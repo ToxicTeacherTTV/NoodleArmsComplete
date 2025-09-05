@@ -1,0 +1,293 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(240, 10%, 3.9%);
+  --foreground: hsl(0, 0%, 98%);
+  --card: hsl(240, 10%, 7%);
+  --card-foreground: hsl(0, 0%, 95%);
+  --popover: hsl(240, 10%, 7%);
+  --popover-foreground: hsl(0, 0%, 95%);
+  --primary: hsl(263, 70%, 65%);
+  --primary-foreground: hsl(0, 0%, 98%);
+  --secondary: hsl(22, 93%, 58%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --muted: hsl(240, 5%, 15%);
+  --muted-foreground: hsl(240, 5%, 65%);
+  --accent: hsl(188, 78%, 41%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --border: hsl(240, 6%, 20%);
+  --input: hsl(240, 6%, 20%);
+  --ring: hsl(263, 70%, 65%);
+  --chart-1: hsl(263, 70%, 65%);
+  --chart-2: hsl(188, 78%, 41%);
+  --chart-3: hsl(22, 93%, 58%);
+  --chart-4: hsl(147, 78%, 42%);
+  --chart-5: hsl(341, 75%, 51%);
+  --sidebar: hsl(240, 10%, 7%);
+  --sidebar-foreground: hsl(0, 0%, 95%);
+  --sidebar-primary: hsl(263, 70%, 65%);
+  --sidebar-primary-foreground: hsl(0, 0%, 98%);
+  --sidebar-accent: hsl(240, 5%, 15%);
+  --sidebar-accent-foreground: hsl(263, 70%, 65%);
+  --sidebar-border: hsl(240, 6%, 20%);
+  --sidebar-ring: hsl(263, 70%, 65%);
+  --font-sans: "Inter", sans-serif;
+  --font-serif: "Georgia", serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --radius: 0.75rem;
+  --shadow-2xs: 0px 2px 0px 0px hsl(263, 70%, 65%, 0.00);
+  --shadow-xs: 0px 2px 0px 0px hsl(263, 70%, 65%, 0.00);
+  --shadow-sm: 0px 2px 0px 0px hsl(263, 70%, 65%, 0.00), 0px 1px 2px -1px hsl(263, 70%, 65%, 0.00);
+  --shadow: 0px 2px 0px 0px hsl(263, 70%, 65%, 0.00), 0px 1px 2px -1px hsl(263, 70%, 65%, 0.00);
+  --shadow-md: 0px 2px 0px 0px hsl(263, 70%, 65%, 0.00), 0px 2px 4px -1px hsl(263, 70%, 65%, 0.00);
+  --shadow-lg: 0px 2px 0px 0px hsl(263, 70%, 65%, 0.00), 0px 4px 6px -1px hsl(263, 70%, 65%, 0.00);
+  --shadow-xl: 0px 2px 0px 0px hsl(263, 70%, 65%, 0.00), 0px 8px 10px -1px hsl(263, 70%, 65%, 0.00);
+  --shadow-2xl: 0px 2px 0px 0px hsl(263, 70%, 65%, 0.00);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+}
+
+.dark {
+  --background: hsl(240, 10%, 3.9%);
+  --foreground: hsl(0, 0%, 98%);
+  --card: hsl(240, 10%, 7%);
+  --card-foreground: hsl(0, 0%, 95%);
+  --popover: hsl(240, 10%, 7%);
+  --popover-foreground: hsl(0, 0%, 95%);
+  --primary: hsl(263, 70%, 65%);
+  --primary-foreground: hsl(0, 0%, 98%);
+  --secondary: hsl(22, 93%, 58%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --muted: hsl(240, 5%, 15%);
+  --muted-foreground: hsl(240, 5%, 65%);
+  --accent: hsl(188, 78%, 41%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --border: hsl(240, 6%, 20%);
+  --input: hsl(240, 6%, 20%);
+  --ring: hsl(263, 70%, 65%);
+  --chart-1: hsl(263, 70%, 65%);
+  --chart-2: hsl(188, 78%, 41%);
+  --chart-3: hsl(22, 93%, 58%);
+  --chart-4: hsl(147, 78%, 42%);
+  --chart-5: hsl(341, 75%, 51%);
+  --sidebar: hsl(240, 10%, 7%);
+  --sidebar-foreground: hsl(0, 0%, 95%);
+  --sidebar-primary: hsl(263, 70%, 65%);
+  --sidebar-primary-foreground: hsl(0, 0%, 98%);
+  --sidebar-accent: hsl(240, 5%, 15%);
+  --sidebar-accent-foreground: hsl(263, 70%, 65%);
+  --sidebar-border: hsl(240, 6%, 20%);
+  --sidebar-ring: hsl(263, 70%, 65%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+/* Custom styles for the DBD-themed AI dashboard */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.neon-glow {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+}
+
+.chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 92, 246, 0.3) transparent;
+}
+
+.chat-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scroll::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: 3px;
+}
+
+.chat-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.5);
+}
+
+@keyframes typing {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.typing-indicator {
+  animation: typing 1.5s infinite;
+}
+
+@keyframes glow {
+  from { box-shadow: 0 0 20px -10px rgb(139, 92, 246); }
+  to { box-shadow: 0 0 20px -5px rgb(139, 92, 246); }
+}
+
+@keyframes bounce-subtle {
+  0%, 100% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.8,0,1,1);
+  }
+  50% {
+    transform: translateY(-25%);
+    animation-timing-function: cubic-bezier(0,0,0.2,1);
+  }
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+.animate-bounce-subtle {
+  animation: bounce-subtle 1s ease-in-out 2;
+}
+
+.animate-pulse-slow {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Font family overrides for different sections */
+.font-display {
+  font-family: "Outfit", sans-serif;
+}
+
+/* Voice activity visualizer bars */
+.voice-bar {
+  transition: height 0.1s ease-out;
+}
+
+/* Button hover effects for dark theme */
+.btn-primary {
+  background: hsl(263, 70%, 65%);
+  color: hsl(0, 0%, 98%);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: hsl(263, 70%, 60%);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+}
+
+.btn-secondary {
+  background: hsl(22, 93%, 58%);
+  color: hsl(0, 0%, 98%);
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: hsl(22, 93%, 53%);
+}
+
+.btn-accent {
+  background: hsl(188, 78%, 41%);
+  color: hsl(0, 0%, 98%);
+  transition: all 0.2s ease;
+}
+
+.btn-accent:hover {
+  background: hsl(188, 78%, 36%);
+}
+
+/* Custom focus styles for better accessibility */
+.focus-ring:focus {
+  outline: none;
+  ring: 2px;
+  ring-color: hsl(263, 70%, 65%);
+  ring-offset: 2px;
+  ring-offset-color: hsl(240, 10%, 3.9%);
+}
+
+/* Status indicator animations */
+.status-listening {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.status-thinking {
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.status-speaking {
+  animation: bounce-subtle 1s ease-in-out infinite;
+}
+
+/* Enhanced card styling for dark theme */
+.card-dark {
+  background: hsl(240, 10%, 7%);
+  border: 1px solid hsl(240, 6%, 20%);
+  border-radius: 0.75rem;
+}
+
+.card-dark:hover {
+  border-color: hsl(240, 6%, 25%);
+  transition: border-color 0.2s ease;
+}
+
+/* Memory entry type colors */
+.memory-fact {
+  color: hsl(188, 78%, 41%);
+}
+
+.memory-preference {
+  color: hsl(22, 93%, 58%);
+}
+
+.memory-lore {
+  color: hsl(263, 70%, 65%);
+}
+
+.memory-context {
+  color: hsl(240, 5%, 65%);
+}
+
+/* Document processing progress */
+.progress-bar {
+  background: hsl(240, 5%, 15%);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  background: hsl(188, 78%, 41%);
+  height: 100%;
+  transition: width 0.3s ease;
+  border-radius: 9999px;
+}
+
+/* Toast notification styling */
+.toast-success {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  color: rgb(34, 197, 94);
+}
+
+.toast-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: rgb(239, 68, 68);
+}
+
+.toast-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: rgb(245, 158, 11);
+}
