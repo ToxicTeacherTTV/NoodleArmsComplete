@@ -1,0 +1,83 @@
+Project High-Level Summary
+The application is a sophisticated AI-powered co-host designed for live streamers. It functions as an interactive voice agent that can listen to a user's speech, process it, generate a contextually-aware response based on a configurable personality, and vocalize that response using text-to-speech. It also includes a mechanism for reacting to simulated text-based chat messages. The core of the application is a highly customizable personality engine that allows users to define the AI's core identity and long-term memory (Knowledge Base), with features for autonomous memory consolidation and optimization.
+Core Technologies
+Frontend Framework: React 19 with TypeScript, utilizing functional components and hooks.
+AI Service: Google Gemini API via the @google/genai library (v1.11.0). The gemini-2.5-flash model is used for chat, memory consolidation, and knowledge base optimization.
+Speech-to-Text (STT): Browser-native Web Speech API (window.SpeechRecognition). The implementation includes robust error handling and automatic restarting to maintain a continuous listening state.
+Text-to-Speech (TTS): Browser-native Web Speech API (window.speechSynthesis). The implementation manages a queue and ensures responses are spoken sequentially.
+Styling: Tailwind CSS, loaded via a CDN for rapid prototyping and a modern utility-first UI.
+State Management: Local component state managed by React hooks (useState, useEffect, useCallback, useRef). There is no external state management library like Redux.
+Data Persistence: Browser localStorage is used to store and retrieve user-created AI personality profiles, ensuring they persist between sessions.
+Modularity: The application is broken down into logical components, custom hooks for complex browser API interactions, and a dedicated service layer for Gemini API communication.
+Architectural Breakdown & Data Flow
+The application follows a component-based architecture orchestrated by the main App.tsx component.
+1. Initialization (App.tsx)
+On initial load, the application checks localStorage for existing personality profiles (ai_cohost_profiles) and the last active profile ID (ai_cohost_active_profile_id).
+Default Profile: If no profiles are found, it generates a default "Nicky A.I. Dente" profile, which includes an extensive, pre-written coreIdentity (system instruction) and knowledgeBase. This default profile is then saved to localStorage.
+API Key Check: It verifies if the process.env.API_KEY is available. If not, it posts a system error message to the chat log.
+Chat Initialization: It calls resetChat from geminiService.ts, which creates a new Gemini Chat instance configured with the coreIdentity of the active profile.
+2. User Input & Message Queuing
+The application processes two types of user input, both of which are funneled into a central processing queue (messageQueueRef) to ensure sequential, non-overlapping processing.
+Voice Input (useSpeechRecognition.ts):
+The user clicks "Start Listening" in the ControlPanel.
+useSpeechRecognition hook initiates window.SpeechRecognition.
+When the user pauses, the API finalizes a transcript.
+The onTranscript callback in App.tsx is invoked.
+The transcript is added to the messages state array (for UI display) and pushed into the messageQueueRef as a USER message.
+Text Input (ControlPanel.tsx):
+The user types a message and submits the form.
+handleSendText in App.tsx is called.
+The text is added to the messages state array and pushed into the messageQueueRef as a CHATTER message.
+3. Central Processing (App.tsx -> processQueue)
+An useEffect hook monitors for new messages. The processQueue function acts as the application's brain.
+It is designed to be non-reentrant using a ref (isProcessingQueueRef) and will not proceed if the TTS is currently speaking.
+It dequeues the next message and initiates the AI response generation by calling handleAiResponse.
+4. AI Response Generation (geminiService.ts)
+handleAiResponse in App.tsx sets the AIStatus to THINKING.
+It calls getAIResponse in the geminiService.
+Retrieval-Augmented Generation (RAG):
+getAIResponse first calls findRelevantKnowledge. This is a simple, keyword-based search function that scans the profile's knowledgeBase for lines relevant to the user's input.
+If relevant context is found, it is prepended to the user's message in a structured format (e.g., "Relevant context from your memory:..."). This augments the prompt with long-term memory.
+API Call: The augmented prompt is sent to the initialized Gemini chat session via chat.sendMessage.
+The response.text from the Gemini API is returned.
+5. Vocalization and State Update
+Back in App.tsx, the AI's response is received.
+The response text is added to the messages array as an AI message.
+AIStatus is set to SPEAKING.
+The speak function from useSpeechSynthesis is called.
+TTS Output (useSpeechSynthesis.ts): The browser's speech synthesis engine vocalizes the text.
+Completion: Upon completion of speech (the onend event), a callback function is executed which resets the AIStatus (to LISTENING or IDLE) and unlocks the processing queue (isProcessingQueueRef = false), allowing the next message to be processed.
+Key Features and Implementation Details
+Personality Management (PersonalityPanel.tsx)
+Profiles: A user can create, select, edit, and delete multiple Profile objects. A Profile consists of an id, name, coreIdentity (the system instruction for Gemini), and knowledgeBase (long-term memory).
+State Management: The panel's inputs are bound to a temporary state (currentProfileName, etc.). An isDirty function compares this temporary state to the saved profile to determine if the "Save Changes" button should be enabled.
+Applying Changes: The "Apply & Reset" button is critical. It calls resetChat to create a new Gemini session with the updated coreIdentity, ensuring personality changes take effect immediately.
+Autonomous Memory System (geminiService.ts)
+This system prevents the context window from being lost and builds a persistent memory for the AI.
+Memory Consolidation (consolidateMemory):
+Triggered automatically in App.tsx after a set number of interactions (e.g., 6).
+It takes the last several messages from the conversation history.
+It sends this history to the Gemini gemini-2.5-flash model with a specific prompt asking it to extract new, significant information and summarize it into concise, third-person facts.
+It's instructed to return "NO_UPDATE" if no new information is present.
+The resulting summary is appended to the knowledgeBase under a "MEMORY LOG" section.
+Knowledge Base Optimization (optimizeKnowledgeBase):
+A user-triggered function.
+It sends the entire knowledgeBase to the Gemini model.
+The prompt instructs the model to act as a "Memory Archivist," de-duplicating entries, summarizing related facts, improving clarity, and pruning trivial information while preserving core lore.
+This returns a rewritten, more efficient knowledge base, which replaces the old one.
+File Structure Overview
+index.html / index.tsx: Application entry points.
+App.tsx: Main component, orchestrates all application logic and state.
+types.ts: Centralized TypeScript interfaces and enums (Message, Profile, AIStatus).
+components/: Reusable UI components.
+ChatPanel.tsx: Renders the conversation log.
+ControlPanel.tsx: User interaction controls (mic, text input).
+PersonalityPanel.tsx: UI for managing AI profiles.
+StatusIndicator.tsx: Visual feedback on the AI's current state.
+Icons.tsx: SVG icon components.
+hooks/: Custom hooks abstracting browser APIs.
+useSpeechRecognition.ts: STT logic.
+useSpeechSynthesis.ts: TTS logic.
+services/: External API communication.
+geminiService.ts: All logic for interacting with the Google Gemini API.
+metadata.json: Application metadata, including microphone permission requests.
