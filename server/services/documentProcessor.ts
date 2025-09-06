@@ -1,6 +1,7 @@
 import { storage } from "../storage";
 import { Document } from "@shared/schema";
 import pdf from 'pdf-parse';
+import mammoth from 'mammoth';
 
 interface DocumentChunk {
   content: string;
@@ -27,6 +28,11 @@ class DocumentProcessor {
       if (document.contentType === 'application/pdf') {
         const pdfData = await pdf(buffer);
         extractedContent = pdfData.text;
+        chunks = this.chunkText(extractedContent);
+      } else if (document.contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        // Process Word documents (.docx)
+        const result = await mammoth.extractRawText({ buffer });
+        extractedContent = result.value;
         chunks = this.chunkText(extractedContent);
       } else if (document.contentType.includes('text/')) {
         extractedContent = buffer.toString('utf-8');
