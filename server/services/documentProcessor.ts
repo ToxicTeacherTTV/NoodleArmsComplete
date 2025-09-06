@@ -58,27 +58,44 @@ class DocumentProcessor {
     }
   }
 
-  private chunkText(text: string, maxChunkSize = 1000, overlap = 100): string[] {
+  private chunkText(text: string, maxChunkSize = 2500, overlap = 200): string[] {
     const chunks: string[] = [];
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    
+    // First split by double newlines (paragraphs), then by single newlines if needed
+    const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0);
     
     let currentChunk = '';
-    let currentSize = 0;
     
-    for (const sentence of sentences) {
-      const sentenceWithPunctuation = sentence.trim() + '.';
+    for (const paragraph of paragraphs) {
+      const trimmedParagraph = paragraph.trim();
       
-      if (currentSize + sentenceWithPunctuation.length > maxChunkSize && currentChunk) {
+      // If adding this paragraph would exceed chunk size
+      if (currentChunk && (currentChunk.length + trimmedParagraph.length) > maxChunkSize) {
         chunks.push(currentChunk.trim());
         
-        // Create overlap by keeping last few sentences
-        const words = currentChunk.split(' ');
-        const overlapWords = words.slice(-overlap);
-        currentChunk = overlapWords.join(' ') + ' ' + sentenceWithPunctuation;
-        currentSize = currentChunk.length;
+        // Create overlap by keeping last portion of previous chunk
+        const sentences = currentChunk.split(/[.!?]+/).filter(s => s.trim());
+        const overlapSentences = sentences.slice(-2); // Keep last 2 sentences for context
+        currentChunk = overlapSentences.join('. ') + '. ' + trimmedParagraph;
       } else {
-        currentChunk += ' ' + sentenceWithPunctuation;
-        currentSize += sentenceWithPunctuation.length;
+        currentChunk += (currentChunk ? '\n\n' : '') + trimmedParagraph;
+      }
+      
+      // If single paragraph is too large, split it by sentences
+      if (currentChunk.length > maxChunkSize * 1.5) {
+        const sentences = currentChunk.split(/[.!?]+/).filter(s => s.trim());
+        let tempChunk = '';
+        
+        for (const sentence of sentences) {
+          if (tempChunk && (tempChunk.length + sentence.length) > maxChunkSize) {
+            chunks.push(tempChunk.trim() + '.');
+            tempChunk = sentence;
+          } else {
+            tempChunk += (tempChunk ? '. ' : '') + sentence;
+          }
+        }
+        
+        currentChunk = tempChunk;
       }
     }
     
@@ -90,27 +107,54 @@ class DocumentProcessor {
   }
 
   private async extractAndStoreKnowledge(profileId: string, content: string, filename: string): Promise<void> {
-    // Extract DBD-specific knowledge
-    const dbdKeywords = [
-      'killer', 'survivor', 'generator', 'hook', 'pallet', 'vault', 'loop',
-      'bloodweb', 'entity', 'trial', 'offering', 'add-on', 'perk', 'bloodpoint',
-      'dead by daylight', 'dbd', 'behavior', 'bhvr'
+    // Enhanced extraction for character-specific knowledge
+    const characterKeywords = [
+      // DBD game content
+      'killer', 'survivor', 'generator', 'hook', 'pallet', 'vault', 'loop', 'bloodweb', 'entity', 'trial', 'offering', 'add-on', 'perk', 'bloodpoint', 'dead by daylight', 'dbd', 'behavior', 'bhvr',
+      // Character personality
+      'nicky', 'dente', 'sabam', 'streaming', 'podcast', 'camping them softly', 'earl', 'vice don', 'digital entertainment',
+      // Character preferences and lore
+      'ghostface', 'twins', 'nurse', 'hillbilly', 'wraith', 'demogorgon', 'plague', 'spirit'
     ];
 
-    const lines = content.split('\n').filter(line => line.trim().length > 20);
+    // Use larger paragraph-based chunks instead of line-by-line processing
+    const chunks = this.chunkText(content, 1500, 150);
     
-    for (const line of lines) {
-      const lowerLine = line.toLowerCase();
+    for (const chunk of chunks) {
+      const lowerChunk = chunk.toLowerCase();
       
-      // Check if line contains DBD-related content
-      const isDbdRelated = dbdKeywords.some(keyword => lowerLine.includes(keyword));
+      // Check if chunk contains relevant character content
+      const relevantKeywordCount = characterKeywords.filter(keyword => 
+        lowerChunk.includes(keyword)
+      ).length;
       
-      if (isDbdRelated) {
+      // Only store chunks with substantial relevant content (2+ keywords)
+      if (relevantKeywordCount >= 2 && chunk.trim().length > 100) {
+        // Determine content type and importance
+        let type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT' = 'FACT';
+        let importance = 2;
+        
+        // Character personality and preferences
+        if (lowerChunk.includes('prefer') || lowerChunk.includes('like') || lowerChunk.includes('favorite')) {
+          type = 'PREFERENCE';
+          importance = 4;
+        }
+        // Character backstory and lore
+        else if (lowerChunk.includes('backstory') || lowerChunk.includes('history') || lowerChunk.includes('origin')) {
+          type = 'LORE';
+          importance = 4;
+        }
+        // Game strategy and tactics
+        else if (lowerChunk.includes('strategy') || lowerChunk.includes('tactics') || lowerChunk.includes('gameplay')) {
+          type = 'CONTEXT';
+          importance = 3;
+        }
+        
         await storage.addMemoryEntry({
           profileId,
-          type: 'FACT',
-          content: line.trim(),
-          importance: 2,
+          type,
+          content: chunk.trim(),
+          importance,
           source: `document:${filename}`,
         });
       }
