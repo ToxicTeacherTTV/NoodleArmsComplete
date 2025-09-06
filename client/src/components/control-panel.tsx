@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import type { AppMode } from "@/types";
 
 interface ControlPanelProps {
   onToggleListening: () => void;
@@ -9,6 +10,7 @@ interface ControlPanelProps {
   onClearChat: () => void;
   onStoreConversation: () => void;
   isListening: boolean;
+  appMode?: AppMode;
 }
 
 export default function ControlPanel({
@@ -17,6 +19,7 @@ export default function ControlPanel({
   onClearChat,
   onStoreConversation,
   isListening,
+  appMode = 'PODCAST',
 }: ControlPanelProps) {
   const [textInput, setTextInput] = useState("");
 
@@ -34,18 +37,25 @@ export default function ControlPanel({
       <div className="space-y-3">
         <h3 className="text-sm font-medium text-foreground">Voice Controls</h3>
         
-        <Button
-          onClick={onToggleListening}
-          className={`w-full py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200 ${
-            isListening
-              ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground neon-glow'
-              : 'bg-primary hover:bg-primary/90 text-primary-foreground neon-glow'
-          }`}
-          data-testid="button-toggle-listening"
-        >
-          <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'}`}></i>
-          <span>{isListening ? 'Stop Listening' : 'Start Listening'}</span>
-        </Button>
+        {appMode === 'STREAMING' ? (
+          <Button
+            onClick={onToggleListening}
+            className={`w-full py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200 ${
+              isListening
+                ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground neon-glow'
+                : 'bg-primary hover:bg-primary/90 text-primary-foreground neon-glow'
+            }`}
+            data-testid="button-toggle-listening"
+          >
+            <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'}`}></i>
+            <span>{isListening ? 'Stop Listening' : 'Start Listening'}</span>
+          </Button>
+        ) : (
+          <div className="w-full py-3 px-4 rounded-lg bg-muted/30 text-muted-foreground text-center text-sm">
+            <i className="fas fa-microphone-slash mr-2"></i>
+            Voice listening disabled in Podcast Mode
+          </div>
+        )}
 
         <div className="flex items-center justify-between w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground py-2 px-4 rounded-lg transition-all duration-200">
           <div className="flex items-center space-x-2">

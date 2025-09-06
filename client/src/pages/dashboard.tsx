@@ -11,8 +11,9 @@ import VoiceVisualizer from "@/components/voice-visualizer";
 import ProfileModal from "@/components/profile-modal";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useSpeechSynthesis } from "@/hooks/use-speech-synthesis";
+import { useElevenLabsSpeech } from "@/hooks/use-elevenlabs-speech";
 import { useVoiceActivity } from "@/hooks/use-voice-activity";
-import type { Message, Profile, AIStatus, StreamSettings, VoiceActivity } from "@/types";
+import type { Message, Profile, AIStatus, StreamSettings, VoiceActivity, AppMode } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
 import { nanoid } from "nanoid";
 
@@ -26,6 +27,7 @@ export default function Dashboard() {
   const [aiStatus, setAiStatus] = useState<AIStatus>('IDLE');
   const [activeTab, setActiveTab] = useState<'memory' | 'docs'>('memory');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [appMode, setAppMode] = useState<AppMode>('PODCAST');
   const [streamSettings, setStreamSettings] = useState<StreamSettings>({
     autoRespond: true,
     voiceOutput: true,
@@ -39,8 +41,14 @@ export default function Dashboard() {
 
   // Custom hooks
   const { isListening, startListening, stopListening, transcript, error: speechError } = useSpeechRecognition();
-  const { speak, isSpeaking, stop: stopSpeaking } = useSpeechSynthesis();
+  const { speak: speakBrowser, isSpeaking: isSpeakingBrowser, stop: stopSpeakingBrowser } = useSpeechSynthesis();
+  const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, stop: stopSpeakingElevenLabs } = useElevenLabsSpeech();
   const voiceActivity = useVoiceActivity(isListening);
+
+  // Choose speech synthesis based on mode
+  const speak = appMode === 'STREAMING' ? speakElevenLabs : speakBrowser;
+  const isSpeaking = appMode === 'STREAMING' ? isSpeakingElevenLabs : isSpeakingBrowser;
+  const stopSpeaking = appMode === 'STREAMING' ? stopSpeakingElevenLabs : stopSpeakingBrowser;
 
   // Queries
   const { data: activeProfile } = useQuery({
@@ -116,15 +124,17 @@ export default function Dashboard() {
       };
 
       setMessages(prev => [...prev, aiMessage]);
-      setAiStatus('SPEAKING');
-
-      if (streamSettings.voiceOutput) {
+      
+      // Handle response based on app mode
+      if (appMode === 'STREAMING' && streamSettings.voiceOutput) {
+        setAiStatus('SPEAKING');
         speak(response.content, () => {
           setAiStatus('LISTENING');
           isProcessingQueueRef.current = false;
         });
       } else {
-        setAiStatus('LISTENING');
+        // Podcast mode - just show text, no auto-speech
+        setAiStatus('IDLE');
         isProcessingQueueRef.current = false;
       }
     },
@@ -231,14 +241,39 @@ export default function Dashboard() {
     }
   }, [messages.length, streamSettings.memoryLearning, currentConversationId]);
 
-  // Handle voice control
+  // Handle voice control (only in streaming mode)
   const toggleListening = () => {
+    if (appMode !== 'STREAMING') return;
+    
     if (isListening) {
       stopListening();
       setAiStatus('IDLE');
     } else {
       startListening();
       setAiStatus('LISTENING');
+    }
+  };
+
+  // Play audio for a specific message (podcast mode)
+  const playMessageAudio = (content: string) => {
+    if (isSpeaking) {
+      stopSpeaking();
+    }
+    speakElevenLabs(content);
+  };
+
+  // Toggle app mode
+  const toggleAppMode = () => {
+    const newMode = appMode === 'PODCAST' ? 'STREAMING' : 'PODCAST';
+    setAppMode(newMode);
+    
+    // Stop any ongoing speech
+    stopSpeaking();
+    
+    // Stop listening if switching to podcast mode
+    if (newMode === 'PODCAST' && isListening) {
+      stopListening();
+      setAiStatus('IDLE');
     }
   };
 
@@ -343,6 +378,30 @@ export default function Dashboard() {
           </div>
           
           <StatusIndicator status={aiStatus} />
+          
+          {/* Mode Toggle */}
+          <div className="mt-4 p-3 bg-secondary/20 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-foreground">Mode</span>
+              <button
+                onClick={toggleAppMode}
+                className="px-3 py-1 text-xs rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                data-testid="button-toggle-mode"
+              >
+                Switch to {appMode === 'PODCAST' ? 'Streaming' : 'Podcast'}
+              </button>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              <div className="flex items-center space-x-2">
+                <div className={`w-2 h-2 rounded-full ${appMode === 'PODCAST' ? 'bg-green-400' : 'bg-gray-400'}`}></div>
+                <span className={appMode === 'PODCAST' ? 'text-foreground' : ''}>🎙️ Podcast Mode</span>
+              </div>
+              <div className="flex items-center space-x-2 mt-1">
+                <div className={`w-2 h-2 rounded-full ${appMode === 'STREAMING' ? 'bg-green-400' : 'bg-gray-400'}`}></div>
+                <span className={appMode === 'STREAMING' ? 'text-foreground' : ''}>🔴 Streaming Mode</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <ControlPanel
@@ -351,6 +410,7 @@ export default function Dashboard() {
           onClearChat={clearChat}
           onStoreConversation={storeConversation}
           isListening={isListening}
+          appMode={appMode}
         />
 
         <PersonalityPanel
@@ -366,6 +426,9 @@ export default function Dashboard() {
           messages={messages}
           sessionDuration={getSessionDuration()}
           messageCount={messages.length}
+          appMode={appMode}
+          onPlayAudio={playMessageAudio}
+          isPlayingAudio={isSpeakingElevenLabs}
         />
       </div>
 

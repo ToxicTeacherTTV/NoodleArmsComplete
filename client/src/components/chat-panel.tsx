@@ -1,14 +1,17 @@
 import { useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
-import type { Message } from "@/types";
+import type { Message, AppMode } from "@/types";
 
 interface ChatPanelProps {
   messages: Message[];
   sessionDuration: string;
   messageCount: number;
+  appMode?: AppMode;
+  onPlayAudio?: (content: string) => void;
+  isPlayingAudio?: boolean;
 }
 
-export default function ChatPanel({ messages, sessionDuration, messageCount }: ChatPanelProps) {
+export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', onPlayAudio, isPlayingAudio = false }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -118,10 +121,21 @@ export default function ChatPanel({ messages, sessionDuration, messageCount }: C
                         <span>
                           {message.type === 'AI' ? 'Nicky' : 'Chat'} • {formatTime(message.createdAt)}
                         </span>
-                        {message.type === 'AI' && (
+                        {message.type === 'AI' && appMode === 'PODCAST' && onPlayAudio && (
+                          <button
+                            onClick={() => onPlayAudio(message.content)}
+                            disabled={isPlayingAudio}
+                            className="flex items-center space-x-1 text-accent hover:text-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                            data-testid={`play-audio-${message.id}`}
+                          >
+                            <i className={`fas ${isPlayingAudio ? 'fa-pause' : 'fa-play'} text-xs`}></i>
+                            <span className="text-xs">{isPlayingAudio ? 'Playing...' : 'Play Audio'}</span>
+                          </button>
+                        )}
+                        {message.type === 'AI' && appMode === 'STREAMING' && (
                           <>
                             <i className="fas fa-volume-up text-accent"></i>
-                            <span className="text-accent">Spoken</span>
+                            <span className="text-accent">Auto-Spoken</span>
                           </>
                         )}
                         {message.metadata?.processingTime && (
