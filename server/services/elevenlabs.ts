@@ -10,7 +10,7 @@ class ElevenLabsService {
   constructor() {
     this.config = {
       apiKey: process.env.ELEVENLABS_API_KEY || "",
-      voiceId: process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM", // Default voice
+      voiceId: process.env.ELEVENLABS_VOICE_ID || "LEwNRx69wC2SjtBsyDEf", // Nicky's custom voice
       model: "eleven_monolingual_v1"
     };
   }
