@@ -66,7 +66,7 @@ export class DatabaseStorage implements IStorage {
   async createProfile(profile: InsertProfile): Promise<Profile> {
     const [newProfile] = await db
       .insert(profiles)
-      .values(profile)
+      .values([profile])
       .returning();
     return newProfile;
   }
@@ -96,7 +96,7 @@ export class DatabaseStorage implements IStorage {
   async createConversation(conversation: InsertConversation): Promise<Conversation> {
     const [newConversation] = await db
       .insert(conversations)
-      .values(conversation)
+      .values([conversation])
       .returning();
     return newConversation;
   }
@@ -117,7 +117,7 @@ export class DatabaseStorage implements IStorage {
   async addMessage(message: InsertMessage): Promise<Message> {
     const [newMessage] = await db
       .insert(messages)
-      .values(message)
+      .values([message])
       .returning();
     return newMessage;
   }
@@ -134,7 +134,7 @@ export class DatabaseStorage implements IStorage {
   async createDocument(document: InsertDocument): Promise<Document> {
     const [newDocument] = await db
       .insert(documents)
-      .values(document)
+      .values([document])
       .returning();
     return newDocument;
   }
@@ -175,7 +175,7 @@ export class DatabaseStorage implements IStorage {
   async addMemoryEntry(entry: InsertMemoryEntry): Promise<MemoryEntry> {
     const [newEntry] = await db
       .insert(memoryEntries)
-      .values(entry)
+      .values([entry])
       .returning();
     return newEntry;
   }

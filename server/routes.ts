@@ -138,7 +138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Store the AI response
       await storage.addMessage({
         conversationId,
-        type: 'AI',
+        type: 'AI' as const,
         content: response.content,
         metadata: {
           processingTime: response.processingTime,
@@ -190,14 +190,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filename: req.file.originalname,
         contentType: req.file.mimetype,
         size: req.file.size,
-        processingStatus: 'PENDING',
+        processingStatus: 'PENDING' as const,
       });
 
       // Process document asynchronously
       documentProcessor.processDocument(document.id, req.file.buffer)
         .catch(error => {
           console.error('Document processing error:', error);
-          storage.updateDocument(document.id, { processingStatus: 'FAILED' });
+          storage.updateDocument(document.id, { processingStatus: 'FAILED' as const });
         });
 
       res.json(document);
