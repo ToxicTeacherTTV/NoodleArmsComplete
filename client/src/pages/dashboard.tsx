@@ -181,9 +181,9 @@ export default function Dashboard() {
     }
   }, [existingMessages]);
 
-  // Handle speech recognition transcript
+  // Handle speech recognition transcript (only in streaming mode)
   useEffect(() => {
-    if (transcript && currentConversationId) {
+    if (transcript && currentConversationId && appMode === 'STREAMING') {
       const userMessage: Message = {
         id: nanoid(),
         conversationId: currentConversationId,
@@ -204,7 +204,7 @@ export default function Dashboard() {
         metadata: { voice: true },
       });
     }
-  }, [transcript, currentConversationId]);
+  }, [transcript, currentConversationId, appMode]);
 
   // Process message queue
   useEffect(() => {
