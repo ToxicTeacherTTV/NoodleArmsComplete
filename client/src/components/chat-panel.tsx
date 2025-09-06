@@ -9,9 +9,10 @@ interface ChatPanelProps {
   appMode?: AppMode;
   onPlayAudio?: (content: string) => void;
   isPlayingAudio?: boolean;
+  isPausedAudio?: boolean;
 }
 
-export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', onPlayAudio, isPlayingAudio = false }: ChatPanelProps) {
+export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', onPlayAudio, isPlayingAudio = false, isPausedAudio = false }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -124,12 +125,13 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                         {message.type === 'AI' && appMode === 'PODCAST' && onPlayAudio && (
                           <button
                             onClick={() => onPlayAudio(message.content)}
-                            disabled={isPlayingAudio}
-                            className="flex items-center space-x-1 text-accent hover:text-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center space-x-1 text-accent hover:text-accent/80 transition-colors"
                             data-testid={`play-audio-${message.id}`}
                           >
-                            <i className={`fas ${isPlayingAudio ? 'fa-pause' : 'fa-play'} text-xs`}></i>
-                            <span className="text-xs">{isPlayingAudio ? 'Playing...' : 'Play Audio'}</span>
+                            <i className={`fas ${isPlayingAudio ? (isPausedAudio ? 'fa-play' : 'fa-pause') : 'fa-play'} text-xs`}></i>
+                            <span className="text-xs">
+                              {isPlayingAudio ? (isPausedAudio ? 'Resume' : 'Pause') : 'Play Audio'}
+                            </span>
                           </button>
                         )}
                         {message.type === 'AI' && appMode === 'STREAMING' && (

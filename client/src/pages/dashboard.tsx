@@ -42,7 +42,7 @@ export default function Dashboard() {
   // Custom hooks
   const { isListening, startListening, stopListening, transcript, error: speechError } = useSpeechRecognition();
   const { speak: speakBrowser, isSpeaking: isSpeakingBrowser, stop: stopSpeakingBrowser } = useSpeechSynthesis();
-  const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, stop: stopSpeakingElevenLabs } = useElevenLabsSpeech();
+  const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopSpeakingElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs } = useElevenLabsSpeech();
   const voiceActivity = useVoiceActivity(isListening);
 
   // Choose speech synthesis based on mode
@@ -256,10 +256,15 @@ export default function Dashboard() {
 
   // Play audio for a specific message (podcast mode)
   const playMessageAudio = (content: string) => {
-    if (isSpeaking) {
-      stopSpeaking();
+    if (isSpeakingElevenLabs) {
+      if (isPausedElevenLabs) {
+        resumeElevenLabs();
+      } else {
+        pauseElevenLabs();
+      }
+    } else {
+      speakElevenLabs(content);
     }
-    speakElevenLabs(content);
   };
 
   // Toggle app mode
@@ -429,6 +434,7 @@ export default function Dashboard() {
           appMode={appMode}
           onPlayAudio={playMessageAudio}
           isPlayingAudio={isSpeakingElevenLabs}
+          isPausedAudio={isPausedElevenLabs}
         />
       </div>
 

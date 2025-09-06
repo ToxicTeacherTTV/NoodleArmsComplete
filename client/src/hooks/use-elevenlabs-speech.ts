@@ -4,12 +4,16 @@ import { apiRequest } from '@/lib/queryClient';
 interface UseElevenLabsSpeechReturn {
   speak: (text: string, onEnd?: () => void) => void;
   stop: () => void;
+  pause: () => void;
+  resume: () => void;
   isSpeaking: boolean;
+  isPaused: boolean;
   isSupported: boolean;
 }
 
 export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const onEndCallbackRef = useRef<(() => void) | undefined>();
   const speechQueue = useRef<string[]>([]);
@@ -46,6 +50,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
 
       audio.onended = () => {
         setIsSpeaking(false);
+        setIsPaused(false);
         isProcessingRef.current = false;
         audioRef.current = null;
         URL.revokeObjectURL(audioUrl);
@@ -59,9 +64,18 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
         setTimeout(processQueue, 100);
       };
 
+      audio.onpause = () => {
+        setIsPaused(true);
+      };
+
+      audio.onplay = () => {
+        setIsPaused(false);
+      };
+
       audio.onerror = (error) => {
         console.error('ElevenLabs audio error:', error);
         setIsSpeaking(false);
+        setIsPaused(false);
         isProcessingRef.current = false;
         audioRef.current = null;
         URL.revokeObjectURL(audioUrl);
@@ -79,6 +93,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     } catch (error) {
       console.error('ElevenLabs synthesis error:', error);
       setIsSpeaking(false);
+      setIsPaused(false);
       isProcessingRef.current = false;
       
       if (onEndCallbackRef.current) {
@@ -118,14 +133,28 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     
     speechQueue.current = [];
     setIsSpeaking(false);
+    setIsPaused(false);
     isProcessingRef.current = false;
     onEndCallbackRef.current = undefined;
   }, [isSupported]);
 
+  const pause = useCallback(() => {
+    if (!isSupported || !audioRef.current || !isSpeaking) return;
+    audioRef.current.pause();
+  }, [isSupported, isSpeaking]);
+
+  const resume = useCallback(() => {
+    if (!isSupported || !audioRef.current || !isPaused) return;
+    audioRef.current.play();
+  }, [isSupported, isPaused]);
+
   return {
     speak,
     stop,
+    pause,
+    resume,
     isSpeaking,
+    isPaused,
     isSupported,
   };
 }

@@ -11,7 +11,7 @@ class ElevenLabsService {
     this.config = {
       apiKey: process.env.ELEVENLABS_API_KEY || "",
       voiceId: process.env.ELEVENLABS_VOICE_ID || "LEwNRx69wC2SjtBsyDEf", // Nicky's custom voice
-      model: "eleven_monolingual_v1"
+      model: "eleven_multilingual_v2"  // Latest model for better quality
     };
   }
 
@@ -36,7 +36,7 @@ class ElevenLabsService {
             voice_settings: {
               stability: 0.5,
               similarity_boost: 0.8,
-              style: 0.2,
+              style: 1.0,  // Maximum creative mode for character personality
               use_speaker_boost: true
             }
           }),
