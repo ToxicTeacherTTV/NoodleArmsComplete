@@ -340,6 +340,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/documents/reprocess', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      // Get all completed documents for the active profile
+      const documents = await storage.getProfileDocuments(activeProfile.id);
+      const completedDocs = documents.filter(doc => doc.processingStatus === 'COMPLETED');
+      
+      let processedCount = 0;
+      
+      for (const document of completedDocs) {
+        try {
+          if (document.extractedContent) {
+            // Re-extract knowledge using improved logic
+            await documentProcessor.extractAndStoreKnowledge(
+              activeProfile.id, 
+              document.extractedContent, 
+              document.filename
+            );
+            processedCount++;
+          }
+        } catch (error) {
+          console.error(`Failed to reprocess document ${document.filename}:`, error);
+        }
+      }
+
+      res.json({ 
+        message: `Reprocessed ${processedCount} documents`,
+        processedCount,
+        totalDocuments: completedDocs.length
+      });
+    } catch (error) {
+      console.error('Document reprocessing error:', error);
+      res.status(500).json({ error: 'Failed to reprocess documents' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

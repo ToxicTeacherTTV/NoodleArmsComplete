@@ -106,7 +106,7 @@ class DocumentProcessor {
     return chunks;
   }
 
-  private async extractAndStoreKnowledge(profileId: string, content: string, filename: string): Promise<void> {
+  async extractAndStoreKnowledge(profileId: string, content: string, filename: string): Promise<void> {
     // Enhanced extraction for character-specific knowledge
     const characterKeywords = [
       // DBD game content
