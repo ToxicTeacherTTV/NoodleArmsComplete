@@ -58,6 +58,12 @@ export default function Dashboard() {
     refetchInterval: false,
   });
 
+  const { data: existingMessages } = useQuery({
+    queryKey: ['/api/conversations', currentConversationId, 'messages'],
+    enabled: !!currentConversationId,
+    refetchInterval: false,
+  });
+
   // Mutations
   const createConversationMutation = useMutation({
     mutationFn: async (profileId: string) => {
@@ -157,6 +163,13 @@ export default function Dashboard() {
       setSessionStartTime(new Date());
     }
   }, [activeProfile, currentConversationId]);
+
+  // Load existing messages when conversation changes
+  useEffect(() => {
+    if (existingMessages && existingMessages.length > 0) {
+      setMessages(existingMessages);
+    }
+  }, [existingMessages]);
 
   // Handle speech recognition transcript
   useEffect(() => {
