@@ -48,6 +48,7 @@ export interface IStorage {
   getMemoryEntries(profileId: string, limit?: number): Promise<MemoryEntry[]>;
   searchMemoryEntries(profileId: string, query: string): Promise<MemoryEntry[]>;
   deleteMemoryEntry(id: string): Promise<void>;
+  clearProfileMemories(profileId: string): Promise<void>;
   incrementMemoryRetrieval(id: string): Promise<void>;
   getMemoryStats(profileId: string): Promise<{ totalFacts: number; conversations: number }>;
 }
@@ -204,6 +205,10 @@ export class DatabaseStorage implements IStorage {
 
   async deleteMemoryEntry(id: string): Promise<void> {
     await db.delete(memoryEntries).where(eq(memoryEntries.id, id));
+  }
+
+  async clearProfileMemories(profileId: string): Promise<void> {
+    await db.delete(memoryEntries).where(eq(memoryEntries.profileId, profileId));
   }
 
   async incrementMemoryRetrieval(id: string): Promise<void> {

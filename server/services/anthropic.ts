@@ -128,8 +128,8 @@ ${conversationHistory}`;
         ],
       });
 
-      const content = Array.isArray(response.content) ? response.content[0].text : response.content;
-      const textContent = typeof content === 'string' ? content : '';
+      const content = Array.isArray(response.content) ? response.content[0] : response.content;
+      const textContent = content && 'text' in content ? content.text : '';
       
       try {
         const memories = JSON.parse(textContent);
@@ -175,11 +175,107 @@ Please return an optimized, well-organized knowledge base that maintains all imp
         ],
       });
 
-      const content = Array.isArray(response.content) ? response.content[0].text : response.content;
-      return typeof content === 'string' ? content : '';
+      const content = Array.isArray(response.content) ? response.content[0] : response.content;
+      const textContent = content && 'text' in content ? content.text : '';
+      return typeof textContent === 'string' ? textContent : '';
     } catch (error) {
       console.error('Knowledge base optimization error:', error);
       throw new Error('Failed to optimize knowledge base');
+    }
+  }
+
+  async consolidateAndOptimizeMemories(memories: MemoryEntry[]): Promise<Array<{
+    type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
+    content: string;
+    importance: number;
+    source?: string;
+  }>> {
+    try {
+      // Group memories by source to maintain context
+      const memoryGroups: { [key: string]: MemoryEntry[] } = {};
+      memories.forEach(memory => {
+        const source = memory.source || 'unknown';
+        if (!memoryGroups[source]) memoryGroups[source] = [];
+        memoryGroups[source].push(memory);
+      });
+
+      const consolidatedMemories: Array<{
+        type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
+        content: string;
+        importance: number;
+        source?: string;
+      }> = [];
+
+      // Process each source group
+      for (const [source, sourceMemories] of Object.entries(memoryGroups)) {
+        const memoryContent = sourceMemories
+          .map(memory => `[${memory.type}] ${memory.content}`)
+          .join('\n');
+
+        const prompt = `You are consolidating fragmented memories into coherent knowledge entries. Take these memory fragments and create well-organized, comprehensive entries that preserve all important information while eliminating redundancy.
+
+Rules:
+1. Combine related fragments into single, coherent entries
+2. Preserve all character details, preferences, and lore
+3. Maintain context and relationships between facts
+4. Return ONLY a JSON array of objects with this exact structure:
+[
+  {
+    "type": "FACT|PREFERENCE|LORE|CONTEXT",
+    "content": "consolidated content here",
+    "importance": 1-5,
+    "source": "${source}"
+  }
+]
+
+Memory fragments to consolidate:
+${memoryContent}
+
+Return the consolidated memories as a JSON array:`;
+
+        const response = await anthropic.messages.create({
+          model: DEFAULT_MODEL_STR,
+          max_tokens: 3000,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+        });
+
+        const content = Array.isArray(response.content) ? response.content[0] : response.content;
+        const textContent = content && 'text' in content ? content.text : '';
+        
+        try {
+          const consolidatedGroup = JSON.parse(textContent);
+          if (Array.isArray(consolidatedGroup)) {
+            consolidatedMemories.push(...consolidatedGroup);
+          }
+        } catch (parseError) {
+          console.error('Failed to parse consolidated memories for source:', source, parseError);
+          // Fallback: keep original memories with reduced importance
+          sourceMemories.forEach(memory => {
+            consolidatedMemories.push({
+              type: memory.type,
+              content: memory.content,
+              importance: Math.max(1, memory.importance - 1),
+              source: memory.source
+            });
+          });
+        }
+      }
+
+      return consolidatedMemories;
+    } catch (error) {
+      console.error('Memory consolidation error:', error);
+      // Fallback: return original memories
+      return memories.map(memory => ({
+        type: memory.type,
+        content: memory.content,
+        importance: memory.importance,
+        source: memory.source
+      }));
     }
   }
 }

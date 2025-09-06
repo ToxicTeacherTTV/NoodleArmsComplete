@@ -311,17 +311,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      const allMemories = await storage.getMemoryEntries(activeProfile.id, 1000);
-      const optimizedKnowledgeBase = await anthropicService.optimizeKnowledgeBase(allMemories);
+      // Get all memory entries
+      const allMemories = await storage.getMemoryEntries(activeProfile.id, 10000);
+      const optimizedMemories = await anthropicService.consolidateAndOptimizeMemories(allMemories);
       
-      // Update the profile's knowledge base
-      await storage.updateProfile(activeProfile.id, {
-        knowledgeBase: optimizedKnowledgeBase,
-      });
+      // Clear existing memories and replace with optimized ones
+      await storage.clearProfileMemories(activeProfile.id);
+      
+      // Add optimized memories back
+      for (const memory of optimizedMemories) {
+        await storage.addMemoryEntry({
+          profileId: activeProfile.id,
+          type: memory.type,
+          content: memory.content,
+          importance: memory.importance,
+          source: memory.source || 'optimization',
+        });
+      }
 
       res.json({ 
-        message: 'Knowledge base optimized successfully',
-        knowledgeBase: optimizedKnowledgeBase 
+        message: `Knowledge base optimized: ${allMemories.length} → ${optimizedMemories.length} entries`,
+        beforeCount: allMemories.length,
+        afterCount: optimizedMemories.length
       });
     } catch (error) {
       console.error('Knowledge optimization error:', error);
