@@ -248,7 +248,9 @@ Return the consolidated memories as a JSON array:`;
         const textContent = content && 'text' in content ? content.text : '';
         
         try {
-          const consolidatedGroup = JSON.parse(textContent);
+          // Remove markdown code blocks if present
+          const cleanedText = textContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const consolidatedGroup = JSON.parse(cleanedText);
           if (Array.isArray(consolidatedGroup)) {
             consolidatedMemories.push(...consolidatedGroup);
           }
