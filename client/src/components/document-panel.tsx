@@ -16,6 +16,8 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [textInput, setTextInput] = useState('');
+  const [showTextInput, setShowTextInput] = useState(false);
 
   const uploadDocumentMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -38,6 +40,43 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
         title: "Upload Successful",
         description: `${result.filename} is being processed`,
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Upload Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const uploadTextMutation = useMutation({
+    mutationFn: async (text: string) => {
+      const blob = new Blob([text], { type: 'text/plain' });
+      const file = new File([blob], `pasted-text-${Date.now()}.txt`, { type: 'text/plain' });
+      
+      const formData = new FormData();
+      formData.append('document', file);
+      
+      const response = await fetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+      
+      return response.json();
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Text Uploaded",
+        description: `Pasted text is being processed as ${result.filename}`,
+      });
+      setTextInput('');
+      setShowTextInput(false);
       queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
     },
     onError: (error) => {
@@ -124,6 +163,28 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
     fileInputRef.current?.click();
   };
 
+  const handleTextUpload = () => {
+    if (!textInput.trim()) {
+      toast({
+        title: "No Text",
+        description: "Please enter some text to upload",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (textInput.length < 50) {
+      toast({
+        title: "Text Too Short",
+        description: "Please enter at least 50 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    uploadTextMutation.mutate(textInput);
+  };
+
   const getFileIcon = (contentType: string) => {
     if (contentType.includes('pdf')) return 'fas fa-file-pdf text-destructive';
     if (contentType.includes('word')) return 'fas fa-file-word text-accent';
@@ -167,20 +228,31 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
         <i className="fas fa-cloud-upload-alt text-3xl text-muted-foreground mb-3"></i>
         <h3 className="text-sm font-medium text-foreground mb-1">Upload Documents</h3>
         <p className="text-xs text-muted-foreground mb-3">PDF, DOCX, TXT files supported</p>
-        <Button 
-          className="bg-primary hover:bg-primary/90 text-primary-foreground py-2 px-4 rounded-lg text-xs transition-all duration-200"
-          disabled={uploadDocumentMutation.isPending}
-          data-testid="button-choose-files"
-        >
-          {uploadDocumentMutation.isPending ? (
-            <>
-              <i className="fas fa-spinner fa-spin mr-2"></i>
-              Uploading...
-            </>
-          ) : (
-            'Choose Files'
-          )}
-        </Button>
+        <div className="flex gap-2 mb-3">
+          <Button 
+            className="bg-primary hover:bg-primary/90 text-primary-foreground py-2 px-4 rounded-lg text-xs transition-all duration-200"
+            disabled={uploadDocumentMutation.isPending}
+            data-testid="button-choose-files"
+          >
+            {uploadDocumentMutation.isPending ? (
+              <>
+                <i className="fas fa-spinner fa-spin mr-2"></i>
+                Uploading...
+              </>
+            ) : (
+              'Choose Files'
+            )}
+          </Button>
+          <Button 
+            variant="outline"
+            className="py-2 px-4 rounded-lg text-xs transition-all duration-200"
+            onClick={() => setShowTextInput(!showTextInput)}
+            data-testid="button-toggle-text-input"
+          >
+            <i className="fas fa-paste mr-2"></i>
+            Paste Text
+          </Button>
+        </div>
         
         <input
           ref={fileInputRef}
@@ -190,6 +262,57 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
           onChange={(e) => handleFileSelect(e.target.files)}
         />
       </div>
+
+      {/* Text Input Area */}
+      {showTextInput && (
+        <div className="border border-border rounded-lg p-4 space-y-3">
+          <h3 className="text-sm font-medium text-foreground">Paste Text Content</h3>
+          <textarea
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            className="w-full h-32 p-3 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground resize-vertical focus:ring-2 focus:ring-ring focus:border-transparent"
+            placeholder="Paste large amounts of text here (character information, transcripts, notes, etc.)..."
+            data-testid="textarea-text-input"
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {textInput.length} characters {textInput.length >= 50 ? '✓' : '(minimum 50)'}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setTextInput('');
+                  setShowTextInput(false);
+                }}
+                disabled={uploadTextMutation.isPending}
+                data-testid="button-cancel-text"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleTextUpload}
+                disabled={uploadTextMutation.isPending || textInput.length < 50}
+                data-testid="button-upload-text"
+              >
+                {uploadTextMutation.isPending ? (
+                  <>
+                    <i className="fas fa-spinner fa-spin mr-2"></i>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-upload mr-2"></i>
+                    Upload Text
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Processing Queue */}
       <div className="space-y-3">
