@@ -65,3 +65,10 @@ export interface StreamSettings {
   voiceOutput: boolean;
   memoryLearning: boolean;
 }
+
+export type AppMode = 'PODCAST' | 'STREAMING';
+
+export interface VoiceSettings {
+  useElevenLabs: boolean;
+  voiceId?: string;
+}
