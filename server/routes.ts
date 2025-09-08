@@ -154,6 +154,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get available voices
+  app.get('/api/speech/voices', async (req, res) => {
+    try {
+      const voices = await elevenlabsService.getVoices();
+      res.json(voices);
+    } catch (error) {
+      console.error('Failed to fetch voices:', error);
+      res.status(500).json({ error: 'Failed to fetch voices' });
+    }
+  });
+
   // Speech synthesis route
   app.post('/api/speech/synthesize', async (req, res) => {
     try {

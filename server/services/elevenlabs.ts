@@ -11,7 +11,7 @@ class ElevenLabsService {
     this.config = {
       apiKey: process.env.ELEVENLABS_API_KEY || "",
       voiceId: process.env.ELEVENLABS_VOICE_ID || "pNInz6obpgDQGcFmaJgB", // Default Adam voice
-      model: "eleven_multilingual_v2", // Temporary fallback to working model
+      model: "eleven_v3", // Latest v3 model for maximum expressiveness
     };
   }
 
@@ -34,7 +34,14 @@ class ElevenLabsService {
             "xi-api-key": this.config.apiKey,
           },
           body: JSON.stringify({
-            text: text
+            text: text,
+            model_id: this.config.model,
+            voice_settings: {
+              stability: 0.3, // Lower for more creative/expressive output
+              similarity_boost: 0.75, // Recommended balance for v3
+              style: 0.0, // Style exaggeration (v3 parameter, keep at 0.0)
+              use_speaker_boost: true,
+            },
           }),
         },
       );
