@@ -9,13 +9,11 @@ import EvolutionPanel from "./evolution-panel";
 interface MemoryPanelProps {
   profileId?: string;
   memoryStats?: MemoryStats;
-  onConsolidateMemory: () => void;
 }
 
 export default function MemoryPanel({ 
   profileId, 
-  memoryStats, 
-  onConsolidateMemory 
+  memoryStats 
 }: MemoryPanelProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -25,58 +23,7 @@ export default function MemoryPanel({
     enabled: !!profileId,
   });
 
-  const optimizeKnowledgeMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest('POST', '/api/memory/optimize');
-      return response.json();
-    },
-    onSuccess: (result) => {
-      toast({
-        title: "Knowledge Base Optimized",
-        description: result.message,
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/profiles/active'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/memory/stats'] });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to optimize knowledge base",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const exportMemoriesMutation = useMutation({
-    mutationFn: async () => {
-      // This would typically generate and download a file
-      const data = {
-        memoryStats,
-        entries: memoryEntries,
-        exportedAt: new Date().toISOString(),
-      };
-      
-      const blob = new Blob([JSON.stringify(data, null, 2)], { 
-        type: 'application/json' 
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `nicky-memory-export-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      return { success: true };
-    },
-    onSuccess: () => {
-      toast({
-        title: "Export Complete",
-        description: "Memory bank exported successfully",
-      });
-    },
-  });
+  // Removed redundant mutations - Evolution Panel handles optimization
 
   const formatTimeAgo = (timestamp: string) => {
     const now = new Date();
@@ -129,15 +76,6 @@ export default function MemoryPanel({
             </div>
           </div>
           
-          <Button
-            onClick={() => optimizeKnowledgeMutation.mutate()}
-            disabled={optimizeKnowledgeMutation.isPending}
-            className="w-full mt-3 bg-primary/20 hover:bg-primary/30 text-primary py-2 px-3 rounded-lg text-xs transition-all duration-200"
-            data-testid="button-optimize-knowledge"
-          >
-            <i className="fas fa-compress-arrows-alt mr-1"></i>
-            {optimizeKnowledgeMutation.isPending ? 'Optimizing...' : 'Optimize Knowledge Base'}
-          </Button>
         </CardContent>
       </Card>
 
@@ -183,26 +121,7 @@ export default function MemoryPanel({
       {/* EVOLUTIONARY AI PANEL */}
       <EvolutionPanel profileId={profileId} />
 
-      {/* Memory Actions */}
-      <div className="space-y-2">
-        <Button
-          onClick={onConsolidateMemory}
-          className="w-full bg-accent/20 hover:bg-accent/30 text-accent py-2 px-3 rounded-lg text-xs transition-all duration-200"
-          data-testid="button-consolidate-memory"
-        >
-          <i className="fas fa-layer-group mr-1"></i>
-          Consolidate Recent Memories
-        </Button>
-        <Button
-          onClick={() => exportMemoriesMutation.mutate()}
-          variant="secondary"
-          className="w-full bg-muted hover:bg-muted/80 text-muted-foreground py-2 px-3 rounded-lg text-xs transition-all duration-200"
-          data-testid="button-export-memories"
-        >
-          <i className="fas fa-download mr-1"></i>
-          Export Memory Bank
-        </Button>
-      </div>
+      {/* All memory management now handled by Evolution Panel above */}
     </div>
   );
 }

@@ -489,7 +489,6 @@ export default function Dashboard() {
           <MemoryPanel
             profileId={activeProfile?.id}
             memoryStats={memoryStats}
-            onConsolidateMemory={() => consolidateMemoryMutation.mutate(currentConversationId)}
           />
         )}
 
