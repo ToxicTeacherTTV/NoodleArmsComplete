@@ -82,15 +82,13 @@ export default function JazzDashboard() {
   // Mutations
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { conversationId: string; type: string; content: string; metadata?: any }) => {
-      return apiRequest('/api/chat', {
-        method: 'POST',
-        body: JSON.stringify({
-          conversationId: data.conversationId,
-          message: data.content,
-          profileId: activeProfile?.id,
-          mode: appMode,
-        }),
+      const response = await apiRequest('POST', '/api/chat', {
+        conversationId: data.conversationId,
+        message: data.content,
+        profileId: activeProfile?.id,
+        mode: appMode,
       });
+      return response.json();
     },
     onSuccess: (response) => {
       if (response?.content) {
@@ -115,7 +113,10 @@ export default function JazzDashboard() {
   });
 
   const createConversationMutation = useMutation({
-    mutationFn: () => apiRequest('/api/conversations', { method: 'POST' }),
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/conversations');
+      return response.json();
+    },
     onSuccess: (data) => {
       setCurrentConversationId(data.id);
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
@@ -124,9 +125,7 @@ export default function JazzDashboard() {
 
   const consolidateMemoryMutation = useMutation({
     mutationFn: (conversationId: string) => {
-      return apiRequest(`/api/memory/consolidate/${conversationId}`, {
-        method: 'POST',
-      });
+      return apiRequest('POST', `/api/memory/consolidate/${conversationId}`);
     },
     onSuccess: () => {
       toast({
