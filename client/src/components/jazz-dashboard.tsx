@@ -79,6 +79,81 @@ export default function JazzDashboard() {
     refetchInterval: 5000,
   });
 
+  // Mutations
+  const sendMessageMutation = useMutation({
+    mutationFn: async (data: { conversationId: string; type: string; content: string; metadata?: any }) => {
+      return apiRequest('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          conversationId: data.conversationId,
+          message: data.content,
+          profileId: activeProfile?.id,
+          mode: appMode,
+        }),
+      });
+    },
+    onSuccess: (response) => {
+      if (response?.content) {
+        const aiMessage: Message = {
+          id: nanoid(),
+          conversationId: currentConversationId,
+          type: 'AI',
+          content: response.content,
+          createdAt: new Date(),
+        };
+        setMessages(prev => [...prev, aiMessage]);
+        
+        if (streamSettings.voiceOutput) {
+          speak(response.content);
+        }
+      }
+      setAiStatus('IDLE');
+    },
+    onError: () => {
+      setAiStatus('ERROR');
+    },
+  });
+
+  const createConversationMutation = useMutation({
+    mutationFn: () => apiRequest('/api/conversations', { method: 'POST' }),
+    onSuccess: (data) => {
+      setCurrentConversationId(data.id);
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+    },
+  });
+
+  const consolidateMemoryMutation = useMutation({
+    mutationFn: (conversationId: string) => {
+      return apiRequest(`/api/memory/consolidate/${conversationId}`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Memory Consolidated",
+        description: "Conversation has been processed and stored in Nicky's memory.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+    },
+  });
+
+  // Initialize conversation on mount
+  useEffect(() => {
+    if (!currentConversationId) {
+      createConversationMutation.mutate();
+    }
+  }, []);
+
+  // Calculate session duration
+  const getSessionDuration = () => {
+    const now = new Date();
+    const diff = now.getTime() - sessionStartTime.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   // Handle text selection for memory checking
   const handleTextSelection = () => {
     const selection = window.getSelection();
@@ -140,9 +215,30 @@ export default function JazzDashboard() {
             <CardContent>
               <ControlPanel
                 onToggleListening={() => isListening ? stopListening() : startListening()}
-                onSendText={() => {}} // Will implement
+                onSendText={(message: string) => {
+                  if (message.trim()) {
+                    const userMessage: Message = {
+                      id: nanoid(),
+                      conversationId: currentConversationId,
+                      type: 'USER',
+                      content: message,
+                      createdAt: new Date(),
+                    };
+                    setMessages(prev => [...prev, userMessage]);
+                    setAiStatus('PROCESSING');
+                    sendMessageMutation.mutate({
+                      conversationId: currentConversationId,
+                      type: 'USER',
+                      content: message,
+                    });
+                  }
+                }}
                 onClearChat={() => setMessages([])}
-                onStoreConversation={() => {}} // Will implement
+                onStoreConversation={() => {
+                  if (messages.length > 0) {
+                    consolidateMemoryMutation.mutate(currentConversationId);
+                  }
+                }}
                 isListening={isListening}
                 appMode={appMode}
               />
@@ -176,7 +272,7 @@ export default function JazzDashboard() {
           <Card className="h-full border-primary/20 shadow-xl">
             <ChatPanel
               messages={messages}
-              sessionDuration="00:00:00" // Will calculate
+              sessionDuration={getSessionDuration()}
               messageCount={messages.length}
               appMode={appMode}
               onTextSelection={handleTextSelection}
