@@ -5,6 +5,7 @@ import { insertProfileSchema, insertConversationSchema, insertMessageSchema, ins
 import { anthropicService } from "./services/anthropic";
 import { elevenlabsService } from "./services/elevenlabs";
 import { documentProcessor } from "./services/documentProcessor";
+import { geminiService } from "./services/gemini";
 import multer from "multer";
 import { z } from "zod";
 
@@ -336,7 +337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get all memory entries
       const allMemories = await storage.getMemoryEntries(activeProfile.id, 10000);
-      const optimizedMemories = await anthropicService.consolidateAndOptimizeMemories(allMemories);
+      const optimizedMemories = await geminiService.consolidateAndOptimizeMemories(allMemories);
       
       // Clear existing memories and replace with optimized ones
       await storage.clearProfileMemories(activeProfile.id);
