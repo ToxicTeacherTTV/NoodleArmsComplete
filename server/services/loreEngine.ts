@@ -1,6 +1,6 @@
 import { storage } from '../storage.js';
 import { loreEvents, loreCharacters, profiles } from '../../shared/schema.js';
-import { drizzle } from 'drizzle-orm/neon-serverless';
+import { sql } from 'drizzle-orm';
 import { eq, and, lt, desc, asc } from 'drizzle-orm';
 import type { LoreEvent, LoreCharacter, InsertLoreEvent, InsertLoreCharacter } from '../../shared/schema.js';
 import { generateLoreContent } from './gemini.js';
@@ -251,7 +251,7 @@ Format as JSON:
     await storage.db.update(loreEvents)
       .set({ 
         lastMentioned: new Date(),
-        mentionCount: loreEvents.mentionCount + 1
+        mentionCount: sql`${loreEvents.mentionCount} + 1`
       })
       .where(and(
         eq(loreEvents.profileId, profileId),
@@ -269,7 +269,7 @@ Format as JSON:
     await this.generateBackgroundLore(context);
     
     // Resolve very old events (optional - creates narrative closure)
-    const oldEvents = await db
+    const oldEvents = await storage.db
       .select()
       .from(loreEvents)
       .where(and(
@@ -284,7 +284,8 @@ Format as JSON:
         await storage.db.update(loreEvents)
           .set({ 
             status: 'resolved',
-            description: `${event.description} RESOLUTION: ${randomOutcome}`
+            description: `${event.description} RESOLUTION: ${randomOutcome}`,
+            updatedAt: new Date()
           })
           .where(eq(loreEvents.id, event.id));
         console.log(`🎬 Resolved event: ${event.title}`);
@@ -307,7 +308,7 @@ Format as JSON:
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
     const timeSinceLastLore = lastEvent 
-      ? (Date.now() - new Date(lastEvent.createdAt).getTime()) / (1000 * 60 * 60)
+      ? (Date.now() - new Date(lastEvent.createdAt || new Date()).getTime()) / (1000 * 60 * 60)
       : 24; // If no events, assume 24 hours
 
     return {

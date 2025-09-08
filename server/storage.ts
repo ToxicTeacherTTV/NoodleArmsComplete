@@ -4,6 +4,8 @@ import {
   messages, 
   documents, 
   memoryEntries,
+  loreEvents,
+  loreCharacters,
   type Profile, 
   type InsertProfile,
   type Conversation,
@@ -13,7 +15,11 @@ import {
   type Document,
   type InsertDocument,
   type MemoryEntry,
-  type InsertMemoryEntry
+  type InsertMemoryEntry,
+  type LoreEvent,
+  type InsertLoreEvent,
+  type LoreCharacter,
+  type InsertLoreCharacter
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, sql } from "drizzle-orm";
@@ -54,6 +60,8 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Expose db for lore engine to use directly  
+  public db = db;
   async getProfile(id: string): Promise<Profile | undefined> {
     const [profile] = await db.select().from(profiles).where(eq(profiles.id, id));
     return profile || undefined;
