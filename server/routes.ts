@@ -9,6 +9,7 @@ import { geminiService } from "./services/gemini";
 import ChaosEngine from "./services/chaosEngine.js";
 import EvolutionaryAI from "./services/evolutionaryAI.js";
 import { LoreEngine } from './services/loreEngine.js';
+import { MemoryAnalyzer } from './services/memoryAnalyzer.js';
 import multer from "multer";
 import { z } from "zod";
 
@@ -560,6 +561,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Lore context error:', error);
       res.status(500).json({ error: 'Failed to get lore context' });
+    }
+  });
+
+  // Build comprehensive knowledge graph from all memories
+  app.post('/api/memory/build-knowledge-graph/:profileId', async (req, res) => {
+    try {
+      const { profileId } = req.params;
+      console.log(`🚀 Starting knowledge graph build for profile ${profileId}`);
+      
+      // This is a heavy operation that processes all memories
+      await MemoryAnalyzer.buildKnowledgeGraph(profileId);
+      
+      res.json({ 
+        success: true,
+        message: 'Knowledge graph built successfully from all memories'
+      });
+    } catch (error) {
+      console.error('Failed to build knowledge graph:', error);
+      res.status(500).json({ error: 'Failed to build knowledge graph' });
+    }
+  });
+
+  // Get enhanced lore context (includes extracted knowledge)
+  app.get('/api/lore/enhanced-context/:profileId', async (req, res) => {
+    try {
+      const { profileId } = req.params;
+      const context = await MemoryAnalyzer.getEnhancedLoreContext(profileId);
+      res.json({ context });
+    } catch (error) {
+      console.error('Failed to get enhanced lore context:', error);
+      res.status(500).json({ error: 'Failed to get enhanced lore context' });
     }
   });
 
