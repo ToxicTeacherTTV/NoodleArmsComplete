@@ -9,6 +9,7 @@ import DocumentPanel from "@/components/document-panel";
 import StatusIndicator from "@/components/status-indicator";
 import VoiceVisualizer from "@/components/voice-visualizer";
 import ProfileModal from "@/components/profile-modal";
+import ChaosMeter from "@/components/chaos-meter";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useSpeechSynthesis } from "@/hooks/use-speech-synthesis";
 import { useElevenLabsSpeech } from "@/hooks/use-elevenlabs-speech";
@@ -64,6 +65,11 @@ export default function Dashboard() {
   const { data: documents } = useQuery({
     queryKey: ['/api/documents'],
     refetchInterval: false,
+  });
+
+  const { data: chaosState } = useQuery({
+    queryKey: ['/api/chaos/state'],
+    refetchInterval: 5000, // Update chaos state every 5 seconds
   });
 
   const { data: existingMessages } = useQuery({
@@ -440,6 +446,16 @@ export default function Dashboard() {
 
       {/* Right Panel */}
       <div className="w-96 bg-card border-l border-border flex flex-col">
+        {/* Chaos Meter */}
+        <div className="p-4 border-b border-border">
+          {chaosState && (
+            <ChaosMeter 
+              chaosLevel={chaosState.level} 
+              chaosMode={chaosState.mode} 
+            />
+          )}
+        </div>
+
         {/* Tabs */}
         <div className="border-b border-border">
           <nav className="flex">

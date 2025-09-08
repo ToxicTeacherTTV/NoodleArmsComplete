@@ -10,6 +10,8 @@ export const profiles = pgTable("profiles", {
   coreIdentity: text("core_identity").notNull(),
   knowledgeBase: text("knowledge_base").default(""),
   isActive: boolean("is_active").default(false),
+  chaosLevel: integer("chaos_level").default(80), // 0-100 scale, default highly unhinged
+  chaosMode: text("chaos_mode").$type<'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 'CONSPIRACY'>().default('FULL_PSYCHO'),
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });

@@ -6,6 +6,7 @@ import { anthropicService } from "./services/anthropic";
 import { elevenlabsService } from "./services/elevenlabs";
 import { documentProcessor } from "./services/documentProcessor";
 import { geminiService } from "./services/gemini";
+import ChaosEngine from "./services/chaosEngine.js";
 import multer from "multer";
 import { z } from "zod";
 
@@ -412,6 +413,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Document reprocessing error:', error);
       res.status(500).json({ error: 'Failed to reprocess documents' });
+    }
+  });
+
+  // Chaos Engine routes
+  const chaosEngine = ChaosEngine.getInstance();
+
+  app.get('/api/chaos/state', async (req, res) => {
+    try {
+      const chaosState = chaosEngine.getCurrentState();
+      res.json(chaosState);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get chaos state' });
+    }
+  });
+
+  app.post('/api/chaos/trigger', async (req, res) => {
+    try {
+      const { eventType } = req.body;
+      const validEvents = ['death', 'win', 'trolled', 'compliment', 'random'];
+      
+      if (!validEvents.includes(eventType)) {
+        return res.status(400).json({ error: 'Invalid event type' });
+      }
+      
+      chaosEngine.triggerChaosEvent(eventType);
+      const newState = chaosEngine.getCurrentState();
+      res.json(newState);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to trigger chaos event' });
     }
   });
 

@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Message, MemoryEntry } from '@shared/schema';
+import ChaosEngine from './chaosEngine.js';
 
 /*
 <important_code_snippet_instructions>
@@ -30,6 +31,12 @@ interface ConsolidatedMemory {
 }
 
 class AnthropicService {
+  private chaosEngine: ChaosEngine;
+
+  constructor() {
+    this.chaosEngine = ChaosEngine.getInstance();
+  }
+
   async generateResponse(
     userMessage: string,
     coreIdentity: string,
@@ -56,13 +63,18 @@ class AnthropicService {
         });
       }
 
+      // Get current chaos state and personality modifier
+      const chaosModifier = this.chaosEngine.getPersonalityModifier();
       const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}`;
+
+      // Enhanced system prompt with chaos personality
+      const enhancedCoreIdentity = `${coreIdentity}\n\n${chaosModifier}`;
 
       const response = await anthropic.messages.create({
         // "claude-sonnet-4-20250514"
         model: DEFAULT_MODEL_STR,
         max_tokens: 1024,
-        system: coreIdentity,
+        system: enhancedCoreIdentity,
         messages: [
           {
             role: 'user',
@@ -72,7 +84,9 @@ class AnthropicService {
       });
 
       const processingTime = Date.now() - startTime;
-      const content = Array.isArray(response.content) ? response.content[0].text : response.content;
+      const content = Array.isArray(response.content) 
+        ? (response.content[0] as any).text 
+        : (response.content as any);
 
       return {
         content: typeof content === 'string' ? content : '',
