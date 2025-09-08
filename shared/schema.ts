@@ -58,8 +58,16 @@ export const memoryEntries = pgTable("memory_entries", {
   content: text("content").notNull(),
   importance: integer("importance").default(1),
   retrievalCount: integer("retrieval_count").default(0),
+  successRate: integer("success_rate").default(100), // Track how useful this fact is in conversations
+  lastUsed: timestamp("last_used"),
+  clusterId: varchar("cluster_id"), // For intelligent clustering
+  keywords: text("keywords").array(), // For better retrieval
+  relationships: text("relationships").array(), // IDs of related facts
+  qualityScore: integer("quality_score").default(5), // 1-10 based on feedback
+  temporalContext: text("temporal_context"), // When this fact was true/relevant
   source: text("source"), // 'conversation', 'document', 'manual'
   createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
 });
 
 // Relations
