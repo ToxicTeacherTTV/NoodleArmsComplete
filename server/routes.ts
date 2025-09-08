@@ -304,6 +304,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/memory/clear', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      // Get count before clearing
+      const stats = await storage.getMemoryStats(activeProfile.id);
+      
+      // Clear existing memories
+      await storage.clearProfileMemories(activeProfile.id);
+
+      res.json({ 
+        message: `Cleared ${stats.totalFacts} memory entries`,
+        clearedCount: stats.totalFacts
+      });
+    } catch (error) {
+      console.error('Memory clear error:', error);
+      res.status(500).json({ error: 'Failed to clear memories' });
+    }
+  });
+
   app.post('/api/memory/optimize', async (req, res) => {
     try {
       const activeProfile = await storage.getActiveProfile();
