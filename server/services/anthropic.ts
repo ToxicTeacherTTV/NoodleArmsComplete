@@ -41,7 +41,8 @@ class AnthropicService {
     userMessage: string,
     coreIdentity: string,
     relevantMemories: MemoryEntry[],
-    relevantDocs: any[] = []
+    relevantDocs: any[] = [],
+    loreContext?: string
   ): Promise<AIResponse> {
     const startTime = Date.now();
 
@@ -61,6 +62,11 @@ class AnthropicService {
         relevantDocs.forEach(doc => {
           contextPrompt += `- ${doc.content}\n`;
         });
+      }
+
+      // Add lore context for emergent personality
+      if (loreContext) {
+        contextPrompt += `\n\n${loreContext}`;
       }
 
       // Get current chaos state and personality modifier

@@ -130,13 +130,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get relevant memories for RAG
       const relevantMemories = await storage.searchMemoryEntries(activeProfile.id, message);
       const relevantDocs = await documentProcessor.searchDocuments(activeProfile.id, message);
+      
+      // Get lore context for emergent personality
+      const loreContext = await LoreEngine.getLoreContext(activeProfile.id);
 
-      // Generate AI response
+      // Generate AI response with lore context
       const response = await anthropicService.generateResponse(
         message,
         activeProfile.coreIdentity,
         relevantMemories,
-        relevantDocs
+        relevantDocs,
+        loreContext
       );
 
       // Store the AI response
