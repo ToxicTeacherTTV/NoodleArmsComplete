@@ -2,6 +2,7 @@ import { storage } from "../storage";
 import { Document } from "@shared/schema";
 import pdf from 'pdf-parse';
 import mammoth from 'mammoth';
+import { geminiService } from './gemini';
 
 interface DocumentChunk {
   content: string;
@@ -107,6 +108,47 @@ class DocumentProcessor {
   }
 
   async extractAndStoreKnowledge(profileId: string, content: string, filename: string): Promise<void> {
+    try {
+      console.log(`Starting AI-powered fact extraction for ${filename}...`);
+      
+      // Use Gemini to intelligently extract facts from the content
+      const extractedFacts = await geminiService.extractFactsFromDocument(content, filename);
+      
+      console.log(`Extracted ${extractedFacts.length} facts from ${filename}`);
+      
+      // Get existing facts to check for duplicates
+      const existingFacts = await storage.getMemoryEntries(profileId, 10000);
+      const existingContents = new Set(existingFacts.map(f => f.content.toLowerCase().trim()));
+      
+      // Filter out potential duplicates and store new facts
+      let storedCount = 0;
+      for (const fact of extractedFacts) {
+        const normalizedContent = fact.content.toLowerCase().trim();
+        
+        // Skip if very similar content already exists
+        if (!existingContents.has(normalizedContent)) {
+          await storage.addMemoryEntry({
+            profileId,
+            type: fact.type,
+            content: fact.content.trim(),
+            importance: fact.importance,
+            source: `ai-extract:${filename}`,
+          });
+          storedCount++;
+        }
+      }
+      
+      console.log(`Stored ${storedCount} new unique facts from ${filename}`);
+      
+    } catch (error) {
+      console.error('AI fact extraction failed, falling back to keyword-based extraction:', error);
+      
+      // Fallback to original keyword-based extraction if AI fails
+      await this.fallbackExtractAndStoreKnowledge(profileId, content, filename);
+    }
+  }
+
+  private async fallbackExtractAndStoreKnowledge(profileId: string, content: string, filename: string): Promise<void> {
     // Enhanced extraction for character-specific knowledge
     const characterKeywords = [
       // DBD game content
