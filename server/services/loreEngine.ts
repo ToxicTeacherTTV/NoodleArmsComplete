@@ -1,5 +1,6 @@
-import { db } from '../storage.js';
+import { storage } from '../storage.js';
 import { loreEvents, loreCharacters, profiles } from '../../shared/schema.js';
+import { drizzle } from 'drizzle-orm/neon-serverless';
 import { eq, and, lt, desc, asc } from 'drizzle-orm';
 import type { LoreEvent, LoreCharacter, InsertLoreEvent, InsertLoreCharacter } from '../../shared/schema.js';
 import { generateLoreContent } from './gemini.js';
@@ -17,7 +18,7 @@ export class LoreEngine {
   static async seedBasicLore(profileId: string): Promise<void> {
     console.log(`🎭 Seeding basic lore for profile ${profileId}`);
     
-    const existingCharacters = await db
+    const existingCharacters = await storage.db
       .select()
       .from(loreCharacters)
       .where(eq(loreCharacters.profileId, profileId));
@@ -69,7 +70,7 @@ export class LoreEngine {
 
     // Insert characters
     for (const character of foundationalCharacters) {
-      await db.insert(loreCharacters).values({
+      await storage.db.insert(loreCharacters).values({
         ...character,
         profileId
       });
@@ -117,7 +118,7 @@ export class LoreEngine {
 
     // Insert events
     for (const event of foundationalEvents) {
-      await db.insert(loreEvents).values({
+      await storage.db.insert(loreEvents).values({
         ...event,
         profileId
       });
@@ -183,7 +184,7 @@ Format as JSON:
       // Insert new events
       if (result.newEvents) {
         for (const event of result.newEvents) {
-          await db.insert(loreEvents).values({
+          await storage.db.insert(loreEvents).values({
             ...event,
             profileId
           });
@@ -194,7 +195,7 @@ Format as JSON:
       // Update character activities
       if (result.characterUpdates) {
         for (const update of result.characterUpdates) {
-          await db.update(loreCharacters)
+          await storage.db.update(loreCharacters)
             .set({ 
               lastActivity: update.lastActivity,
               updatedAt: new Date()
@@ -214,7 +215,7 @@ Format as JSON:
 
   // Get relevant lore to include in conversation context
   static async getRelevantLore(profileId: string, limit: number = 3): Promise<string> {
-    const recentEvents = await db
+    const recentEvents = await storage.db
       .select()
       .from(loreEvents)
       .where(and(
@@ -224,7 +225,7 @@ Format as JSON:
       .orderBy(desc(loreEvents.priority), asc(loreEvents.lastMentioned))
       .limit(limit);
 
-    const activeCharacters = await db
+    const activeCharacters = await storage.db
       .select()
       .from(loreCharacters)
       .where(eq(loreCharacters.profileId, profileId))
@@ -247,7 +248,7 @@ Format as JSON:
 
   // Mark an event as mentioned (for tracking usage)
   static async markEventMentioned(profileId: string, eventTitle: string): Promise<void> {
-    await db.update(loreEvents)
+    await storage.db.update(loreEvents)
       .set({ 
         lastMentioned: new Date(),
         mentionCount: loreEvents.mentionCount + 1
@@ -280,7 +281,7 @@ Format as JSON:
     for (const event of oldEvents) {
       if (Math.random() < 0.3) { // 30% chance to auto-resolve
         const randomOutcome = event.outcomes?.[Math.floor(Math.random() * event.outcomes.length)];
-        await db.update(loreEvents)
+        await storage.db.update(loreEvents)
           .set({ 
             status: 'resolved',
             description: `${event.description} RESOLUTION: ${randomOutcome}`
@@ -292,12 +293,12 @@ Format as JSON:
   }
 
   private static async buildGenerationContext(profileId: string): Promise<LoreGenerationContext> {
-    const existingEvents = await db
+    const existingEvents = await storage.db
       .select()
       .from(loreEvents)
       .where(eq(loreEvents.profileId, profileId));
 
-    const existingCharacters = await db
+    const existingCharacters = await storage.db
       .select()
       .from(loreCharacters)
       .where(eq(loreCharacters.profileId, profileId));

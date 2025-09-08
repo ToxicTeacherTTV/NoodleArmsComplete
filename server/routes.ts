@@ -8,6 +8,7 @@ import { documentProcessor } from "./services/documentProcessor";
 import { geminiService } from "./services/gemini";
 import ChaosEngine from "./services/chaosEngine.js";
 import EvolutionaryAI from "./services/evolutionaryAI.js";
+import { LoreEngine } from './services/loreEngine.js';
 import multer from "multer";
 import { z } from "zod";
 
@@ -520,6 +521,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(metrics);
     } catch (error) {
       res.status(500).json({ error: 'Failed to get evolution metrics' });
+    }
+  });
+
+  // Emergent Lore System routes
+  app.post('/api/lore/seed/:profileId', async (req, res) => {
+    try {
+      const { profileId } = req.params;
+      await LoreEngine.seedBasicLore(profileId);
+      res.json({ success: true, message: 'Basic lore seeded successfully' });
+    } catch (error) {
+      console.error('Lore seeding error:', error);
+      res.status(500).json({ error: 'Failed to seed lore' });
+    }
+  });
+
+  app.post('/api/lore/generate/:profileId', async (req, res) => {
+    try {
+      const { profileId } = req.params;
+      await LoreEngine.runMaintenanceCycle(profileId);
+      res.json({ success: true, message: 'Background lore generated' });
+    } catch (error) {
+      console.error('Lore generation error:', error);
+      res.status(500).json({ error: 'Failed to generate lore' });
+    }
+  });
+
+  app.get('/api/lore/context/:profileId', async (req, res) => {
+    try {
+      const { profileId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 3;
+      const loreContext = await LoreEngine.getRelevantLore(profileId, limit);
+      res.json({ context: loreContext });
+    } catch (error) {
+      console.error('Lore context error:', error);
+      res.status(500).json({ error: 'Failed to get lore context' });
     }
   });
 
