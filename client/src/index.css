@@ -3,25 +3,26 @@
 @tailwind utilities;
 
 :root {
-  --background: hsl(240, 10%, 3.9%);
-  --foreground: hsl(0, 0%, 98%);
-  --card: hsl(240, 10%, 7%);
-  --card-foreground: hsl(0, 0%, 95%);
-  --popover: hsl(240, 10%, 7%);
-  --popover-foreground: hsl(0, 0%, 95%);
-  --primary: hsl(263, 70%, 65%);
-  --primary-foreground: hsl(0, 0%, 98%);
-  --secondary: hsl(22, 93%, 58%);
-  --secondary-foreground: hsl(0, 0%, 98%);
-  --muted: hsl(240, 5%, 15%);
-  --muted-foreground: hsl(240, 5%, 65%);
-  --accent: hsl(188, 78%, 41%);
-  --accent-foreground: hsl(0, 0%, 98%);
+  /* Jazz Cup Color Palette */
+  --background: hsl(180, 50%, 98%);
+  --foreground: hsl(220, 90%, 15%);
+  --card: hsl(180, 30%, 95%);
+  --card-foreground: hsl(220, 90%, 15%);
+  --popover: hsl(180, 30%, 95%);
+  --popover-foreground: hsl(220, 90%, 15%);
+  --primary: hsl(180, 100%, 40%); /* Jazz cup teal */
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(280, 80%, 60%); /* Jazz cup purple */
+  --secondary-foreground: hsl(0, 0%, 100%);
+  --muted: hsl(180, 25%, 90%);
+  --muted-foreground: hsl(220, 50%, 45%);
+  --accent: hsl(285, 85%, 65%); /* Bright purple accent */
+  --accent-foreground: hsl(0, 0%, 100%);
   --destructive: hsl(0, 84%, 60%);
   --destructive-foreground: hsl(0, 0%, 98%);
-  --border: hsl(240, 6%, 20%);
-  --input: hsl(240, 6%, 20%);
-  --ring: hsl(263, 70%, 65%);
+  --border: hsl(180, 30%, 85%);
+  --input: hsl(180, 30%, 92%);
+  --ring: hsl(180, 100%, 40%);
   --chart-1: hsl(263, 70%, 65%);
   --chart-2: hsl(188, 78%, 41%);
   --chart-3: hsl(22, 93%, 58%);
@@ -52,25 +53,26 @@
 }
 
 .dark {
-  --background: hsl(240, 10%, 3.9%);
-  --foreground: hsl(0, 0%, 98%);
-  --card: hsl(240, 10%, 7%);
-  --card-foreground: hsl(0, 0%, 95%);
-  --popover: hsl(240, 10%, 7%);
-  --popover-foreground: hsl(0, 0%, 95%);
-  --primary: hsl(263, 70%, 65%);
-  --primary-foreground: hsl(0, 0%, 98%);
-  --secondary: hsl(22, 93%, 58%);
-  --secondary-foreground: hsl(0, 0%, 98%);
-  --muted: hsl(240, 5%, 15%);
-  --muted-foreground: hsl(240, 5%, 65%);
-  --accent: hsl(188, 78%, 41%);
-  --accent-foreground: hsl(0, 0%, 98%);
+  /* Jazz Cup Dark Mode */
+  --background: hsl(220, 30%, 8%);
+  --foreground: hsl(180, 50%, 95%);
+  --card: hsl(220, 30%, 12%);
+  --card-foreground: hsl(180, 50%, 95%);
+  --popover: hsl(220, 30%, 12%);
+  --popover-foreground: hsl(180, 50%, 95%);
+  --primary: hsl(180, 100%, 50%); /* Bright teal */
+  --primary-foreground: hsl(220, 30%, 8%);
+  --secondary: hsl(280, 80%, 70%); /* Bright purple */
+  --secondary-foreground: hsl(220, 30%, 8%);
+  --muted: hsl(220, 20%, 18%);
+  --muted-foreground: hsl(180, 30%, 65%);
+  --accent: hsl(285, 85%, 75%); /* Bright purple accent */
+  --accent-foreground: hsl(220, 30%, 8%);
   --destructive: hsl(0, 84%, 60%);
   --destructive-foreground: hsl(0, 0%, 98%);
-  --border: hsl(240, 6%, 20%);
-  --input: hsl(240, 6%, 20%);
-  --ring: hsl(263, 70%, 65%);
+  --border: hsl(220, 20%, 25%);
+  --input: hsl(220, 20%, 25%);
+  --ring: hsl(180, 100%, 50%);
   --chart-1: hsl(263, 70%, 65%);
   --chart-2: hsl(188, 78%, 41%);
   --chart-3: hsl(22, 93%, 58%);

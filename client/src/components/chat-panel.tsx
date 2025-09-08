@@ -97,7 +97,13 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
               <div key={message.id} className="flex" data-testid={`message-${message.type.toLowerCase()}`}>
                 {message.type === 'USER' ? (
                   <div className={`px-4 py-3 rounded-2xl rounded-br-md ${getMessageStyle(message.type)}`}>
-                    <div className="text-sm">{message.content}</div>
+                    <div 
+                      className="text-sm cursor-text select-text"
+                      onMouseUp={onTextSelection}
+                      data-testid={`message-content-${message.id}`}
+                    >
+                      {message.content}
+                    </div>
                     <div className="text-xs opacity-70 mt-1">
                       You • {formatTime(message.createdAt)}
                       {message.metadata?.voice && <i className="fas fa-microphone ml-2 text-accent"></i>}
@@ -113,7 +119,11 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                       {getMessageIcon(message.type)}
                     </div>
                     <div className={`px-4 py-3 rounded-2xl rounded-bl-md ${getMessageStyle(message.type)}`}>
-                      <div className="text-sm">
+                      <div 
+                        className="text-sm cursor-text select-text"
+                        onMouseUp={onTextSelection}
+                        data-testid={`message-content-${message.id}`}
+                      >
                         {message.type === 'CHATTER' && message.metadata?.speaker && (
                           <span className="text-accent font-medium">{message.metadata.speaker}: </span>
                         )}
