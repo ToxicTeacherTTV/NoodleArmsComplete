@@ -140,7 +140,12 @@ Return the optimized facts as a JSON array. Keep the most important and unique i
       }
     } catch (error) {
       console.error("Gemini optimization error:", error);
-      return facts; // Return original facts if optimization fails
+      return facts as Array<{
+        content: string;
+        type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
+        importance: number;
+        keywords: string[];
+      }>; // Return original facts if optimization fails
     }
   }
 }

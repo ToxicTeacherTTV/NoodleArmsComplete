@@ -252,7 +252,10 @@ Return the consolidated memories as a JSON array:`;
           const cleanedText = textContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
           const consolidatedGroup = JSON.parse(cleanedText);
           if (Array.isArray(consolidatedGroup)) {
-            consolidatedMemories.push(...consolidatedGroup);
+            consolidatedMemories.push(...consolidatedGroup.map(item => ({
+              ...item,
+              type: item.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT'
+            })));
           }
         } catch (parseError) {
           console.error('Failed to parse consolidated memories for source:', source, parseError);
