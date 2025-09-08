@@ -10,6 +10,9 @@ import StatusIndicator from "@/components/status-indicator";
 import VoiceVisualizer from "@/components/voice-visualizer";
 import ProfileModal from "@/components/profile-modal";
 import ChaosMeter from "@/components/chaos-meter";
+import { MemoryChecker } from "@/components/memory-checker";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useSpeechSynthesis } from "@/hooks/use-speech-synthesis";
 import { useElevenLabsSpeech } from "@/hooks/use-elevenlabs-speech";
@@ -35,6 +38,9 @@ export default function Dashboard() {
     memoryLearning: true,
   });
   const [sessionStartTime, setSessionStartTime] = useState<Date>(new Date());
+  const [memoryCheckerOpen, setMemoryCheckerOpen] = useState(false);
+  const [selectedText, setSelectedText] = useState("");
+  const [checkerPosition, setCheckerPosition] = useState({ x: 0, y: 0 });
 
   // Refs for queue management
   const messageQueueRef = useRef<Message[]>([]);
@@ -370,6 +376,23 @@ export default function Dashboard() {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Handle text selection for memory checking
+  const handleTextSelection = () => {
+    const selection = window.getSelection();
+    const selectedText = selection?.toString().trim();
+    
+    if (selectedText && selectedText.length > 2) {
+      const range = selection?.getRangeAt(0);
+      const rect = range?.getBoundingClientRect();
+      
+      if (rect) {
+        setSelectedText(selectedText);
+        setCheckerPosition({ x: rect.left, y: rect.top });
+        setMemoryCheckerOpen(true);
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen flex bg-background text-foreground">
       {/* Sidebar */}
@@ -441,6 +464,7 @@ export default function Dashboard() {
           onPlayAudio={playMessageAudio}
           isPlayingAudio={isSpeakingElevenLabs}
           isPausedAudio={isPausedElevenLabs}
+          onTextSelection={handleTextSelection}
         />
       </div>
 
@@ -514,6 +538,15 @@ export default function Dashboard() {
       <ProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+      />
+
+      {/* Memory Checker */}
+      <MemoryChecker
+        selectedText={selectedText}
+        profileId={activeProfile?.id}
+        isOpen={memoryCheckerOpen}
+        onClose={() => setMemoryCheckerOpen(false)}
+        position={checkerPosition}
       />
 
       {/* Connection Status Bar */}

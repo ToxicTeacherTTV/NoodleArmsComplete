@@ -10,9 +10,10 @@ interface ChatPanelProps {
   onPlayAudio?: (content: string) => void;
   isPlayingAudio?: boolean;
   isPausedAudio?: boolean;
+  onTextSelection?: () => void;
 }
 
-export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', onPlayAudio, isPlayingAudio = false, isPausedAudio = false }: ChatPanelProps) {
+export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', onPlayAudio, isPlayingAudio = false, isPausedAudio = false, onTextSelection }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
