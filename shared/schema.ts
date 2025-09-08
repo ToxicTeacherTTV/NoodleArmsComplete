@@ -178,6 +178,58 @@ export const loreCharacters = pgTable("lore_characters", {
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
 
+// Locations in Nicky's world (extracted from memories)
+export const loreLocations = pgTable("lore_locations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  name: text("name").notNull(), // "Ma's Restaurant", "The Old Neighborhood", "Twitch Studio"
+  category: text("category").notNull(), // 'restaurant', 'home', 'gaming', 'neighborhood', 'family'
+  description: text("description").notNull(), // What happens there, atmosphere
+  significance: text("significance").notNull(), // Why it matters to Nicky
+  currentStatus: text("current_status"), // Current state/activity
+  associatedCharacters: text("associated_characters").array(), // Who goes there
+  lastMentioned: timestamp("last_mentioned"),
+  mentionCount: integer("mention_count").default(0),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+// Historical events from Nicky's past (extracted from memories)
+export const loreHistoricalEvents = pgTable("lore_historical_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  title: text("title").notNull(), // "The Great Stream Disaster of 2023"
+  description: text("description").notNull(), // What happened
+  category: text("category").notNull(), // 'gaming', 'family', 'streaming', 'personal'
+  timeframe: text("timeframe"), // "last year", "when I was a kid", "2023"
+  significance: integer("significance").default(3), // 1-5, how important this memory is
+  participants: text("participants").array(), // Characters involved
+  location: text("location"), // Where it happened
+  consequences: text("consequences"), // What resulted from this event
+  lastMentioned: timestamp("last_mentioned"),
+  mentionCount: integer("mention_count").default(0),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+// Relationships between entities (character-character, character-location, etc.)
+export const loreRelationships = pgTable("lore_relationships", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  entityType1: text("entity_type_1").notNull(), // 'character', 'location', 'event'
+  entityId1: text("entity_id_1").notNull(), // ID of first entity
+  entityName1: text("entity_name_1").notNull(), // Name for easy reference
+  entityType2: text("entity_type_2").notNull(), // 'character', 'location', 'event'
+  entityId2: text("entity_id_2").notNull(), // ID of second entity
+  entityName2: text("entity_name_2").notNull(), // Name for easy reference
+  relationshipType: text("relationship_type").notNull(), // 'friends', 'rivals', 'works_at', 'happened_at'
+  strength: integer("strength").default(3), // 1-5, how strong/important this connection is
+  description: text("description"), // Details about the relationship
+  status: text("status").default('active'), // 'active', 'past', 'complicated'
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
 // Relations for lore system
 export const loreEventsRelations = relations(loreEvents, ({ one }) => ({
   profile: one(profiles, {
@@ -189,6 +241,27 @@ export const loreEventsRelations = relations(loreEvents, ({ one }) => ({
 export const loreCharactersRelations = relations(loreCharacters, ({ one }) => ({
   profile: one(profiles, {
     fields: [loreCharacters.profileId],
+    references: [profiles.id],
+  }),
+}));
+
+export const loreLocationsRelations = relations(loreLocations, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [loreLocations.profileId],
+    references: [profiles.id],
+  }),
+}));
+
+export const loreHistoricalEventsRelations = relations(loreHistoricalEvents, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [loreHistoricalEvents.profileId],
+    references: [profiles.id],
+  }),
+}));
+
+export const loreRelationshipsRelations = relations(loreRelationships, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [loreRelationships.profileId],
     references: [profiles.id],
   }),
 }));
@@ -206,8 +279,32 @@ export const insertLoreCharacterSchema = createInsertSchema(loreCharacters).omit
   updatedAt: true,
 });
 
+export const insertLoreLocationSchema = createInsertSchema(loreLocations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertLoreHistoricalEventSchema = createInsertSchema(loreHistoricalEvents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertLoreRelationshipSchema = createInsertSchema(loreRelationships).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types for lore system
 export type LoreEvent = typeof loreEvents.$inferSelect;
 export type InsertLoreEvent = z.infer<typeof insertLoreEventSchema>;
 export type LoreCharacter = typeof loreCharacters.$inferSelect;
 export type InsertLoreCharacter = z.infer<typeof insertLoreCharacterSchema>;
+export type LoreLocation = typeof loreLocations.$inferSelect;
+export type InsertLoreLocation = z.infer<typeof insertLoreLocationSchema>;
+export type LoreHistoricalEvent = typeof loreHistoricalEvents.$inferSelect;
+export type InsertLoreHistoricalEvent = z.infer<typeof insertLoreHistoricalEventSchema>;
+export type LoreRelationship = typeof loreRelationships.$inferSelect;
+export type InsertLoreRelationship = z.infer<typeof insertLoreRelationshipSchema>;
