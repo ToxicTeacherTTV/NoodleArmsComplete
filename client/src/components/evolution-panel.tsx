@@ -25,6 +25,13 @@ export default function EvolutionPanel({ profileId }: EvolutionPanelProps) {
 
   const { data: metrics, isLoading } = useQuery<EvolutionMetrics>({
     queryKey: ['/api/memory/evolution-metrics', profileId],
+    queryFn: async () => {
+      const response = await fetch(`/api/memory/evolution-metrics?profileId=${profileId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch evolution metrics');
+      }
+      return response.json();
+    },
     enabled: !!profileId,
     refetchInterval: 30000,
   });
@@ -71,6 +78,7 @@ export default function EvolutionPanel({ profileId }: EvolutionPanelProps) {
 
   // Debug logging
   console.log('EvolutionPanel Debug:', { profileId, metrics, isLoading });
+  console.log('Metrics data:', JSON.stringify(metrics, null, 2));
 
   const getQualityColor = (score: number) => {
     if (score >= 8) return 'text-green-400';
@@ -100,7 +108,7 @@ export default function EvolutionPanel({ profileId }: EvolutionPanelProps) {
           )}
         </div>
 
-        {metrics && (
+        {metrics && metrics.totalFacts !== undefined && (
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="bg-muted/50 rounded p-3">
               <div className="text-sm text-muted-foreground">Total Knowledge</div>
