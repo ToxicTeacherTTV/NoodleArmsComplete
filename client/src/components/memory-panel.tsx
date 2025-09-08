@@ -150,14 +150,14 @@ export default function MemoryPanel({
               <i className="fas fa-spinner fa-spin mr-2"></i>
               Loading memories...
             </div>
-          ) : !memoryEntries || memoryEntries.length === 0 ? (
+          ) : !memoryEntries || (memoryEntries as any[])?.length === 0 ? (
             <div className="text-center text-muted-foreground py-4">
               <i className="fas fa-brain mb-2 text-2xl opacity-50"></i>
               <p>No memories stored yet</p>
               <p className="text-xs">Start chatting to build Nicky's memory!</p>
             </div>
           ) : (
-            memoryEntries.slice(0, 10).map((memory: MemoryEntry) => (
+            (memoryEntries as MemoryEntry[])?.slice(0, 10).map((memory: MemoryEntry) => (
               <Card key={memory.id} className="bg-muted/30 p-3 rounded-lg">
                 <CardContent className="p-0">
                   <div className={`text-xs font-medium mb-1 ${getTypeColor(memory.type)}`}>

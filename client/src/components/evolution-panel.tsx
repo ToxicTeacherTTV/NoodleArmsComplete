@@ -23,7 +23,7 @@ export default function EvolutionPanel({ profileId }: EvolutionPanelProps) {
   const queryClient = useQueryClient();
   const [optimizationResults, setOptimizationResults] = useState<any>(null);
 
-  const { data: metrics, isLoading } = useQuery({
+  const { data: metrics, isLoading } = useQuery<EvolutionMetrics>({
     queryKey: ['/api/memory/evolution-metrics', profileId],
     enabled: !!profileId,
     refetchInterval: 30000,
