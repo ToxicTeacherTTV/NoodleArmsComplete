@@ -69,6 +69,9 @@ export default function EvolutionPanel({ profileId }: EvolutionPanelProps) {
     );
   }
 
+  // Debug logging
+  console.log('EvolutionPanel Debug:', { profileId, metrics, isLoading });
+
   const getQualityColor = (score: number) => {
     if (score >= 8) return 'text-green-400';
     if (score >= 6) return 'text-yellow-400';

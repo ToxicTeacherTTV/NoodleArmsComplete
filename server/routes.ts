@@ -485,18 +485,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/memory/evolution-metrics', async (req, res) => {
     try {
-      const { profileId } = req.query;
+      let profileId = req.query.profileId as string;
       
-      if (!profileId) {
-        return res.status(400).json({ error: 'Profile ID required' });
+      // Always get the active profile (same as memory stats endpoint)
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
       }
+      profileId = activeProfile.id;
 
-      const memories = await storage.getMemoryEntries(profileId as string);
+      // Get memory entries for the active profile
+      const memories = await storage.getMemoryEntries(profileId);
       
       // Calculate current evolution metrics
       const totalFacts = memories.length;
-      const avgQuality = memories.reduce((sum, m) => sum + (m.qualityScore || 5), 0) / totalFacts;
-      const avgImportance = memories.reduce((sum, m) => sum + (m.importance || 1), 0) / totalFacts;
+      const avgQuality = totalFacts > 0 ? 
+        memories.reduce((sum, m) => sum + (m.qualityScore || 5), 0) / totalFacts : 5;
+      const avgImportance = totalFacts > 0 ? 
+        memories.reduce((sum, m) => sum + (m.importance || 1), 0) / totalFacts : 1;
       const recentlyUsed = memories.filter(m => m.lastUsed && 
         new Date(m.lastUsed).getTime() > Date.now() - (7 * 24 * 60 * 60 * 1000)
       ).length;
