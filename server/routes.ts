@@ -132,8 +132,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const relevantMemories = await storage.searchMemoryEntries(activeProfile.id, message);
       const relevantDocs = await documentProcessor.searchDocuments(activeProfile.id, message);
       
-      // Get lore context for emergent personality
-      const loreContext = await LoreEngine.getRelevantLore(activeProfile.id);
+      // Get enhanced lore context (includes extracted knowledge from memories)
+      const loreContext = await MemoryAnalyzer.getEnhancedLoreContext(activeProfile.id);
 
       // Generate AI response with lore context
       const response = await anthropicService.generateResponse(
