@@ -37,7 +37,7 @@ class ElevenLabsService {
             text: text,
             model_id: this.config.model,
             voice_settings: {
-              stability: 0.5,
+              stability: 0.0, // Creative mode for maximum expressiveness 
               similarity_boost: 0.75,
             },
           }),
