@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import type { MemoryEntry, MemoryStats } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
+import EvolutionPanel from "./evolution-panel";
 
 interface MemoryPanelProps {
   profileId?: string;
@@ -178,6 +179,9 @@ export default function MemoryPanel({
           )}
         </div>
       </div>
+
+      {/* EVOLUTIONARY AI PANEL */}
+      <EvolutionPanel profileId={profileId} />
 
       {/* Memory Actions */}
       <div className="space-y-2">

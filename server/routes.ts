@@ -7,6 +7,7 @@ import { elevenlabsService } from "./services/elevenlabs";
 import { documentProcessor } from "./services/documentProcessor";
 import { geminiService } from "./services/gemini";
 import ChaosEngine from "./services/chaosEngine.js";
+import EvolutionaryAI from "./services/evolutionaryAI.js";
 import multer from "multer";
 import { z } from "zod";
 
@@ -416,7 +417,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Chaos Engine routes
+  // Evolutionary AI and Chaos Engine
+  const evolutionaryAI = new EvolutionaryAI();
   const chaosEngine = ChaosEngine.getInstance();
 
   app.get('/api/chaos/state', async (req, res) => {
@@ -442,6 +444,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(newState);
     } catch (error) {
       res.status(500).json({ error: 'Failed to trigger chaos event' });
+    }
+  });
+
+  // EVOLUTIONARY AI ROUTES - The Ultimate Brain Upgrade! 🧠
+  app.post('/api/memory/evolutionary-optimization', async (req, res) => {
+    try {
+      const { profileId } = req.body;
+      
+      if (!profileId) {
+        return res.status(400).json({ error: 'Profile ID required' });
+      }
+
+      // Get all memory entries for this profile
+      const memories = await storage.getMemoryEntries(profileId);
+      
+      // Run the revolutionary optimization
+      const result = await evolutionaryAI.evolutionaryOptimization(memories);
+      
+      // Store the optimized facts back (in a real system, you'd want to backup first)
+      // For now, let's just return the results
+      res.json({
+        message: 'Evolutionary optimization complete!',
+        ...result,
+        summary: {
+          originalFacts: memories.length,
+          optimizedFacts: result.optimizedFacts.length,
+          relationships: result.relationships.length,
+          clusters: result.clusters.length,
+          knowledgeGaps: result.knowledgeGaps.length,
+          qualityImprovement: result.metrics.avgQualityScore,
+          knowledgeCoverage: result.metrics.knowledgeCoverage
+        }
+      });
+    } catch (error) {
+      console.error('Evolutionary optimization error:', error);
+      res.status(500).json({ error: 'Failed to run evolutionary optimization' });
+    }
+  });
+
+  app.get('/api/memory/evolution-metrics', async (req, res) => {
+    try {
+      const { profileId } = req.query;
+      
+      if (!profileId) {
+        return res.status(400).json({ error: 'Profile ID required' });
+      }
+
+      const memories = await storage.getMemoryEntries(profileId as string);
+      
+      // Calculate current evolution metrics
+      const totalFacts = memories.length;
+      const avgQuality = memories.reduce((sum, m) => sum + (m.qualityScore || 5), 0) / totalFacts;
+      const avgImportance = memories.reduce((sum, m) => sum + (m.importance || 1), 0) / totalFacts;
+      const recentlyUsed = memories.filter(m => m.lastUsed && 
+        new Date(m.lastUsed).getTime() > Date.now() - (7 * 24 * 60 * 60 * 1000)
+      ).length;
+      
+      const metrics = {
+        totalFacts,
+        avgQualityScore: Number(avgQuality.toFixed(1)),
+        avgImportance: Number(avgImportance.toFixed(1)),
+        recentUsageRate: Number((recentlyUsed / totalFacts).toFixed(2)),
+        estimatedClusters: Math.floor(totalFacts / 50), // Rough estimate
+        lastOptimization: 'Never', // Would track this in production
+        readyForOptimization: totalFacts > 100 // Suggest optimization if lots of facts
+      };
+      
+      res.json(metrics);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get evolution metrics' });
     }
   });
 
