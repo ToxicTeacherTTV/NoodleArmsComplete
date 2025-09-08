@@ -114,7 +114,10 @@ export default function JazzDashboard() {
 
   const createConversationMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('POST', '/api/conversations');
+      const response = await apiRequest('POST', '/api/conversations', {
+        profileId: activeProfile?.id,
+        title: `Session ${new Date().toLocaleTimeString()}`,
+      });
       return response.json();
     },
     onSuccess: (data) => {
