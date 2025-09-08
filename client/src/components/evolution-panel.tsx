@@ -226,6 +226,38 @@ export default function EvolutionPanel({ profileId }: EvolutionPanelProps) {
           )}
         </div>
       )}
+
+      {/* NEURAL MAP VISUALIZATION */}
+      {optimizationResults && (
+        <div className="bg-card border border-border rounded-lg p-4">
+          <h4 className="text-md font-semibold text-foreground mb-3 flex items-center">
+            <i className="fas fa-project-diagram mr-2 text-purple-400"></i>
+            Neural Knowledge Map
+          </h4>
+          
+          <div className="mb-3 text-xs text-muted-foreground">
+            Interactive visualization of Nicky's optimized brain structure
+          </div>
+
+          <NeuralMap
+            facts={optimizationResults.optimizedFacts || []}
+            relationships={optimizationResults.relationships || []}
+            clusters={optimizationResults.clusters || []}
+            knowledgeGaps={optimizationResults.knowledgeGaps || []}
+            width={550}
+            height={350}
+          />
+
+          <div className="mt-3 text-xs text-muted-foreground">
+            <div className="grid grid-cols-2 gap-2">
+              <div>• <strong>Green lines:</strong> Supporting facts</div>
+              <div>• <strong>Red lines:</strong> Contradictions</div>
+              <div>• <strong>Blue lines:</strong> Enhancing facts</div>
+              <div>• <strong>Yellow lines:</strong> Dependencies</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
