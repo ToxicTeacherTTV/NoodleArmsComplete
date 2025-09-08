@@ -53,10 +53,10 @@ export default function JazzDashboard() {
   const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopSpeakingElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs } = useElevenLabsSpeech();
   const voiceActivity = useVoiceActivity(isListening);
 
-  // Choose speech synthesis based on mode
-  const speak = appMode === 'STREAMING' ? speakElevenLabs : speakBrowser;
-  const isSpeaking = appMode === 'STREAMING' ? isSpeakingElevenLabs : isSpeakingBrowser;
-  const stopSpeaking = appMode === 'STREAMING' ? stopSpeakingElevenLabs : stopSpeakingBrowser;
+  // Choose speech synthesis based on mode - PODCAST uses ElevenLabs, STREAMING uses browser
+  const speak = appMode === 'PODCAST' ? speakElevenLabs : speakBrowser;
+  const isSpeaking = appMode === 'PODCAST' ? isSpeakingElevenLabs : isSpeakingBrowser;
+  const stopSpeaking = appMode === 'PODCAST' ? stopSpeakingElevenLabs : stopSpeakingBrowser;
 
   // Queries
   const { data: activeProfile } = useQuery({
@@ -101,7 +101,8 @@ export default function JazzDashboard() {
         };
         setMessages(prev => [...prev, aiMessage]);
         
-        if (streamSettings.voiceOutput) {
+        // Don't auto-play in podcast mode - let user control playback
+        if (streamSettings.voiceOutput && appMode === 'STREAMING') {
           speak(response.content);
         }
       }
@@ -192,12 +193,12 @@ export default function JazzDashboard() {
           
           <div className="flex items-center space-x-4">
             <StatusIndicator status={aiStatus} />
-            <Badge 
-              variant={appMode === 'PODCAST' ? 'default' : 'secondary'}
-              className="bg-white/20 text-white border-white/30"
+            <button
+              onClick={() => setAppMode(appMode === 'PODCAST' ? 'STREAMING' : 'PODCAST')}
+              className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors"
             >
-              {appMode === 'PODCAST' ? '🎙️ Podcast' : '🔴 Streaming'}
-            </Badge>
+              {appMode === 'PODCAST' ? '🎙️ Podcast Mode' : '🔴 Streaming Mode'}
+            </button>
           </div>
         </div>
       </div>
@@ -277,6 +278,15 @@ export default function JazzDashboard() {
               sessionDuration={getSessionDuration()}
               messageCount={messages.length}
               appMode={appMode}
+              onPlayAudio={(content: string) => {
+                if (appMode === 'PODCAST') {
+                  speakElevenLabs(content);
+                } else {
+                  speakBrowser(content);
+                }
+              }}
+              isPlayingAudio={appMode === 'PODCAST' ? isSpeakingElevenLabs : isSpeakingBrowser}
+              isPausedAudio={isPausedElevenLabs}
               onTextSelection={handleTextSelection}
             />
           </Card>
