@@ -11,7 +11,7 @@ class ElevenLabsService {
     this.config = {
       apiKey: process.env.ELEVENLABS_API_KEY || "",
       voiceId: process.env.ELEVENLABS_VOICE_ID || "pNInz6obpgDQGcFmaJgB", // Default Adam voice
-      model: "eleven_v3", // Latest v3 model for maximum expressiveness
+      model: "eleven_multilingual_v2", // Stable v2 with emotion tag support
     };
   }
 
@@ -37,9 +37,8 @@ class ElevenLabsService {
             text: text,
             model_id: this.config.model,
             voice_settings: {
-              stability: 0.3, // Lower for more creative/expressive output
-              similarity_boost: 0.75, // Recommended balance for v3
-              style: 0.0, // Style exaggeration (v3 parameter, keep at 0.0)
+              stability: 0.2, // Low for creative emotion processing
+              similarity_boost: 0.8,
               use_speaker_boost: true,
             },
           }),

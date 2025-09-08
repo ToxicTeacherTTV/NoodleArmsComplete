@@ -56,7 +56,7 @@ class AnthropicService {
         });
       }
 
-      const fullPrompt = `${userMessage}${contextPrompt}`;
+      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}`;
 
       const response = await anthropic.messages.create({
         // "claude-sonnet-4-20250514"
