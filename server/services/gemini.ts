@@ -233,4 +233,29 @@ Response format:
   }
 }
 
+// Generate lore content for emergent storytelling
+export async function generateLoreContent(prompt: string): Promise<any> {
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      config: {
+        responseMimeType: "application/json",
+      },
+      contents: prompt,
+    });
+
+    const rawJson = response.text;
+    if (rawJson) {
+      return JSON.parse(rawJson);
+    } else {
+      throw new Error("Empty response from model");
+    }
+  } catch (error) {
+    console.error('Lore generation error:', error);
+    throw new Error(`Failed to generate lore: ${error}`);
+  }
+}
+
 export const geminiService = new GeminiService();

@@ -145,3 +145,69 @@ export type Document = typeof documents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type MemoryEntry = typeof memoryEntries.$inferSelect;
 export type InsertMemoryEntry = z.infer<typeof insertMemoryEntrySchema>;
+
+// Emergent Lore System - Nicky's ongoing life events
+export const loreEvents = pgTable("lore_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  category: text("category").notNull(), // 'family_drama', 'rival_conflict', 'neighborhood', 'restaurant', 'gaming'
+  title: text("title").notNull(), // "Cousin Vinny's Legal Troubles"
+  description: text("description").notNull(), // Full event description
+  status: text("status").notNull(), // 'ongoing', 'resolved', 'escalated'
+  priority: integer("priority").default(3), // 1-5, how likely to mention
+  lastMentioned: timestamp("last_mentioned"),
+  mentionCount: integer("mention_count").default(0),
+  relatedCharacters: text("related_characters").array(), // Character names
+  outcomes: text("outcomes").array(), // Possible developments
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+// Characters in Nicky's world
+export const loreCharacters = pgTable("lore_characters", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  name: text("name").notNull(), // "Cousin Vinny", "Tony_Cannoli", "Mrs. Rigatoni"
+  category: text("category").notNull(), // 'family', 'rival', 'neighbor', 'customer', 'player'
+  relationship: text("relationship").notNull(), // Relationship to Nicky
+  personality: text("personality").notNull(), // Brief personality description
+  backstory: text("backstory").notNull(), // Character background
+  lastActivity: text("last_activity"), // What they were last doing
+  activityFrequency: integer("activity_frequency").default(3), // 1-5, how often they do things
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+// Relations for lore system
+export const loreEventsRelations = relations(loreEvents, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [loreEvents.profileId],
+    references: [profiles.id],
+  }),
+}));
+
+export const loreCharactersRelations = relations(loreCharacters, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [loreCharacters.profileId],
+    references: [profiles.id],
+  }),
+}));
+
+// Insert schemas for lore system
+export const insertLoreEventSchema = createInsertSchema(loreEvents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertLoreCharacterSchema = createInsertSchema(loreCharacters).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types for lore system
+export type LoreEvent = typeof loreEvents.$inferSelect;
+export type InsertLoreEvent = z.infer<typeof insertLoreEventSchema>;
+export type LoreCharacter = typeof loreCharacters.$inferSelect;
+export type InsertLoreCharacter = z.infer<typeof insertLoreCharacterSchema>;
