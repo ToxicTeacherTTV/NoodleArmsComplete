@@ -142,10 +142,10 @@ export default function JazzDashboard() {
 
   // Initialize conversation on mount
   useEffect(() => {
-    if (!currentConversationId) {
+    if (!currentConversationId && activeProfile?.id) {
       createConversationMutation.mutate();
     }
-  }, []);
+  }, [activeProfile?.id]);
 
   // Calculate session duration
   const getSessionDuration = () => {
@@ -280,7 +280,13 @@ export default function JazzDashboard() {
               appMode={appMode}
               onPlayAudio={(content: string) => {
                 if (appMode === 'PODCAST') {
-                  speakElevenLabs(content);
+                  if (isSpeakingElevenLabs && !isPausedElevenLabs) {
+                    pauseElevenLabs();
+                  } else if (isPausedElevenLabs) {
+                    resumeElevenLabs();
+                  } else {
+                    speakElevenLabs(content);
+                  }
                 } else {
                   speakBrowser(content);
                 }
