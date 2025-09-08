@@ -22,7 +22,7 @@ class ElevenLabsService {
 
     try {
       const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${this.config.voiceId}`,
+        `https://api.elevenlabs.io/v1/text-to-dialogue`,
         {
           method: "POST",
           headers: {
@@ -31,12 +31,16 @@ class ElevenLabsService {
             "xi-api-key": this.config.apiKey,
           },
           body: JSON.stringify({
-            text: text,
+            inputs: [
+              {
+                text: text,
+                voice_id: this.config.voiceId,
+              }
+            ],
             model_id: this.config.model,
-            voice_settings: {
+            settings: {
               stability: 0.3, // Lower for more creative/expressive output
               similarity_boost: 0.75, // Recommended balance for v3
-              style: 0.0, // Style exaggeration (v3 parameter, keep at 0.0)
               use_speaker_boost: true,
             },
           }),

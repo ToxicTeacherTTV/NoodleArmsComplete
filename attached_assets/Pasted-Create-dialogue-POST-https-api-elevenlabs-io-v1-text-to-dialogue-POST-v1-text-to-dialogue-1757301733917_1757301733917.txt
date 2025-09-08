@@ -1,0 +1,114 @@
+Create dialogue
+POST
+
+https://api.elevenlabs.io
+/v1/text-to-dialogue
+POST
+/v1/text-to-dialogue
+
+Python
+
+from elevenlabs import DialogueInput, ElevenLabs
+client = ElevenLabs(
+    api_key="YOUR_API_KEY",
+)
+client.text_to_dialogue.convert(
+    inputs=[
+        DialogueInput(
+            text="Knock knock",
+            voice_id="JBFqnCBsd6RMkjVDRZzb",
+        ),
+        DialogueInput(
+            text="Who is there?",
+            voice_id="Aw4FAjKCGjjNkVhN1Xmq",
+        ),
+    ],
+)
+Try it
+Converts a list of text and voice ID pairs into speech (dialogue) and returns audio.
+
+Headers
+xi-api-key
+string
+Required
+Query parameters
+output_format
+enum
+Optional
+Defaults to mp3_44100_128
+Output format of the generated audio. Formatted as codec_sample_rate_bitrate. So an mp3 with 22.05kHz sample rate at 32kbs is represented as mp3_22050_32. MP3 with 192kbps bitrate requires you to be subscribed to Creator tier or above. PCM with 44.1kHz sample rate requires you to be subscribed to Pro tier or above. Note that the μ-law format (sometimes written mu-law, often approximated as u-law) is commonly used for Twilio audio inputs.
+
+
+Show 19 enum values
+Request
+This endpoint expects an object.
+inputs
+list of objects
+Required
+A list of dialogue inputs, each containing text and a voice ID which will be converted into speech.
+
+Hide 2 properties
+text
+string
+Required
+The text to be converted into speech.
+voice_id
+string
+Required
+The ID of the voice to be used for the generation.
+model_id
+string
+Optional
+Defaults to eleven_v3
+Identifier of the model that will be used, you can query them using GET /v1/models. The model needs to have support for text to speech, you can check this using the can_do_text_to_speech property.
+
+language_code
+string or null
+Optional
+Language code (ISO 639-1) used to enforce a language for the model and text normalization. If the model does not support provided language code, an error will be returned.
+
+settings
+object or null
+Optional
+Settings controlling the dialogue generation.
+
+Hide 2 properties
+stability
+double or null
+Optional
+Determines how stable the voice is and the randomness between each generation. Lower values introduce broader emotional range for the voice. Higher values can result in a monotonous voice with limited emotion.
+use_speaker_boost
+boolean or null
+Optional
+This setting boosts the similarity to the original speaker. Using this setting requires a slightly higher computational load, which in turn increases latency.
+pronunciation_dictionary_locators
+list of objects or null
+Optional
+A list of pronunciation dictionary locators (id, version_id) to be applied to the text. They will be applied in order. You may have up to 3 locators per request
+
+
+Hide 2 properties
+pronunciation_dictionary_id
+string
+Required
+The ID of the pronunciation dictionary.
+version_id
+string or null
+Optional
+The ID of the version of the pronunciation dictionary. If not provided, the latest version will be used.
+seed
+integer or null
+Optional
+If specified, our system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed. Must be integer between 0 and 4294967295.
+apply_text_normalization
+enum
+Optional
+Defaults to auto
+This parameter controls text normalization with three modes: ‘auto’, ‘on’, and ‘off’. When set to ‘auto’, the system will automatically decide whether to apply text normalization (e.g., spelling out numbers). With ‘on’, text normalization will always be applied, while with ‘off’, it will be skipped. For ‘eleven_turbo_v2_5’ and ‘eleven_flash_v2_5’ models, text normalization can only be enabled with Enterprise plans.
+
+Allowed values:
+auto
+on
+off
+Response
+The generated audio file
