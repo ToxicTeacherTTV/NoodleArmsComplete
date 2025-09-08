@@ -595,6 +595,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Memory inspector - search for specific references
+  app.get('/api/memory/search/:profileId', async (req, res) => {
+    try {
+      const { profileId } = req.params;
+      const { q } = req.query;
+      
+      if (!q || typeof q !== 'string') {
+        return res.status(400).json({ error: 'Query parameter "q" is required' });
+      }
+      
+      const memories = await storage.searchMemoryEntries(profileId, q);
+      res.json({ 
+        query: q,
+        count: memories.length,
+        memories: memories.map(m => ({
+          id: m.id,
+          type: m.type,
+          content: m.content,
+          importance: m.importance,
+          retrievalCount: m.retrievalCount,
+          createdAt: m.createdAt
+        }))
+      });
+    } catch (error) {
+      console.error('Memory search error:', error);
+      res.status(500).json({ error: 'Failed to search memories' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
