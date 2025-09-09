@@ -170,32 +170,62 @@ class DocumentProcessor {
         lowerChunk.includes(keyword)
       ).length;
       
-      // Only store chunks with substantial relevant content (2+ keywords)
+      // Only store chunks with substantial relevant content AND clear Nicky references
       if (relevantKeywordCount >= 2 && chunk.trim().length > 100) {
-        // Determine content type and importance
-        let type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT' = 'FACT';
-        let importance = 2;
+        // CRITICAL: Only store content that is clearly about/by Nicky
+        // Check for explicit Nicky references or first-person statements that could be Nicky's
+        const hasNickyReference = lowerChunk.includes('nicky') || lowerChunk.includes('dente') || 
+                                 lowerChunk.includes('camping them softly') || lowerChunk.includes('earl') || 
+                                 lowerChunk.includes('vice don');
         
-        // Character personality and preferences
-        if (lowerChunk.includes('prefer') || lowerChunk.includes('like') || lowerChunk.includes('favorite')) {
+        // Skip user preferences that aren't about Nicky
+        const looksLikeUserContent = (lowerChunk.includes('i prefer') || lowerChunk.includes('my main') || 
+                                    lowerChunk.includes('i like') || lowerChunk.includes('i play')) && 
+                                   !hasNickyReference;
+        
+        if (!hasNickyReference && looksLikeUserContent) {
+          continue; // Skip storing user preferences as Nicky's traits
+        }
+        
+        // If no clear Nicky reference, only store general DBD knowledge, not personal preferences
+        if (!hasNickyReference) {
+          const isPersonalPreference = lowerChunk.includes('prefer') || lowerChunk.includes('like') || 
+                                     lowerChunk.includes('favorite') || lowerChunk.includes('main');
+          if (isPersonalPreference) {
+            continue; // Skip personal preferences without clear attribution
+          }
+        }
+        
+        // Determine content type and importance  
+        let type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT' = 'FACT';
+        let importance = hasNickyReference ? 3 : 2; // Higher importance for explicit Nicky content
+        
+        // Character personality and preferences (only if about Nicky)
+        if ((lowerChunk.includes('prefer') || lowerChunk.includes('like') || lowerChunk.includes('favorite')) && hasNickyReference) {
           type = 'PREFERENCE';
           importance = 4;
         }
         // Character backstory and lore
         else if (lowerChunk.includes('backstory') || lowerChunk.includes('history') || lowerChunk.includes('origin')) {
           type = 'LORE';
-          importance = 4;
+          importance = hasNickyReference ? 4 : 2;
         }
         // Game strategy and tactics
         else if (lowerChunk.includes('strategy') || lowerChunk.includes('tactics') || lowerChunk.includes('gameplay')) {
           type = 'CONTEXT';
-          importance = 3;
+          importance = hasNickyReference ? 3 : 2;
+        }
+        
+        // Add attribution prefix if no clear Nicky reference
+        let content = chunk.trim();
+        if (!hasNickyReference) {
+          content = `Document reference: ${content}`;
         }
         
         await storage.addMemoryEntry({
           profileId,
           type,
-          content: chunk.trim(),
+          content,
           importance,
           source: `document:${filename}`,
         });
