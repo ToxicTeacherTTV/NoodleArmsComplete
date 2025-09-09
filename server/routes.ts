@@ -316,6 +316,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Clean up hardcoded lore characters that conflict with user preferences
+  app.post('/api/memory/cleanup-lore-characters', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      // Clean up hardcoded characters from lore system
+      const charactersDeleted = await storage.db.delete(storage.schema.loreCharacters)
+        .where(storage.eq(storage.schema.loreCharacters.profileId, activeProfile.id));
+        
+      const eventsDeleted = await storage.db.delete(storage.schema.loreEvents)
+        .where(storage.eq(storage.schema.loreEvents.profileId, activeProfile.id));
+
+      console.log('Cleaned up hardcoded lore characters and events');
+
+      res.json({ 
+        message: 'Cleaned up hardcoded lore characters and events that were causing character conflicts',
+        charactersDeleted: charactersDeleted.rowCount || 0,
+        eventsDeleted: eventsDeleted.rowCount || 0
+      });
+    } catch (error) {
+      console.error('Lore cleanup error:', error);
+      res.status(500).json({ error: 'Failed to cleanup lore data' });
+    }
+  });
+
   app.get('/api/memory/stats', async (req, res) => {
     try {
       const activeProfile = await storage.getActiveProfile();

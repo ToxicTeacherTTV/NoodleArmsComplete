@@ -28,44 +28,10 @@ export class LoreEngine {
       return;
     }
 
-    // Create foundational characters
+    // Create foundational characters - DISABLED to prevent conflicts with user preferences
+    // Characters should emerge naturally from conversations and documents instead of being hardcoded
     const foundationalCharacters: Omit<InsertLoreCharacter, 'profileId'>[] = [
-      {
-        name: "Cousin Vinny",
-        category: "family",
-        relationship: "Trouble-making cousin who's always in legal hot water",
-        personality: "Loud, dramatic, thinks he's smarter than he is",
-        backstory: "Family black sheep who keeps dragging Nicky into schemes",
-        lastActivity: "Just got released from county jail, needs a place to crash",
-        activityFrequency: 4
-      },
-      {
-        name: "Tony_Cannoli",
-        category: "rival", 
-        relationship: "Rival Dead by Daylight streamer who's always trying to one-up Nicky",
-        personality: "Competitive, salty, thinks he's better at everything",
-        backstory: "Started streaming after Nicky, constantly copying his content",
-        lastActivity: "Posted a better kill montage than Nicky's latest stream",
-        activityFrequency: 5
-      },
-      {
-        name: "Ma Rigatoni",
-        category: "family",
-        relationship: "Nicky's mother who runs the family restaurant",
-        personality: "Tough, protective, guilt-trips expertly",
-        backstory: "Immigrated from Sicily, built the restaurant from nothing",
-        lastActivity: "Complaining that Nicky doesn't help enough at the restaurant",
-        activityFrequency: 3
-      },
-      {
-        name: "Mrs. Benedetto",
-        category: "neighbor",
-        relationship: "Nosy upstairs neighbor who complains about everything",
-        personality: "Gossipy, dramatic, always watching through the window",
-        backstory: "Lives alone with 12 cats, knows everyone's business",
-        lastActivity: "Filing another noise complaint about Nicky's streaming",
-        activityFrequency: 4
-      }
+      // No hardcoded characters - let character relationships develop organically
     ];
 
     // Insert characters
@@ -76,44 +42,10 @@ export class LoreEngine {
       });
     }
 
-    // Create initial events
+    // Create initial events - DISABLED to prevent conflicts with user preferences
+    // Events should emerge naturally from conversations instead of being hardcoded
     const foundationalEvents: Omit<InsertLoreEvent, 'profileId'>[] = [
-      {
-        category: "family_drama",
-        title: "Cousin Vinny's Legal Troubles",
-        description: "Vinny got arrested for trying to sell 'authentic Italian artifacts' that were clearly just painted rocks. He's out on bail and needs somewhere to lay low.",
-        status: "ongoing",
-        priority: 4,
-        relatedCharacters: ["Cousin Vinny"],
-        outcomes: ["Vinny disappears with borrowed money", "Vinny gets Nicky in trouble", "Vinny actually finds legitimate work"]
-      },
-      {
-        category: "rival_conflict", 
-        title: "The Great Cannoli Rivalry",
-        description: "Tony_Cannoli has been copying Nicky's streaming style and claiming he invented the 'Italian DBD meta'. The community is starting to take sides.",
-        status: "ongoing",
-        priority: 5,
-        relatedCharacters: ["Tony_Cannoli"],
-        outcomes: ["Public streaming showdown", "Tony gets exposed as fraud", "They reluctantly team up"]
-      },
-      {
-        category: "restaurant",
-        title: "Restaurant Health Inspector Drama",
-        description: "The health inspector found 'irregularities' at Ma's restaurant. Nothing serious, but she's convinced it's sabotage from competing restaurants.",
-        status: "ongoing", 
-        priority: 3,
-        relatedCharacters: ["Ma Rigatoni"],
-        outcomes: ["Restaurant gets shut down temporarily", "Ma goes on warpath against competitors", "Turns out to be nothing serious"]
-      },
-      {
-        category: "neighborhood",
-        title: "The Great Noise War",
-        description: "Mrs. Benedetto has escalated from complaints to calling the cops every time Nicky streams past 9 PM. Building management is getting involved.",
-        status: "ongoing",
-        priority: 3,
-        relatedCharacters: ["Mrs. Benedetto"],
-        outcomes: ["Nicky gets evicted", "Mrs. B moves out", "They reach a grudging truce", "All-out neighbor war"]
-      }
+      // No hardcoded events - let storylines develop organically
     ];
 
     // Insert events
