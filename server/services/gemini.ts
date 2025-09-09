@@ -225,7 +225,7 @@ Response format:
       const rawJson = response.text;
       if (rawJson) {
         const consolidated = JSON.parse(rawJson);
-        return consolidated.map(item => ({
+        return consolidated.map((item: any) => ({
           ...item,
           type: item.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT',
           source: item.source || 'consolidation'

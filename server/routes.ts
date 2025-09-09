@@ -268,6 +268,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Clean up incorrectly attributed memories
+  app.post('/api/memory/cleanup-attribution', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const entries = await storage.getMemoryEntries(activeProfile.id, 10000);
+      let deletedCount = 0;
+
+      // Find and delete memories that look like user preferences incorrectly attributed to Nicky
+      for (const entry of entries) {
+        const content = entry.content.toLowerCase();
+        const isFromDocument = entry.source?.startsWith('ai-extract:') || entry.source?.startsWith('document:');
+        
+        if (isFromDocument && entry.type === 'PREFERENCE') {
+          // Look for patterns that suggest user preferences stored as Nicky's
+          const suspiciousPatterns = [
+            'nicky mains ', 
+            'nicky prefers ',
+            'nicky likes ',
+            'nicky\'s primary killer',
+            'nicky uses '
+          ];
+          
+          const matchesPattern = suspiciousPatterns.some(pattern => content.includes(pattern));
+          const lacksNickyContext = !content.includes('nicky said') && !content.includes('nicky mentioned') && 
+                                  !content.includes('nicky states') && !content.includes('according to nicky');
+          
+          if (matchesPattern && lacksNickyContext) {
+            await storage.deleteMemoryEntry(entry.id);
+            deletedCount++;
+            console.log(`Deleted potentially misattributed memory: ${entry.content}`);
+          }
+        }
+      }
+
+      res.json({ 
+        message: `Cleaned up ${deletedCount} potentially misattributed memories`,
+        deletedCount 
+      });
+    } catch (error) {
+      console.error('Memory cleanup error:', error);
+      res.status(500).json({ error: 'Failed to cleanup memories' });
+    }
+  });
+
   app.get('/api/memory/stats', async (req, res) => {
     try {
       const activeProfile = await storage.getActiveProfile();
