@@ -259,7 +259,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      const entries = await storage.getMemoryEntries(activeProfile.id);
+      // Get all entries for search functionality
+      const limit = parseInt(req.query.limit as string) || 10000; // Large limit for search
+      const entries = await storage.getMemoryEntries(activeProfile.id, limit);
       res.json(entries);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch memory entries' });

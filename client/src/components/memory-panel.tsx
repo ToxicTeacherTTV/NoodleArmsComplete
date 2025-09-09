@@ -23,7 +23,12 @@ export default function MemoryPanel({
   const [searchTerm, setSearchTerm] = useState("");
 
   const { data: memoryEntries, isLoading } = useQuery({
-    queryKey: ['/api/memory/entries'],
+    queryKey: ['/api/memory/entries', { limit: 10000 }],
+    queryFn: async () => {
+      const response = await fetch('/api/memory/entries?limit=10000');
+      if (!response.ok) throw new Error('Failed to fetch memory entries');
+      return response.json();
+    },
     enabled: !!profileId,
   });
 
