@@ -240,7 +240,7 @@ Format as JSON:
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
     const timeSinceLastLore = lastEvent 
-      ? (Date.now() - new Date(lastEvent.createdAt || new Date()).getTime()) / (1000 * 60 * 60)
+      ? (Date.now() - new Date(lastEvent.createdAt || new Date().toISOString()).getTime()) / (1000 * 60 * 60)
       : 24; // If no events, assume 24 hours
 
     return {

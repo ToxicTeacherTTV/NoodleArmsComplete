@@ -1,7 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema } from "@shared/schema";
+import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, loreCharacters, loreEvents } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { anthropicService } from "./services/anthropic";
 import { elevenlabsService } from "./services/elevenlabs";
 import { documentProcessor } from "./services/documentProcessor";
@@ -325,11 +326,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Clean up hardcoded characters from lore system
-      const charactersDeleted = await storage.db.delete(storage.schema.loreCharacters)
-        .where(storage.eq(storage.schema.loreCharacters.profileId, activeProfile.id));
+      const charactersDeleted = await storage.db.delete(loreCharacters)
+        .where(eq(loreCharacters.profileId, activeProfile.id));
         
-      const eventsDeleted = await storage.db.delete(storage.schema.loreEvents)
-        .where(storage.eq(storage.schema.loreEvents.profileId, activeProfile.id));
+      const eventsDeleted = await storage.db.delete(loreEvents)
+        .where(eq(loreEvents.profileId, activeProfile.id));
 
       console.log('Cleaned up hardcoded lore characters and events');
 
