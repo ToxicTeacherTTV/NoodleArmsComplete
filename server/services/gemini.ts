@@ -19,33 +19,46 @@ class GeminiService {
       throw new Error("Gemini API key not configured");
     }
 
-    const prompt = `You are analyzing a document about Nicky "Noodle Arms" A.I. Dente, a foul-mouthed Italian mafia-themed Dead by Daylight streamer who co-hosts the "Camping Them Softly" podcast.
+    const prompt = `You are analyzing a document that may contain information about or from Nicky "Noodle Arms" A.I. Dente (a foul-mouthed Italian mafia-themed Dead by Daylight streamer who co-hosts "Camping Them Softly" podcast), the user who uploaded this document, or other people.
 
-Extract key facts from this document: "${filename}"
+CRITICAL: Pay attention to WHO is saying or doing what. This could be:
+- Content BY Nicky (his own statements/preferences) 
+- Content ABOUT Nicky (others describing him)
+- Content BY the USER (their own statements/preferences)
+- Content ABOUT other people (guests, characters, etc.)
+
+Analyze document: "${filename}"
 
 Content:
 ${content}
 
-Extract facts that are:
-1. Character personality traits, preferences, or backstory
-2. Dead by Daylight game knowledge, strategies, or opinions
-3. Streaming/podcast content or habits
-4. Relationships with other characters (Earl, Vice Don, etc.)
+Extract relevant facts, but ONLY store information that is clearly ABOUT NICKY or BY NICKY. Do NOT store user preferences as Nicky's traits.
 
-For each fact, provide:
-- content: The actual fact (1-2 sentences max)
-- type: FACT (general info), PREFERENCE (likes/dislikes), LORE (backstory), or CONTEXT (situational)
+For each fact about Nicky, provide:
+- content: The actual fact with clear attribution (1-2 sentences max)
+- type: FACT (general info), PREFERENCE (likes/dislikes), LORE (backstory), or CONTEXT (situational)  
 - importance: 1-5 (5 being most important for character consistency)
 - keywords: 2-4 relevant keywords for retrieval
 
-Return as JSON array. Only include substantial, unique facts. Avoid redundant information.
+ONLY include facts that are:
+1. Nicky's personality traits, preferences, or backstory
+2. Nicky's Dead by Daylight knowledge, strategies, or opinions
+3. Nicky's streaming/podcast content or habits  
+4. Nicky's relationships with other characters (Earl, Vice Don, etc.)
+
+DO NOT include:
+- User's personal preferences or statements
+- Other people's preferences (unless about Nicky)
+- General gaming information not specific to Nicky
+
+Return as JSON array. Only include substantial, unique facts about Nicky specifically.
 
 Example format:
 [
   {
-    "content": "Nicky prefers playing as Ghostface because of the stealth gameplay style",
-    "type": "PREFERENCE", 
-    "importance": 4,
+    "content": "Nicky states he prefers playing as Ghostface because of the stealth gameplay style",
+    "type": "PREFERENCE",
+    "importance": 4, 
     "keywords": ["ghostface", "stealth", "killer", "preference"]
   }
 ]`;
