@@ -57,6 +57,12 @@ export interface IStorage {
   clearProfileMemories(profileId: string): Promise<void>;
   incrementMemoryRetrieval(id: string): Promise<void>;
   getMemoryStats(profileId: string): Promise<{ totalFacts: number; conversations: number }>;
+  
+  // Confidence tracking methods
+  findMemoryByCanonicalKey(profileId: string, canonicalKey: string): Promise<MemoryEntry | undefined>;
+  updateMemoryConfidence(id: string, confidence: number, supportCount?: number): Promise<MemoryEntry>;
+  getHighConfidenceMemories(profileId: string, minConfidence: number, limit?: number): Promise<MemoryEntry[]>;
+  markFactsAsContradicting(factIds: string[], groupId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -75,15 +81,16 @@ export class DatabaseStorage implements IStorage {
   async createProfile(profile: InsertProfile): Promise<Profile> {
     const [newProfile] = await db
       .insert(profiles)
-      .values([profile])
+      .values([profile as any])
       .returning();
     return newProfile;
   }
 
   async updateProfile(id: string, profile: Partial<Profile>): Promise<Profile> {
+    const updateData = { ...profile, updatedAt: sql`now()` };
     const [updatedProfile] = await db
       .update(profiles)
-      .set({ ...profile, updatedAt: sql`now()` })
+      .set(updateData as any)
       .where(eq(profiles.id, id))
       .returning();
     return updatedProfile;
@@ -126,7 +133,7 @@ export class DatabaseStorage implements IStorage {
   async addMessage(message: InsertMessage): Promise<Message> {
     const [newMessage] = await db
       .insert(messages)
-      .values([message])
+      .values([message as any])
       .returning();
     return newMessage;
   }
@@ -143,7 +150,7 @@ export class DatabaseStorage implements IStorage {
   async createDocument(document: InsertDocument): Promise<Document> {
     const [newDocument] = await db
       .insert(documents)
-      .values([document])
+      .values([document as any])
       .returning();
     return newDocument;
   }
@@ -184,7 +191,7 @@ export class DatabaseStorage implements IStorage {
   async addMemoryEntry(entry: InsertMemoryEntry): Promise<MemoryEntry> {
     const [newEntry] = await db
       .insert(memoryEntries)
-      .values([entry])
+      .values([entry as any])
       .returning();
     return newEntry;
   }
@@ -245,6 +252,66 @@ export class DatabaseStorage implements IStorage {
       totalFacts: memoryStats.totalFacts || 0,
       conversations: conversationStats.conversations || 0,
     };
+  }
+
+  // Confidence tracking methods implementation
+  async findMemoryByCanonicalKey(profileId: string, canonicalKey: string): Promise<MemoryEntry | undefined> {
+    const [memory] = await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.canonicalKey, canonicalKey)
+        )
+      );
+    return memory || undefined;
+  }
+
+  async updateMemoryConfidence(id: string, confidence: number, supportCount?: number): Promise<MemoryEntry> {
+    const updateData: any = { 
+      confidence, 
+      lastSeenAt: sql`now()`,
+      updatedAt: sql`now()` 
+    };
+    
+    if (supportCount !== undefined) {
+      updateData.supportCount = supportCount;
+    }
+
+    const [updatedMemory] = await db
+      .update(memoryEntries)
+      .set(updateData)
+      .where(eq(memoryEntries.id, id))
+      .returning();
+    
+    return updatedMemory;
+  }
+
+  async getHighConfidenceMemories(profileId: string, minConfidence: number, limit = 50): Promise<MemoryEntry[]> {
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          sql`${memoryEntries.confidence} >= ${minConfidence}`,
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.confidence), desc(memoryEntries.supportCount), desc(memoryEntries.importance))
+      .limit(limit);
+  }
+
+  async markFactsAsContradicting(factIds: string[], groupId: string): Promise<void> {
+    await db
+      .update(memoryEntries)
+      .set({ 
+        contradictionGroupId: groupId,
+        status: 'AMBIGUOUS',
+        updatedAt: sql`now()` 
+      })
+      .where(sql`${memoryEntries.id} = ANY(${factIds})`);
   }
 }
 
