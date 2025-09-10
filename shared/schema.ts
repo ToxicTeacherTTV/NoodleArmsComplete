@@ -66,6 +66,15 @@ export const memoryEntries = pgTable("memory_entries", {
   qualityScore: integer("quality_score").default(5), // 1-10 based on feedback
   temporalContext: text("temporal_context"), // When this fact was true/relevant
   source: text("source"), // 'conversation', 'document', 'manual'
+  // Confidence tracking fields
+  confidence: integer("confidence").default(50), // 0-100 confidence score
+  sourceId: varchar("source_id"), // ID of the document/conversation that created this fact
+  supportCount: integer("support_count").default(1), // How many sources have mentioned this fact
+  firstSeenAt: timestamp("first_seen_at").default(sql`now()`),
+  lastSeenAt: timestamp("last_seen_at").default(sql`now()`),
+  contradictionGroupId: varchar("contradiction_group_id"), // Groups conflicting facts together
+  canonicalKey: text("canonical_key"), // Unique key for fact deduplication
+  status: text("status").$type<'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'>().default('ACTIVE'),
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
