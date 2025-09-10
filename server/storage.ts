@@ -191,9 +191,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async addMemoryEntry(entry: InsertMemoryEntry): Promise<MemoryEntry> {
+    // CRITICAL FIX: Ensure canonicalKey is always present
+    let finalEntry = { ...entry };
+    
+    if (!finalEntry.canonicalKey && finalEntry.content) {
+      const { generateCanonicalKey } = await import('./utils/canonical.js');
+      finalEntry.canonicalKey = generateCanonicalKey(finalEntry.content);
+      console.warn(`🔧 Backfilled missing canonicalKey for content: "${finalEntry.content.substring(0, 50)}..."`);
+    }
+    
     const [newEntry] = await db
       .insert(memoryEntries)
-      .values([entry as any])
+      .values([finalEntry as any])
       .returning();
     return newEntry;
   }
