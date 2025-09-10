@@ -64,6 +64,7 @@ export interface IStorage {
   getHighConfidenceMemories(profileId: string, minConfidence: number, limit?: number): Promise<MemoryEntry[]>;
   markFactsAsContradicting(factIds: string[], groupId: string): Promise<void>;
   updateMemoryStatus(id: string, status: 'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'): Promise<MemoryEntry>;
+  getReliableMemoriesForAI(profileId: string, limit?: number): Promise<MemoryEntry[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -201,8 +202,18 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(memoryEntries)
-      .where(eq(memoryEntries.profileId, profileId))
-      .orderBy(desc(memoryEntries.createdAt))
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE') // Only get active facts, exclude contradictions
+        )
+      )
+      .orderBy(
+        desc(memoryEntries.confidence), // Prioritize high confidence
+        desc(memoryEntries.supportCount), // Then by support count
+        desc(memoryEntries.importance), // Then by importance
+        desc(memoryEntries.createdAt) // Finally by recency
+      )
       .limit(limit);
   }
 
@@ -213,10 +224,16 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE'), // Only search active facts, exclude contradictions
           like(memoryEntries.content, `%${query}%`)
         )
       )
-      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.retrievalCount));
+      .orderBy(
+        desc(memoryEntries.confidence), // Prioritize high confidence first
+        desc(memoryEntries.importance), // Then by importance
+        desc(memoryEntries.supportCount), // Then by support count
+        desc(memoryEntries.retrievalCount) // Finally by usage frequency
+      );
   }
 
   async deleteMemoryEntry(id: string): Promise<void> {
@@ -322,6 +339,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(memoryEntries.id, id))
       .returning();
     return updatedEntry;
+  }
+
+  async getReliableMemoriesForAI(profileId: string, limit = 100): Promise<MemoryEntry[]> {
+    // Get only high-confidence, ACTIVE facts for AI response generation
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE'), // Only active facts
+          sql`${memoryEntries.confidence} >= 60` // Minimum 60% confidence
+        )
+      )
+      .orderBy(
+        desc(memoryEntries.confidence), // Highest confidence first
+        desc(memoryEntries.supportCount), // Then by support
+        desc(memoryEntries.importance), // Then by importance
+        desc(memoryEntries.lastUsed) // Then by recent usage
+      )
+      .limit(limit);
   }
 }
 

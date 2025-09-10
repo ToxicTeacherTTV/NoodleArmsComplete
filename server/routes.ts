@@ -129,9 +129,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      // Get relevant memories for RAG
-      const relevantMemories = await storage.searchMemoryEntries(activeProfile.id, message);
+      // Get relevant memories for RAG - combine search-based and high-confidence retrieval
+      const allSearchResults = await storage.searchMemoryEntries(activeProfile.id, message);
+      const highConfidenceMemories = await storage.getReliableMemoriesForAI(activeProfile.id, 20);
+      
+      // Filter search results to only include high-confidence facts (≥60%)
+      const searchBasedMemories = allSearchResults.filter(m => (m.confidence || 50) >= 60);
+      
+      // Combine and deduplicate memories, prioritizing search relevance
+      const seenIds = new Set(searchBasedMemories.map(m => m.id));
+      const additionalMemories = highConfidenceMemories.filter(m => !seenIds.has(m.id));
+      const relevantMemories = [...searchBasedMemories, ...additionalMemories.slice(0, 10)];
+      
+      // Update retrieval tracking for all used memories
+      for (const memory of relevantMemories) {
+        await storage.incrementMemoryRetrieval(memory.id);
+      }
+      
       const relevantDocs = await documentProcessor.searchDocuments(activeProfile.id, message);
+      
+      // Log confidence distribution for monitoring
+      const confidenceStats = relevantMemories.length > 0 ? {
+        min: Math.min(...relevantMemories.map(m => m.confidence || 50)),
+        max: Math.max(...relevantMemories.map(m => m.confidence || 50)),
+        avg: Math.round(relevantMemories.reduce((sum, m) => sum + (m.confidence || 50), 0) / relevantMemories.length)
+      } : { min: 0, max: 0, avg: 0 };
+      
+      console.log(`🧠 AI Context: ${searchBasedMemories.length} search-based + ${additionalMemories.slice(0, 10).length} high-confidence facts (${relevantMemories.length} total). Confidence: ${confidenceStats.min}-${confidenceStats.max}% (avg: ${confidenceStats.avg}%)`);
       
       // Get enhanced lore context (includes extracted knowledge from memories)
       const loreContext = await MemoryAnalyzer.getEnhancedLoreContext(activeProfile.id);
