@@ -639,6 +639,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Brain Management API endpoints
+  app.get('/api/memory/high-confidence', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const highConfidenceFacts = await storage.getHighConfidenceMemories(activeProfile.id, 90, 100);
+      res.json(highConfidenceFacts);
+    } catch (error) {
+      console.error('High confidence facts error:', error);
+      res.status(500).json({ error: 'Failed to get high confidence facts' });
+    }
+  });
+
+  app.get('/api/memory/contradictions', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      // For now, return a simple mock. In production, this would use the contradiction detector
+      const contradictions = [];
+      res.json(contradictions);
+    } catch (error) {
+      console.error('Contradictions error:', error);
+      res.status(500).json({ error: 'Failed to get contradictions' });
+    }
+  });
+
+  app.patch('/api/memory/entries/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const updatedEntry = await storage.updateMemoryConfidence(
+        id, 
+        updates.confidence, 
+        updates.supportCount
+      );
+      res.json(updatedEntry);
+    } catch (error) {
+      console.error('Update memory entry error:', error);
+      res.status(500).json({ error: 'Failed to update memory entry' });
+    }
+  });
+
+  app.post('/api/memory/entries/:id/boost', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const updatedEntry = await storage.updateMemoryConfidence(id, 100, undefined);
+      console.log(`🎯 Manual boost: Fact confidence set to 100% by user`);
+      res.json(updatedEntry);
+    } catch (error) {
+      console.error('Boost fact error:', error);
+      res.status(500).json({ error: 'Failed to boost fact confidence' });
+    }
+  });
+
+  app.post('/api/memory/entries/:id/deprecate', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const updatedEntry = await storage.updateMemoryStatus(id, 'DEPRECATED');
+      console.log(`❌ Manual deprecation: Fact marked as FALSE by user`);
+      res.json(updatedEntry);
+    } catch (error) {
+      console.error('Deprecate fact error:', error);
+      res.status(500).json({ error: 'Failed to deprecate fact' });
+    }
+  });
+
+  app.post('/api/memory/resolve-contradiction', async (req, res) => {
+    try {
+      const { winnerFactId, loserFactId } = req.body;
+      
+      // Boost winner to 100%, deprecate loser
+      await storage.updateMemoryConfidence(winnerFactId, 100, undefined);
+      await storage.updateMemoryStatus(loserFactId, 'DEPRECATED');
+      
+      console.log(`⚖️ Contradiction resolved: Winner ${winnerFactId}, Loser ${loserFactId}`);
+      res.json({ success: true, message: 'Contradiction resolved' });
+    } catch (error) {
+      console.error('Resolve contradiction error:', error);
+      res.status(500).json({ error: 'Failed to resolve contradiction' });
+    }
+  });
+
   // Emergent Lore System routes
   app.post('/api/lore/seed/:profileId', async (req, res) => {
     try {
