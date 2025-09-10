@@ -63,6 +63,7 @@ export interface IStorage {
   updateMemoryConfidence(id: string, confidence: number, supportCount?: number): Promise<MemoryEntry>;
   getHighConfidenceMemories(profileId: string, minConfidence: number, limit?: number): Promise<MemoryEntry[]>;
   markFactsAsContradicting(factIds: string[], groupId: string): Promise<void>;
+  updateMemoryStatus(id: string, status: 'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'): Promise<MemoryEntry>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -312,6 +313,15 @@ export class DatabaseStorage implements IStorage {
         updatedAt: sql`now()` 
       })
       .where(sql`${memoryEntries.id} = ANY(${factIds})`);
+  }
+
+  async updateMemoryStatus(id: string, status: 'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'): Promise<MemoryEntry> {
+    const [updatedEntry] = await db
+      .update(memoryEntries)
+      .set({ status, updatedAt: sql`now()` })
+      .where(eq(memoryEntries.id, id))
+      .returning();
+    return updatedEntry;
   }
 }
 

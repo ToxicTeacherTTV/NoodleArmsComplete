@@ -3,6 +3,7 @@ import { Document } from "@shared/schema";
 import pdf from 'pdf-parse';
 import mammoth from 'mammoth';
 import { geminiService } from './gemini';
+import { contradictionDetector } from './contradictionDetector';
 
 interface DocumentChunk {
   content: string;
@@ -147,7 +148,7 @@ class DocumentProcessor {
           // New fact - determine initial confidence based on source and importance
           const initialConfidence = this.calculateInitialConfidence(fact.importance, filename);
           
-          await storage.addMemoryEntry({
+          const newMemoryEntry = await storage.addMemoryEntry({
             profileId,
             type: fact.type,
             content: fact.content.trim(),
@@ -158,6 +159,18 @@ class DocumentProcessor {
             canonicalKey,
             source: `ai-extract:${filename}`,
           });
+          
+          // Check for contradictions with this new fact
+          try {
+            const contradictionGroup = await contradictionDetector.checkAndResolveContradictions(profileId, newMemoryEntry);
+            if (contradictionGroup) {
+              console.log(`🔍 Resolved contradiction for fact: "${fact.content.substring(0, 50)}..." in group ${contradictionGroup.groupId}`);
+            }
+          } catch (error) {
+            console.error('Error checking contradictions for new fact:', error);
+            // Continue processing even if contradiction detection fails
+          }
+          
           storedCount++;
         }
       }
@@ -273,7 +286,7 @@ class DocumentProcessor {
           
           const initialConfidence = this.calculateInitialConfidence(importance, filename);
           
-          await storage.addMemoryEntry({
+          const newMemoryEntry = await storage.addMemoryEntry({
             profileId,
             type,
             content: displayContent,
@@ -284,6 +297,17 @@ class DocumentProcessor {
             canonicalKey,
             source: `document:${filename}`,
           });
+          
+          // Check for contradictions with this new fact
+          try {
+            const contradictionGroup = await contradictionDetector.checkAndResolveContradictions(profileId, newMemoryEntry);
+            if (contradictionGroup) {
+              console.log(`🔍 Resolved fallback contradiction for fact: "${rawContent.substring(0, 50)}..." in group ${contradictionGroup.groupId}`);
+            }
+          } catch (error) {
+            console.error('Error checking contradictions for fallback fact:', error);
+            // Continue processing even if contradiction detection fails
+          }
         }
       }
     }
