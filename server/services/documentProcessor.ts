@@ -50,7 +50,7 @@ class DocumentProcessor {
       });
 
       // Extract and store relevant information as memory entries
-      await this.extractAndStoreKnowledge(document.profileId, extractedContent, document.filename);
+      await this.extractAndStoreKnowledge(document.profileId, extractedContent, document.filename, document.id);
 
     } catch (error) {
       console.error('Document processing error:', error);
@@ -107,7 +107,7 @@ class DocumentProcessor {
     return chunks;
   }
 
-  async extractAndStoreKnowledge(profileId: string, content: string, filename: string): Promise<void> {
+  async extractAndStoreKnowledge(profileId: string, content: string, filename: string, documentId?: string): Promise<void> {
     try {
       console.log(`Starting AI-powered fact extraction for ${filename}...`);
       
@@ -116,39 +116,63 @@ class DocumentProcessor {
       
       console.log(`Extracted ${extractedFacts.length} facts from ${filename}`);
       
-      // Get existing facts to check for duplicates
-      const existingFacts = await storage.getMemoryEntries(profileId, 10000);
-      const existingContents = new Set(existingFacts.map(f => f.content.toLowerCase().trim()));
-      
-      // Filter out potential duplicates and store new facts
+      // Track processed facts to prevent intra-document over-boosting
+      const processedInThisDocument = new Set<string>();
       let storedCount = 0;
+      let boostedCount = 0;
+      
       for (const fact of extractedFacts) {
-        const normalizedContent = fact.content.toLowerCase().trim();
+        const canonicalKey = this.generateCanonicalKey(fact.content);
         
-        // Skip if very similar content already exists
-        if (!existingContents.has(normalizedContent)) {
+        // Skip if we already processed this exact fact in this document
+        if (processedInThisDocument.has(canonicalKey)) {
+          continue;
+        }
+        processedInThisDocument.add(canonicalKey);
+        
+        // Check if this fact already exists
+        const existingFact = await storage.findMemoryByCanonicalKey(profileId, canonicalKey);
+        
+        if (existingFact) {
+          // Fact exists - boost confidence and support count (max +10 per document)
+          const newSupportCount = (existingFact.supportCount || 1) + 1;
+          const confidenceBoost = 10; // Fixed 10 point boost per new document
+          const newConfidence = Math.min(100, (existingFact.confidence || 50) + confidenceBoost);
+          
+          await storage.updateMemoryConfidence(existingFact.id, newConfidence, newSupportCount);
+          boostedCount++;
+          
+          console.log(`Boosted confidence for fact: "${fact.content.substring(0, 50)}..." (${existingFact.confidence || 50} → ${newConfidence}, support: ${newSupportCount})`);
+        } else {
+          // New fact - determine initial confidence based on source and importance
+          const initialConfidence = this.calculateInitialConfidence(fact.importance, filename);
+          
           await storage.addMemoryEntry({
             profileId,
             type: fact.type,
             content: fact.content.trim(),
             importance: fact.importance,
+            confidence: initialConfidence,
+            sourceId: documentId || `doc:${filename}`,
+            supportCount: 1,
+            canonicalKey,
             source: `ai-extract:${filename}`,
           });
           storedCount++;
         }
       }
       
-      console.log(`Stored ${storedCount} new unique facts from ${filename}`);
+      console.log(`Processed ${extractedFacts.length} facts from ${filename}: ${storedCount} new, ${boostedCount} confidence boosted`);
       
     } catch (error) {
       console.error('AI fact extraction failed, falling back to keyword-based extraction:', error);
       
       // Fallback to original keyword-based extraction if AI fails
-      await this.fallbackExtractAndStoreKnowledge(profileId, content, filename);
+      await this.fallbackExtractAndStoreKnowledge(profileId, content, filename, documentId);
     }
   }
 
-  private async fallbackExtractAndStoreKnowledge(profileId: string, content: string, filename: string): Promise<void> {
+  private async fallbackExtractAndStoreKnowledge(profileId: string, content: string, filename: string, documentId?: string): Promise<void> {
     // Enhanced extraction for character-specific knowledge
     const characterKeywords = [
       // DBD game content
@@ -161,6 +185,9 @@ class DocumentProcessor {
 
     // Use larger paragraph-based chunks instead of line-by-line processing
     const chunks = this.chunkText(content, 1500, 150);
+    
+    // Track processed facts to prevent intra-document over-boosting
+    const processedInThisDocument = new Set<string>();
     
     for (const chunk of chunks) {
       const lowerChunk = chunk.toLowerCase();
@@ -216,19 +243,48 @@ class DocumentProcessor {
           importance = hasNickyReference ? 3 : 2;
         }
         
-        // Add attribution prefix if no clear Nicky reference
-        let content = chunk.trim();
-        if (!hasNickyReference) {
-          content = `Document reference: ${content}`;
-        }
+        // Generate canonical key from raw content (before adding prefixes)
+        const rawContent = chunk.trim();
+        const canonicalKey = this.generateCanonicalKey(rawContent);
         
-        await storage.addMemoryEntry({
-          profileId,
-          type,
-          content,
-          importance,
-          source: `document:${filename}`,
-        });
+        // Skip if we already processed this exact fact in this document
+        if (processedInThisDocument.has(canonicalKey)) {
+          continue;
+        }
+        processedInThisDocument.add(canonicalKey);
+        
+        // Check if this fact already exists
+        const existingFact = await storage.findMemoryByCanonicalKey(profileId, canonicalKey);
+        
+        if (existingFact) {
+          // Fact exists - boost confidence and support count (max +10 per document)
+          const newSupportCount = (existingFact.supportCount || 1) + 1;
+          const confidenceBoost = 10; // Fixed 10 point boost per new document
+          const newConfidence = Math.min(100, (existingFact.confidence || 50) + confidenceBoost);
+          
+          await storage.updateMemoryConfidence(existingFact.id, newConfidence, newSupportCount);
+          console.log(`Boosted fallback fact confidence: "${rawContent.substring(0, 50)}..." (${existingFact.confidence || 50} → ${newConfidence})`);
+        } else {
+          // New fact - add attribution prefix if no clear Nicky reference
+          let displayContent = rawContent;
+          if (!hasNickyReference) {
+            displayContent = `Document reference: ${rawContent}`;
+          }
+          
+          const initialConfidence = this.calculateInitialConfidence(importance, filename);
+          
+          await storage.addMemoryEntry({
+            profileId,
+            type,
+            content: displayContent,
+            importance,
+            confidence: initialConfidence,
+            sourceId: documentId || `doc:${filename}`,
+            supportCount: 1,
+            canonicalKey,
+            source: `document:${filename}`,
+          });
+        }
       }
     }
   }
@@ -257,6 +313,50 @@ class DocumentProcessor {
     }
     
     return results.sort((a, b) => b.relevantChunks - a.relevantChunks);
+  }
+
+  // Generate a canonical key for fact deduplication
+  private generateCanonicalKey(content: string): string {
+    // Normalize content for consistent matching
+    const normalized = content
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s]/g, '') // Remove punctuation
+      .replace(/\s+/g, ' ')    // Normalize whitespace
+      .substring(0, 100);      // Limit length
+    
+    // Simple hash for canonical key
+    let hash = 0;
+    for (let i = 0; i < normalized.length; i++) {
+      const char = normalized.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    return `fact_${Math.abs(hash)}`;
+  }
+
+  // Calculate initial confidence based on source reliability and importance
+  private calculateInitialConfidence(importance: number, filename: string): number {
+    let baseConfidence = 50; // Default medium confidence
+    
+    // Boost confidence based on importance (1-5 scale from Gemini)
+    const importanceBoost = (importance - 1) * 10; // 0-40 point boost
+    
+    // Boost confidence based on source type
+    let sourceBoost = 0;
+    const lowerFilename = filename.toLowerCase();
+    
+    if (lowerFilename.includes('official') || lowerFilename.includes('doc')) {
+      sourceBoost = 15; // Official documentation
+    } else if (lowerFilename.includes('note') || lowerFilename.includes('fact')) {
+      sourceBoost = 10; // Personal notes/facts
+    } else if (lowerFilename.includes('chat') || lowerFilename.includes('log')) {
+      sourceBoost = 5;  // Chat logs or conversation logs
+    }
+    
+    const confidence = Math.min(90, baseConfidence + importanceBoost + sourceBoost);
+    return Math.max(30, confidence); // Minimum 30% confidence
   }
 }
 
