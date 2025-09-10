@@ -404,15 +404,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Use Claude to consolidate memories
+      console.log(`💬 Memory consolidation: Processing ${recentMessages.length} recent messages`);
       const consolidatedMemories = await anthropicService.consolidateMemories(recentMessages);
       
-      // Store the consolidated memories
+      // Store the consolidated memories with confidence based on conversation context
       for (const memory of consolidatedMemories) {
         await storage.addMemoryEntry({
           profileId: activeProfile.id,
           type: memory.type,
           content: memory.content,
           importance: memory.importance,
+          confidence: 75, // Good confidence since extracted from conversation context
+          supportCount: 1,
           source: 'conversation',
         });
       }
@@ -457,27 +460,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      // Get all memory entries
-      const allMemories = await storage.getMemoryEntries(activeProfile.id, 10000);
-      const optimizedMemories = await geminiService.consolidateAndOptimizeMemories(allMemories);
+      // Get only high-confidence, reliable memories for optimization
+      const reliableMemories = await storage.getReliableMemoriesForAI(activeProfile.id, 10000);
+      console.log(`🔧 Memory optimization: Using ${reliableMemories.length} high-confidence memories (≥60% confidence)`);
+      const optimizedMemories = await geminiService.consolidateAndOptimizeMemories(reliableMemories);
       
       // Clear existing memories and replace with optimized ones
       await storage.clearProfileMemories(activeProfile.id);
       
-      // Add optimized memories back
+      // Add optimized memories back with high confidence (since they came from high-confidence sources)
       for (const memory of optimizedMemories) {
         await storage.addMemoryEntry({
           profileId: activeProfile.id,
           type: memory.type,
           content: memory.content,
           importance: memory.importance,
+          confidence: 85, // High confidence since optimized from reliable sources
+          supportCount: 1,
           source: memory.source || 'optimization',
         });
       }
 
       res.json({ 
-        message: `Knowledge base optimized: ${allMemories.length} → ${optimizedMemories.length} entries`,
-        beforeCount: allMemories.length,
+        message: `Knowledge base optimized: ${reliableMemories.length} → ${optimizedMemories.length} entries`,
+        beforeCount: reliableMemories.length,
         afterCount: optimizedMemories.length
       });
     } catch (error) {
@@ -565,11 +571,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Profile ID required' });
       }
 
-      // Get all memory entries for this profile
-      const memories = await storage.getMemoryEntries(profileId);
+      // Get only high-confidence memories for evolutionary optimization
+      const reliableMemories = await storage.getReliableMemoriesForAI(profileId, 1000);
+      console.log(`🧬 Evolutionary optimization: Using ${reliableMemories.length} high-confidence memories (≥60% confidence)`);
       
-      // Run the revolutionary optimization
-      const result = await evolutionaryAI.evolutionaryOptimization(memories);
+      // Run the revolutionary optimization with reliable data only
+      const result = await evolutionaryAI.evolutionaryOptimization(reliableMemories);
       
       // Store the optimized facts back (in a real system, you'd want to backup first)
       // For now, let's just return the results
@@ -577,7 +584,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: 'Evolutionary optimization complete!',
         ...result,
         summary: {
-          originalFacts: memories.length,
+          originalFacts: reliableMemories.length,
           optimizedFacts: result.optimizedFacts.length,
           relationships: result.relationships.length,
           clusters: result.clusters.length,
