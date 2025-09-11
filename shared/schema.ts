@@ -54,7 +54,7 @@ export const documents = pgTable("documents", {
 export const memoryEntries = pgTable("memory_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   profileId: varchar("profile_id").references(() => profiles.id).notNull(),
-  type: text("type").$type<'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT'>().notNull(),
+  type: text("type").$type<'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT' | 'STORY' | 'ATOMIC'>().notNull(),
   content: text("content").notNull(),
   importance: integer("importance").default(1),
   retrievalCount: integer("retrieval_count").default(0),
@@ -75,6 +75,10 @@ export const memoryEntries = pgTable("memory_entries", {
   contradictionGroupId: varchar("contradiction_group_id"), // Groups conflicting facts together
   canonicalKey: text("canonical_key"), // Unique key for fact deduplication
   status: text("status").$type<'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'>().default('ACTIVE'),
+  // Hierarchical fact support
+  parentFactId: varchar("parent_fact_id").references(() => memoryEntries.id), // Links atomic facts to parent stories
+  isAtomicFact: boolean("is_atomic_fact").default(false), // True for granular facts extracted from stories
+  storyContext: text("story_context"), // Brief context about which part of the story this relates to
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
@@ -141,6 +145,7 @@ export const insertDocumentSchema = createInsertSchema(documents).omit({
 export const insertMemoryEntrySchema = createInsertSchema(memoryEntries).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 // Types

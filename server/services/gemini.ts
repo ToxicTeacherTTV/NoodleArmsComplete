@@ -9,6 +9,173 @@ class GeminiService {
     });
   }
 
+  // Enhanced hierarchical extraction methods
+  async extractStoriesFromDocument(content: string, filename: string): Promise<Array<{
+    content: string;
+    type: 'STORY' | 'LORE' | 'CONTEXT';
+    importance: number;
+    keywords: string[];
+  }>> {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Gemini API key not configured");
+    }
+
+    const prompt = `You are analyzing a document for NARRATIVE CONTENT about Nicky "Noodle Arms" A.I. Dente - the Italian mafia-themed Dead by Daylight streamer.
+
+Document: "${filename}"
+
+Content:
+${content}
+
+Extract COMPLETE STORIES, ANECDOTES, and RICH CONTEXTS about Nicky. Focus on:
+- Full backstory narratives 
+- Complete incident descriptions
+- Rich character interactions
+- Detailed explanations of relationships
+- Complete conversations or exchanges
+- Comprehensive background context
+
+For each story/narrative, provide:
+- content: The COMPLETE story/context (preserve full narrative flow)
+- type: STORY (incidents/events), LORE (backstory), or CONTEXT (situational background)
+- importance: 1-5 (5 being most important for character understanding)
+- keywords: 3-5 relevant keywords for retrieval
+
+Preserve narrative richness - these will be parents for atomic facts.
+
+Return as JSON array. Only include substantial narrative content about Nicky.
+
+Example format:
+[
+  {
+    "content": "The 2005 incident where Nicky first clashed with Earl in World of Warcraft began when Nicky was playing his orc warrior PastaEnforcer on the Tichondrius server. Earl, playing a human mage named Teadiculous, kept repeatedly killing Nicky in contested zones. This escalated when Earl started camping Nicky's corpse for hours, leading to Nicky's first recorded threat to 'call his digital guys.' The feud continued for months, with both players recruiting their guilds into elaborate revenge schemes that eventually got both temporarily banned. This incident established their competitive dynamic that continues today.",
+    "type": "STORY",
+    "importance": 4,
+    "keywords": ["earl", "warcraft", "feud", "origin", "tichondrius"]
+  }
+]`;
+
+    try {
+      const response = await this.ai.models.generateContent({
+        model: "gemini-2.5-pro",
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                content: { type: "string" },
+                type: { type: "string", enum: ["STORY", "LORE", "CONTEXT"] },
+                importance: { type: "number" },
+                keywords: { type: "array", items: { type: "string" } }
+              },
+              required: ["content", "type", "importance", "keywords"]
+            }
+          }
+        },
+        contents: prompt,
+      });
+
+      const rawJson = response.text;
+      if (rawJson) {
+        return JSON.parse(rawJson);
+      } else {
+        throw new Error("Empty response from Gemini");
+      }
+    } catch (error) {
+      console.error("Gemini story extraction error:", error);
+      throw new Error(`Failed to extract stories: ${error}`);
+    }
+  }
+
+  async extractAtomicFactsFromStory(storyContent: string, storyContext: string): Promise<Array<{
+    content: string;
+    type: 'ATOMIC';
+    importance: number;
+    keywords: string[];
+    storyContext: string;
+  }>> {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Gemini API key not configured");
+    }
+
+    const prompt = `You are breaking down a narrative about Nicky "Noodle Arms" A.I. Dente into ATOMIC FACTS.
+
+Story Context: ${storyContext}
+
+Full Story:
+${storyContent}
+
+Extract individual, verifiable claims from this story. Each atomic fact should be:
+- A single, specific claim
+- Independently verifiable
+- 1-2 sentences maximum
+- Clear about WHO did WHAT
+
+For each atomic fact, provide:
+- content: The specific atomic claim
+- type: "ATOMIC" (always)
+- importance: 1-5 based on how critical this detail is
+- keywords: 2-4 keywords for retrieval
+- storyContext: Brief note about which part of the story this relates to
+
+Example - from story about WoW incident:
+[
+  {
+    "content": "Nicky played an orc warrior named PastaEnforcer",
+    "type": "ATOMIC",
+    "importance": 3,
+    "keywords": ["character", "warrior", "PastaEnforcer"],
+    "storyContext": "WoW character details"
+  },
+  {
+    "content": "Earl played human mage named Teadiculous", 
+    "type": "ATOMIC",
+    "importance": 3,
+    "keywords": ["earl", "mage", "Teadiculous"],
+    "storyContext": "Earl's character details"
+  }
+]
+
+Return as JSON array.`;
+
+    try {
+      const response = await this.ai.models.generateContent({
+        model: "gemini-2.5-pro",
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                content: { type: "string" },
+                type: { type: "string", enum: ["ATOMIC"] },
+                importance: { type: "number" },
+                keywords: { type: "array", items: { type: "string" } },
+                storyContext: { type: "string" }
+              },
+              required: ["content", "type", "importance", "keywords", "storyContext"]
+            }
+          }
+        },
+        contents: prompt,
+      });
+
+      const rawJson = response.text;
+      if (rawJson) {
+        return JSON.parse(rawJson);
+      } else {
+        throw new Error("Empty response from Gemini");
+      }
+    } catch (error) {
+      console.error("Gemini atomic fact extraction error:", error);
+      throw new Error(`Failed to extract atomic facts: ${error}`);
+    }
+  }
+
+  // Legacy method for backward compatibility
   async extractFactsFromDocument(content: string, filename: string): Promise<Array<{
     content: string;
     type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';

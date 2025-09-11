@@ -50,8 +50,8 @@ class DocumentProcessor {
         processingStatus: 'COMPLETED',
       });
 
-      // Extract and store relevant information as memory entries
-      await this.extractAndStoreKnowledge(document.profileId, extractedContent, document.filename, document.id);
+      // Extract and store relevant information using hierarchical approach
+      await this.extractAndStoreHierarchicalKnowledge(document.profileId, extractedContent, document.filename, document.id);
 
     } catch (error) {
       console.error('Document processing error:', error);
@@ -106,6 +106,109 @@ class DocumentProcessor {
     }
     
     return chunks;
+  }
+
+  // New hierarchical extraction method
+  private async extractAndStoreHierarchicalKnowledge(profileId: string, content: string, filename: string, documentId: string): Promise<void> {
+    try {
+      console.log(`🧠 Starting hierarchical extraction for ${filename}...`);
+      
+      // PASS 1: Extract rich stories and contexts
+      console.log(`📖 Pass 1: Extracting stories and contexts...`);
+      const stories = await geminiService.extractStoriesFromDocument(content, filename);
+      console.log(`✅ Extracted ${stories.length} stories/contexts`);
+      
+      const storyIds: string[] = [];
+      
+      // Store story-level facts first
+      for (const story of stories) {
+        const canonicalKey = this.generateCanonicalKey(story.content);
+        
+        let storyFact = await storage.addMemoryEntry({
+          profileId,
+          type: story.type,
+          content: story.content,
+          importance: story.importance,
+          keywords: story.keywords,
+          source: 'document',
+          sourceId: documentId,
+          canonicalKey,
+          isAtomicFact: false, // This is a parent story
+        });
+        
+        // Handle story deduplication - find existing story if insertion failed
+        if (!storyFact?.id) {
+          storyFact = await storage.findMemoryByCanonicalKey(profileId, canonicalKey);
+        }
+        
+        if (storyFact?.id) {
+          storyIds.push(storyFact.id);
+          console.log(`📚 Stored story: ${story.content.substring(0, 60)}...`);
+        }
+      }
+      
+      // PASS 2: Extract atomic facts from each story
+      console.log(`🔬 Pass 2: Extracting atomic facts from stories...`);
+      let totalAtomicFacts = 0;
+      
+      for (let i = 0; i < stories.length; i++) {
+        const story = stories[i];
+        const storyId = storyIds[i];
+        
+        if (!storyId) continue;
+        
+        try {
+          const atomicFacts = await geminiService.extractAtomicFactsFromStory(
+            story.content, 
+            `${story.type}: ${story.keywords.join(', ')}`
+          );
+          
+          console.log(`⚛️ Extracted ${atomicFacts.length} atomic facts from story ${i + 1}`);
+          
+          // Store atomic facts linked to parent story
+          for (const atomicFact of atomicFacts) {
+            const atomicCanonicalKey = this.generateCanonicalKey(atomicFact.content);
+            
+            await storage.addMemoryEntry({
+              profileId,
+              type: 'ATOMIC',
+              content: atomicFact.content,
+              importance: atomicFact.importance,
+              keywords: atomicFact.keywords,
+              source: 'document',
+              sourceId: documentId,
+              canonicalKey: atomicCanonicalKey,
+              isAtomicFact: true, // This is a granular fact
+              parentFactId: storyId, // Link to parent story
+              storyContext: atomicFact.storyContext,
+            });
+            
+            totalAtomicFacts++;
+          }
+        } catch (error) {
+          console.error(`❌ Failed to extract atomic facts from story ${i + 1}:`, error);
+          // Continue with other stories
+        }
+      }
+      
+      console.log(`🎉 Hierarchical extraction complete!`);
+      console.log(`📊 Results: ${stories.length} stories, ${totalAtomicFacts} atomic facts`);
+      
+      // Run contradiction detection on atomic facts
+      console.log(`🔍 Running contradiction detection...`);
+      await contradictionDetector.detectContradictions(profileId);
+      
+    } catch (error) {
+      console.error('❌ Hierarchical knowledge extraction failed:', error);
+      // Fallback to legacy extraction
+      console.log('🔄 Falling back to legacy extraction...');
+      await this.extractAndStoreKnowledgeLegacy(profileId, content, filename, documentId);
+    }
+  }
+  
+  // Legacy extraction method as fallback
+  private async extractAndStoreKnowledgeLegacy(profileId: string, content: string, filename: string, documentId?: string): Promise<void> {
+    return this.extractAndStoreKnowledge(profileId, content, filename, documentId);
   }
 
   async extractAndStoreKnowledge(profileId: string, content: string, filename: string, documentId?: string): Promise<void> {
