@@ -59,15 +59,6 @@ export default function PersonalityPanel({
               </div>
             </div>
 
-            <div className="mt-3 space-y-2">
-              <div className="text-xs text-muted-foreground">Knowledge Base:</div>
-              <div className="text-xs text-accent" data-testid="knowledge-base-size">
-                {profile?.knowledgeBase 
-                  ? `${profile.knowledgeBase.length} characters stored`
-                  : "No knowledge base"
-                }
-              </div>
-            </div>
           </CardContent>
         </Card>
 
