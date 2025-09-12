@@ -56,7 +56,7 @@ export default function NeuralMap({
       const radius = Math.min(width, height) * 0.3;
       newNodes.push({
         id: fact.id,
-        label: fact.content.substring(0, 30) + '...',
+        label: fact.content.length > 40 ? fact.content.substring(0, 40) + '...' : fact.content,
         type: 'fact',
         x: width/2 + Math.cos(angle) * radius,
         y: height/2 + Math.sin(angle) * radius,

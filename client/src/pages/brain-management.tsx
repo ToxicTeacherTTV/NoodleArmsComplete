@@ -100,7 +100,7 @@ export default function BrainManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
-      toast({ title: "Fact marked as TRUE - confidence boosted to 100%!" });
+      toast({ title: "Fact boosted progressively (85→90→95→100)!" });
     },
   });
 
@@ -404,12 +404,13 @@ export default function BrainManagement() {
                             </Badge>
                             <Badge variant="outline">{fact.status}</Badge>
                           </div>
-                          <div className="flex space-x-1">
+                          <div className="flex items-center space-x-2">
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={() => boostFactMutation.mutate(fact.id)}
                               data-testid={`button-boost-all-${fact.id}`}
+                              title="Progressive boost (85→90→95→100)"
                             >
                               <ThumbsUp className="h-3 w-3" />
                             </Button>
@@ -421,13 +422,26 @@ export default function BrainManagement() {
                             >
                               <ThumbsDown className="h-3 w-3" />
                             </Button>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              defaultValue={fact.confidence || 50}
+                              className="w-12 h-7 text-xs border rounded text-center"
+                              data-testid={`input-confidence-${fact.id}`}
+                              onBlur={(e) => {
+                                const newConfidence = parseInt(e.target.value);
+                                if (newConfidence >= 0 && newConfidence <= 100 && newConfidence !== fact.confidence) {
+                                  updateFactMutation.mutate({ factId: fact.id, updates: { confidence: newConfidence } });
+                                }
+                              }}
+                              title="Manual confidence (0-100)"
+                            />
+                            <span className="text-xs text-muted-foreground">%</span>
                           </div>
                         </div>
-                        <p className="text-sm text-gray-900 dark:text-gray-100 mb-2">
-                          {fact.content.length > 200 
-                            ? `${fact.content.substring(0, 200)}...` 
-                            : fact.content
-                          }
+                        <p className="text-sm text-gray-900 dark:text-gray-100 mb-2 leading-relaxed">
+                          {fact.content}
                         </p>
                         <div className="text-xs text-gray-500 dark:text-gray-400">
                           {fact.supportCount} sources • Importance: {fact.importance} • {fact.source}

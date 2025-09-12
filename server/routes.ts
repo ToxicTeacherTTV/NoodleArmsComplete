@@ -684,11 +684,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const updates = req.body;
       
+      // Validate confidence range (0-100)
+      if (updates.confidence !== undefined) {
+        const confidence = Number(updates.confidence);
+        if (isNaN(confidence) || confidence < 0 || confidence > 100) {
+          return res.status(400).json({ error: 'Confidence must be between 0 and 100' });
+        }
+      }
+      
       const updatedEntry = await storage.updateMemoryConfidence(
         id, 
         updates.confidence, 
         updates.supportCount
       );
+      
+      if (updates.confidence !== undefined) {
+        console.log(`📊 Manual confidence update: Fact confidence set to ${updates.confidence}% by user`);
+      }
+      
       res.json(updatedEntry);
     } catch (error) {
       console.error('Update memory entry error:', error);
@@ -700,8 +713,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       
-      const updatedEntry = await storage.updateMemoryConfidence(id, 100, undefined);
-      console.log(`🎯 Manual boost: Fact confidence set to 100% by user`);
+      // Get current fact to calculate progressive boost
+      const currentFacts = await storage.getMemoryEntries(await storage.getActiveProfile().then(p => p!.id), 1000);
+      const currentFact = currentFacts.find(f => f.id === id);
+      
+      if (!currentFact) {
+        return res.status(404).json({ error: 'Fact not found' });
+      }
+      
+      // Progressive boosting: 85→90→95→100
+      const currentConfidence = currentFact.confidence || 50; // Default to 50 if null
+      let newConfidence;
+      if (currentConfidence < 85) {
+        newConfidence = 85;
+      } else if (currentConfidence < 90) {
+        newConfidence = 90;
+      } else if (currentConfidence < 95) {
+        newConfidence = 95;
+      } else {
+        newConfidence = 100;
+      }
+      
+      const updatedEntry = await storage.updateMemoryConfidence(id, newConfidence, undefined);
+      console.log(`🎯 Progressive boost: Fact confidence ${currentConfidence}% → ${newConfidence}% by user`);
       res.json(updatedEntry);
     } catch (error) {
       console.error('Boost fact error:', error);
