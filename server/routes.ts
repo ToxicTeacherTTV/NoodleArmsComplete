@@ -411,7 +411,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const memory of consolidatedMemories) {
         await storage.addMemoryEntry({
           profileId: activeProfile.id,
-          type: memory.type,
+          type: memory.type as any,
           content: memory.content,
           importance: memory.importance,
           confidence: 75, // Good confidence since extracted from conversation context

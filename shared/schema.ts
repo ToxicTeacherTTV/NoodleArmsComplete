@@ -76,8 +76,8 @@ export const memoryEntries = pgTable("memory_entries", {
   canonicalKey: text("canonical_key"), // Unique key for fact deduplication
   status: text("status").$type<'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'>().default('ACTIVE'),
   isProtected: boolean("is_protected").default(false), // Protected facts can't be deprecated by contradictions
-  // Hierarchical fact support
-  parentFactId: varchar("parent_fact_id").references(() => memoryEntries.id), // Links atomic facts to parent stories
+  // Hierarchical fact support  
+  parentFactId: varchar("parent_fact_id"), // Links atomic facts to parent stories (self-reference removed to avoid circular dependency)
   isAtomicFact: boolean("is_atomic_fact").default(false), // True for granular facts extracted from stories
   storyContext: text("story_context"), // Brief context about which part of the story this relates to
   createdAt: timestamp("created_at").default(sql`now()`),

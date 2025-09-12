@@ -209,7 +209,7 @@ export class DatabaseStorage implements IStorage {
     
     const [newEntry] = await db
       .insert(memoryEntries)
-      .values([finalEntry as any])
+      .values(finalEntry)
       .returning();
     return newEntry;
   }
@@ -385,7 +385,7 @@ export class DatabaseStorage implements IStorage {
     
     const protectedFact = await this.addMemoryEntry({
       profileId,
-      type: 'FACT',
+      type: 'FACT' as const,
       content,
       importance,
       keywords,
