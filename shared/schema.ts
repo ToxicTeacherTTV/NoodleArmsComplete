@@ -75,6 +75,7 @@ export const memoryEntries = pgTable("memory_entries", {
   contradictionGroupId: varchar("contradiction_group_id"), // Groups conflicting facts together
   canonicalKey: text("canonical_key"), // Unique key for fact deduplication
   status: text("status").$type<'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'>().default('ACTIVE'),
+  isProtected: boolean("is_protected").default(false), // Protected facts can't be deprecated by contradictions
   // Hierarchical fact support
   parentFactId: varchar("parent_fact_id").references(() => memoryEntries.id), // Links atomic facts to parent stories
   isAtomicFact: boolean("is_atomic_fact").default(false), // True for granular facts extracted from stories

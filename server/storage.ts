@@ -65,6 +65,10 @@ export interface IStorage {
   markFactsAsContradicting(factIds: string[], groupId: string): Promise<void>;
   updateMemoryStatus(id: string, status: 'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'): Promise<MemoryEntry>;
   getReliableMemoriesForAI(profileId: string, limit?: number): Promise<MemoryEntry[]>;
+  
+  // Protected facts methods
+  addProtectedFact(profileId: string, content: string, importance?: number, keywords?: string[]): Promise<MemoryEntry>;
+  getProtectedFacts(profileId: string): Promise<MemoryEntry[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -369,6 +373,42 @@ export class DatabaseStorage implements IStorage {
         desc(memoryEntries.lastUsed) // Then by recent usage
       )
       .limit(limit);
+  }
+
+  // Protected facts implementation
+  async addProtectedFact(profileId: string, content: string, importance = 5, keywords: string[] = []): Promise<MemoryEntry> {
+    const { generateCanonicalKey } = await import('./utils/canonical.js');
+    const canonicalKey = generateCanonicalKey(content);
+    
+    const protectedFact = await this.addMemoryEntry({
+      profileId,
+      type: 'FACT',
+      content,
+      importance,
+      keywords,
+      source: 'manual',
+      confidence: 100, // Maximum confidence for protected facts
+      supportCount: 999, // High support count so they're never overridden
+      isProtected: true, // Mark as protected
+      canonicalKey,
+    });
+    
+    console.log(`🔒 Added protected fact: "${content}"`);
+    return protectedFact;
+  }
+
+  async getProtectedFacts(profileId: string): Promise<MemoryEntry[]> {
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.isProtected, true),
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
   }
 }
 

@@ -825,6 +825,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Protected Facts Management
+  app.post('/api/memory/protected', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { content, importance = 5, keywords = [] } = req.body;
+      
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        return res.status(400).json({ error: 'Content is required and must be a non-empty string' });
+      }
+
+      const protectedFact = await storage.addProtectedFact(
+        profile.id, 
+        content.trim(), 
+        importance, 
+        keywords
+      );
+
+      res.json(protectedFact);
+    } catch (error) {
+      console.error('Error adding protected fact:', error);
+      res.status(500).json({ error: 'Failed to add protected fact' });
+    }
+  });
+
+  app.get('/api/memory/protected', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const protectedFacts = await storage.getProtectedFacts(profile.id);
+      res.json(protectedFacts);
+    } catch (error) {
+      console.error('Error fetching protected facts:', error);
+      res.status(500).json({ error: 'Failed to fetch protected facts' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
