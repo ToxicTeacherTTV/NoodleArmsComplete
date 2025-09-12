@@ -111,20 +111,13 @@ Return only the numbers of facts that contradict the new fact, separated by comm
 
 Response:`;
 
-      try {
-        const response = await geminiService.processText(batchPrompt);
-        const contradictionNumbers = this.parseContradictionResponse(response);
-        
-        // Add contradicting facts from this batch
-        for (const num of contradictionNumbers) {
-          const factIndex = num - 1; // Convert to 0-based index
-          if (factIndex >= 0 && factIndex < batch.length) {
-            contradictingFacts.push(batch[factIndex]);
-          }
+      // 🚀 SIMPLIFIED: Basic keyword-based contradiction detection for now
+      // Look for obvious contradictory patterns in the content
+      for (const existingFact of batch) {
+        if (this.detectBasicContradiction(newFact.content, existingFact.content)) {
+          contradictingFacts.push(existingFact);
+          console.log(`📍 Detected contradiction: "${newFact.content.substring(0, 50)}..." vs "${existingFact.content.substring(0, 50)}..."`);
         }
-      } catch (error) {
-        console.error('Error in semantic contradiction detection batch:', error);
-        // Continue with next batch even if this one fails
       }
     }
 
@@ -132,20 +125,36 @@ Response:`;
   }
 
   /**
-   * Parse AI response to extract contradiction fact numbers
+   * Simple contradiction detection using keyword patterns
    */
-  private parseContradictionResponse(response: string): number[] {
-    const cleanResponse = response.trim().toUpperCase();
+  private detectBasicContradiction(newContent: string, existingContent: string): boolean {
+    const newLower = newContent.toLowerCase();
+    const existingLower = existingContent.toLowerCase();
     
-    if (cleanResponse === 'NONE' || cleanResponse === 'NO CONTRADICTIONS') {
-      return [];
+    // Check for direct negations
+    const negationPatterns = [
+      ['likes', 'hates'], ['loves', 'hates'], ['prefers', 'dislikes'],
+      ['is', 'is not'], ['has', 'does not have'], ['can', 'cannot'],
+      ['will', 'will not'], ['does', 'does not']
+    ];
+    
+    for (const [positive, negative] of negationPatterns) {
+      if ((newLower.includes(positive) && existingLower.includes(negative)) ||
+          (newLower.includes(negative) && existingLower.includes(positive))) {
+        return true;
+      }
     }
-
-    // Extract numbers from the response
-    const numbers = response.match(/\d+/g);
-    if (!numbers) return [];
-
-    return numbers.map(num => parseInt(num, 10)).filter(num => !isNaN(num));
+    
+    // Check for conflicting times/numbers (basic pattern)
+    const timePattern = /(\d+)\s*(am|pm|hour|minute)/g;
+    const newTimes = newLower.match(timePattern);
+    const existingTimes = existingLower.match(timePattern);
+    
+    if (newTimes && existingTimes && newTimes[0] !== existingTimes[0]) {
+      return true;
+    }
+    
+    return false;
   }
 
   /**

@@ -71,7 +71,12 @@ export default function BrainManagement() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      // Fix: Invalidate all memory-related queries
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] as string).startsWith('/api/memory')
+      });
       toast({ title: "Fact updated successfully!" });
     },
   });
@@ -86,7 +91,12 @@ export default function BrainManagement() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      // Fix: Invalidate all memory-related queries
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] as string).startsWith('/api/memory')
+      });
       toast({ title: "Contradiction resolved!" });
     },
   });
@@ -99,7 +109,12 @@ export default function BrainManagement() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      // Fix: Invalidate all memory-related queries
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] as string).startsWith('/api/memory')
+      });
       toast({ title: "Fact boosted progressively (85→90→95→100)!" });
     },
   });
@@ -112,7 +127,12 @@ export default function BrainManagement() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      // Fix: Invalidate all memory-related queries
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] as string).startsWith('/api/memory')
+      });
       toast({ title: "Fact marked as FALSE - deprecated!" });
     },
   });

@@ -670,8 +670,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      // For now, return a simple mock. In production, this would use the contradiction detector
-      const contradictions: any[] = [];
+      // 🚀 NEW: Use actual contradiction detector 
+      const contradictions = await storage.getContradictionGroups(activeProfile.id);
+      console.log(`📊 Found ${contradictions.length} contradiction groups for profile ${activeProfile.id}`);
       res.json(contradictions);
     } catch (error) {
       console.error('Contradictions error:', error);
