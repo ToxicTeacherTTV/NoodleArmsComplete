@@ -91,7 +91,12 @@ export default function BrainManagement() {
       return response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      // Fix: Use same cache invalidation pattern as single apply
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] as string).startsWith('/api/memory')
+      });
       setShowPreviewDialog(false);
       setCleaningPreviews([]);
       setSelectedPreviewIds(new Set());
@@ -191,6 +196,10 @@ export default function BrainManagement() {
   const [cleaningPreviews, setCleaningPreviews] = useState<any[]>([]);
   const [selectedPreviewIds, setSelectedPreviewIds] = useState<Set<string>>(new Set());
 
+  // Single fact cleaning dialog state
+  const [showSingleCleanDialog, setShowSingleCleanDialog] = useState(false);
+  const [singleCleanPreview, setSingleCleanPreview] = useState<any>(null);
+
   // Function to open edit dialog
   const openEditDialog = (fact: MemoryFact) => {
     setEditingFact(fact);
@@ -233,6 +242,191 @@ export default function BrainManagement() {
       applyCleaningMutation.mutate(Array.from(selectedPreviewIds));
     }
   };
+
+  // Function to check if a fact looks like wall-of-text
+  const isWallOfText = (fact: MemoryFact) => {
+    const content = fact.content.toLowerCase();
+    const hasUserMarkers = /(\byou\s|user:|^### |^> |what|how|why|hey nicky)/i.test(fact.content);
+    const hasAIMarkers = /(nicky|assistant:|dente|noodle arms)/i.test(content);
+    const isLong = fact.content.length > 300;
+    
+    return hasUserMarkers && hasAIMarkers && isLong;
+  };
+
+  // 🔍 NEW: Single fact cleaning preview mutation
+  const previewSingleFactCleaningMutation = useMutation({
+    mutationFn: async (factId: string): Promise<{ preview: any; found: boolean }> => {
+      // Get the fact first
+      const fact = allFacts.find(f => f.id === factId);
+      if (!fact || !isWallOfText(fact)) {
+        return { preview: null, found: false };
+      }
+
+      // Call the existing preview endpoint but filter for just this fact
+      const response = await fetch('/api/memory/preview-cleaning');
+      if (!response.ok) {
+        throw new Error('Failed to preview cleaning');
+      }
+      const data = await response.json();
+      
+      // Find the preview for this specific fact
+      const preview = data.previews.find((p: any) => p.id === factId);
+      return { preview, found: !!preview };
+    },
+    onSuccess: (data) => {
+      if (data.found && data.preview) {
+        setSingleCleanPreview(data.preview);
+        setShowSingleCleanDialog(true);
+      } else {
+        toast({
+          title: "Already Clean",
+          description: "This fact doesn't need wall-of-text cleaning.",
+        });
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Preview Failed",
+        description: error.message || "Failed to preview cleaning",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // ✂️ NEW: Apply single fact cleaning mutation
+  const applySingleCleaningMutation = useMutation({
+    mutationFn: async (factId: string): Promise<{ applied: number; message: string }> => {
+      const response = await fetch('/api/memory/apply-cleaning', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ selectedFactIds: [factId] }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to apply cleaning');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      // Fix: Invalidate all memory-related queries
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] as string).startsWith('/api/memory')
+      });
+      setShowSingleCleanDialog(false);
+      setSingleCleanPreview(null);
+      
+      toast({
+        title: "Fact Cleaned Successfully",
+        description: "Wall-of-text content has been cleaned and simplified.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Cleaning Failed",
+        description: error.message || "Failed to apply cleaning",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Shared component for fact action buttons
+  const FactActions = ({ fact, variant = "standard" }: { fact: MemoryFact; variant?: "standard" | "compact" }) => (
+    <div className="flex items-center space-x-2">
+      {variant === "compact" ? (
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => openEditDialog(fact)}
+            data-testid={`button-boost-all-${fact.id}`}
+            title="Edit fact"
+          >
+            <ThumbsUp className="h-3 w-3" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => deprecateFactMutation.mutate(fact.id)}
+            data-testid={`button-deprecate-all-${fact.id}`}
+          >
+            <ThumbsDown className="h-3 w-3" />
+          </Button>
+          {isWallOfText(fact) && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => previewSingleFactCleaningMutation.mutate(fact.id)}
+              disabled={previewSingleFactCleaningMutation.isPending}
+              data-testid={`button-preview-clean-single-${fact.id}`}
+              title="Preview clean wall-of-text"
+            >
+              {previewSingleFactCleaningMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Scissors className="h-3 w-3" />
+              )}
+            </Button>
+          )}
+          <input
+            type="number"
+            min="0"
+            max="100"
+            defaultValue={fact.confidence || 50}
+            className="w-12 h-7 text-xs border rounded text-center"
+            data-testid={`input-confidence-${fact.id}`}
+            onBlur={(e) => {
+              const newConfidence = parseInt(e.target.value);
+              if (newConfidence >= 0 && newConfidence <= 100 && newConfidence !== fact.confidence) {
+                updateFactMutation.mutate({ factId: fact.id, content: fact.content, confidence: newConfidence });
+              }
+            }}
+            title="Manual confidence (0-100)"
+          />
+          <span className="text-xs text-muted-foreground">%</span>
+        </>
+      ) : (
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => openEditDialog(fact)}
+            data-testid={`button-boost-${fact.id}`}
+          >
+            <ThumbsUp className="h-4 w-4 mr-1" />
+            EDIT CONFIDENCE
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => deprecateFactMutation.mutate(fact.id)}
+            data-testid={`button-edit-false-${fact.id}`}
+          >
+            <ThumbsDown className="h-4 w-4 mr-1" />
+            FALSE
+          </Button>
+          {isWallOfText(fact) && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => previewSingleFactCleaningMutation.mutate(fact.id)}
+              disabled={previewSingleFactCleaningMutation.isPending}
+              data-testid={`button-preview-clean-single-${fact.id}`}
+            >
+              {previewSingleFactCleaningMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Scissors className="h-4 w-4 mr-1" />
+              )}
+              CLEAN WALL-OF-TEXT
+            </Button>
+          )}
+        </>
+      )}
+    </div>
+  );
 
   // Queries
   const { data: activeProfile } = useQuery({
@@ -565,26 +759,7 @@ export default function BrainManagement() {
                               Importance: {fact.importance}
                             </Badge>
                           </div>
-                          <div className="flex space-x-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openEditDialog(fact)}
-                              data-testid={`button-boost-${fact.id}`}
-                            >
-                              <ThumbsUp className="h-4 w-4 mr-1" />
-                              EDIT CONFIDENCE
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => openEditDialog(fact)}
-                              data-testid={`button-edit-false-${fact.id}`}
-                            >
-                              <ThumbsDown className="h-4 w-4 mr-1" />
-                              FALSE
-                            </Button>
-                          </div>
+                          <FactActions fact={fact} />
                         </div>
                         <Progress value={fact.confidence} className="w-full mb-3" />
                         <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
@@ -635,26 +810,7 @@ export default function BrainManagement() {
                               Support: {fact.supportCount}
                             </Badge>
                           </div>
-                          <div className="flex space-x-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openEditDialog(fact)}
-                              data-testid={`button-boost-${fact.id}`}
-                            >
-                              <ThumbsUp className="h-4 w-4 mr-1" />
-                              EDIT CONFIDENCE
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => openEditDialog(fact)}
-                              data-testid={`button-edit-false-${fact.id}`}
-                            >
-                              <ThumbsDown className="h-4 w-4 mr-1" />
-                              FALSE
-                            </Button>
-                          </div>
+                          <FactActions fact={fact} />
                         </div>
                         <Progress value={fact.confidence} className="w-full mb-3" />
                         <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
@@ -705,26 +861,7 @@ export default function BrainManagement() {
                               Support: {fact.supportCount}
                             </Badge>
                           </div>
-                          <div className="flex space-x-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openEditDialog(fact)}
-                              data-testid={`button-boost-${fact.id}`}
-                            >
-                              <ThumbsUp className="h-4 w-4 mr-1" />
-                              EDIT CONFIDENCE
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => openEditDialog(fact)}
-                              data-testid={`button-edit-false-${fact.id}`}
-                            >
-                              <ThumbsDown className="h-4 w-4 mr-1" />
-                              FALSE
-                            </Button>
-                          </div>
+                          <FactActions fact={fact} />
                         </div>
                         <Progress value={fact.confidence} className="w-full mb-3" />
                         <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
@@ -879,41 +1016,7 @@ export default function BrainManagement() {
                             </Badge>
                             <Badge variant="outline">{fact.status}</Badge>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => openEditDialog(fact)}
-                              data-testid={`button-boost-all-${fact.id}`}
-                              title="Progressive boost (85→90→95→100)"
-                            >
-                              <ThumbsUp className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => deprecateFactMutation.mutate(fact.id)}
-                              data-testid={`button-deprecate-all-${fact.id}`}
-                            >
-                              <ThumbsDown className="h-3 w-3" />
-                            </Button>
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              defaultValue={fact.confidence || 50}
-                              className="w-12 h-7 text-xs border rounded text-center"
-                              data-testid={`input-confidence-${fact.id}`}
-                              onBlur={(e) => {
-                                const newConfidence = parseInt(e.target.value);
-                                if (newConfidence >= 0 && newConfidence <= 100 && newConfidence !== fact.confidence) {
-                                  updateFactMutation.mutate({ factId: fact.id, content: fact.content, confidence: newConfidence });
-                                }
-                              }}
-                              title="Manual confidence (0-100)"
-                            />
-                            <span className="text-xs text-muted-foreground">%</span>
-                          </div>
+                          <FactActions fact={fact} variant="compact" />
                         </div>
                         <p className="text-sm text-gray-900 dark:text-gray-100 mb-2 leading-relaxed">
                           {fact.content}
@@ -930,6 +1033,71 @@ export default function BrainManagement() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Single Fact Cleaning Dialog */}
+      <Dialog open={showSingleCleanDialog} onOpenChange={(open) => !open && setShowSingleCleanDialog(false)}>
+        <DialogContent className="sm:max-w-[800px]">
+          <DialogHeader>
+            <DialogTitle>Preview Wall-of-Text Cleaning</DialogTitle>
+            <DialogDescription>
+              Review the proposed changes to clean up this wall-of-text fact.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {singleCleanPreview && (
+            <div className="space-y-4 max-h-[500px] overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Before */}
+                <div className="space-y-2">
+                  <h4 className="font-medium text-red-600 dark:text-red-400">Before (Wall-of-Text)</h4>
+                  <div className="p-3 border border-red-200 dark:border-red-800 rounded bg-red-50 dark:bg-red-900/20">
+                    <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
+                      {singleCleanPreview.original}
+                    </p>
+                  </div>
+                </div>
+
+                {/* After */}
+                <div className="space-y-2">
+                  <h4 className="font-medium text-green-600 dark:text-green-400">After (Cleaned)</h4>
+                  <div className="p-3 border border-green-200 dark:border-green-800 rounded bg-green-50 dark:bg-green-900/20">
+                    <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
+                      {singleCleanPreview.cleaned}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowSingleCleanDialog(false)}
+              data-testid="button-cancel-single-clean"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => applySingleCleaningMutation.mutate(singleCleanPreview?.id)}
+              disabled={applySingleCleaningMutation.isPending}
+              data-testid="button-apply-single-clean"
+            >
+              {applySingleCleaningMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Applying...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Apply Cleaning
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Fact Dialog */}
       <Dialog open={!!editingFact} onOpenChange={(open) => !open && setEditingFact(null)}>
