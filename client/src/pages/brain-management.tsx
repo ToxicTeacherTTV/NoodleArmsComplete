@@ -9,7 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
+import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ProtectedFactsManager } from "@/components/protected-facts-manager";
@@ -38,10 +41,17 @@ export default function BrainManagement() {
 
   // 🔧 NEW: Reprocess wall-of-text facts mutation
   const reprocessFactsMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest('/api/memory/reprocess-facts', {
+    mutationFn: async (): Promise<{ cleaned: number; totalFound: number; message: string }> => {
+      const response = await fetch('/api/memory/reprocess-facts', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
+      if (!response.ok) {
+        throw new Error('Failed to reprocess facts');
+      }
+      return response.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
@@ -58,11 +68,65 @@ export default function BrainManagement() {
       });
     },
   });
+
+  // Mutation for updating fact content and confidence
+  const updateFactMutation = useMutation({
+    mutationFn: async ({ factId, content, confidence }: { factId: string; content: string; confidence: number }) => {
+      const response = await fetch(`/api/memory/${factId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ content, confidence }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update fact');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      toast({
+        title: "Fact updated successfully",
+        description: "Changes have been saved",
+      });
+      setEditingFact(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Update failed",
+        description: error.message || "Failed to update fact",
+        variant: "destructive",
+      });
+    },
+  });
+
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("protected-facts");
   const [sortBy, setSortBy] = useState<'confidence' | 'date'>('confidence');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  
+  // Edit dialog state
+  const [editingFact, setEditingFact] = useState<MemoryFact | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [editConfidence, setEditConfidence] = useState(50);
+
+  // Function to open edit dialog
+  const openEditDialog = (fact: MemoryFact) => {
+    setEditingFact(fact);
+    setEditContent(fact.content);
+    setEditConfidence(fact.confidence);
+  };
+
+  // Function to save edited fact
+  const saveEditedFact = () => {
+    if (editingFact) {
+      updateFactMutation.mutate({
+        factId: editingFact.id,
+        content: editContent,
+        confidence: editConfidence
+      });
+    }
+  };
 
   // Queries
   const { data: activeProfile } = useQuery({
@@ -95,25 +159,6 @@ export default function BrainManagement() {
   });
 
   // Mutations
-  const updateFactMutation = useMutation({
-    mutationFn: async ({ factId, updates }: { factId: string; updates: any }) => {
-      const response = await fetch(`/api/memory/entries/${factId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      // Fix: Invalidate all memory-related queries
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
-          (query.queryKey[0] as string).startsWith('/api/memory')
-      });
-      toast({ title: "Fact updated successfully!" });
-    },
-  });
 
   const resolveContradictionMutation = useMutation({
     mutationFn: async ({ winnerFactId, loserFactId }: { winnerFactId: string; loserFactId: string }) => {
@@ -328,6 +373,25 @@ export default function BrainManagement() {
               >
                 {sortOrder === 'desc' ? '↓' : '↑'}
               </Button>
+              <Button
+                onClick={() => reprocessFactsMutation.mutate()}
+                disabled={reprocessFactsMutation.isPending}
+                variant="outline"
+                size="sm"
+                data-testid="button-reprocess-facts"
+              >
+                {reprocessFactsMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Cleaning...
+                  </>
+                ) : (
+                  <>
+                    <Scissors className="h-4 w-4 mr-2" />
+                    Clean Wall-of-Text
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </div>
@@ -408,8 +472,8 @@ export default function BrainManagement() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => deprecateFactMutation.mutate(fact.id)}
-                              data-testid={`button-deprecate-${fact.id}`}
+                              onClick={() => openEditDialog(fact)}
+                              data-testid={`button-edit-false-${fact.id}`}
                             >
                               <ThumbsDown className="h-4 w-4 mr-1" />
                               FALSE
@@ -478,8 +542,8 @@ export default function BrainManagement() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => deprecateFactMutation.mutate(fact.id)}
-                              data-testid={`button-deprecate-${fact.id}`}
+                              onClick={() => openEditDialog(fact)}
+                              data-testid={`button-edit-false-${fact.id}`}
                             >
                               <ThumbsDown className="h-4 w-4 mr-1" />
                               FALSE
@@ -548,8 +612,8 @@ export default function BrainManagement() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => deprecateFactMutation.mutate(fact.id)}
-                              data-testid={`button-deprecate-${fact.id}`}
+                              onClick={() => openEditDialog(fact)}
+                              data-testid={`button-edit-false-${fact.id}`}
                             >
                               <ThumbsDown className="h-4 w-4 mr-1" />
                               FALSE
@@ -662,11 +726,13 @@ export default function BrainManagement() {
                               // Mark both as not important
                               updateFactMutation.mutate({ 
                                 factId: pair.fact1.id, 
-                                updates: { importance: 1 } 
+                                content: pair.fact1.content,
+                                confidence: 1 
                               });
                               updateFactMutation.mutate({ 
                                 factId: pair.fact2.id, 
-                                updates: { importance: 1 } 
+                                content: pair.fact2.content,
+                                confidence: 1 
                               });
                             }}
                             data-testid={`button-not-important-${index}`}
@@ -735,7 +801,7 @@ export default function BrainManagement() {
                               onBlur={(e) => {
                                 const newConfidence = parseInt(e.target.value);
                                 if (newConfidence >= 0 && newConfidence <= 100 && newConfidence !== fact.confidence) {
-                                  updateFactMutation.mutate({ factId: fact.id, updates: { confidence: newConfidence } });
+                                  updateFactMutation.mutate({ factId: fact.id, content: fact.content, confidence: newConfidence });
                                 }
                               }}
                               title="Manual confidence (0-100)"
@@ -758,6 +824,76 @@ export default function BrainManagement() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Edit Fact Dialog */}
+      <Dialog open={!!editingFact} onOpenChange={(open) => !open && setEditingFact(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Fact</DialogTitle>
+            <DialogDescription>
+              Modify the fact content and adjust its confidence level.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <label htmlFor="edit-content" className="text-sm font-medium">
+                Content
+              </label>
+              <Textarea
+                id="edit-content"
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                placeholder="Enter fact content..."
+                className="min-h-[100px]"
+                data-testid="textarea-edit-content"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label htmlFor="edit-confidence" className="text-sm font-medium">
+                Confidence: {editConfidence}%
+              </label>
+              <Slider
+                id="edit-confidence"
+                min={0}
+                max={100}
+                step={1}
+                value={[editConfidence]}
+                onValueChange={(value) => setEditConfidence(value[0])}
+                className="w-full"
+                data-testid="slider-edit-confidence"
+              />
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>0% (False)</span>
+                <span>50% (Uncertain)</span>
+                <span>100% (Absolutely True)</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingFact(null)}
+              data-testid="button-cancel-edit"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={saveEditedFact}
+              disabled={updateFactMutation.isPending || !editContent.trim()}
+              data-testid="button-save-edit"
+            >
+              {updateFactMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
