@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -39,7 +40,77 @@ export default function BrainManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // 🔧 NEW: Reprocess wall-of-text facts mutation
+  // 🔍 NEW: Preview cleaning mutation
+  const previewCleaningMutation = useMutation({
+    mutationFn: async (): Promise<{ previews: any[]; totalFound: number; previewsAvailable: number }> => {
+      const response = await fetch('/api/memory/preview-cleaning');
+      if (!response.ok) {
+        throw new Error('Failed to preview cleaning');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setCleaningPreviews(data.previews);
+      setSelectedPreviewIds(new Set()); // Reset selections
+      setShowPreviewDialog(true);
+      
+      if (data.previewsAvailable === 0) {
+        toast({
+          title: "No Wall-of-Text Facts Found",
+          description: "All your facts are already clean!",
+        });
+      } else {
+        toast({
+          title: "Preview Ready",
+          description: `Found ${data.previewsAvailable} facts that can be cleaned.`,
+        });
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Preview Failed",
+        description: error.message || "Failed to preview cleaning",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // ✂️ NEW: Apply selected cleaning changes mutation
+  const applyCleaningMutation = useMutation({
+    mutationFn: async (selectedFactIds: string[]): Promise<{ applied: number; message: string }> => {
+      const response = await fetch('/api/memory/apply-cleaning', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ selectedFactIds }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to apply cleaning');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      setShowPreviewDialog(false);
+      setCleaningPreviews([]);
+      setSelectedPreviewIds(new Set());
+      
+      toast({
+        title: "Cleaning Applied Successfully",
+        description: `Cleaned ${data.applied} facts as requested.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Cleaning Failed",
+        description: error.message || "Failed to apply cleaning",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // 🔧 LEGACY: Reprocess wall-of-text facts mutation (kept for backup)
   const reprocessFactsMutation = useMutation({
     mutationFn: async (): Promise<{ cleaned: number; totalFound: number; message: string }> => {
       const response = await fetch('/api/memory/reprocess-facts', {
@@ -110,6 +181,11 @@ export default function BrainManagement() {
   const [editContent, setEditContent] = useState("");
   const [editConfidence, setEditConfidence] = useState(50);
 
+  // Preview cleaning dialog state
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const [cleaningPreviews, setCleaningPreviews] = useState<any[]>([]);
+  const [selectedPreviewIds, setSelectedPreviewIds] = useState<Set<string>>(new Set());
+
   // Function to open edit dialog
   const openEditDialog = (fact: MemoryFact) => {
     setEditingFact(fact);
@@ -125,6 +201,31 @@ export default function BrainManagement() {
         content: editContent,
         confidence: editConfidence
       });
+    }
+  };
+
+  // Functions for preview cleaning dialog
+  const togglePreviewSelection = (factId: string) => {
+    const newSelected = new Set(selectedPreviewIds);
+    if (newSelected.has(factId)) {
+      newSelected.delete(factId);
+    } else {
+      newSelected.add(factId);
+    }
+    setSelectedPreviewIds(newSelected);
+  };
+
+  const selectAllPreviews = () => {
+    setSelectedPreviewIds(new Set(cleaningPreviews.map(p => p.id)));
+  };
+
+  const deselectAllPreviews = () => {
+    setSelectedPreviewIds(new Set());
+  };
+
+  const applySelectedCleaning = () => {
+    if (selectedPreviewIds.size > 0) {
+      applyCleaningMutation.mutate(Array.from(selectedPreviewIds));
     }
   };
 
@@ -374,21 +475,21 @@ export default function BrainManagement() {
                 {sortOrder === 'desc' ? '↓' : '↑'}
               </Button>
               <Button
-                onClick={() => reprocessFactsMutation.mutate()}
-                disabled={reprocessFactsMutation.isPending}
+                onClick={() => previewCleaningMutation.mutate()}
+                disabled={previewCleaningMutation.isPending}
                 variant="outline"
                 size="sm"
-                data-testid="button-reprocess-facts"
+                data-testid="button-preview-cleaning"
               >
-                {reprocessFactsMutation.isPending ? (
+                {previewCleaningMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Cleaning...
+                    Analyzing...
                   </>
                 ) : (
                   <>
                     <Scissors className="h-4 w-4 mr-2" />
-                    Clean Wall-of-Text
+                    Preview Clean Wall-of-Text
                   </>
                 )}
               </Button>
@@ -889,6 +990,131 @@ export default function BrainManagement() {
                 </>
               ) : (
                 "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview Cleaning Dialog */}
+      <Dialog open={showPreviewDialog} onOpenChange={(open) => !open && setShowPreviewDialog(false)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Preview Wall-of-Text Cleaning</DialogTitle>
+            <DialogDescription>
+              Review the proposed changes before applying them. Select which facts you want to clean.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Selection Controls */}
+            <div className="flex items-center justify-between border-b pb-4">
+              <div className="flex items-center space-x-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={selectAllPreviews}
+                  data-testid="button-select-all-previews"
+                >
+                  Select All ({cleaningPreviews.length})
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={deselectAllPreviews}
+                  data-testid="button-deselect-all-previews"
+                >
+                  Deselect All
+                </Button>
+              </div>
+              <div className="text-sm text-gray-600">
+                {selectedPreviewIds.size} of {cleaningPreviews.length} selected
+              </div>
+            </div>
+
+            {/* Preview List */}
+            <ScrollArea className="max-h-96">
+              {cleaningPreviews.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No wall-of-text facts found to clean.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {cleaningPreviews.map((preview) => (
+                    <div
+                      key={preview.id}
+                      className={`border rounded-lg p-4 ${
+                        selectedPreviewIds.has(preview.id)
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                          : 'border-gray-200 dark:border-gray-700'
+                      }`}
+                    >
+                      <div className="flex items-start space-x-3">
+                        <Checkbox
+                          checked={selectedPreviewIds.has(preview.id)}
+                          onCheckedChange={() => togglePreviewSelection(preview.id)}
+                          data-testid={`checkbox-preview-${preview.id}`}
+                        />
+                        <div className="flex-1 space-y-3">
+                          {/* Metadata */}
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>Confidence: {preview.confidence}% • Source: {preview.source}</span>
+                            <span>{preview.originalLength} → {preview.cleanedLength} chars</span>
+                          </div>
+                          
+                          {/* Before */}
+                          <div>
+                            <label className="text-sm font-medium text-red-700 dark:text-red-400">
+                              📝 Original (Wall-of-Text):
+                            </label>
+                            <div className="mt-1 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded text-sm">
+                              {preview.original}
+                            </div>
+                          </div>
+                          
+                          {/* Arrow */}
+                          <div className="flex justify-center">
+                            <div className="text-gray-400">↓</div>
+                          </div>
+                          
+                          {/* After */}
+                          <div>
+                            <label className="text-sm font-medium text-green-700 dark:text-green-400">
+                              ✨ Cleaned Version:
+                            </label>
+                            <div className="mt-1 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded text-sm">
+                              {preview.cleaned}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowPreviewDialog(false)}
+              data-testid="button-cancel-preview"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={applySelectedCleaning}
+              disabled={applyCleaningMutation.isPending || selectedPreviewIds.size === 0}
+              data-testid="button-apply-cleaning"
+            >
+              {applyCleaningMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Applying...
+                </>
+              ) : (
+                `Apply Changes (${selectedPreviewIds.size})`
               )}
             </Button>
           </DialogFooter>

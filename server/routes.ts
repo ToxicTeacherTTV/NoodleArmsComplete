@@ -697,7 +697,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // 🔧 NEW: Reprocess wall-of-text facts endpoint
+  // 🔍 NEW: Preview wall-of-text facts cleaning without applying changes
+  app.get('/api/memory/preview-cleaning', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      // Find facts that look like wall-of-text (using same logic as reprocess endpoint)
+      const allFacts = await storage.getMemoryEntries(activeProfile.id, 1000);
+      const wallOfTextFacts = allFacts.filter(fact => {
+        const content = fact.content.toLowerCase();
+        const hasUserMarkers = /(\byou\s|user:|^### |^> |what|how|why|hey nicky)/i.test(fact.content);
+        const hasAIMarkers = /(nicky|assistant:|dente|noodle arms)/i.test(content);
+        const isLong = fact.content.length > 300;
+        
+        return hasUserMarkers && hasAIMarkers && isLong;
+      });
+
+      console.log(`🔍 Found ${wallOfTextFacts.length} wall-of-text facts for preview`);
+
+      const previews = [];
+      const { conversationParser } = await import('../services/conversationParser');
+
+      for (const fact of wallOfTextFacts) {
+        try {
+          // Parse the fact content to extract only Nicky's parts
+          const nickyContent = conversationParser.extractFactRelevantContent(fact.content, fact.source || 'unknown');
+          
+          // Only include if we can extract something meaningful and different
+          if (nickyContent && nickyContent.trim() !== fact.content.trim() && nickyContent.length > 20) {
+            previews.push({
+              id: fact.id,
+              original: fact.content,
+              cleaned: nickyContent.substring(0, 500), // Limit to 500 chars
+              confidence: fact.confidence,
+              source: fact.source,
+              story: fact.story,
+              originalLength: fact.content.length,
+              cleanedLength: nickyContent.length
+            });
+          }
+        } catch (error) {
+          console.error(`❌ Error previewing fact ${fact.id}:`, error);
+        }
+      }
+
+      res.json({ 
+        success: true,
+        totalFound: wallOfTextFacts.length,
+        previewsAvailable: previews.length,
+        previews
+      });
+    } catch (error) {
+      console.error('Preview error:', error);
+      res.status(500).json({ error: 'Failed to preview cleaning' });
+    }
+  });
+
+  // ✂️ NEW: Apply selected cleaning changes
+  app.post('/api/memory/apply-cleaning', async (req, res) => {
+    try {
+      const { selectedFactIds } = req.body;
+      
+      if (!selectedFactIds || !Array.isArray(selectedFactIds) || selectedFactIds.length === 0) {
+        return res.status(400).json({ error: 'No fact IDs provided' });
+      }
+
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      let applied = 0;
+      const { conversationParser } = await import('../services/conversationParser');
+      const { db } = await import('../db');
+      const { memoryEntries } = await import('@shared/schema');
+      const { eq, sql } = await import('drizzle-orm');
+
+      // Get the selected facts
+      const allFacts = await storage.getMemoryEntries(activeProfile.id, 1000);
+      const selectedFacts = allFacts.filter(fact => selectedFactIds.includes(fact.id));
+
+      for (const fact of selectedFacts) {
+        try {
+          // Parse the fact content to extract only Nicky's parts
+          const nickyContent = conversationParser.extractFactRelevantContent(fact.content, fact.source || 'unknown');
+          
+          // Only update if we actually extracted something meaningful and different
+          if (nickyContent && nickyContent.trim() !== fact.content.trim() && nickyContent.length > 20) {
+            // Update the fact with cleaned content using SQL update
+            await db
+              .update(memoryEntries)
+              .set({ 
+                content: nickyContent.substring(0, 500), // Limit to 500 chars max
+                updatedAt: sql`now()`
+              })
+              .where(eq(memoryEntries.id, fact.id));
+            applied++;
+            console.log(`✂️ Applied cleaning to fact: ${fact.id} (${fact.content.length} → ${nickyContent.length} chars)`);
+          }
+        } catch (error) {
+          console.error(`❌ Error applying cleaning to fact ${fact.id}:`, error);
+        }
+      }
+
+      res.json({ 
+        success: true,
+        message: `Successfully applied cleaning to ${applied} facts`,
+        applied 
+      });
+    } catch (error) {
+      console.error('Apply cleaning error:', error);
+      res.status(500).json({ error: 'Failed to apply cleaning' });
+    }
+  });
+
+  // 🔧 EXISTING: Reprocess wall-of-text facts endpoint
   app.post('/api/memory/reprocess-facts', async (req, res) => {
     try {
       const activeProfile = await storage.getActiveProfile();
