@@ -38,6 +38,8 @@ export default function BrainManagement() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("protected-facts");
+  const [sortBy, setSortBy] = useState<'confidence' | 'date'>('confidence');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Queries
   const { data: activeProfile } = useQuery({
@@ -50,6 +52,11 @@ export default function BrainManagement() {
 
   const { data: highConfidenceFacts = [] } = useQuery<MemoryFact[]>({
     queryKey: ['/api/memory/high-confidence'],
+  });
+
+  // 🚀 NEW: Medium confidence facts query
+  const { data: mediumConfidenceFacts = [] } = useQuery<MemoryFact[]>({
+    queryKey: ['/api/memory/medium-confidence'],
   });
 
   const { data: contradictions = [] } = useQuery<ContradictionPair[]>({
@@ -137,11 +144,60 @@ export default function BrainManagement() {
     },
   });
 
+  // 🚀 NEW: Sort and filter facts with story groupings
+  const sortFacts = (facts: MemoryFact[]) => {
+    const sorted = [...facts].sort((a, b) => {
+      if (sortBy === 'confidence') {
+        return sortOrder === 'desc' ? (b.confidence || 0) - (a.confidence || 0) : (a.confidence || 0) - (b.confidence || 0);
+      } else {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+      }
+    });
+    return sorted;
+  };
+
+  // Group facts by story context if available
+  const groupFactsByStory = (facts: MemoryFact[]) => {
+    const grouped: { [key: string]: MemoryFact[] } = {};
+    
+    facts.forEach(fact => {
+      // Extract story context from source or content
+      let storyKey = 'General Facts';
+      
+      if (fact.source && fact.source.includes('_')) {
+        // Parse filename for story context
+        const parts = fact.source.replace('.txt', '').split('_');
+        if (parts.length > 2) {
+          storyKey = parts.slice(1).join(' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+      }
+      
+      // Look for story indicators in content
+      if (fact.content.includes('episode') || fact.content.includes('stream')) {
+        storyKey = 'Stream Episodes';
+      } else if (fact.content.includes('backstory') || fact.content.includes('origin')) {
+        storyKey = 'Character Backstory';
+      } else if (fact.content.includes('personality') || fact.content.includes('behavior')) {
+        storyKey = 'Personality Traits';
+      }
+      
+      if (!grouped[storyKey]) {
+        grouped[storyKey] = [];
+      }
+      grouped[storyKey].push(fact);
+    });
+    
+    return grouped;
+  };
+
   const filteredFacts = (facts: MemoryFact[] = []) => {
-    if (!searchQuery) return facts;
-    return facts.filter(fact => 
+    if (!searchQuery) return sortFacts(facts);
+    const filtered = facts.filter(fact => 
       fact.content.toLowerCase().includes(searchQuery.toLowerCase())
     );
+    return sortFacts(filtered);
   };
 
   const getConfidenceColor = (confidence: number) => {
@@ -188,29 +244,60 @@ export default function BrainManagement() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Search Bar */}
-        <div className="mb-8">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              type="text"
-              placeholder="Search Nicky's knowledge..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-              data-testid="input-search"
-            />
+        {/* Search Bar & Sorting Controls */}
+        <div className="mb-8 space-y-4">
+          <div className="flex gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                type="text"
+                placeholder="Search Nicky's knowledge..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+                data-testid="input-search"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant={sortBy === 'confidence' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSortBy('confidence')}
+                data-testid="sort-by-confidence"
+              >
+                Sort by Confidence
+              </Button>
+              <Button
+                variant={sortBy === 'date' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSortBy('date')}
+                data-testid="sort-by-date"
+              >
+                Sort by Date
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+                data-testid="toggle-sort-order"
+              >
+                {sortOrder === 'desc' ? '↓' : '↑'}
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="protected-facts" data-testid="tab-protected-facts">
               Protected Facts
             </TabsTrigger>
             <TabsTrigger value="high-confidence" data-testid="tab-high-confidence">
-              High Confidence Facts
+              High Confidence (90%+)
+            </TabsTrigger>
+            <TabsTrigger value="medium-confidence" data-testid="tab-medium-confidence">
+              Medium Confidence (60-89%)
             </TabsTrigger>
             <TabsTrigger value="contradictions" data-testid="tab-contradictions">
               Contradictions ({contradictions?.length || 0})
@@ -236,12 +323,18 @@ export default function BrainManagement() {
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[600px]">
-                  <div className="space-y-4">
-                    {filteredFacts(highConfidenceFacts)?.map((fact: MemoryFact) => (
-                      <div
-                        key={fact.id}
-                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
-                      >
+                  {/* 🚀 NEW: Story-grouped facts */}
+                  {Object.entries(groupFactsByStory(filteredFacts(highConfidenceFacts))).map(([storyKey, facts]) => (
+                    <div key={storyKey} className="mb-6">
+                      <h3 className="text-lg font-semibold mb-3 text-purple-600 dark:text-purple-400 border-b border-purple-200 dark:border-purple-800 pb-2">
+                        📖 {storyKey}
+                      </h3>
+                      <div className="space-y-4">
+                        {facts.map((fact: MemoryFact) => (
+                          <div
+                            key={fact.id}
+                            className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
+                          >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center space-x-2">
                             <Badge className={getConfidenceColor(fact.confidence)}>
@@ -282,9 +375,81 @@ export default function BrainManagement() {
                         <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
                           Source: {fact.source} • Created: {new Date(fact.createdAt).toLocaleDateString()}
                         </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* 🚀 NEW: Medium Confidence Facts */}
+          <TabsContent value="medium-confidence" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Medium Confidence Facts (60-89%)</CardTitle>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  These facts need more verification but show promising confidence levels.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[600px]">
+                  {/* Story-grouped medium confidence facts */}
+                  {Object.entries(groupFactsByStory(filteredFacts(mediumConfidenceFacts))).map(([storyKey, facts]) => (
+                    <div key={storyKey} className="mb-6">
+                      <h3 className="text-lg font-semibold mb-3 text-blue-600 dark:text-blue-400 border-b border-blue-200 dark:border-blue-800 pb-2">
+                        📖 {storyKey}
+                      </h3>
+                      <div className="space-y-4">
+                        {facts.map((fact: MemoryFact) => (
+                          <div
+                            key={fact.id}
+                            className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
+                          >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center space-x-2">
+                            <Badge className={getConfidenceColor(fact.confidence)}>
+                              {fact.confidence}% {getConfidenceLabel(fact.confidence)}
+                            </Badge>
+                            <Badge variant="outline">
+                              Support: {fact.supportCount}
+                            </Badge>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => boostFactMutation.mutate(fact.id)}
+                              data-testid={`button-boost-${fact.id}`}
+                            >
+                              <ThumbsUp className="h-4 w-4 mr-1" />
+                              BOOST
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => deprecateFactMutation.mutate(fact.id)}
+                              data-testid={`button-deprecate-${fact.id}`}
+                            >
+                              <ThumbsDown className="h-4 w-4 mr-1" />
+                              FALSE
+                            </Button>
+                          </div>
+                        </div>
+                        <Progress value={fact.confidence} className="w-full mb-3" />
+                        <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
+                          {fact.content}
+                        </p>
+                        <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                          Source: {fact.source} • Created: {new Date(fact.createdAt).toLocaleDateString()}
+                        </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </ScrollArea>
               </CardContent>
             </Card>

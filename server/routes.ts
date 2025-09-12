@@ -663,6 +663,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 🚀 NEW: Medium confidence facts endpoint (60-89%)
+  app.get('/api/memory/medium-confidence', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const mediumConfidenceFacts = await storage.getHighConfidenceMemories(activeProfile.id, 60, 89);
+      console.log(`📊 Found ${mediumConfidenceFacts.length} medium confidence facts (60-89%)`);
+      res.json(mediumConfidenceFacts);
+    } catch (error) {
+      console.error('Medium confidence facts error:', error);
+      res.status(500).json({ error: 'Failed to get medium confidence facts' });
+    }
+  });
+
   app.get('/api/memory/contradictions', async (req, res) => {
     try {
       const activeProfile = await storage.getActiveProfile();
