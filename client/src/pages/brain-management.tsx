@@ -463,11 +463,11 @@ export default function BrainManagement() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => boostFactMutation.mutate(fact.id)}
+                              onClick={() => openEditDialog(fact)}
                               data-testid={`button-boost-${fact.id}`}
                             >
                               <ThumbsUp className="h-4 w-4 mr-1" />
-                              THIS IS TRUE
+                              EDIT CONFIDENCE
                             </Button>
                             <Button
                               size="sm"
@@ -533,11 +533,11 @@ export default function BrainManagement() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => boostFactMutation.mutate(fact.id)}
+                              onClick={() => openEditDialog(fact)}
                               data-testid={`button-boost-${fact.id}`}
                             >
                               <ThumbsUp className="h-4 w-4 mr-1" />
-                              BOOST
+                              EDIT CONFIDENCE
                             </Button>
                             <Button
                               size="sm"
@@ -603,11 +603,11 @@ export default function BrainManagement() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => boostFactMutation.mutate(fact.id)}
+                              onClick={() => openEditDialog(fact)}
                               data-testid={`button-boost-${fact.id}`}
                             >
                               <ThumbsUp className="h-4 w-4 mr-1" />
-                              BOOST
+                              EDIT CONFIDENCE
                             </Button>
                             <Button
                               size="sm"
@@ -777,7 +777,7 @@ export default function BrainManagement() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => boostFactMutation.mutate(fact.id)}
+                              onClick={() => openEditDialog(fact)}
                               data-testid={`button-boost-all-${fact.id}`}
                               title="Progressive boost (85→90→95→100)"
                             >
