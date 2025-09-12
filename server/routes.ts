@@ -680,6 +680,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 🚀 NEW: Low confidence facts endpoint (0-59%)
+  app.get('/api/memory/low-confidence', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const lowConfidenceFacts = await storage.getMemoriesByConfidenceRange(activeProfile.id, 0, 59);
+      console.log(`📊 Found ${lowConfidenceFacts.length} low confidence facts (0-59%)`);
+      res.json(lowConfidenceFacts);
+    } catch (error) {
+      console.error('Low confidence facts error:', error);
+      res.status(500).json({ error: 'Failed to get low confidence facts' });
+    }
+  });
+
+  // 🔧 NEW: Reprocess wall-of-text facts endpoint
+  app.post('/api/memory/reprocess-facts', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      // Find facts that look like wall-of-text (long content with both user and AI markers)
+      const allFacts = await storage.getMemoryEntries(activeProfile.id, 1000);
+      const wallOfTextFacts = allFacts.filter(fact => {
+        const content = fact.content.toLowerCase();
+        const hasUserMarkers = /(\byou\s|user:|^### |^> |what|how|why|hey nicky)/i.test(fact.content);
+        const hasAIMarkers = /(nicky|assistant:|dente|noodle arms)/i.test(content);
+        const isLong = fact.content.length > 300;
+        
+        return hasUserMarkers && hasAIMarkers && isLong;
+      });
+
+      console.log(`🔧 Found ${wallOfTextFacts.length} wall-of-text facts to reprocess`);
+
+      let cleaned = 0;
+      const { conversationParser } = await import('../services/conversationParser');
+      const { db } = await import('../db');
+      const { memoryEntries } = await import('@shared/schema');
+      const { eq, sql } = await import('drizzle-orm');
+
+      for (const fact of wallOfTextFacts) {
+        try {
+          // Parse the fact content to extract only Nicky's parts
+          const nickyContent = conversationParser.extractFactRelevantContent(fact.content, fact.source || 'unknown');
+          
+          // Only update if we actually extracted something meaningful and different
+          if (nickyContent && nickyContent.trim() !== fact.content.trim() && nickyContent.length > 20) {
+            // Update the fact with cleaned content using SQL update
+            await db
+              .update(memoryEntries)
+              .set({ 
+                content: nickyContent.substring(0, 500), // Limit to 500 chars max
+                updatedAt: sql`now()`
+              })
+              .where(eq(memoryEntries.id, fact.id));
+            cleaned++;
+            console.log(`✂️ Cleaned fact: ${fact.id} (${fact.content.length} → ${nickyContent.length} chars)`);
+          }
+        } catch (error) {
+          console.error(`❌ Failed to clean fact ${fact.id}:`, error);
+        }
+      }
+
+      res.json({ 
+        message: `Successfully reprocessed ${cleaned} wall-of-text facts`,
+        totalFound: wallOfTextFacts.length,
+        cleaned 
+      });
+    } catch (error) {
+      console.error('Fact reprocessing error:', error);
+      res.status(500).json({ error: 'Failed to reprocess facts' });
+    }
+  });
+
   app.get('/api/memory/contradictions', async (req, res) => {
     try {
       const activeProfile = await storage.getActiveProfile();

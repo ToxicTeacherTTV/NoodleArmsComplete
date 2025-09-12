@@ -35,6 +35,29 @@ interface ContradictionPair {
 export default function BrainManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // 🔧 NEW: Reprocess wall-of-text facts mutation
+  const reprocessFactsMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('/api/memory/reprocess-facts', {
+        method: 'POST',
+      });
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      toast({
+        title: "Facts Reprocessed Successfully",
+        description: `Cleaned ${data.cleaned} wall-of-text facts out of ${data.totalFound} found.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Reprocessing Failed",
+        description: error.message || "Failed to reprocess facts",
+        variant: "destructive",
+      });
+    },
+  });
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("protected-facts");
@@ -57,6 +80,10 @@ export default function BrainManagement() {
   // 🚀 NEW: Medium confidence facts query
   const { data: mediumConfidenceFacts = [] } = useQuery<MemoryFact[]>({
     queryKey: ['/api/memory/medium-confidence'],
+  });
+
+  const { data: lowConfidenceFacts = [] } = useQuery<MemoryFact[]>({
+    queryKey: ['/api/memory/low-confidence'],
   });
 
   const { data: contradictions = [] } = useQuery<ContradictionPair[]>({
@@ -317,6 +344,9 @@ export default function BrainManagement() {
             <TabsTrigger value="medium-confidence" data-testid="tab-medium-confidence">
               Medium Confidence (60-89%)
             </TabsTrigger>
+            <TabsTrigger value="low-confidence" data-testid="tab-low-confidence">
+              Low Confidence (0-59%)
+            </TabsTrigger>
             <TabsTrigger value="contradictions" data-testid="tab-contradictions">
               Contradictions ({contradictions?.length || 0})
             </TabsTrigger>
@@ -418,6 +448,76 @@ export default function BrainManagement() {
                   {Object.entries(groupFactsByStory(filteredFacts(mediumConfidenceFacts))).map(([storyKey, facts]) => (
                     <div key={storyKey} className="mb-6">
                       <h3 className="text-lg font-semibold mb-3 text-blue-600 dark:text-blue-400 border-b border-blue-200 dark:border-blue-800 pb-2">
+                        📖 {storyKey}
+                      </h3>
+                      <div className="space-y-4">
+                        {facts.map((fact: MemoryFact) => (
+                          <div
+                            key={fact.id}
+                            className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
+                          >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center space-x-2">
+                            <Badge className={getConfidenceColor(fact.confidence)}>
+                              {fact.confidence}% {getConfidenceLabel(fact.confidence)}
+                            </Badge>
+                            <Badge variant="outline">
+                              Support: {fact.supportCount}
+                            </Badge>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => boostFactMutation.mutate(fact.id)}
+                              data-testid={`button-boost-${fact.id}`}
+                            >
+                              <ThumbsUp className="h-4 w-4 mr-1" />
+                              BOOST
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => deprecateFactMutation.mutate(fact.id)}
+                              data-testid={`button-deprecate-${fact.id}`}
+                            >
+                              <ThumbsDown className="h-4 w-4 mr-1" />
+                              FALSE
+                            </Button>
+                          </div>
+                        </div>
+                        <Progress value={fact.confidence} className="w-full mb-3" />
+                        <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
+                          {fact.content}
+                        </p>
+                        <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                          Source: {fact.source} • Created: {new Date(fact.createdAt).toLocaleDateString()}
+                        </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* 🚀 NEW: Low Confidence Facts */}
+          <TabsContent value="low-confidence" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Low Confidence Facts (0-59%)</CardTitle>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  These facts need significant verification or may be questionable.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[600px]">
+                  {/* Story-grouped low confidence facts */}
+                  {Object.entries(groupFactsByStory(filteredFacts(lowConfidenceFacts))).map(([storyKey, facts]) => (
+                    <div key={storyKey} className="mb-6">
+                      <h3 className="text-lg font-semibold mb-3 text-red-600 dark:text-red-400 border-b border-red-200 dark:border-red-800 pb-2">
                         📖 {storyKey}
                       </h3>
                       <div className="space-y-4">
