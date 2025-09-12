@@ -719,7 +719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🔍 Found ${wallOfTextFacts.length} wall-of-text facts for preview`);
 
       const previews = [];
-      const conversationParser = await import('../services/conversationParser');
+      const { conversationParser } = await import('../services/conversationParser');
 
       for (const fact of wallOfTextFacts) {
         try {
@@ -771,8 +771,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let applied = 0;
-      const conversationParser = await import('../services/conversationParser');
-      const { db } = await import('../db');
+      const { conversationParser } = await import('../services/conversationParser');
+      const { db } = await import('./db');
       const { memoryEntries } = await import('@shared/schema');
       const { eq, sql } = await import('drizzle-orm');
 
@@ -836,8 +836,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🔧 Found ${wallOfTextFacts.length} wall-of-text facts to reprocess`);
 
       let cleaned = 0;
-      const conversationParser = await import('../services/conversationParser');
-      const { db } = await import('../db');
+      const { conversationParser } = await import('../services/conversationParser');
+      const { db } = await import('./db');
       const { memoryEntries } = await import('@shared/schema');
       const { eq, sql } = await import('drizzle-orm');
 
