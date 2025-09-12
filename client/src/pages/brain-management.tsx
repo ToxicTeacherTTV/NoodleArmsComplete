@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ interface ContradictionPair {
 export default function BrainManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("protected-facts");
 
@@ -154,7 +156,7 @@ export default function BrainManagement() {
               </div>
               <Button 
                 variant="outline" 
-                onClick={() => window.history.back()}
+                onClick={() => setLocation("/")}
                 data-testid="button-back"
               >
                 Back to Chat
