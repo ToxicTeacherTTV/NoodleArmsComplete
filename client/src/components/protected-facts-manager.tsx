@@ -31,7 +31,7 @@ export function ProtectedFactsManager() {
   // Add protected fact mutation
   const addFactMutation = useMutation({
     mutationFn: (content: string) => 
-      apiRequest('/api/memory/protected', 'POST', {
+      apiRequest('POST', '/api/memory/protected', {
         content: content.trim(),
         importance: 5,
         keywords: content.toLowerCase().split(' ').filter(w => w.length > 3).slice(0, 4)
@@ -56,7 +56,7 @@ export function ProtectedFactsManager() {
   // Delete protected fact mutation
   const deleteFactMutation = useMutation({
     mutationFn: (factId: string) => 
-      apiRequest(`/api/memory/entries/${factId}`, 'DELETE'),
+      apiRequest('DELETE', `/api/memory/entries/${factId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/memory/protected'] });
       toast({
