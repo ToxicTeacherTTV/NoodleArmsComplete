@@ -143,7 +143,7 @@ export default function BrainManagement() {
   // Mutation for updating fact content and confidence
   const updateFactMutation = useMutation({
     mutationFn: async ({ factId, content, confidence }: { factId: string; content: string; confidence: number }) => {
-      const response = await fetch(`/api/memory/${factId}`, {
+      const response = await fetch(`/api/memory/entries/${factId}`, {
         method: 'PATCH',
         body: JSON.stringify({ content, confidence }),
         headers: { 'Content-Type': 'application/json' }
