@@ -166,21 +166,39 @@ export default function BrainManagement() {
       // Extract story context from source or content
       let storyKey = 'General Facts';
       
-      if (fact.source && fact.source.includes('_')) {
-        // Parse filename for story context
+      // 🔧 IMPROVED: Better location detection for Berlin/Germany content
+      const content = fact.content.toLowerCase();
+      const source = fact.source?.toLowerCase() || '';
+      
+      // Check for specific locations first
+      if (content.includes('berlin') || source.includes('berlin') || 
+          content.includes('germany') || source.includes('germany')) {
+        storyKey = 'Berlin/Germany Stories';
+      } else if (content.includes('paris') || source.includes('paris') || 
+                 content.includes('france') || source.includes('france')) {
+        storyKey = 'Paris/France Stories';
+      } else if (content.includes('tokyo') || source.includes('tokyo') || 
+                 content.includes('japan') || source.includes('japan')) {
+        storyKey = 'Tokyo/Japan Stories';
+      }
+      // Then check for story types
+      else if (content.includes('episode') || content.includes('stream')) {
+        storyKey = 'Stream Episodes';
+      } else if (content.includes('backstory') || content.includes('origin')) {
+        storyKey = 'Character Backstory';
+      } else if (content.includes('personality') || content.includes('behavior') || 
+                content.includes('trait') || content.includes('characteristic')) {
+        storyKey = 'Personality Traits';
+      } else if (content.includes('conversation') || content.includes('dialogue') || 
+                content.includes('said') || content.includes('asked')) {
+        storyKey = 'Conversations';
+      }
+      // Parse filename for additional context
+      else if (fact.source && fact.source.includes('_')) {
         const parts = fact.source.replace('.txt', '').split('_');
         if (parts.length > 2) {
           storyKey = parts.slice(1).join(' ').replace(/\b\w/g, l => l.toUpperCase());
         }
-      }
-      
-      // Look for story indicators in content
-      if (fact.content.includes('episode') || fact.content.includes('stream')) {
-        storyKey = 'Stream Episodes';
-      } else if (fact.content.includes('backstory') || fact.content.includes('origin')) {
-        storyKey = 'Character Backstory';
-      } else if (fact.content.includes('personality') || fact.content.includes('behavior')) {
-        storyKey = 'Personality Traits';
       }
       
       if (!grouped[storyKey]) {

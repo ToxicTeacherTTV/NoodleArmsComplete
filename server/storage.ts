@@ -62,6 +62,7 @@ export interface IStorage {
   findMemoryByCanonicalKey(profileId: string, canonicalKey: string): Promise<MemoryEntry | undefined>;
   updateMemoryConfidence(id: string, confidence: number, supportCount?: number): Promise<MemoryEntry>;
   getHighConfidenceMemories(profileId: string, minConfidence: number, limit?: number): Promise<MemoryEntry[]>;
+  getMemoriesByConfidenceRange(profileId: string, minConfidence: number, maxConfidence: number, limit?: number): Promise<MemoryEntry[]>;
   markFactsAsContradicting(factIds: string[], groupId: string): Promise<void>;
   updateMemoryStatus(id: string, status: 'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'): Promise<MemoryEntry>;
   getReliableMemoriesForAI(profileId: string, limit?: number): Promise<MemoryEntry[]>;
@@ -330,6 +331,23 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(memoryEntries.profileId, profileId),
           sql`${memoryEntries.confidence} >= ${minConfidence}`,
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.confidence), desc(memoryEntries.supportCount), desc(memoryEntries.importance))
+      .limit(limit);
+  }
+
+  // 🔧 NEW: Confidence range method for medium confidence facts
+  async getMemoriesByConfidenceRange(profileId: string, minConfidence: number, maxConfidence: number, limit = 50): Promise<MemoryEntry[]> {
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          sql`${memoryEntries.confidence} >= ${minConfidence}`,
+          sql`${memoryEntries.confidence} <= ${maxConfidence}`,
           eq(memoryEntries.status, 'ACTIVE')
         )
       )

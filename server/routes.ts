@@ -671,7 +671,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      const mediumConfidenceFacts = await storage.getHighConfidenceMemories(activeProfile.id, 60, 89);
+      const mediumConfidenceFacts = await storage.getMemoriesByConfidenceRange(activeProfile.id, 60, 89);
       console.log(`📊 Found ${mediumConfidenceFacts.length} medium confidence facts (60-89%)`);
       res.json(mediumConfidenceFacts);
     } catch (error) {
