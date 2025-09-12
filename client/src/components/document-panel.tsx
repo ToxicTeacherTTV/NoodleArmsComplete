@@ -246,7 +246,10 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
           <Button 
             variant="outline"
             className="py-2 px-4 rounded-lg text-xs transition-all duration-200"
-            onClick={() => setShowTextInput(!showTextInput)}
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent triggering file dialog
+              setShowTextInput(!showTextInput);
+            }}
             data-testid="button-toggle-text-input"
           >
             <i className="fas fa-paste mr-2"></i>

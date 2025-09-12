@@ -184,6 +184,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteDocument(id: string): Promise<void> {
+    // First delete all associated memory entries
+    await db.delete(memoryEntries).where(eq(memoryEntries.sourceId, id));
+    // Then delete the document itself
     await db.delete(documents).where(eq(documents.id, id));
   }
 

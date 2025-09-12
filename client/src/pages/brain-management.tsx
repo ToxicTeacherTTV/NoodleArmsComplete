@@ -44,19 +44,19 @@ export default function BrainManagement() {
     queryKey: ['/api/profiles/active'],
   });
 
-  const { data: memoryStats } = useQuery({
+  const { data: memoryStats } = useQuery<{totalFacts: number; conversations: number}>({
     queryKey: ['/api/memory/stats'],
   });
 
-  const { data: highConfidenceFacts } = useQuery({
+  const { data: highConfidenceFacts = [] } = useQuery<MemoryFact[]>({
     queryKey: ['/api/memory/high-confidence'],
   });
 
-  const { data: contradictions } = useQuery({
+  const { data: contradictions = [] } = useQuery<ContradictionPair[]>({
     queryKey: ['/api/memory/contradictions'],
   });
 
-  const { data: allFacts } = useQuery({
+  const { data: allFacts = [] } = useQuery<MemoryFact[]>({
     queryKey: ['/api/memory/entries'],
   });
 
