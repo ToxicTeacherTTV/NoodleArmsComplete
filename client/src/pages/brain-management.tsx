@@ -154,7 +154,12 @@ export default function BrainManagement() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      // Fix: Invalidate all memory-related queries
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] as string).startsWith('/api/memory')
+      });
       toast({
         title: "Fact updated successfully",
         description: "Changes have been saved",
