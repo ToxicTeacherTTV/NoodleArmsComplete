@@ -209,7 +209,7 @@ export class DatabaseStorage implements IStorage {
     
     const [newEntry] = await db
       .insert(memoryEntries)
-      .values(finalEntry)
+      .values([finalEntry as any])
       .returning();
     return newEntry;
   }

@@ -463,7 +463,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get only high-confidence, reliable memories for optimization
       const reliableMemories = await storage.getReliableMemoriesForAI(activeProfile.id, 10000);
       console.log(`🔧 Memory optimization: Using ${reliableMemories.length} high-confidence memories (≥60% confidence)`);
-      const optimizedMemories = await geminiService.consolidateAndOptimizeMemories(reliableMemories);
+      // Map memories to expected format, handling null values
+      const memoriesForOptimization = reliableMemories.map(m => ({
+        id: m.id,
+        type: m.type,
+        content: m.content,
+        importance: m.importance || 1,
+        source: m.source || 'unknown'
+      }));
+      const optimizedMemories = await geminiService.consolidateAndOptimizeMemories(memoriesForOptimization);
       
       // Clear existing memories and replace with optimized ones
       await storage.clearProfileMemories(activeProfile.id);
@@ -663,7 +671,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // For now, return a simple mock. In production, this would use the contradiction detector
-      const contradictions = [];
+      const contradictions: any[] = [];
       res.json(contradictions);
     } catch (error) {
       console.error('Contradictions error:', error);
