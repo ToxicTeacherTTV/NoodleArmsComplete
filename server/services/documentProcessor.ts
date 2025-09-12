@@ -4,6 +4,7 @@ import pdf from 'pdf-parse';
 import mammoth from 'mammoth';
 import { geminiService } from './gemini';
 import { contradictionDetector } from './contradictionDetector';
+import { conversationParser } from './conversationParser';
 
 interface DocumentChunk {
   content: string;
@@ -113,9 +114,13 @@ class DocumentProcessor {
     try {
       console.log(`🧠 Starting hierarchical extraction for ${filename}...`);
       
-      // PASS 1: Extract rich stories and contexts
-      console.log(`📖 Pass 1: Extracting stories and contexts...`);
-      const stories = await geminiService.extractStoriesFromDocument(content, filename);
+      // 🔧 NEW: Parse conversation to extract only Nicky's content
+      console.log(`🎭 Parsing conversation to separate user and Nicky content...`);
+      const nickyContent = conversationParser.extractFactRelevantContent(content, filename);
+      
+      // PASS 1: Extract rich stories and contexts (from Nicky's content only)
+      console.log(`📖 Pass 1: Extracting stories and contexts from Nicky's responses...`);
+      const stories = await geminiService.extractStoriesFromDocument(nickyContent, filename);
       console.log(`✅ Extracted ${stories.length} stories/contexts`);
       
       const storyIds: string[] = [];
@@ -144,6 +149,8 @@ class DocumentProcessor {
         if (storyFact?.id) {
           storyIds.push(storyFact.id);
           console.log(`📚 Stored story: ${story.content.substring(0, 60)}...`);
+        } else {
+          console.warn(`⚠️ Failed to store story, skipping atomic fact extraction for this story`);
         }
       }
       
@@ -215,8 +222,12 @@ class DocumentProcessor {
     try {
       console.log(`Starting AI-powered fact extraction for ${filename}...`);
       
-      // Use Gemini to intelligently extract facts from the content
-      const extractedFacts = await geminiService.extractFactsFromDocument(content, filename);
+      // 🔧 NEW: Parse conversation to extract only Nicky's content
+      console.log(`🎭 Parsing conversation to separate user and Nicky content...`);
+      const nickyContent = conversationParser.extractFactRelevantContent(content, filename);
+      
+      // Use Gemini to intelligently extract facts from the content (Nicky only)
+      const extractedFacts = await geminiService.extractFactsFromDocument(nickyContent, filename);
       
       console.log(`Extracted ${extractedFacts.length} facts from ${filename}`);
       

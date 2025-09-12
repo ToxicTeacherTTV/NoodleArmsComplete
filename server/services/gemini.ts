@@ -20,30 +20,32 @@ class GeminiService {
       throw new Error("Gemini API key not configured");
     }
 
-    const prompt = `You are analyzing a document for NARRATIVE CONTENT about Nicky "Noodle Arms" A.I. Dente - the Italian mafia-themed Dead by Daylight streamer.
+    const prompt = `You are analyzing NICKY'S CONTENT ONLY from document: "${filename}"
 
-Document: "${filename}"
+CRITICAL INSTRUCTIONS:
+- This content has been pre-filtered to contain ONLY Nicky's statements, responses, and attributions
+- Do NOT include user questions or prompts in extracted stories
+- Focus ONLY on what Nicky said, did, experienced, or expressed
+- If content seems to contain both sides of conversation, extract only Nicky's parts
 
-Content:
+Content (Nicky's responses only):
 ${content}
 
-Extract COMPLETE STORIES, ANECDOTES, and RICH CONTEXTS about Nicky. Focus on:
-- Full backstory narratives 
-- Complete incident descriptions
-- Rich character interactions
-- Detailed explanations of relationships
-- Complete conversations or exchanges
-- Comprehensive background context
+Extract COMPLETE STORIES, ANECDOTES, and RICH CONTEXTS that Nicky shared about himself. Focus on:
+- Nicky's backstory narratives 
+- Incidents Nicky described
+- Nicky's character interactions
+- Relationships Nicky explained
+- Experiences Nicky shared
+- Background context Nicky provided
 
 For each story/narrative, provide:
-- content: The COMPLETE story/context (preserve full narrative flow)
+- content: The COMPLETE story/context from Nicky's perspective (1-3 sentences max)
 - type: STORY (incidents/events), LORE (backstory), or CONTEXT (situational background)
 - importance: 1-5 (5 being most important for character understanding)
 - keywords: 3-5 relevant keywords for retrieval
 
-Preserve narrative richness - these will be parents for atomic facts.
-
-Return as JSON array. Only include substantial narrative content about Nicky.
+Return as JSON array. Only include substantial narrative content BY or ABOUT Nicky.
 
 Example format:
 [
@@ -104,17 +106,24 @@ Example format:
 
 Story Context: ${storyContext}
 
-Full Story:
+Full Story (Nicky's content only):
 ${storyContent}
 
+CRITICAL RULES:
+- Extract ONLY facts stated BY Nicky or ABOUT Nicky
+- Ignore any user questions or prompts that may be mixed in
+- Each fact must be 1-2 sentences MAXIMUM
+- Focus on specific, verifiable claims
+- Clear about WHO did WHAT
+
 Extract individual, verifiable claims from this story. Each atomic fact should be:
-- A single, specific claim
+- A single, specific claim about Nicky
 - Independently verifiable
-- 1-2 sentences maximum
+- 1-2 sentences maximum (HARD LIMIT)
 - Clear about WHO did WHAT
 
 For each atomic fact, provide:
-- content: The specific atomic claim
+- content: The specific atomic claim (max 2 sentences)
 - type: "ATOMIC" (always)
 - importance: 1-5 based on how critical this detail is
 - keywords: 2-4 keywords for retrieval
