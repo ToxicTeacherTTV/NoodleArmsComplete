@@ -719,7 +719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🔍 Found ${wallOfTextFacts.length} wall-of-text facts for preview`);
 
       const previews = [];
-      const { conversationParser } = await import('../services/conversationParser');
+      const conversationParser = await import('../services/conversationParser');
 
       for (const fact of wallOfTextFacts) {
         try {
@@ -734,7 +734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               cleaned: nickyContent.substring(0, 500), // Limit to 500 chars
               confidence: fact.confidence,
               source: fact.source,
-              story: fact.story,
+              storyContext: fact.storyContext, // Fixed: use storyContext instead of story
               originalLength: fact.content.length,
               cleanedLength: nickyContent.length
             });
@@ -771,7 +771,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let applied = 0;
-      const { conversationParser } = await import('../services/conversationParser');
+      const conversationParser = await import('../services/conversationParser');
       const { db } = await import('../db');
       const { memoryEntries } = await import('@shared/schema');
       const { eq, sql } = await import('drizzle-orm');
@@ -836,7 +836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🔧 Found ${wallOfTextFacts.length} wall-of-text facts to reprocess`);
 
       let cleaned = 0;
-      const { conversationParser } = await import('../services/conversationParser');
+      const conversationParser = await import('../services/conversationParser');
       const { db } = await import('../db');
       const { memoryEntries } = await import('@shared/schema');
       const { eq, sql } = await import('drizzle-orm');
@@ -905,14 +905,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const updatedEntry = await storage.updateMemoryConfidence(
-        id, 
-        updates.confidence, 
-        updates.supportCount
-      );
+      // Use the more flexible updateMemoryEntry method for content + confidence updates
+      const updatedEntry = await storage.updateMemoryEntry(id, updates);
       
       if (updates.confidence !== undefined) {
         console.log(`📊 Manual confidence update: Fact confidence set to ${updates.confidence}% by user`);
+      }
+      
+      if (updates.content !== undefined) {
+        console.log(`📝 Manual content update: Fact content updated by user`);
       }
       
       res.json(updatedEntry);

@@ -61,6 +61,7 @@ export interface IStorage {
   // Confidence tracking methods
   findMemoryByCanonicalKey(profileId: string, canonicalKey: string): Promise<MemoryEntry | undefined>;
   updateMemoryConfidence(id: string, confidence: number, supportCount?: number): Promise<MemoryEntry>;
+  updateMemoryEntry(id: string, updates: Partial<MemoryEntry>): Promise<MemoryEntry>;
   getHighConfidenceMemories(profileId: string, minConfidence: number, limit?: number): Promise<MemoryEntry[]>;
   getMemoriesByConfidenceRange(profileId: string, minConfidence: number, maxConfidence: number, limit?: number): Promise<MemoryEntry[]>;
   markFactsAsContradicting(factIds: string[], groupId: string): Promise<void>;
@@ -313,6 +314,25 @@ export class DatabaseStorage implements IStorage {
     if (supportCount !== undefined) {
       updateData.supportCount = supportCount;
     }
+
+    const [updatedMemory] = await db
+      .update(memoryEntries)
+      .set(updateData)
+      .where(eq(memoryEntries.id, id))
+      .returning();
+    
+    return updatedMemory;
+  }
+
+  async updateMemoryEntry(id: string, updates: Partial<MemoryEntry>): Promise<MemoryEntry> {
+    const updateData: any = { 
+      ...updates,
+      updatedAt: sql`now()` 
+    };
+    
+    // Remove fields that shouldn't be updated directly
+    delete updateData.id;
+    delete updateData.createdAt;
 
     const [updatedMemory] = await db
       .update(memoryEntries)
