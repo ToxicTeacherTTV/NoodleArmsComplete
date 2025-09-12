@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { ProtectedFactsManager } from "@/components/protected-facts-manager";
 
 interface MemoryFact {
   id: string;
@@ -34,7 +35,7 @@ export default function BrainManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTab, setSelectedTab] = useState("high-confidence");
+  const [selectedTab, setSelectedTab] = useState("protected-facts");
 
   // Queries
   const { data: activeProfile } = useQuery({
@@ -182,7 +183,10 @@ export default function BrainManagement() {
 
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="protected-facts" data-testid="tab-protected-facts">
+              Protected Facts
+            </TabsTrigger>
             <TabsTrigger value="high-confidence" data-testid="tab-high-confidence">
               High Confidence Facts
             </TabsTrigger>
@@ -193,6 +197,11 @@ export default function BrainManagement() {
               All Facts
             </TabsTrigger>
           </TabsList>
+
+          {/* Protected Facts */}
+          <TabsContent value="protected-facts" className="mt-6">
+            <ProtectedFactsManager />
+          </TabsContent>
 
           {/* High Confidence Facts */}
           <TabsContent value="high-confidence" className="mt-6">
