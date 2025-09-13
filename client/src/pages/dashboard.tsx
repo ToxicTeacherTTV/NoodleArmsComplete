@@ -17,7 +17,7 @@ import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useSpeechSynthesis } from "@/hooks/use-speech-synthesis";
 import { useElevenLabsSpeech } from "@/hooks/use-elevenlabs-speech";
 import { useVoiceActivity } from "@/hooks/use-voice-activity";
-import type { Message, Profile, AIStatus, StreamSettings, VoiceActivity, AppMode } from "@/types";
+import type { Message, Profile, AIStatus, StreamSettings, VoiceActivity, AppMode, Document } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
 import { nanoid } from "nanoid";
 
@@ -48,37 +48,39 @@ export default function Dashboard() {
 
   // Custom hooks
   const { isListening, startListening, stopListening, transcript, error: speechError } = useSpeechRecognition();
-  const { speak: speakBrowser, isSpeaking: isSpeakingBrowser, stop: stopSpeakingBrowser } = useSpeechSynthesis();
-  const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopSpeakingElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs } = useElevenLabsSpeech();
+  const { speak: speakBrowser, isSpeaking: isSpeakingBrowser, stop: stopSpeakingBrowser, replay: replayBrowser, canReplay: canReplayBrowser } = useSpeechSynthesis();
+  const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopSpeakingElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs, replay: replayElevenLabs, canReplay: canReplayElevenLabs } = useElevenLabsSpeech();
   const voiceActivity = useVoiceActivity(isListening);
 
   // Choose speech synthesis based on mode
   const speak = appMode === 'STREAMING' ? speakElevenLabs : speakBrowser;
   const isSpeaking = appMode === 'STREAMING' ? isSpeakingElevenLabs : isSpeakingBrowser;
   const stopSpeaking = appMode === 'STREAMING' ? stopSpeakingElevenLabs : stopSpeakingBrowser;
+  const replay = appMode === 'STREAMING' ? replayElevenLabs : replayBrowser;
+  const canReplay = appMode === 'STREAMING' ? canReplayElevenLabs : canReplayBrowser;
 
   // Queries
-  const { data: activeProfile } = useQuery({
+  const { data: activeProfile } = useQuery<Profile>({
     queryKey: ['/api/profiles/active'],
     refetchInterval: false,
   });
 
-  const { data: memoryStats } = useQuery({
+  const { data: memoryStats } = useQuery<{ totalFacts: number; conversations: number }>({
     queryKey: ['/api/memory/stats'],
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  const { data: documents } = useQuery({
+  const { data: documents } = useQuery<Document[]>({
     queryKey: ['/api/documents'],
     refetchInterval: false,
   });
 
-  const { data: chaosState } = useQuery({
+  const { data: chaosState } = useQuery<{ level: number; mode: "FULL_PSYCHO" | "FAKE_PROFESSIONAL" | "HYPER_FOCUSED" | "CONSPIRACY"; lastModeChangeAt?: string }>({
     queryKey: ['/api/chaos/state'],
     refetchInterval: 5000, // Update chaos state every 5 seconds
   });
 
-  const { data: existingMessages } = useQuery({
+  const { data: existingMessages } = useQuery<Message[]>({
     queryKey: ['/api/conversations', currentConversationId, 'messages'],
     enabled: !!currentConversationId,
     refetchInterval: false,
@@ -279,6 +281,11 @@ export default function Dashboard() {
     }
   };
 
+  // Replay last audio message
+  const replayLastAudio = () => {
+    replay();
+  };
+
   // Toggle app mode
   const toggleAppMode = () => {
     const newMode = appMode === 'PODCAST' ? 'STREAMING' : 'PODCAST';
@@ -462,8 +469,10 @@ export default function Dashboard() {
           messageCount={messages.length}
           appMode={appMode}
           onPlayAudio={playMessageAudio}
+          onReplayAudio={replayLastAudio}
           isPlayingAudio={isSpeakingElevenLabs}
           isPausedAudio={isPausedElevenLabs}
+          canReplay={canReplay}
           onTextSelection={handleTextSelection}
         />
       </div>

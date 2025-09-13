@@ -12,9 +12,11 @@ interface UseSpeechSynthesisReturn {
   stop: () => void;
   pause: () => void;
   resume: () => void;
+  replay: () => void;
   isSpeaking: boolean;
   isPaused: boolean;
   isSupported: boolean;
+  canReplay: boolean;
   voices: SpeechSynthesisVoice[];
   setVoice: (voice: SpeechSynthesisVoice) => void;
   setRate: (rate: number) => void;
@@ -44,6 +46,8 @@ export function useSpeechSynthesis(
   const onEndCallbackRef = useRef<(() => void) | undefined>();
   const speechQueue = useRef<string[]>([]);
   const isProcessingRef = useRef(false);
+  const lastSpokenTextRef = useRef<string>('');
+  const canReplayRef = useRef(false);
 
   const isSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
@@ -85,6 +89,10 @@ export function useSpeechSynthesis(
     const text = speechQueue.current.shift();
     if (!text) return;
 
+    // Store the text being spoken for replay
+    lastSpokenTextRef.current = text;
+    canReplayRef.current = true;
+    
     isProcessingRef.current = true;
     setIsSpeaking(true);
 
@@ -192,6 +200,11 @@ export function useSpeechSynthesis(
     setCurrentVolume(Math.max(0, Math.min(1, newVolume)));
   }, []);
 
+  const replay = useCallback(() => {
+    if (!isSupported || !lastSpokenTextRef.current.trim()) return;
+    speak(lastSpokenTextRef.current);
+  }, [isSupported, speak]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -206,9 +219,11 @@ export function useSpeechSynthesis(
     stop,
     pause,
     resume,
+    replay,
     isSpeaking,
     isPaused,
     isSupported,
+    canReplay: canReplayRef.current,
     voices,
     setVoice,
     setRate,

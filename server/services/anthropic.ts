@@ -80,6 +80,7 @@ class AnthropicService {
         // "claude-sonnet-4-20250514"
         model: DEFAULT_MODEL_STR,
         max_tokens: 1024,
+        temperature: 1.3, // Higher creativity for more expressive personality
         system: enhancedCoreIdentity,
         messages: [
           {
@@ -140,6 +141,7 @@ ${conversationHistory}`;
         // "claude-sonnet-4-20250514"
         model: DEFAULT_MODEL_STR,
         max_tokens: 1024,
+        temperature: 0.8, // Moderate creativity for memory consolidation
         messages: [
           {
             role: 'user',
@@ -187,6 +189,7 @@ Please return an optimized, well-organized knowledge base that maintains all imp
         // "claude-sonnet-4-20250514"
         model: DEFAULT_MODEL_STR,
         max_tokens: 2048,
+        temperature: 0.7, // Controlled creativity for knowledge organization
         messages: [
           {
             role: 'user',
@@ -256,6 +259,7 @@ Return the consolidated memories as a JSON array:`;
         const response = await anthropic.messages.create({
           model: DEFAULT_MODEL_STR,
           max_tokens: 3000,
+          temperature: 0.8, // Moderate creativity for memory consolidation
           messages: [
             {
               role: 'user',
@@ -281,11 +285,21 @@ Return the consolidated memories as a JSON array:`;
           console.error('Failed to parse consolidated memories for source:', source, parseError);
           // Fallback: keep original memories with reduced importance
           sourceMemories.forEach(memory => {
+            // Map extended types to base types
+            let baseType: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT' = 'FACT';
+            if (['FACT', 'PREFERENCE', 'LORE', 'CONTEXT'].includes(memory.type)) {
+              baseType = memory.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
+            } else if (memory.type === 'STORY') {
+              baseType = 'LORE';
+            } else if (memory.type === 'ATOMIC') {
+              baseType = 'FACT';
+            }
+            
             consolidatedMemories.push({
-              type: memory.type,
+              type: baseType,
               content: memory.content,
-              importance: Math.max(1, memory.importance - 1),
-              source: memory.source
+              importance: Math.max(1, (memory.importance || 3) - 1),
+              source: memory.source || undefined
             });
           });
         }
@@ -295,12 +309,24 @@ Return the consolidated memories as a JSON array:`;
     } catch (error) {
       console.error('Memory consolidation error:', error);
       // Fallback: return original memories
-      return memories.map(memory => ({
-        type: memory.type,
-        content: memory.content,
-        importance: memory.importance,
-        source: memory.source
-      }));
+      return memories.map(memory => {
+        // Map extended types to base types
+        let baseType: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT' = 'FACT';
+        if (['FACT', 'PREFERENCE', 'LORE', 'CONTEXT'].includes(memory.type)) {
+          baseType = memory.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
+        } else if (memory.type === 'STORY') {
+          baseType = 'LORE';
+        } else if (memory.type === 'ATOMIC') {
+          baseType = 'FACT';
+        }
+        
+        return {
+          type: baseType,
+          content: memory.content,
+          importance: memory.importance || 3,
+          source: memory.source || undefined
+        };
+      });
     }
   }
 }

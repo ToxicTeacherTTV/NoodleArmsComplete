@@ -6,9 +6,11 @@ interface UseElevenLabsSpeechReturn {
   stop: () => void;
   pause: () => void;
   resume: () => void;
+  replay: () => void;
   isSpeaking: boolean;
   isPaused: boolean;
   isSupported: boolean;
+  canReplay: boolean;
 }
 
 export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
@@ -18,6 +20,8 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
   const onEndCallbackRef = useRef<(() => void) | undefined>();
   const speechQueue = useRef<string[]>([]);
   const isProcessingRef = useRef(false);
+  const lastSpokenTextRef = useRef<string>('');
+  const canReplayRef = useRef(false);
 
   const isSupported = typeof window !== 'undefined' && typeof Audio !== 'undefined';
 
@@ -30,6 +34,10 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     const text = speechQueue.current.shift();
     if (!text) return;
 
+    // Store the text being spoken for replay
+    lastSpokenTextRef.current = text;
+    canReplayRef.current = true;
+    
     isProcessingRef.current = true;
     setIsSpeaking(true);
 
@@ -148,13 +156,20 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     audioRef.current.play();
   }, [isSupported, isPaused]);
 
+  const replay = useCallback(() => {
+    if (!isSupported || !lastSpokenTextRef.current.trim()) return;
+    speak(lastSpokenTextRef.current);
+  }, [isSupported, speak]);
+
   return {
     speak,
     stop,
     pause,
     resume,
+    replay,
     isSpeaking,
     isPaused,
     isSupported,
+    canReplay: canReplayRef.current,
   };
 }

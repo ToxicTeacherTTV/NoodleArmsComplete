@@ -8,12 +8,14 @@ interface ChatPanelProps {
   messageCount: number;
   appMode?: AppMode;
   onPlayAudio?: (content: string) => void;
+  onReplayAudio?: () => void;
   isPlayingAudio?: boolean;
   isPausedAudio?: boolean;
+  canReplay?: boolean;
   onTextSelection?: () => void;
 }
 
-export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', onPlayAudio, isPlayingAudio = false, isPausedAudio = false, onTextSelection }: ChatPanelProps) {
+export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', onPlayAudio, onReplayAudio, isPlayingAudio = false, isPausedAudio = false, canReplay = false, onTextSelection }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -134,16 +136,28 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                           {message.type === 'AI' ? 'Nicky' : 'Chat'} • {formatTime(message.createdAt)}
                         </span>
                         {message.type === 'AI' && appMode === 'PODCAST' && onPlayAudio && (
-                          <button
-                            onClick={() => onPlayAudio(message.content)}
-                            className="flex items-center space-x-1 text-accent hover:text-accent/80 transition-colors"
-                            data-testid={`play-audio-${message.id}`}
-                          >
-                            <i className={`fas ${isPlayingAudio ? (isPausedAudio ? 'fa-play' : 'fa-pause') : 'fa-play'} text-xs`}></i>
-                            <span className="text-xs">
-                              {isPlayingAudio ? (isPausedAudio ? 'Resume' : 'Pause') : 'Play Audio'}
-                            </span>
-                          </button>
+                          <div className="flex items-center space-x-3">
+                            <button
+                              onClick={() => onPlayAudio(message.content)}
+                              className="flex items-center space-x-1 text-accent hover:text-accent/80 transition-colors"
+                              data-testid={`play-audio-${message.id}`}
+                            >
+                              <i className={`fas ${isPlayingAudio ? (isPausedAudio ? 'fa-play' : 'fa-pause') : 'fa-play'} text-xs`}></i>
+                              <span className="text-xs">
+                                {isPlayingAudio ? (isPausedAudio ? 'Resume' : 'Pause') : 'Play Audio'}
+                              </span>
+                            </button>
+                            {onReplayAudio && canReplay && (
+                              <button
+                                onClick={onReplayAudio}
+                                className="flex items-center space-x-1 text-accent hover:text-accent/80 transition-colors"
+                                data-testid={`replay-audio-${message.id}`}
+                              >
+                                <i className="fas fa-redo text-xs"></i>
+                                <span className="text-xs">Replay</span>
+                              </button>
+                            )}
+                          </div>
                         )}
                         {message.type === 'AI' && appMode === 'STREAMING' && (
                           <>
