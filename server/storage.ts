@@ -71,6 +71,9 @@ export interface IStorage {
   // Protected facts methods
   addProtectedFact(profileId: string, content: string, importance?: number, keywords?: string[]): Promise<MemoryEntry>;
   getProtectedFacts(profileId: string): Promise<MemoryEntry[]>;
+  
+  // Contradiction groups methods
+  getContradictionGroups(profileId: string): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -450,6 +453,47 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
+  }
+
+  async getContradictionGroups(profileId: string): Promise<any[]> {
+    // Get all facts that have contradiction group IDs
+    const contradictedFacts = await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          sql`${memoryEntries.contradictionGroupId} IS NOT NULL`
+        )
+      )
+      .orderBy(desc(memoryEntries.confidence), desc(memoryEntries.createdAt));
+
+    // Group facts by their contradiction group ID
+    const groups: { [groupId: string]: MemoryEntry[] } = {};
+    
+    for (const fact of contradictedFacts) {
+      const groupId = fact.contradictionGroupId!;
+      if (!groups[groupId]) {
+        groups[groupId] = [];
+      }
+      groups[groupId].push(fact);
+    }
+
+    // Convert to contradiction group format
+    return Object.entries(groups).map(([groupId, facts]) => {
+      // Find the primary fact (highest confidence, ACTIVE status)
+      const primaryFact = facts.find(f => f.status === 'ACTIVE') || facts[0];
+      const conflictingFacts = facts.filter(f => f.id !== primaryFact.id);
+      
+      return {
+        groupId,
+        facts,
+        primaryFact,
+        conflictingFacts,
+        severity: facts.length > 2 ? 'HIGH' : 'MEDIUM',
+        explanation: `Contradiction group with ${facts.length} conflicting facts`
+      };
+    });
   }
 }
 

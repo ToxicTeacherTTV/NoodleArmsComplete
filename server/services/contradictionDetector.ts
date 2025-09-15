@@ -111,12 +111,51 @@ Return only the numbers of facts that contradict the new fact, separated by comm
 
 Response:`;
 
-      // 🚀 SIMPLIFIED: Basic keyword-based contradiction detection for now
-      // Look for obvious contradictory patterns in the content
-      for (const existingFact of batch) {
-        if (this.detectBasicContradiction(newFact.content, existingFact.content)) {
-          contradictingFacts.push(existingFact);
-          console.log(`📍 Detected contradiction: "${newFact.content.substring(0, 50)}..." vs "${existingFact.content.substring(0, 50)}..."`);
+      try {
+        // 🚀 USE AI: Enable semantic contradiction detection with Gemini  
+        // Use a simple fact analysis approach - check each fact individually
+        const contradictionPrompt = `Analyze if these two facts contradict each other:
+
+FACT 1: "${newFact.content}"
+
+FACT 2: "${batch[0]?.content || ''}"
+
+Do these facts make conflicting claims about the same subject? Answer only "YES" or "NO".`;
+
+        // Skip the initial response since we'll check individually
+        // const response = await geminiService.ai.models.generateContent(...
+        
+        // Check each fact in the batch individually for cleaner AI responses
+        for (const existingFact of batch) {
+          const individualPrompt = `Analyze if these two facts contradict each other:
+
+FACT 1: "${newFact.content}"
+FACT 2: "${existingFact.content}"
+
+Do these facts make conflicting claims about the same subject/entity? Answer only "YES" or "NO".`;
+
+          const individualResponse = await geminiService['ai'].models.generateContent({
+            model: "gemini-2.5-pro",
+            contents: individualPrompt,
+          });
+          
+          const result = individualResponse.text?.trim().toUpperCase();
+          console.log(`🤖 AI contradiction check: "${result}" for facts "${newFact.content.substring(0, 30)}..." vs "${existingFact.content.substring(0, 30)}..."`);
+          
+          if (result === "YES") {
+            contradictingFacts.push(existingFact);
+            console.log(`🔍 AI detected contradiction: "${newFact.content.substring(0, 50)}..." vs "${existingFact.content.substring(0, 50)}..."`);
+          }
+        }
+      } catch (error) {
+        console.error(`❌ AI contradiction detection failed, falling back to keyword matching:`, error);
+        
+        // Fallback to basic keyword detection if AI fails
+        for (const existingFact of batch) {
+          if (this.detectBasicContradiction(newFact.content, existingFact.content)) {
+            contradictingFacts.push(existingFact);
+            console.log(`📍 Keyword detected contradiction: "${newFact.content.substring(0, 50)}..." vs "${existingFact.content.substring(0, 50)}..."`);
+          }
         }
       }
     }
