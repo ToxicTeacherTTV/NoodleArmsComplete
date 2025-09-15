@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2 } from "lucide-react";
+import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ProtectedFactsManager } from "@/components/protected-facts-manager";
@@ -28,6 +28,7 @@ interface MemoryFact {
   source: string;
   createdAt: string;
   canonicalKey: string;
+  isProtected: boolean;
 }
 
 interface ContradictionPair {
@@ -175,6 +176,39 @@ export default function BrainManagement() {
       toast({
         title: "Update failed",
         description: error.message || "Failed to update fact",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for making a fact protected
+  const makeProtectedMutation = useMutation({
+    mutationFn: async (factId: string) => {
+      const response = await fetch(`/api/memory/entries/${factId}/protect`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to make fact protected');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate all memory-related queries to refresh the UI
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] as string).startsWith('/api/memory')
+      });
+      toast({
+        title: "Fact Protected",
+        description: "This fact is now permanently protected with 100% confidence",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Protection Failed",
+        description: error.message || "Failed to protect fact",
         variant: "destructive",
       });
     },
@@ -354,6 +388,22 @@ export default function BrainManagement() {
           >
             <ThumbsDown className="h-3 w-3" />
           </Button>
+          {!fact.isProtected && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => makeProtectedMutation.mutate(fact.id)}
+              disabled={makeProtectedMutation.isPending}
+              data-testid={`button-protect-compact-${fact.id}`}
+              title="Make Protected (100% confidence, cannot be contradicted)"
+            >
+              {makeProtectedMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Shield className="h-3 w-3" />
+              )}
+            </Button>
+          )}
           {isWallOfText(fact) && (
             <Button
               size="sm"
@@ -398,6 +448,18 @@ export default function BrainManagement() {
             <ThumbsUp className="h-4 w-4 mr-1" />
             EDIT CONFIDENCE
           </Button>
+          {!fact.isProtected && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => makeProtectedMutation.mutate(fact.id)}
+              disabled={makeProtectedMutation.isPending}
+              data-testid={`button-protect-${fact.id}`}
+            >
+              <Shield className="h-4 w-4 mr-1" />
+              {makeProtectedMutation.isPending ? "PROTECTING..." : "MAKE PROTECTED"}
+            </Button>
+          )}
           <Button
             size="sm"
             variant="destructive"

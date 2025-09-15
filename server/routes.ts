@@ -1035,6 +1035,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // NEW: Make a fact protected with maximum confidence
+  app.patch('/api/memory/entries/:id/protect', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Check if fact exists
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const currentFacts = await storage.getMemoryEntries(activeProfile.id, 10000);
+      const currentFact = currentFacts.find(f => f.id === id);
+      
+      if (!currentFact) {
+        return res.status(404).json({ error: 'Fact not found' });
+      }
+
+      // Don't protect already protected facts
+      if (currentFact.isProtected) {
+        return res.status(400).json({ error: 'Fact is already protected' });
+      }
+
+      // Update fact to be protected with maximum confidence and support
+      const updatedEntry = await storage.updateMemoryEntry(id, {
+        isProtected: true,
+        confidence: 100,        // Maximum confidence
+        supportCount: 999,      // High support count so it's never overridden
+      });
+      
+      console.log(`🔒 Fact protected: "${currentFact.content.substring(0, 50)}..." now has 100% confidence and cannot be contradicted`);
+      res.json(updatedEntry);
+    } catch (error) {
+      console.error('Protect fact error:', error);
+      res.status(500).json({ error: 'Failed to protect fact' });
+    }
+  });
+
   app.post('/api/memory/entries/:id/boost', async (req, res) => {
     try {
       const { id } = req.params;
