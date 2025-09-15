@@ -241,6 +241,7 @@ export default function Dashboard() {
 
   // Handle voice control (only in streaming mode) - MANUAL MODE
   const toggleListening = () => {
+    alert('Button clicked! Mode: ' + appMode + ', Listening: ' + isListening);
     console.log('🔘 toggleListening clicked - appMode:', appMode, 'isListening:', isListening);
     
     if (appMode !== 'STREAMING') {
