@@ -61,31 +61,232 @@ export default function ProjectWorkspace() {
   
   // Mock data for now - would be connected to API later
   const [ideas, setIdeas] = useState<ProjectIdea[]>([
+    // ✅ COMPLETED FEATURES
     {
-      id: '1',
-      title: 'Enhanced Voice Recognition',
-      description: 'Improve the accuracy of voice recognition for better interaction with Nicky',
-      priority: 'HIGH',
-      status: 'IN_PROGRESS',
-      category: 'FEATURE',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      tags: ['voice', 'ai', 'enhancement'],
-      estimatedHours: 20,
-      actualHours: 12
-    },
-    {
-      id: '2',
-      title: 'Memory Optimization',
-      description: 'Optimize memory retrieval for better narrative coherence',
+      id: 'completed-1',
+      title: 'Enhanced Memory System - Narrative Fragmentation Fix',
+      description: 'Implemented enhanced memory retrieval that preserves story context when atomic facts are retrieved. Fixed critical issue where story context was lost.',
       priority: 'HIGH',
       status: 'COMPLETED',
       category: 'IMPROVEMENT',
-      createdAt: new Date().toISOString(),
+      createdAt: '2025-09-15',
       updatedAt: new Date().toISOString(),
-      tags: ['memory', 'performance', 'narrative'],
+      tags: ['memory', 'narrative', 'context', 'story-preservation'],
+      estimatedHours: 25,
+      actualHours: 30
+    },
+    {
+      id: 'completed-2',
+      title: 'Document Reprocessing System',
+      description: 'Added individual and batch document reprocessing endpoints to re-extract facts without data loss. Preserves existing data while enhancing with new context.',
+      priority: 'HIGH',
+      status: 'COMPLETED',
+      category: 'FEATURE',
+      createdAt: '2025-09-15',
+      updatedAt: new Date().toISOString(),
+      tags: ['documents', 'reprocessing', 'data-preservation'],
       estimatedHours: 15,
       actualHours: 18
+    },
+    {
+      id: 'completed-3',
+      title: 'Contradiction Detection System',
+      description: 'Manual curation UI with scan button, visual hierarchy, and resolve actions. Revolutionary lie taxonomy system that treats contradictions as character features.',
+      priority: 'HIGH',
+      status: 'COMPLETED',
+      category: 'FEATURE',
+      createdAt: '2025-09-12',
+      updatedAt: new Date().toISOString(),
+      tags: ['contradictions', 'curation', 'character-consistency'],
+      estimatedHours: 40,
+      actualHours: 45
+    },
+    {
+      id: 'completed-4',
+      title: 'Core AI Co-Host Architecture',
+      description: 'PostgreSQL + Drizzle ORM, React + TypeScript frontend, Node.js + Express backend, ElevenLabs voice synthesis (v3), Anthropic Claude API integration.',
+      priority: 'HIGH',
+      status: 'COMPLETED',
+      category: 'INFRASTRUCTURE',
+      createdAt: '2025-08-01',
+      updatedAt: new Date().toISOString(),
+      tags: ['architecture', 'database', 'ai', 'voice', 'foundation'],
+      estimatedHours: 100,
+      actualHours: 120
+    },
+    // 🚧 IN PROGRESS FEATURES
+    {
+      id: 'progress-1',
+      title: 'AI-Assisted Flagging System',
+      description: 'Automate content categorization for character development tracking, relationship dynamics, emotional patterns. Includes new_backstory, personality_anomaly, new_character flags.',
+      priority: 'HIGH',
+      status: 'PLANNING',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['ai', 'flagging', 'automation', 'character-tracking'],
+      estimatedHours: 60
+    },
+    // 💡 PODCAST SEGMENT ENHANCEMENTS
+    {
+      id: 'podcast-1',
+      title: '"Survivors Saying Stupid Sh*t" Enhancement - Beef Tracker',
+      description: 'Auto-add roasted survivors to grudge database, track specific offenses, generate "Survivor Shit List" for callbacks. Reference past grudges in real-time.',
+      priority: 'HIGH',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['podcast', 'beef-tracker', 'survivors', 'grudges'],
+      estimatedHours: 35
+    },
+    {
+      id: 'podcast-2',
+      title: '"Where the F*ck Are Viewers From?" - Instant Backstory Generator',
+      description: 'Input: City name → Output: Insane Nicky story. Geography-specific templates, character generator with ridiculous names, stories get worse with each city revisit.',
+      priority: 'HIGH',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['podcast', 'backstory-generator', 'geography', 'stories'],
+      estimatedHours: 45
+    },
+    {
+      id: 'podcast-3',
+      title: 'Emotional Spiral System for "Tales from the Fog"',
+      description: 'Start calm, escalate to chosen spiral: MANIC PROSPERITY, DELUSIONAL GRANDEUR, PARANOIA CASCADE. Each spiral changes how stories are told.',
+      priority: 'MEDIUM',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['podcast', 'emotional-spirals', 'storytelling', 'moods'],
+      estimatedHours: 30
+    },
+    {
+      id: 'podcast-4',
+      title: '"Word from the Don" - Multi-Phase Terrible Advice Generator',
+      description: 'Input: Simple problem → 15-step criminal conspiracy solution. Phase escalation templates, auto-generate ridiculous names, reference past grudges.',
+      priority: 'MEDIUM',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['podcast', 'advice-generator', 'conspiracy', 'phases'],
+      estimatedHours: 40
+    },
+    // 🎯 NEW SEGMENT PROPOSALS
+    {
+      id: 'segment-1',
+      title: '"Nicky\'s Noodle Arms Power Rankings"',
+      description: 'Weekly rankings of absurd categories, wildly inconsistent based on mood/grudges, ranking history tracker, grudge-based adjustments, chat voting that Nicky ignores.',
+      priority: 'MEDIUM',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['segment', 'rankings', 'absurd', 'grudges'],
+      estimatedHours: 50
+    },
+    {
+      id: 'segment-2',
+      title: '"Nicky News Network (NNN)"',
+      description: 'Unhinged news network with breaking news alerts, correspondent personas (Wasabi Williams, Bluetooth Bradley), field reports, expert panels where Nicky argues with himself.',
+      priority: 'LOW',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['segment', 'news', 'personas', 'correspondent'],
+      estimatedHours: 70
+    },
+    {
+      id: 'segment-3',
+      title: '"Nicky & Nicky At The Movies" (Siskel & Ebert Parody)',
+      description: 'Dual personality movie reviews, plot summaries that devolve into chaos, nonsensical rating systems, relates everything to personal trauma.',
+      priority: 'LOW',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['segment', 'movie-reviews', 'dual-personality', 'chaos'],
+      estimatedHours: 60
+    },
+    // ⚡ INTERACTIVE CHAOS FEATURES
+    {
+      id: 'chaos-1',
+      title: 'Mood Swing System',
+      description: 'Track emotional state (Manic/Depressed/Rage/Scheming/Nostalgic), moods affect response style and memory access, different TTS voice settings per mood.',
+      priority: 'HIGH',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['mood', 'emotional-state', 'tts', 'behavior'],
+      estimatedHours: 55
+    },
+    {
+      id: 'chaos-2',
+      title: 'Romance Failure System',
+      description: 'ALL romantic escapades end terribly, ridiculous names required, romance decay escalation, compound failure mode creating conspiracies.',
+      priority: 'MEDIUM',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['romance', 'failure', 'character-names', 'escalation'],
+      estimatedHours: 40
+    },
+    {
+      id: 'chaos-3',
+      title: 'Character Naming System',
+      description: 'All new characters get ridiculous names: 30% food-related, 20% absurd combinations, names evolve and get MORE ridiculous through retelling.',
+      priority: 'MEDIUM',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['character-names', 'ridiculous', 'evolution'],
+      estimatedHours: 25
+    },
+    // 🔧 STREAM INTEGRATION
+    {
+      id: 'stream-1',
+      title: 'Beef Tracker for Streams',
+      description: 'Maintains grudge list with decay timers, auto-escalates feuds if mentioned multiple times, chat can use "!beef" to see current grudge list.',
+      priority: 'HIGH',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['stream', 'beef', 'grudges', 'chat-commands'],
+      estimatedHours: 30
+    },
+    {
+      id: 'stream-2',
+      title: 'Memory Auction/Voting System',
+      description: 'During streams, chat votes on which contradictory fact becomes canon. Creates dynamic content and audience engagement.',
+      priority: 'MEDIUM',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['stream', 'voting', 'canon', 'audience-engagement'],
+      estimatedHours: 45
+    },
+    // 📊 ANALYTICS & MONITORING
+    {
+      id: 'analytics-1',
+      title: 'Canon Stability Metrics',
+      description: 'Track which facts remain stable vs chaotic, identify core personality traits, monitor character consistency over time.',
+      priority: 'MEDIUM',
+      status: 'IDEA',
+      category: 'IMPROVEMENT',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['analytics', 'canon', 'metrics', 'consistency'],
+      estimatedHours: 35
     }
   ]);
 
@@ -114,21 +315,94 @@ export default function ProjectWorkspace() {
   const [notes, setNotes] = useState<ProjectNote[]>([
     {
       id: '1',
-      title: 'Narrative Fragmentation Issue',
-      content: 'Discovered that atomic fact extraction was losing story context. Implemented enhanced retrieval system to preserve parent story information.',
-      category: 'TECHNICAL',
-      createdAt: new Date().toISOString(),
+      title: 'MASTER PLAN: Nicky AI System Documentation',
+      content: `COMPREHENSIVE DEVELOPMENT ROADMAP
+
+CORE PHILOSOPHY:
+Nicky's lies and contradictions are FEATURES, not bugs. The system treats unreliability as a canonical character trait.
+
+COMPLETED FOUNDATIONS:
+✅ PostgreSQL + Drizzle ORM architecture
+✅ React + TypeScript frontend  
+✅ Node.js + Express backend
+✅ ElevenLabs voice synthesis (v3 API)
+✅ Anthropic Claude API integration
+✅ Enhanced memory retrieval with story context preservation
+✅ Document reprocessing system (individual & batch)
+✅ Contradiction detection with manual curation UI
+✅ Revolutionary lie taxonomy system
+
+NEXT PHASE PRIORITIES:
+🚧 AI-Assisted Flagging System (automate content categorization)
+🚧 Podcast Segment Enhancements (Beef Tracker, Backstory Generator)
+🚧 Interactive Chaos Features (Mood Swings, Romance Failures)
+🚧 Stream Integration Features (Chat commands, Memory Voting)
+
+SEGMENT-SPECIFIC FEATURES:
+• "Survivors Saying Stupid Sh*t" → Beef Tracker Integration
+• "Where the F*ck Are Viewers From?" → Instant Backstory Generator  
+• "Tales from the Fog" → Emotional Spiral System
+• "Word from the Don" → Multi-Phase Terrible Advice Generator
+• NEW: "Nicky's Power Rankings" → Absurd weekly rankings
+• NEW: "Nicky News Network" → Unhinged news with correspondents
+• NEW: "Nicky & Nicky At Movies" → Dual personality reviews
+
+CRITICAL SYSTEMS:
+• Character Naming: All new characters need ridiculous names
+• Romance Failures: ALL romantic escapades must end terribly
+• Memory Management: Flagging, decay, confidence scoring
+• Canon Protection: Core traits must remain stable
+
+This is the master reference document for all development decisions.`,
+      category: 'GENERAL',
+      createdAt: '2025-09-15',
       updatedAt: new Date().toISOString(),
-      tags: ['memory', 'narrative', 'bug-fix']
+      tags: ['master-plan', 'roadmap', 'comprehensive']
     },
     {
       id: '2',
-      title: 'ElevenLabs Integration',
-      content: 'Successfully integrated ElevenLabs for improved voice synthesis. Settings: stability 0.3, similarity_boost 0.75, style 0',
+      title: 'Narrative Fragmentation Fix - COMPLETED',
+      content: 'CRITICAL SUCCESS: Fixed the atomic fact extraction issue that was losing story context. Implemented enhanced memory retrieval system that preserves parent story information when atomic facts are retrieved. This was causing major problems where facts like "Nicky escaped by throwing donuts" lost the spy infiltration story context. Now the system links atomic facts to their parent stories and includes story context in AI responses.',
       category: 'TECHNICAL',
-      createdAt: new Date().toISOString(),
+      createdAt: '2025-09-15',
       updatedAt: new Date().toISOString(),
-      tags: ['voice', 'integration', 'elevenlabs']
+      tags: ['memory', 'narrative', 'bug-fix', 'completed', 'critical']
+    },
+    {
+      id: '3',
+      title: 'ElevenLabs Integration Settings',
+      content: 'Successfully integrated ElevenLabs for improved voice synthesis. Optimal settings discovered: stability: 0.3, similarity_boost: 0.75, style: 0, use_speaker_boost: true. These settings provide the best balance of consistency and expressiveness for Nicky\'s character voice.',
+      category: 'TECHNICAL',
+      createdAt: '2025-09-10',
+      updatedAt: new Date().toISOString(),
+      tags: ['voice', 'integration', 'elevenlabs', 'settings']
+    },
+    {
+      id: '4',
+      title: 'Character Consistency Philosophy',
+      content: 'KEY INSIGHT: Treating Nicky\'s contradictions as FEATURES rather than bugs has been revolutionary. The lie taxonomy system that embraces unreliability as canonical has solved major character consistency issues. Manual curation strongly preferred over automated cleanup - wiping memories was counterproductive.',
+      category: 'DESIGN',
+      createdAt: '2025-09-12',
+      updatedAt: new Date().toISOString(),
+      tags: ['character', 'philosophy', 'contradictions', 'canon']
+    },
+    {
+      id: '5',
+      title: 'Document Reprocessing Success',
+      content: 'Implemented both individual and batch document reprocessing endpoints that re-extract facts without data loss. This was essential for enhancing the memory system while preserving existing knowledge. The reprocessDocument method allows for safe re-extraction of facts with enhanced narrative context.',
+      category: 'TECHNICAL',
+      createdAt: '2025-09-15',
+      updatedAt: new Date().toISOString(),
+      tags: ['documents', 'reprocessing', 'enhancement', 'preservation']
+    },
+    {
+      id: '6',
+      title: 'Zero Contradictions Found - System Working',
+      content: 'Contradiction scanning found zero contradictions in 815 facts, indicating the character consistency approach is working effectively. The system is successfully managing Nicky\'s personality while maintaining canonical coherence.',
+      category: 'TECHNICAL',
+      createdAt: '2025-09-15',
+      updatedAt: new Date().toISOString(),
+      tags: ['contradictions', 'success', 'consistency', 'metrics']
     }
   ]);
 
