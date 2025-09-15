@@ -439,7 +439,7 @@ export default function JazzDashboard() {
 
       {/* Jazz Cup Status Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 p-2">
-        <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-white">
+        <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-black">
           <div className="flex items-center space-x-4">
             <span className="flex items-center gap-1">
               <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
@@ -457,7 +457,7 @@ export default function JazzDashboard() {
               variant="ghost"
               size="sm"
               onClick={() => setIsNotesModalOpen(true)}
-              className="text-white hover:bg-white/10 h-6 px-2 text-xs"
+              className="text-black hover:bg-black/10 h-6 px-2 text-xs"
               data-testid="button-open-notes"
             >
               📝 Notes
