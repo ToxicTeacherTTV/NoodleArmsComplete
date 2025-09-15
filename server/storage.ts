@@ -419,6 +419,100 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
+  // 🚀 NEW: Enhanced memory retrieval that includes story context for atomic facts
+  async getEnrichedMemoriesForAI(profileId: string, limit = 100): Promise<Array<MemoryEntry & { parentStory?: MemoryEntry }>> {
+    // Get only high-confidence, ACTIVE facts for AI response generation
+    const memories = await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE'), // Only active facts
+          sql`${memoryEntries.confidence} >= 60` // Minimum 60% confidence
+        )
+      )
+      .orderBy(
+        desc(memoryEntries.confidence), // Highest confidence first
+        desc(memoryEntries.supportCount), // Then by support
+        desc(memoryEntries.importance), // Then by importance
+        desc(memoryEntries.lastUsed) // Then by recent usage
+      )
+      .limit(limit);
+
+    // Enrich atomic facts with their parent story context
+    const enrichedMemories = await Promise.all(
+      memories.map(async (memory) => {
+        if (memory.isAtomicFact && memory.parentFactId) {
+          try {
+            const parentStory = await db
+              .select()
+              .from(memoryEntries)
+              .where(eq(memoryEntries.id, memory.parentFactId))
+              .limit(1);
+            
+            return {
+              ...memory,
+              parentStory: parentStory[0] || undefined
+            };
+          } catch (error) {
+            console.warn(`⚠️ Failed to fetch parent story for atomic fact ${memory.id}:`, error);
+            return { ...memory };
+          }
+        }
+        return { ...memory };
+      })
+    );
+
+    return enrichedMemories;
+  }
+
+  // 🚀 NEW: Enhanced search that includes story context for atomic facts
+  async searchEnrichedMemoryEntries(profileId: string, query: string): Promise<Array<MemoryEntry & { parentStory?: MemoryEntry }>> {
+    const memories = await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE'), // Only search active facts, exclude contradictions
+          like(memoryEntries.content, `%${query}%`)
+        )
+      )
+      .orderBy(
+        desc(memoryEntries.confidence), // Prioritize high confidence first
+        desc(memoryEntries.importance), // Then by importance
+        desc(memoryEntries.supportCount), // Then by support count
+        desc(memoryEntries.retrievalCount) // Finally by usage frequency
+      );
+
+    // Enrich atomic facts with their parent story context
+    const enrichedMemories = await Promise.all(
+      memories.map(async (memory) => {
+        if (memory.isAtomicFact && memory.parentFactId) {
+          try {
+            const parentStory = await db
+              .select()
+              .from(memoryEntries)
+              .where(eq(memoryEntries.id, memory.parentFactId))
+              .limit(1);
+            
+            return {
+              ...memory,
+              parentStory: parentStory[0] || undefined
+            };
+          } catch (error) {
+            console.warn(`⚠️ Failed to fetch parent story for atomic fact ${memory.id}:`, error);
+            return { ...memory };
+          }
+        }
+        return { ...memory };
+      })
+    );
+
+    return enrichedMemories;
+  }
+
   // Protected facts implementation
   async addProtectedFact(profileId: string, content: string, importance = 5, keywords: string[] = []): Promise<MemoryEntry> {
     const { generateCanonicalKey } = await import('./utils/canonical.js');

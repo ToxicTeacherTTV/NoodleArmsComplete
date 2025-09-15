@@ -1,8 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, loreCharacters, loreEvents } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, loreCharacters, loreEvents, documents, memoryEntries } from "@shared/schema";
+import { eq, and, sql } from "drizzle-orm";
+import { db } from "./db";
 import { anthropicService } from "./services/anthropic";
 import { elevenlabsService } from "./services/elevenlabs";
 import { documentProcessor } from "./services/documentProcessor";
@@ -197,9 +198,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      // Get relevant memories for RAG - combine search-based and high-confidence retrieval
-      const allSearchResults = await storage.searchMemoryEntries(activeProfile.id, message);
-      const highConfidenceMemories = await storage.getReliableMemoriesForAI(activeProfile.id, 20);
+      // 🚀 ENHANCED: Get relevant memories with story context for narrative coherence
+      const allSearchResults = await storage.searchEnrichedMemoryEntries(activeProfile.id, message);
+      const highConfidenceMemories = await storage.getEnrichedMemoriesForAI(activeProfile.id, 20);
       
       // Filter search results to only include high-confidence facts (≥60%)
       const searchBasedMemories = allSearchResults.filter(m => (m.confidence || 50) >= 60);
@@ -1118,6 +1119,238 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('❌ Contradiction scan failed:', error);
       res.status(500).json({ error: 'Failed to scan for contradictions' });
+    }
+  });
+
+  // 🚀 NEW: Document reprocessing endpoint to re-extract facts without data loss
+  app.post('/api/documents/:id/reprocess', async (req, res) => {
+    try {
+      const { id: documentId } = req.params;
+      const { preserveExisting = true, improveAtomization = false } = req.body;
+      
+      console.log(`📄 Starting reprocessing for document ${documentId}...`);
+      
+      // Get the document
+      const document = await db
+        .select()
+        .from(documents)
+        .where(eq(documents.id, documentId))
+        .limit(1);
+        
+      if (!document || document.length === 0) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      
+      const doc = document[0];
+      console.log(`📄 Found document: ${doc.filename}`);
+      
+      // Get existing facts from this document to preserve them
+      const existingFacts = preserveExisting ? await db
+        .select()
+        .from(memoryEntries)
+        .where(
+          and(
+            eq(memoryEntries.profileId, doc.profileId),
+            eq(memoryEntries.sourceId, documentId)
+          )
+        ) : [];
+      
+      console.log(`📄 Found ${existingFacts.length} existing facts from this document`);
+      
+      // Mark document as processing
+      await db
+        .update(documents)
+        .set({ 
+          processingStatus: 'PROCESSING',
+          updatedAt: sql`now()`
+        })
+        .where(eq(documents.id, documentId));
+      
+      try {
+        // Re-extract knowledge using the document processor
+        if (doc.extractedContent) {
+          console.log(`📄 Re-extracting knowledge from ${doc.filename}...`);
+          
+          // Use a public method to trigger reprocessing
+          await documentProcessor.reprocessDocument(
+            doc.profileId, 
+            doc.extractedContent, 
+            doc.filename, 
+            doc.id
+          );
+          
+          console.log(`✅ Reprocessing completed for ${doc.filename}`);
+          
+          // Mark as completed
+          await db
+            .update(documents)
+            .set({ 
+              processingStatus: 'COMPLETED',
+              updatedAt: sql`now()`
+            })
+            .where(eq(documents.id, documentId));
+          
+          // Get final fact counts
+          const finalFacts = await db
+            .select()
+            .from(memoryEntries)
+            .where(
+              and(
+                eq(memoryEntries.profileId, doc.profileId),
+                eq(memoryEntries.sourceId, documentId)
+              )
+            );
+          
+          const message = preserveExisting 
+            ? `Reprocessed ${doc.filename}: ${existingFacts.length} existing facts preserved, ${finalFacts.length - existingFacts.length} new facts extracted`
+            : `Reprocessed ${doc.filename}: ${finalFacts.length} total facts after reprocessing`;
+          
+          res.json({
+            success: true,
+            message,
+            document: doc.filename,
+            existingFactsCount: existingFacts.length,
+            finalFactsCount: finalFacts.length,
+            newFactsExtracted: Math.max(0, finalFacts.length - existingFacts.length)
+          });
+          
+        } else {
+          await db
+            .update(documents)
+            .set({ 
+              processingStatus: 'FAILED',
+              updatedAt: sql`now()`
+            })
+            .where(eq(documents.id, documentId));
+            
+          res.status(400).json({ error: 'Document has no extracted content to reprocess' });
+        }
+        
+      } catch (extractionError) {
+        console.error('📄 Reprocessing extraction failed:', extractionError);
+        
+        await db
+          .update(documents)
+          .set({ 
+            processingStatus: 'FAILED',
+            updatedAt: sql`now()`
+          })
+          .where(eq(documents.id, documentId));
+          
+        res.status(500).json({ error: 'Failed to reprocess document', details: (extractionError as Error).message });
+      }
+      
+    } catch (error) {
+      console.error('📄 Document reprocessing failed:', error);
+      res.status(500).json({ error: 'Failed to reprocess document' });
+    }
+  });
+
+  // 🚀 NEW: Batch document reprocessing endpoint
+  app.post('/api/documents/reprocess-all', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      console.log(`📄 Starting batch reprocessing for all documents...`);
+      
+      // Get all completed documents for the profile
+      const allDocuments = await db
+        .select()
+        .from(documents)
+        .where(
+          and(
+            eq(documents.profileId, activeProfile.id),
+            eq(documents.processingStatus, 'COMPLETED')
+          )
+        );
+        
+      console.log(`📄 Found ${allDocuments.length} documents to reprocess`);
+      
+      let successCount = 0;
+      let errorCount = 0;
+      const results = [];
+      
+      for (const doc of allDocuments) {
+        try {
+          console.log(`📄 Reprocessing ${doc.filename}...`);
+          
+          // Get existing facts count
+          const existingFacts = await db
+            .select()
+            .from(memoryEntries)
+            .where(
+              and(
+                eq(memoryEntries.profileId, doc.profileId),
+                eq(memoryEntries.sourceId, doc.id)
+              )
+            );
+          
+          // Re-extract if content exists
+          if (doc.extractedContent) {
+            await documentProcessor.reprocessDocument(
+              doc.profileId, 
+              doc.extractedContent, 
+              doc.filename, 
+              doc.id
+            );
+            
+            const finalFacts = await db
+              .select()
+              .from(memoryEntries)
+              .where(
+                and(
+                  eq(memoryEntries.profileId, doc.profileId),
+                  eq(memoryEntries.sourceId, doc.id)
+                )
+              );
+            
+            results.push({
+              filename: doc.filename,
+              status: 'success',
+              existingFacts: existingFacts.length,
+              finalFacts: finalFacts.length,
+              newFacts: Math.max(0, finalFacts.length - existingFacts.length)
+            });
+            
+            successCount++;
+            console.log(`✅ ${doc.filename}: ${existingFacts.length} → ${finalFacts.length} facts`);
+            
+          } else {
+            results.push({
+              filename: doc.filename,
+              status: 'skipped',
+              reason: 'No extracted content'
+            });
+          }
+          
+        } catch (docError) {
+          console.error(`❌ Failed to reprocess ${doc.filename}:`, docError);
+          errorCount++;
+          results.push({
+            filename: doc.filename,
+            status: 'error',
+            error: (docError as Error).message
+          });
+        }
+      }
+      
+      console.log(`📄 Batch reprocessing complete: ${successCount} success, ${errorCount} errors`);
+      
+      res.json({
+        success: true,
+        message: `Reprocessed ${successCount} documents successfully, ${errorCount} errors`,
+        totalDocuments: allDocuments.length,
+        successCount,
+        errorCount,
+        results
+      });
+      
+    } catch (error) {
+      console.error('📄 Batch reprocessing failed:', error);
+      res.status(500).json({ error: 'Failed to batch reprocess documents' });
     }
   });
 

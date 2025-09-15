@@ -61,6 +61,16 @@ class DocumentProcessor {
     }
   }
 
+  // 🚀 NEW: Public method for reprocessing documents without full pipeline
+  async reprocessDocument(profileId: string, extractedContent: string, filename: string, documentId: string): Promise<void> {
+    console.log(`🔄 Reprocessing document ${filename} for enhanced narrative context...`);
+    
+    // Call the private hierarchical extraction method directly
+    await this.extractAndStoreHierarchicalKnowledge(profileId, extractedContent, filename, documentId);
+    
+    console.log(`✅ Document reprocessing completed for ${filename}`);
+  }
+
   private chunkText(text: string, maxChunkSize = 2500, overlap = 200): string[] {
     const chunks: string[] = [];
     

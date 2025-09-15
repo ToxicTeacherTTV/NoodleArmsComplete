@@ -40,7 +40,7 @@ class AnthropicService {
   async generateResponse(
     userMessage: string,
     coreIdentity: string,
-    relevantMemories: MemoryEntry[],
+    relevantMemories: Array<MemoryEntry & { parentStory?: MemoryEntry }>,
     relevantDocs: any[] = [],
     loreContext?: string
   ): Promise<AIResponse> {
@@ -53,7 +53,18 @@ class AnthropicService {
       if (relevantMemories.length > 0) {
         contextPrompt += "\n\nRELEVANT MEMORIES:\n";
         relevantMemories.forEach(memory => {
-          contextPrompt += `- ${memory.content}\n`;
+          // 🚀 ENHANCED: Include story context for atomic facts to preserve narrative coherence
+          if (memory.isAtomicFact && (memory as any).parentStory) {
+            contextPrompt += `- ${memory.content}\n`;
+            contextPrompt += `  ↳ Story Context: ${(memory as any).parentStory.content}\n`;
+          } else if (memory.storyContext) {
+            // Include brief story context if available
+            contextPrompt += `- ${memory.content}\n`;
+            contextPrompt += `  ↳ Context: ${memory.storyContext}\n`;
+          } else {
+            // Regular fact without story context
+            contextPrompt += `- ${memory.content}\n`;
+          }
         });
       }
 
