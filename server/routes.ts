@@ -14,6 +14,8 @@ import { MemoryAnalyzer } from './services/memoryAnalyzer.js';
 import { conversationParser } from './services/conversationParser.js';
 import multer from "multer";
 import { z } from "zod";
+import { promises as fs } from "fs";
+import path from "path";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -350,6 +352,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: 'Failed to delete document' });
+    }
+  });
+
+  // Notes management routes
+  app.get('/api/notes', async (req, res) => {
+    try {
+      const notesPath = path.join(process.cwd(), 'NOTES.md');
+      try {
+        const content = await fs.readFile(notesPath, 'utf8');
+        res.json({ content });
+      } catch (readError) {
+        // If file doesn't exist, return empty content
+        res.json({ content: '# Development Notes\n\n<!-- Add your notes here -->\n' });
+      }
+    } catch (error) {
+      console.error('Failed to read notes:', error);
+      res.status(500).json({ error: 'Failed to read notes' });
+    }
+  });
+
+  app.put('/api/notes', async (req, res) => {
+    try {
+      const { content } = req.body;
+      if (typeof content !== 'string') {
+        return res.status(400).json({ error: 'Content must be a string' });
+      }
+      
+      const notesPath = path.join(process.cwd(), 'NOTES.md');
+      await fs.writeFile(notesPath, content, 'utf8');
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to write notes:', error);
+      res.status(500).json({ error: 'Failed to write notes' });
     }
   });
 
