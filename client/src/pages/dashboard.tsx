@@ -41,13 +41,14 @@ export default function Dashboard() {
   const [memoryCheckerOpen, setMemoryCheckerOpen] = useState(false);
   const [selectedText, setSelectedText] = useState("");
   const [checkerPosition, setCheckerPosition] = useState({ x: 0, y: 0 });
+  const [pendingTranscript, setPendingTranscript] = useState<string>(''); // For manual voice control
 
   // Refs for queue management
   const messageQueueRef = useRef<Message[]>([]);
   const isProcessingQueueRef = useRef(false);
 
   // Custom hooks
-  const { isListening, startListening, stopListening, transcript, error: speechError } = useSpeechRecognition();
+  const { isListening, startListening, stopListening, transcript, resetTranscript, error: speechError } = useSpeechRecognition();
   const { speak: speakBrowser, isSpeaking: isSpeakingBrowser, stop: stopSpeakingBrowser, replay: replayBrowser, canReplay: canReplayBrowser } = useSpeechSynthesis();
   const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopSpeakingElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs, replay: replayElevenLabs, canReplay: canReplayElevenLabs } = useElevenLabsSpeech();
   const voiceActivity = useVoiceActivity(isListening);
@@ -195,30 +196,13 @@ export default function Dashboard() {
     }
   }, [existingMessages]);
 
-  // Handle speech recognition transcript (only in streaming mode)
+  // Handle speech recognition transcript - show pending transcript while listening (manual mode)
   useEffect(() => {
-    if (transcript && currentConversationId && appMode === 'STREAMING') {
-      const userMessage: Message = {
-        id: nanoid(),
-        conversationId: currentConversationId,
-        type: 'USER',
-        content: transcript,
-        metadata: { voice: true },
-        createdAt: new Date().toISOString(),
-      };
-
-      setMessages(prev => [...prev, userMessage]);
-      messageQueueRef.current.push(userMessage);
-      
-      // Send to backend
-      sendMessageMutation.mutate({
-        conversationId: currentConversationId,
-        type: 'USER',
-        content: transcript,
-        metadata: { voice: true },
-      });
+    if (transcript && appMode === 'STREAMING' && isListening) {
+      // Only show pending transcript while listening, don't auto-send
+      setPendingTranscript(transcript);
     }
-  }, [transcript, currentConversationId, appMode]);
+  }, [transcript, appMode, isListening]);
 
   // Process message queue
   useEffect(() => {
@@ -255,14 +239,44 @@ export default function Dashboard() {
     }
   }, [messages.length, streamSettings.memoryLearning, currentConversationId]);
 
-  // Handle voice control (only in streaming mode)
+  // Handle voice control (only in streaming mode) - MANUAL MODE
   const toggleListening = () => {
     if (appMode !== 'STREAMING') return;
     
     if (isListening) {
+      // STOP: Process the pending transcript and send message
       stopListening();
+      
+      if (pendingTranscript.trim() && currentConversationId) {
+        const userMessage: Message = {
+          id: nanoid(),
+          conversationId: currentConversationId,
+          type: 'USER',
+          content: pendingTranscript.trim(),
+          metadata: { voice: true },
+          createdAt: new Date().toISOString(),
+        };
+
+        setMessages(prev => [...prev, userMessage]);
+        messageQueueRef.current.push(userMessage);
+        
+        // Send to backend
+        sendMessageMutation.mutate({
+          conversationId: currentConversationId,
+          type: 'USER',
+          content: pendingTranscript.trim(),
+          metadata: { voice: true },
+        });
+      }
+      
+      // Clear pending transcript
+      setPendingTranscript('');
+      resetTranscript();
       setAiStatus('IDLE');
     } else {
+      // START: Begin listening and clear any previous transcript
+      setPendingTranscript('');
+      resetTranscript();
       startListening();
       setAiStatus('LISTENING');
     }
