@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, loreCharacters, loreEvents, documents, memoryEntries } from "@shared/schema";
+import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "./db";
 import { anthropicService } from "./services/anthropic";
@@ -14,6 +14,7 @@ import { LoreEngine } from './services/loreEngine.js';
 import { MemoryAnalyzer } from './services/memoryAnalyzer.js';
 import { conversationParser } from './services/conversationParser.js';
 import { contradictionDetector } from './services/contradictionDetector';
+import { aiFlagger } from './services/aiFlagger';
 import multer from "multer";
 import { z } from "zod";
 import { promises as fs } from "fs";
@@ -1621,6 +1622,212 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching protected facts:', error);
       res.status(500).json({ error: 'Failed to fetch protected facts' });
+    }
+  });
+
+  // AI-Assisted Flagging System API Endpoints
+  
+  // Get pending flags for review
+  app.get('/api/flags/pending', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { limit = 50 } = req.query;
+      const flags = await aiFlagger.getPendingFlags(db, profile.id, Number(limit));
+      
+      res.json({
+        count: flags.length,
+        flags: flags.map(flag => ({
+          ...flag,
+          createdAt: flag.createdAt ? new Date(flag.createdAt).toISOString() : null
+        }))
+      });
+    } catch (error) {
+      console.error('Error fetching pending flags:', error);
+      res.status(500).json({ error: 'Failed to fetch pending flags' });
+    }
+  });
+
+  // Get flags for specific content
+  app.get('/api/flags/:targetType/:targetId', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { targetType, targetId } = req.params;
+      
+      if (!['MEMORY', 'MESSAGE', 'DOCUMENT', 'CONVERSATION'].includes(targetType)) {
+        return res.status(400).json({ error: 'Invalid target type' });
+      }
+
+      const flags = await aiFlagger.getContentFlags(db, targetType as any, targetId, profile.id);
+      res.json(flags);
+    } catch (error) {
+      console.error('Error fetching content flags:', error);
+      res.status(500).json({ error: 'Failed to fetch content flags' });
+    }
+  });
+
+  // Update flag review status
+  app.put('/api/flags/:flagId/review', async (req, res) => {
+    try {
+      const { flagId } = req.params;
+      
+      // Validate request body
+      const reviewSchema = z.object({
+        reviewStatus: z.enum(['APPROVED', 'REJECTED', 'MODIFIED']),
+        reviewNotes: z.string().optional(),
+        reviewedBy: z.string().default('user')
+      });
+      
+      const { reviewStatus, reviewNotes, reviewedBy } = reviewSchema.parse(req.body);
+
+      const [updatedFlag] = await db
+        .update(contentFlags)
+        .set({
+          reviewStatus: reviewStatus as any,
+          reviewNotes: reviewNotes || null,
+          reviewedBy,
+          reviewedAt: sql`now()`,
+          updatedAt: sql`now()`
+        })
+        .where(eq(contentFlags.id, flagId))
+        .returning();
+
+      res.json(updatedFlag);
+    } catch (error) {
+      console.error('Error updating flag review:', error);
+      res.status(500).json({ error: 'Failed to update flag review' });
+    }
+  });
+
+  // Manually flag content
+  app.post('/api/flags/manual', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      // Validate request body with Zod (accept 'reason', map to 'flagReason')
+      const manualInputSchema = z.object({
+        targetType: z.enum(['MEMORY', 'MESSAGE', 'DOCUMENT', 'CONVERSATION']),
+        targetId: z.string().min(1),
+        flagType: z.string().min(1),
+        priority: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']).default('MEDIUM'),
+        reason: z.string().min(1, 'Reason is required'),
+        extractedData: z.object({
+          characterNames: z.array(z.string()).optional(),
+          relationships: z.array(z.string()).optional(),
+          emotions: z.array(z.string()).optional(),
+          topics: z.array(z.string()).optional(),
+          contradictions: z.array(z.string()).optional(),
+          patterns: z.array(z.string()).optional(),
+        }).optional()
+      });
+
+      const inputData = manualInputSchema.parse(req.body);
+
+      // Map 'reason' to 'flagReason' for database schema
+      const { reason, ...rest } = inputData;
+      const validatedData = { ...rest, flagReason: reason };
+      const { targetType, targetId, flagType, priority, flagReason, extractedData } = validatedData;
+
+      const flags = await aiFlagger.storeFlagsInDatabase(
+        db,
+        [{
+          flagType: flagType as any,
+          priority: priority as any,
+          confidence: 100, // Manual flags get 100% confidence
+          reason: flagReason,
+          extractedData: extractedData || {}
+        }],
+        targetType as any,
+        targetId,
+        profile.id
+      );
+
+      res.json(flags[0]);
+    } catch (error) {
+      console.error('Error creating manual flag:', error);
+      res.status(500).json({ error: 'Failed to create manual flag' });
+    }
+  });
+
+  // Batch analyze memories (for testing/setup)
+  app.post('/api/flags/batch-analyze', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { memoryIds } = req.body;
+      
+      if (!memoryIds || !Array.isArray(memoryIds)) {
+        return res.status(400).json({ error: 'memoryIds array is required' });
+      }
+
+      // Start batch analysis in background
+      aiFlagger.batchAnalyzeMemories(db, memoryIds, profile.id)
+        .then(() => {
+          console.log(`🎯 Batch analysis of ${memoryIds.length} memories completed`);
+        })
+        .catch(error => {
+          console.error('❌ Batch analysis failed:', error);
+        });
+
+      res.json({ 
+        message: `Batch analysis started for ${memoryIds.length} memories`,
+        status: 'started'
+      });
+    } catch (error) {
+      console.error('Error starting batch analysis:', error);
+      res.status(500).json({ error: 'Failed to start batch analysis' });
+    }
+  });
+
+  // Get flagging analytics
+  app.get('/api/flags/analytics', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const [flagStats] = await db
+        .select({
+          totalFlags: sql<number>`count(*)`,
+          pendingFlags: sql<number>`count(*) filter (where review_status = 'PENDING')`,
+          approvedFlags: sql<number>`count(*) filter (where review_status = 'APPROVED')`,
+          rejectedFlags: sql<number>`count(*) filter (where review_status = 'REJECTED')`,
+        })
+        .from(contentFlags)
+        .where(eq(contentFlags.profileId, profile.id));
+
+      const flagsByType = await db
+        .select({
+          flagType: contentFlags.flagType,
+          count: sql<number>`count(*)`
+        })
+        .from(contentFlags)
+        .where(eq(contentFlags.profileId, profile.id))
+        .groupBy(contentFlags.flagType)
+        .orderBy(sql`count(*) desc`)
+        .limit(10);
+
+      res.json({
+        overview: flagStats,
+        topFlagTypes: flagsByType
+      });
+    } catch (error) {
+      console.error('Error fetching flag analytics:', error);
+      res.status(500).json({ error: 'Failed to fetch flag analytics' });
     }
   });
 

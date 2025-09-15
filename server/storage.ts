@@ -23,6 +23,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, sql } from "drizzle-orm";
+import { aiFlagger } from "./services/aiFlagger";
 
 export interface IStorage {
   // Profile management
@@ -216,7 +217,49 @@ export class DatabaseStorage implements IStorage {
       .insert(memoryEntries)
       .values([finalEntry as any])
       .returning();
+
+    // AI-Assisted Flagging: Analyze new memory content in background
+    if (newEntry.content && newEntry.profileId) {
+      // Run flagging as background task to avoid slowing down memory creation
+      this.flagMemoryContentBackground(newEntry);
+    }
+
     return newEntry;
+  }
+
+  /**
+   * Background task to flag memory content using AI analysis
+   */
+  private async flagMemoryContentBackground(memory: MemoryEntry): Promise<void> {
+    try {
+      console.log(`🤖 Starting AI flagging analysis for memory: ${memory.id}`);
+      
+      const analysis = await aiFlagger.analyzeContent(
+        memory.content,
+        'MEMORY',
+        { 
+          profileId: memory.profileId,
+          sourceId: memory.id 
+        }
+      );
+
+      if (analysis.flags.length > 0) {
+        await aiFlagger.storeFlagsInDatabase(
+          db,
+          analysis.flags,
+          'MEMORY',
+          memory.id,
+          memory.profileId
+        );
+        
+        console.log(`🏷️ Generated ${analysis.flags.length} flags for memory ${memory.id}: ${analysis.flags.map(f => f.flagType).join(', ')}`);
+      } else {
+        console.log(`✅ No flags needed for memory ${memory.id}`);
+      }
+    } catch (error) {
+      // Don't throw - this is a background task and shouldn't fail memory creation
+      console.error(`❌ Error flagging memory ${memory.id}:`, error);
+    }
   }
 
   async getMemoryEntries(profileId: string, limit = 50): Promise<MemoryEntry[]> {

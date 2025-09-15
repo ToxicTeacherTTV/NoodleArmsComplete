@@ -330,3 +330,74 @@ export type LoreHistoricalEvent = typeof loreHistoricalEvents.$inferSelect;
 export type InsertLoreHistoricalEvent = z.infer<typeof insertLoreHistoricalEventSchema>;
 export type LoreRelationship = typeof loreRelationships.$inferSelect;
 export type InsertLoreRelationship = z.infer<typeof insertLoreRelationshipSchema>;
+
+// AI-Assisted Flagging System
+export const contentFlags = pgTable("content_flags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  targetType: text("target_type").$type<'MEMORY' | 'MESSAGE' | 'DOCUMENT' | 'CONVERSATION'>().notNull(),
+  targetId: varchar("target_id").notNull(), // ID of the flagged content
+  
+  // Core flagging categories from comprehensive documentation
+  flagType: text("flag_type").$type<
+    // Character Development Tracking
+    'new_backstory' | 'personality_anomaly' | 'new_skill_claim' |
+    // Relationship Dynamics  
+    'new_character' | 'relationship_shift' | 'hierarchy_claim' |
+    // Emotional State Patterns
+    'rant_initiated' | 'mask_dropped' | 'chaos_level_1' | 'chaos_level_2' | 'chaos_level_3' | 'chaos_level_4' | 'chaos_level_5' |
+    // Content Importance Classification
+    'permanent_fact' | 'high_importance' | 'medium_importance' | 'low_importance' | 'deletion_candidate' |
+    // Meta-System Monitoring
+    'fourth_wall_break' | 'ooc_behavior' |
+    // Additional Categories
+    'pasta_related' | 'dbd_gameplay' | 'family_mention' | 'romance_failure' | 'criminal_activity'
+  >().notNull(),
+  
+  priority: text("priority").$type<'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'>().default('MEDIUM'),
+  confidence: integer("confidence").default(80), // 0-100, how confident the AI is about this flag
+  
+  // Details about the flagged content
+  flagReason: text("flag_reason").notNull(), // Why this was flagged
+  extractedData: json("extracted_data").$type<{
+    characterNames?: string[];
+    relationships?: string[];
+    emotions?: string[];
+    topics?: string[];
+    contradictions?: string[];
+    patterns?: string[];
+  }>(), // Structured data extracted from content
+  
+  // Review and curation
+  reviewStatus: text("review_status").$type<'PENDING' | 'APPROVED' | 'REJECTED' | 'MODIFIED'>().default('PENDING'),
+  reviewedBy: text("reviewed_by"), // Who reviewed this flag
+  reviewNotes: text("review_notes"), // Notes from human reviewer
+  reviewedAt: timestamp("reviewed_at"),
+  
+  // Automation and patterns
+  triggerPattern: text("trigger_pattern"), // What regex/pattern triggered this flag
+  relatedFlags: text("related_flags").array(), // IDs of related flags for batch processing
+  actionTaken: text("action_taken"), // What automated action was taken
+  
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+// Relations for content flags
+export const contentFlagsRelations = relations(contentFlags, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [contentFlags.profileId],
+    references: [profiles.id],
+  }),
+}));
+
+// Insert schema for content flags
+export const insertContentFlagSchema = createInsertSchema(contentFlags).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types for content flags
+export type ContentFlag = typeof contentFlags.$inferSelect;
+export type InsertContentFlag = z.infer<typeof insertContentFlagSchema>;
