@@ -58,6 +58,10 @@ export default function ProjectWorkspace() {
   const [isIdeaDialogOpen, setIsIdeaDialogOpen] = useState(false);
   const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
   const [isMilestoneDialogOpen, setIsMilestoneDialogOpen] = useState(false);
+  const [isEditIdeaDialogOpen, setIsEditIdeaDialogOpen] = useState(false);
+  const [editingIdea, setEditingIdea] = useState<ProjectIdea | null>(null);
+  const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<{milestoneId: string, taskIndex: number, taskText: string} | null>(null);
   
   // Mock data for now - would be connected to API later
   const [ideas, setIdeas] = useState<ProjectIdea[]>([
@@ -192,7 +196,7 @@ export default function ProjectWorkspace() {
     {
       id: 'segment-2',
       title: '"Nicky News Network (NNN)"',
-      description: 'Unhinged news network with breaking news alerts, correspondent personas (Wasabi Williams, Bluetooth Bradley), field reports, expert panels where Nicky argues with himself.',
+      description: 'Professional news network format with unhinged breaking news alerts, correspondent personas (Wasabi Williams, Bluetooth Bradley), field reports from increasingly ridiculous locations, and expert panels featuring different fake experts (not Nicky debating himself).',
       priority: 'LOW',
       status: 'IDEA',
       category: 'FEATURE',
@@ -204,7 +208,7 @@ export default function ProjectWorkspace() {
     {
       id: 'segment-3',
       title: '"Nicky & Nicky At The Movies" (Siskel & Ebert Parody)',
-      description: 'Dual personality movie reviews, plot summaries that devolve into chaos, nonsensical rating systems, relates everything to personal trauma.',
+      description: 'Extremely obnoxious movie reviews with complete plot spoilers, terrible takes, wild conspiracy theories about directors, relates every movie to personal trauma, uses nonsensical rating systems, and gets increasingly aggressive about defending bad opinions.',
       priority: 'LOW',
       status: 'IDEA',
       category: 'FEATURE',
@@ -507,6 +511,98 @@ This is the master reference document for all development decisions.`,
     });
   };
 
+  const handleEditIdea = (idea: ProjectIdea) => {
+    setEditingIdea(idea);
+    setIsEditIdeaDialogOpen(true);
+  };
+
+  const updateIdea = () => {
+    if (!editingIdea?.title || !editingIdea?.description) {
+      toast({
+        title: "Missing Information",
+        description: "Please provide both title and description for the idea.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const updatedIdeas = ideas.map(idea => 
+      idea.id === editingIdea.id 
+        ? { ...editingIdea, updatedAt: new Date().toISOString() }
+        : idea
+    );
+
+    setIdeas(updatedIdeas);
+    setIsEditIdeaDialogOpen(false);
+    setEditingIdea(null);
+    
+    toast({
+      title: "Idea Updated",
+      description: "Your project idea has been successfully updated.",
+    });
+  };
+
+  const handleDeleteIdea = (ideaId: string) => {
+    setIdeas(ideas.filter(idea => idea.id !== ideaId));
+    toast({
+      title: "Idea Deleted",
+      description: "The project idea has been removed.",
+    });
+  };
+
+  const handleEditTask = (milestoneId: string, taskIndex: number, taskText: string) => {
+    setEditingTask({ milestoneId, taskIndex, taskText });
+    setIsEditTaskDialogOpen(true);
+  };
+
+  const updateTask = () => {
+    if (!editingTask?.taskText.trim()) {
+      toast({
+        title: "Missing Information",
+        description: "Please provide task description.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const updatedMilestones = milestones.map(milestone => 
+      milestone.id === editingTask.milestoneId 
+        ? {
+            ...milestone,
+            tasks: milestone.tasks.map((task, index) => 
+              index === editingTask.taskIndex ? editingTask.taskText : task
+            )
+          }
+        : milestone
+    );
+
+    setMilestones(updatedMilestones);
+    setIsEditTaskDialogOpen(false);
+    setEditingTask(null);
+    
+    toast({
+      title: "Task Updated",
+      description: "The milestone task has been successfully updated.",
+    });
+  };
+
+  const handleDeleteTask = (milestoneId: string, taskIndex: number) => {
+    const updatedMilestones = milestones.map(milestone => 
+      milestone.id === milestoneId 
+        ? {
+            ...milestone,
+            tasks: milestone.tasks.filter((_, index) => index !== taskIndex)
+          }
+        : milestone
+    );
+
+    setMilestones(updatedMilestones);
+    toast({
+      title: "Task Deleted",
+      description: "The milestone task has been removed.",
+    });
+  };
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'HIGH': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
@@ -709,6 +805,145 @@ This is the master reference document for all development decisions.`,
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+
+              {/* Edit Idea Dialog */}
+              <Dialog open={isEditIdeaDialogOpen} onOpenChange={(open) => {
+                setIsEditIdeaDialogOpen(open);
+                if (!open) setEditingIdea(null);
+              }}>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Edit Project Idea</DialogTitle>
+                    <DialogDescription>
+                      Update your project idea details
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="space-y-4">
+                    <Input
+                      placeholder="Idea title..."
+                      value={editingIdea?.title || ''}
+                      onChange={(e) => setEditingIdea(editingIdea ? {...editingIdea, title: e.target.value} : null)}
+                      data-testid="input-edit-idea-title"
+                    />
+                    
+                    <Textarea
+                      placeholder="Describe your idea in detail..."
+                      value={editingIdea?.description || ''}
+                      onChange={(e) => setEditingIdea(editingIdea ? {...editingIdea, description: e.target.value} : null)}
+                      rows={4}
+                      data-testid="textarea-edit-idea-description"
+                    />
+                    
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Priority</label>
+                        <Select 
+                          value={editingIdea?.priority || 'MEDIUM'} 
+                          onValueChange={(value) => setEditingIdea(editingIdea ? {...editingIdea, priority: value as ProjectIdea['priority']} : null)}
+                        >
+                          <SelectTrigger data-testid="select-edit-idea-priority">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="HIGH">🔴 High</SelectItem>
+                            <SelectItem value="MEDIUM">🟡 Medium</SelectItem>
+                            <SelectItem value="LOW">🟢 Low</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Status</label>
+                        <Select 
+                          value={editingIdea?.status || 'IDEA'} 
+                          onValueChange={(value) => setEditingIdea(editingIdea ? {...editingIdea, status: value as ProjectIdea['status']} : null)}
+                        >
+                          <SelectTrigger data-testid="select-edit-idea-status">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="IDEA">💡 Idea</SelectItem>
+                            <SelectItem value="PLANNING">📋 Planning</SelectItem>
+                            <SelectItem value="IN_PROGRESS">⚡ In Progress</SelectItem>
+                            <SelectItem value="ON_HOLD">⏸️ On Hold</SelectItem>
+                            <SelectItem value="COMPLETED">✅ Completed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Category</label>
+                        <Select 
+                          value={editingIdea?.category || 'FEATURE'} 
+                          onValueChange={(value) => setEditingIdea(editingIdea ? {...editingIdea, category: value as ProjectIdea['category']} : null)}
+                        >
+                          <SelectTrigger data-testid="select-edit-idea-category">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="FEATURE">⚡ Feature</SelectItem>
+                            <SelectItem value="IMPROVEMENT">🎯 Improvement</SelectItem>
+                            <SelectItem value="BUG_FIX">🐛 Bug Fix</SelectItem>
+                            <SelectItem value="RESEARCH">📚 Research</SelectItem>
+                            <SelectItem value="INFRASTRUCTURE">🗄️ Infrastructure</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Estimated Hours</label>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        value={editingIdea?.estimatedHours || ''}
+                        onChange={(e) => setEditingIdea(editingIdea ? {...editingIdea, estimatedHours: e.target.value ? parseInt(e.target.value) : undefined} : null)}
+                        data-testid="input-edit-idea-hours"
+                      />
+                    </div>
+                  </div>
+                  
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsEditIdeaDialogOpen(false)} data-testid="button-cancel-edit-idea">
+                      Cancel
+                    </Button>
+                    <Button onClick={updateIdea} data-testid="button-update-idea">Update Idea</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Edit Task Dialog */}
+              <Dialog open={isEditTaskDialogOpen} onOpenChange={(open) => {
+                setIsEditTaskDialogOpen(open);
+                if (!open) setEditingTask(null);
+              }}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Edit Task</DialogTitle>
+                    <DialogDescription>
+                      Update the milestone task description
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="space-y-4">
+                    <Textarea
+                      placeholder="Task description..."
+                      value={editingTask?.taskText || ''}
+                      onChange={(e) => setEditingTask(editingTask ? {...editingTask, taskText: e.target.value} : null)}
+                      rows={3}
+                      data-testid="textarea-edit-task-description"
+                    />
+                  </div>
+                  
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsEditTaskDialogOpen(false)} data-testid="button-cancel-edit-task">
+                      Cancel
+                    </Button>
+                    <Button onClick={updateTask} data-testid="button-update-task">Update Task</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </div>
@@ -880,10 +1115,20 @@ This is the master reference document for all development decisions.`,
                               </div>
                             </div>
                             <div className="flex gap-2">
-                              <Button variant="ghost" size="sm" data-testid={`button-edit-idea-${idea.id}`}>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => handleEditIdea(idea)}
+                                data-testid={`button-edit-idea-${idea.id}`}
+                              >
                                 <Edit className="w-4 h-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" data-testid={`button-delete-idea-${idea.id}`}>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => handleDeleteIdea(idea.id)}
+                                data-testid={`button-delete-idea-${idea.id}`}
+                              >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
@@ -1002,11 +1247,33 @@ This is the master reference document for all development decisions.`,
                               {milestone.tasks.length > 0 && (
                                 <div>
                                   <p className="text-sm font-medium mb-2">Tasks:</p>
-                                  <ul className="text-sm space-y-1">
+                                  <ul className="text-sm space-y-2">
                                     {milestone.tasks.map((task, taskIndex) => (
-                                      <li key={taskIndex} className="flex items-center gap-2">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-current opacity-60" />
-                                        {task}
+                                      <li key={taskIndex} className="flex items-center justify-between group hover:bg-accent/50 rounded-md p-2 -mx-2">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-1.5 h-1.5 rounded-full bg-current opacity-60" />
+                                          <span>{task}</span>
+                                        </div>
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-6 w-6 p-0"
+                                            onClick={() => handleEditTask(milestone.id, taskIndex, task)}
+                                            data-testid={`button-edit-task-${milestone.id}-${taskIndex}`}
+                                          >
+                                            <Edit className="w-3 h-3" />
+                                          </Button>
+                                          <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                            onClick={() => handleDeleteTask(milestone.id, taskIndex)}
+                                            data-testid={`button-delete-task-${milestone.id}-${taskIndex}`}
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </Button>
+                                        </div>
                                       </li>
                                     ))}
                                   </ul>
