@@ -19,7 +19,7 @@ export default function NotesModal({ isOpen, onClose }: NotesModalProps) {
   const [isDirty, setIsDirty] = useState(false);
 
   // Fetch notes content
-  const { data: notesData, isLoading } = useQuery({
+  const { data: notesData, isLoading } = useQuery<{ content: string }>({
     queryKey: ['/api/notes'],
     enabled: isOpen,
   });
