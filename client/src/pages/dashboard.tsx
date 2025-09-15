@@ -196,14 +196,12 @@ export default function Dashboard() {
     }
   }, [existingMessages]);
 
-  // Handle speech recognition transcript - always update pending transcript in streaming mode (manual mode)
+  // Handle speech recognition transcript - always update pending transcript (manual mode)
   useEffect(() => {
-    if (appMode === 'STREAMING') {
-      // Always show live interim transcript, even when not listening (captures final results)
-      const newPending = interimTranscript || transcript || '';
-      console.log('🔄 Setting pendingTranscript:', newPending, 'from interimTranscript:', interimTranscript, 'transcript:', transcript);
-      setPendingTranscript(newPending);
-    }
+    // Always show live interim transcript, even when not listening (captures final results)
+    const newPending = interimTranscript || transcript || '';
+    console.log('🔄 Setting pendingTranscript:', newPending, 'from interimTranscript:', interimTranscript, 'transcript:', transcript, 'appMode:', appMode);
+    setPendingTranscript(newPending);
   }, [transcript, interimTranscript, appMode]);
 
   // Process message queue
