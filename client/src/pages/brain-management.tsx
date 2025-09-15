@@ -217,6 +217,38 @@ export default function BrainManagement() {
     },
   });
 
+  // Mutation for scanning all facts for contradictions
+  const scanContradictionsMutation = useMutation({
+    mutationFn: async (): Promise<{ found: number; message: string }> => {
+      const response = await fetch('/api/memory/scan-contradictions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to scan for contradictions');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] as string).startsWith('/api/memory')
+      });
+      toast({
+        title: "Contradiction Scan Complete",
+        description: data.message,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Scan Failed",
+        description: error.message || "Failed to scan for contradictions",
+        variant: "destructive",
+      });
+    },
+  });
+
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("protected-facts");
@@ -956,6 +988,30 @@ export default function BrainManagement() {
                 <p className="text-sm text-gray-600 dark:text-gray-300">
                   These facts contradict each other. Choose which one is correct or mark conflicts as "not important."
                 </p>
+                {contradictions.length === 0 && (
+                  <div className="mt-4">
+                    <Button
+                      onClick={() => scanContradictionsMutation.mutate()}
+                      disabled={scanContradictionsMutation.isPending}
+                      data-testid="button-scan-contradictions"
+                    >
+                      {scanContradictionsMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Analyzing Facts with AI...
+                        </>
+                      ) : (
+                        <>
+                          <Brain className="h-4 w-4 mr-2" />
+                          Scan All Facts for Contradictions
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      This will analyze your existing {allFacts.length} facts using AI to detect semantic contradictions
+                    </p>
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[600px]">

@@ -12,6 +12,7 @@ import EvolutionaryAI from "./services/evolutionaryAI.js";
 import { LoreEngine } from './services/loreEngine.js';
 import { MemoryAnalyzer } from './services/memoryAnalyzer.js';
 import { conversationParser } from './services/conversationParser.js';
+import { contradictionDetector } from './services/contradictionDetector';
 import multer from "multer";
 import { z } from "zod";
 import { promises as fs } from "fs";
@@ -1001,6 +1002,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Contradictions error:', error);
       res.status(500).json({ error: 'Failed to get contradictions' });
+    }
+  });
+
+  // 🚀 NEW: Scan all facts for contradictions
+  app.post('/api/memory/scan-contradictions', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      console.log(`🔍 Starting contradiction scan for profile ${activeProfile.id}`);
+      
+      // Get all ACTIVE facts that don't already have contradiction groups
+      const allFacts = await storage.getMemoryEntries(activeProfile.id, 1000);
+      const activeFacts = allFacts.filter(f => 
+        f.status === 'ACTIVE' && 
+        !f.contradictionGroupId &&
+        !f.isProtected // Don't scan protected facts
+      );
+
+      console.log(`🔍 Scanning ${activeFacts.length} facts for contradictions`);
+      
+      let contradictionsFound = 0;
+      let groupsCreated = 0;
+
+      // Process facts in smaller batches to avoid overwhelming the AI
+      const batchSize = 20;
+      for (let i = 0; i < activeFacts.length; i += batchSize) {
+        const batch = activeFacts.slice(i, i + batchSize);
+        
+        for (const currentFact of batch) {
+          // Skip if this fact already has a group (may have been assigned in this scan)
+          if (currentFact.contradictionGroupId) continue;
+          
+          console.log(`🔍 Checking fact ${i + batch.indexOf(currentFact) + 1}/${activeFacts.length}: "${currentFact.content.substring(0, 50)}..."`);
+          
+          try {
+            // Use the contradiction detector to find conflicts
+            const result = await contradictionDetector.detectContradictions(activeProfile.id, currentFact);
+            
+            if (result.isContradiction && result.conflictingFacts.length > 0) {
+              const groupId = `contradiction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              
+              // Group all conflicting facts together
+              const allFactsInGroup = [currentFact, ...result.conflictingFacts];
+              const factIds = allFactsInGroup.map(f => f.id);
+              
+              console.log(`⚠️ Found contradiction group with ${allFactsInGroup.length} facts`);
+              
+              // Mark all facts in this group
+              await storage.markFactsAsContradicting(factIds, groupId);
+              
+              // Set the highest confidence fact as primary (keep it ACTIVE)
+              const primaryFact = allFactsInGroup.reduce((best, current) => 
+                (current.confidence || 0) > (best.confidence || 0) ? current : best
+              );
+              await storage.updateMemoryStatus(primaryFact.id, 'ACTIVE');
+              
+              contradictionsFound += allFactsInGroup.length;
+              groupsCreated++;
+              
+              // Mark processed facts as having contradiction groups to avoid reprocessing
+              allFactsInGroup.forEach(fact => {
+                fact.contradictionGroupId = groupId;
+              });
+            }
+          } catch (error) {
+            console.error(`❌ Error checking fact ${currentFact.id}:`, error);
+            // Continue with other facts even if one fails
+          }
+        }
+        
+        // Add a delay between batches to avoid rate limiting
+        if (i + batchSize < activeFacts.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+
+      const message = groupsCreated > 0 
+        ? `Found ${groupsCreated} contradiction groups with ${contradictionsFound} total conflicting facts`
+        : "No contradictions found in your knowledge base";
+
+      console.log(`✅ Contradiction scan complete: ${message}`);
+      
+      res.json({
+        found: groupsCreated,
+        totalFactsChecked: activeFacts.length,
+        message
+      });
+
+    } catch (error) {
+      console.error('❌ Contradiction scan failed:', error);
+      res.status(500).json({ error: 'Failed to scan for contradictions' });
     }
   });
 
