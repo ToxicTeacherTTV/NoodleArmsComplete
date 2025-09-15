@@ -258,6 +258,13 @@ export default function JazzDashboard() {
           <div className="flex items-center space-x-4">
             <StatusIndicator status={aiStatus} />
             <button
+              onClick={() => window.location.href = '/workspace'}
+              className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors"
+              data-testid="button-project-workspace"
+            >
+              🚧 Project Workspace
+            </button>
+            <button
               onClick={() => window.location.href = '/brain'}
               className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors"
               data-testid="button-brain-management"
