@@ -23,7 +23,7 @@ export default function NotesModal({ isOpen, onClose }: NotesModalProps) {
     queryKey: ['/api/notes'],
     enabled: isOpen,
     staleTime: 0, // Always fetch fresh data
-    cacheTime: 0, // Don't cache the data
+    gcTime: 0, // Don't cache the data (TanStack Query v5)
   });
 
   // Save notes mutation
