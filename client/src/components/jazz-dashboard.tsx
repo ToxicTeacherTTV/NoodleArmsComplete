@@ -42,13 +42,14 @@ export default function JazzDashboard() {
   const [memoryCheckerOpen, setMemoryCheckerOpen] = useState(false);
   const [selectedText, setSelectedText] = useState("");
   const [checkerPosition, setCheckerPosition] = useState({ x: 0, y: 0 });
+  const [pendingTranscript, setPendingTranscript] = useState<string>(''); // For manual voice control
 
   // Refs for queue management
   const messageQueueRef = useRef<Message[]>([]);
   const isProcessingQueueRef = useRef(false);
 
   // Custom hooks
-  const { isListening, startListening, stopListening, transcript, error: speechError } = useSpeechRecognition();
+  const { isListening, startListening, stopListening, transcript, interimTranscript, resetTranscript, error: speechError } = useSpeechRecognition();
   const { speak: speakBrowser, isSpeaking: isSpeakingBrowser, stop: stopSpeakingBrowser } = useSpeechSynthesis();
   const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopSpeakingElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs } = useElevenLabsSpeech();
   const voiceActivity = useVoiceActivity(isListening);
@@ -147,6 +148,67 @@ export default function JazzDashboard() {
     }
   }, [activeProfile?.id]);
 
+  // Handle speech recognition transcript - always update pending transcript (manual mode)
+  useEffect(() => {
+    // Always show live interim transcript, even when not listening (captures final results)
+    const newPending = interimTranscript || transcript || '';
+    console.log('🔄 Setting pendingTranscript:', newPending, 'from interimTranscript:', interimTranscript, 'transcript:', transcript, 'appMode:', appMode);
+    setPendingTranscript(newPending);
+  }, [transcript, interimTranscript, appMode]);
+
+  // Handle voice control (only in streaming mode) - MANUAL MODE
+  const toggleListening = () => {
+    console.log('🔘 toggleListening clicked - appMode:', appMode, 'isListening:', isListening);
+    
+    if (appMode !== 'STREAMING') {
+      console.log('❌ Not in STREAMING mode, returning early');
+      return;
+    }
+    
+    if (isListening) {
+      // STOP: Process the pending transcript and send message
+      stopListening();
+      
+      // Capture final text from available sources to avoid race conditions
+      const finalText = (transcript || interimTranscript || pendingTranscript).trim();
+      console.log('🛑 Stopping with finalText:', finalText);
+      
+      if (finalText && currentConversationId) {
+        const userMessage: Message = {
+          id: nanoid(),
+          conversationId: currentConversationId,
+          type: 'USER',
+          content: finalText,
+          metadata: { voice: true },
+          createdAt: new Date().toISOString(),
+        };
+
+        setMessages(prev => [...prev, userMessage]);
+        
+        // Send to backend
+        sendMessageMutation.mutate({
+          conversationId: currentConversationId,
+          type: 'USER',
+          content: finalText,
+          metadata: { voice: true },
+        });
+      }
+      
+      // Clear pending transcript
+      setPendingTranscript('');
+      resetTranscript();
+      setAiStatus('IDLE');
+    } else {
+      // START: Begin listening and clear any previous transcript
+      console.log('🎤 Starting to listen...');
+      setPendingTranscript('');
+      resetTranscript();
+      startListening();
+      setAiStatus('LISTENING');
+      console.log('✅ Called startListening() and set status to LISTENING');
+    }
+  };
+
   // Calculate session duration
   const getSessionDuration = () => {
     const now = new Date();
@@ -224,7 +286,7 @@ export default function JazzDashboard() {
             </CardHeader>
             <CardContent>
               <ControlPanel
-                onToggleListening={() => isListening ? stopListening() : startListening()}
+                onToggleListening={toggleListening}
                 onSendText={(message: string) => {
                   if (message.trim()) {
                     const userMessage: Message = {
@@ -251,6 +313,7 @@ export default function JazzDashboard() {
                 }}
                 isListening={isListening}
                 appMode={appMode}
+                pendingTranscript={pendingTranscript}
               />
             </CardContent>
           </Card>
