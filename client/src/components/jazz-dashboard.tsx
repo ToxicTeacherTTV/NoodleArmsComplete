@@ -11,6 +11,7 @@ import VoiceVisualizer from "@/components/voice-visualizer";
 import ProfileModal from "@/components/profile-modal";
 import ChaosMeter from "@/components/chaos-meter";
 import { MemoryChecker } from "@/components/memory-checker";
+import NotesModal from "@/components/notes-modal";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useSpeechSynthesis } from "@/hooks/use-speech-synthesis";
 import { useElevenLabsSpeech } from "@/hooks/use-elevenlabs-speech";
@@ -43,6 +44,7 @@ export default function JazzDashboard() {
   const [selectedText, setSelectedText] = useState("");
   const [checkerPosition, setCheckerPosition] = useState({ x: 0, y: 0 });
   const [pendingTranscript, setPendingTranscript] = useState<string>(''); // For manual voice control
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
 
   // Refs for queue management
   const messageQueueRef = useRef<Message[]>([]);
@@ -429,6 +431,12 @@ export default function JazzDashboard() {
         onClose={() => setIsProfileModalOpen(false)}
       />
 
+      {/* Notes Modal */}
+      <NotesModal
+        isOpen={isNotesModalOpen}
+        onClose={() => setIsNotesModalOpen(false)}
+      />
+
       {/* Jazz Cup Status Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 p-2">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-white">
@@ -445,6 +453,15 @@ export default function JazzDashboard() {
           <div className="flex items-center space-x-4">
             <span>💬 {messages.length} messages</span>
             <span>🧠 {memoryStats?.totalFacts || 0} facts</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsNotesModalOpen(true)}
+              className="text-white hover:bg-white/10 h-6 px-2 text-xs"
+              data-testid="button-open-notes"
+            >
+              📝 Notes
+            </Button>
           </div>
         </div>
       </div>

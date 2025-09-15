@@ -27,10 +27,17 @@ export default function NotesModal({ isOpen, onClose }: NotesModalProps) {
   // Save notes mutation
   const saveNotesMutation = useMutation({
     mutationFn: async (content: string) => {
-      return apiRequest('/api/notes', {
+      const response = await fetch('/api/notes', {
         method: 'PUT',
-        body: { content },
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content }),
       });
+      if (!response.ok) {
+        throw new Error('Failed to save notes');
+      }
+      return response.json();
     },
     onSuccess: () => {
       setIsDirty(false);
