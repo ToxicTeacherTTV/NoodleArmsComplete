@@ -31,10 +31,13 @@ interface MemoryFact {
   isProtected: boolean;
 }
 
-interface ContradictionPair {
-  fact1: MemoryFact;
-  fact2: MemoryFact;
-  conflictReason: string;
+interface ContradictionGroup {
+  groupId: string;
+  facts: MemoryFact[];
+  primaryFact: MemoryFact;
+  conflictingFacts: MemoryFact[];
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  explanation: string;
 }
 
 export default function BrainManagement() {
@@ -512,7 +515,7 @@ export default function BrainManagement() {
     queryKey: ['/api/memory/low-confidence'],
   });
 
-  const { data: contradictions = [] } = useQuery<ContradictionPair[]>({
+  const { data: contradictions = [] } = useQuery<ContradictionGroup[]>({
     queryKey: ['/api/memory/contradictions'],
   });
 
@@ -957,93 +960,104 @@ export default function BrainManagement() {
               <CardContent>
                 <ScrollArea className="h-[600px]">
                   <div className="space-y-6">
-                    {contradictions?.map((pair: ContradictionPair, index: number) => (
+                    {contradictions?.map((group: ContradictionGroup, index: number) => (
                       <div
-                        key={index}
-                        className="border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 bg-yellow-50 dark:bg-yellow-900/20"
+                        key={group.groupId}
+                        className={`border rounded-lg p-4 ${
+                          group.severity === 'HIGH' 
+                            ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
+                            : group.severity === 'MEDIUM'
+                            ? 'border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20' 
+                            : 'border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20'
+                        }`}
                       >
                         <div className="mb-4">
-                          <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
-                            Contradiction: {pair.conflictReason}
-                          </h4>
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
+                              Contradiction Group: {group.explanation}
+                            </h4>
+                            <Badge variant={group.severity === 'HIGH' ? 'destructive' : group.severity === 'MEDIUM' ? 'default' : 'secondary'}>
+                              {group.severity} Priority
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            Found {group.facts.length} conflicting facts about the same topic
+                          </p>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Fact 1 */}
-                          <div className="border border-gray-200 dark:border-gray-700 rounded p-3 bg-white dark:bg-gray-800">
-                            <div className="flex items-center justify-between mb-2">
-                              <Badge className={getConfidenceColor(pair.fact1.confidence)}>
-                                {pair.fact1.confidence}% confidence
-                              </Badge>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => resolveContradictionMutation.mutate({
-                                  winnerFactId: pair.fact1.id,
-                                  loserFactId: pair.fact2.id
-                                })}
-                                data-testid={`button-choose-${pair.fact1.id}`}
-                              >
-                                <CheckCircle className="h-4 w-4 mr-1" />
-                                Choose This
-                              </Button>
+                        <div className="space-y-3">
+                          {/* Primary Fact (if marked) */}
+                          {group.primaryFact && group.primaryFact.status === 'ACTIVE' && (
+                            <div className="border border-green-200 dark:border-green-700 rounded p-3 bg-green-50 dark:bg-green-900/20">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center space-x-2">
+                                  <CheckCircle className="h-4 w-4 text-green-600" />
+                                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                                    PRIMARY ({group.primaryFact.confidence}% confidence)
+                                  </Badge>
+                                </div>
+                              </div>
+                              <p className="text-sm text-gray-900 dark:text-gray-100">
+                                {group.primaryFact.content}
+                              </p>
+                              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                {group.primaryFact.supportCount} sources • {group.primaryFact.source}
+                              </div>
                             </div>
-                            <p className="text-sm text-gray-900 dark:text-gray-100">
-                              {pair.fact1.content}
-                            </p>
-                            <div className="mt-2 text-xs text-gray-500">
-                              {pair.fact1.supportCount} sources • {pair.fact1.source}
+                          )}
+                          
+                          {/* Conflicting Facts */}
+                          {group.facts.filter(f => f.id !== group.primaryFact?.id || group.primaryFact?.status !== 'ACTIVE').map((fact) => (
+                            <div key={fact.id} className="border border-gray-200 dark:border-gray-700 rounded p-3 bg-white dark:bg-gray-800">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center space-x-2">
+                                  <Badge className={getConfidenceColor(fact.confidence)}>
+                                    {fact.confidence}% confidence
+                                  </Badge>
+                                  <Badge variant={fact.status === 'ACTIVE' ? 'default' : 'secondary'}>
+                                    {fact.status}
+                                  </Badge>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => resolveContradictionMutation.mutate({
+                                    winnerFactId: fact.id,
+                                    loserFactId: group.facts.find(f => f.id !== fact.id)?.id || ''
+                                  })}
+                                  data-testid={`button-choose-${fact.id}`}
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  Make Primary
+                                </Button>
+                              </div>
+                              <p className="text-sm text-gray-900 dark:text-gray-100">
+                                {fact.content}
+                              </p>
+                              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                {fact.supportCount} sources • {fact.source}
+                              </div>
                             </div>
-                          </div>
-
-                          {/* Fact 2 */}
-                          <div className="border border-gray-200 dark:border-gray-700 rounded p-3 bg-white dark:bg-gray-800">
-                            <div className="flex items-center justify-between mb-2">
-                              <Badge className={getConfidenceColor(pair.fact2.confidence)}>
-                                {pair.fact2.confidence}% confidence
-                              </Badge>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => resolveContradictionMutation.mutate({
-                                  winnerFactId: pair.fact2.id,
-                                  loserFactId: pair.fact1.id
-                                })}
-                                data-testid={`button-choose-${pair.fact2.id}`}
-                              >
-                                <CheckCircle className="h-4 w-4 mr-1" />
-                                Choose This
-                              </Button>
-                            </div>
-                            <p className="text-sm text-gray-900 dark:text-gray-100">
-                              {pair.fact2.content}
-                            </p>
-                            <div className="mt-2 text-xs text-gray-500">
-                              {pair.fact2.supportCount} sources • {pair.fact2.source}
-                            </div>
-                          </div>
+                          ))}
                         </div>
-
+                        
                         <div className="mt-4 flex justify-center">
                           <Button
                             variant="secondary"
                             onClick={() => {
-                              // Mark both as not important
-                              updateFactMutation.mutate({ 
-                                factId: pair.fact1.id, 
-                                content: pair.fact1.content,
-                                confidence: 1 
-                              });
-                              updateFactMutation.mutate({ 
-                                factId: pair.fact2.id, 
-                                content: pair.fact2.content,
-                                confidence: 1 
+                              // Mark all facts in group as low confidence
+                              group.facts.forEach(fact => {
+                                updateFactMutation.mutate({ 
+                                  factId: fact.id, 
+                                  content: fact.content,
+                                  confidence: 1 
+                                });
                               });
                             }}
-                            data-testid={`button-not-important-${index}`}
+                            data-testid={`button-dismiss-group-${group.groupId}`}
                           >
                             <Ban className="h-4 w-4 mr-1" />
-                            Mark as Not Important
+                            Dismiss Group
                           </Button>
                         </div>
                       </div>
