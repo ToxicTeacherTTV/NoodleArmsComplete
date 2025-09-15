@@ -54,10 +54,10 @@ export default function JazzDashboard() {
   const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopSpeakingElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs } = useElevenLabsSpeech();
   const voiceActivity = useVoiceActivity(isListening);
 
-  // Choose speech synthesis based on mode - PODCAST uses ElevenLabs, STREAMING uses browser
-  const speak = appMode === 'PODCAST' ? speakElevenLabs : speakBrowser;
-  const isSpeaking = appMode === 'PODCAST' ? isSpeakingElevenLabs : isSpeakingBrowser;
-  const stopSpeaking = appMode === 'PODCAST' ? stopSpeakingElevenLabs : stopSpeakingBrowser;
+  // Always use ElevenLabs when available and voice output is enabled, fall back to browser if needed
+  const speak = speakElevenLabs;
+  const isSpeaking = isSpeakingElevenLabs;
+  const stopSpeaking = stopSpeakingElevenLabs;
 
   // Queries
   const { data: activeProfile } = useQuery({
@@ -102,8 +102,8 @@ export default function JazzDashboard() {
         };
         setMessages(prev => [...prev, aiMessage]);
         
-        // Don't auto-play in podcast mode - let user control playback
-        if (streamSettings.voiceOutput && appMode === 'STREAMING') {
+        // Auto-play when voice output is enabled, regardless of mode
+        if (streamSettings.voiceOutput) {
           speak(response.content);
         }
       }
