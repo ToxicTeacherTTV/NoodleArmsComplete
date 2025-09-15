@@ -67,7 +67,7 @@ export default function Dashboard() {
 
   const { data: memoryStats } = useQuery<{ totalFacts: number; conversations: number }>({
     queryKey: ['/api/memory/stats'],
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 120000, // Refresh every 2 minutes (reduced from 30s to reduce flickering)
   });
 
   const { data: documents } = useQuery<Document[]>({
@@ -77,7 +77,7 @@ export default function Dashboard() {
 
   const { data: chaosState } = useQuery<{ level: number; mode: "FULL_PSYCHO" | "FAKE_PROFESSIONAL" | "HYPER_FOCUSED" | "CONSPIRACY"; lastModeChangeAt?: string }>({
     queryKey: ['/api/chaos/state'],
-    refetchInterval: 5000, // Update chaos state every 5 seconds
+    refetchInterval: 15000, // Update chaos state every 15 seconds (reduced from 5s to reduce flickering)
   });
 
   const { data: existingMessages } = useQuery<Message[]>({

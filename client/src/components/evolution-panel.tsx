@@ -33,7 +33,7 @@ export default function EvolutionPanel({ profileId }: EvolutionPanelProps) {
       return response.json();
     },
     enabled: !!profileId,
-    refetchInterval: 30000,
+    refetchInterval: 120000, // Reduced from 30s to 2min to reduce flickering
   });
 
   const evolutionMutation = useMutation({

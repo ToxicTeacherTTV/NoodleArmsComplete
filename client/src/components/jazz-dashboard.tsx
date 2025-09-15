@@ -66,7 +66,7 @@ export default function JazzDashboard() {
 
   const { data: memoryStats } = useQuery({
     queryKey: ['/api/memory/stats'],
-    refetchInterval: 30000,
+    refetchInterval: 120000, // Reduced from 30s to 2min to reduce flickering
   });
 
   const { data: documents } = useQuery({
@@ -76,7 +76,7 @@ export default function JazzDashboard() {
 
   const { data: chaosState } = useQuery({
     queryKey: ['/api/chaos/state'],
-    refetchInterval: 5000,
+    refetchInterval: 15000, // Reduced from 5s to 15s to reduce flickering
   });
 
   // Mutations
