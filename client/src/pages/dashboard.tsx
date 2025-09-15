@@ -466,6 +466,7 @@ export default function Dashboard() {
           onStoreConversation={storeConversation}
           isListening={isListening}
           appMode={appMode}
+          pendingTranscript={pendingTranscript}
         />
 
         <PersonalityPanel
