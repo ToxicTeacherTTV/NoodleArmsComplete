@@ -18,6 +18,15 @@ export interface Profile {
   coreIdentity: string;
   knowledgeBase: string;
   isActive: boolean;
+  chaosLevel: number;
+  chaosMode: 'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 'CONSPIRACY';
+  voiceId: string;
+  voiceSettings: {
+    stability?: number;
+    similarity_boost?: number;
+    style?: number;
+    use_speaker_boost?: boolean;
+  };
   createdAt: string;
   updatedAt: string;
 }
