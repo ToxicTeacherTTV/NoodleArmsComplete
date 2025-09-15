@@ -80,8 +80,8 @@ class ContradictionDetector {
    * Use AI to find semantic contradictions between facts
    */
   private async findSemanticContradictions(newFact: MemoryEntry, existingFacts: MemoryEntry[]): Promise<MemoryEntry[]> {
-    // Process facts in batches to avoid overwhelming the AI
-    const batchSize = 10;
+    // 🚀 OPTIMIZED: Smaller batches and adaptive retry logic for API stability
+    const batchSize = 5; // Reduced from 10 to 5 facts per batch
     const contradictingFacts: MemoryEntry[] = [];
 
     for (let i = 0; i < existingFacts.length; i += batchSize) {
@@ -125,7 +125,7 @@ Do these facts make conflicting claims about the same subject? Answer only "YES"
         // Skip the initial response since we'll check individually
         // const response = await geminiService.ai.models.generateContent(...
         
-        // Check each fact in the batch individually for cleaner AI responses
+        // 🚀 OPTIMIZED: Check each fact individually with retry logic
         for (const existingFact of batch) {
           const individualPrompt = `Analyze if these two facts contradict each other:
 
@@ -134,18 +134,44 @@ FACT 2: "${existingFact.content}"
 
 Do these facts make conflicting claims about the same subject/entity? Answer only "YES" or "NO".`;
 
-          const individualResponse = await geminiService['ai'].models.generateContent({
-            model: "gemini-2.5-pro",
-            contents: individualPrompt,
-          });
-          
-          const result = individualResponse.text?.trim().toUpperCase();
-          console.log(`🤖 AI contradiction check: "${result}" for facts "${newFact.content.substring(0, 30)}..." vs "${existingFact.content.substring(0, 30)}..."`);
-          
-          if (result === "YES") {
-            contradictingFacts.push(existingFact);
-            console.log(`🔍 AI detected contradiction: "${newFact.content.substring(0, 50)}..." vs "${existingFact.content.substring(0, 50)}..."`);
+          let retryCount = 0;
+          let maxRetries = 2;
+          let success = false;
+
+          while (retryCount < maxRetries && !success) {
+            try {
+              const individualResponse = await geminiService['ai'].models.generateContent({
+                model: "gemini-2.5-pro",
+                contents: individualPrompt,
+              });
+              
+              const result = individualResponse.text?.trim().toUpperCase();
+              console.log(`🤖 AI contradiction check: "${result}" for facts "${newFact.content.substring(0, 30)}..." vs "${existingFact.content.substring(0, 30)}..."`);
+              
+              if (result === "YES") {
+                contradictingFacts.push(existingFact);
+                console.log(`🔍 AI detected contradiction: "${newFact.content.substring(0, 50)}..." vs "${existingFact.content.substring(0, 50)}..."`);
+              }
+              
+              success = true;
+            } catch (error) {
+              retryCount++;
+              if (retryCount < maxRetries) {
+                console.log(`🔄 AI call failed, retrying (${retryCount}/${maxRetries})...`);
+                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Exponential backoff
+              } else {
+                console.log(`❌ AI calls exhausted, falling back to keyword matching for this comparison`);
+                // Fall back to keyword matching for this specific comparison
+                if (this.detectBasicContradiction(newFact.content, existingFact.content)) {
+                  contradictingFacts.push(existingFact);
+                  console.log(`📍 Keyword detected contradiction: "${newFact.content.substring(0, 50)}..." vs "${existingFact.content.substring(0, 50)}..."`);
+                }
+              }
+            }
           }
+          
+          // Add delay between individual fact comparisons to ease API load
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       } catch (error) {
         console.error(`❌ AI contradiction detection failed, falling back to keyword matching:`, error);

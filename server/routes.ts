@@ -1028,20 +1028,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let contradictionsFound = 0;
       let groupsCreated = 0;
 
-      // Process facts in smaller batches to avoid overwhelming the AI
-      const batchSize = 20;
+      // 🚀 OPTIMIZED: Much smaller batches and longer delays for API stability
+      const batchSize = 5; // Reduced from 20 to 5 for less API pressure
+      let processedCount = 0;
+      let successfulAICalls = 0;
+      let failedAICalls = 0;
+      
       for (let i = 0; i < activeFacts.length; i += batchSize) {
         const batch = activeFacts.slice(i, i + batchSize);
+        
+        console.log(`📊 Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(activeFacts.length/batchSize)} (${batch.length} facts)`);
+        console.log(`📈 AI Success Rate: ${failedAICalls + successfulAICalls > 0 ? Math.round((successfulAICalls / (successfulAICalls + failedAICalls)) * 100) : 0}% (${successfulAICalls} success, ${failedAICalls} failed)`);
         
         for (const currentFact of batch) {
           // Skip if this fact already has a group (may have been assigned in this scan)
           if (currentFact.contradictionGroupId) continue;
           
-          console.log(`🔍 Checking fact ${i + batch.indexOf(currentFact) + 1}/${activeFacts.length}: "${currentFact.content.substring(0, 50)}..."`);
+          processedCount++;
+          console.log(`🔍 Checking fact ${processedCount}/${activeFacts.length}: "${currentFact.content.substring(0, 50)}..."`);
           
           try {
             // Use the contradiction detector to find conflicts
             const result = await contradictionDetector.detectContradictions(activeProfile.id, currentFact);
+            
+            // Count successful calls (assuming it succeeded if we got a result)
+            successfulAICalls++;
             
             if (result.isContradiction && result.conflictingFacts.length > 0) {
               const groupId = `contradiction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -1071,13 +1082,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           } catch (error) {
             console.error(`❌ Error checking fact ${currentFact.id}:`, error);
+            failedAICalls++;
             // Continue with other facts even if one fails
+          }
+          
+          // 🚀 OPTIMIZED: Longer delay between individual facts when API is struggling
+          if (failedAICalls > successfulAICalls && failedAICalls > 3) {
+            console.log(`⏸️ API struggling (${failedAICalls} failures), adding extra delay...`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second extra delay
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 300)); // Standard 300ms delay
           }
         }
         
-        // Add a delay between batches to avoid rate limiting
+        // 🚀 OPTIMIZED: Much longer delays between batches to give API time to recover
         if (i + batchSize < activeFacts.length) {
-          await new Promise(resolve => setTimeout(resolve, 200));
+          const batchDelay = failedAICalls > successfulAICalls ? 2000 : 800; // 2s if struggling, 800ms normally
+          console.log(`⏳ Batch complete, waiting ${batchDelay}ms before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, batchDelay));
         }
       }
 
