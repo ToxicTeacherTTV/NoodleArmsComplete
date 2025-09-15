@@ -52,14 +52,21 @@ export function useSpeechRecognition(
   }, []);
 
   const startListening = useCallback(() => {
+    console.log('📢 startListening called, isSupported:', isSupported, 'isListening:', isListening);
+    
     if (!isSupported) {
+      console.error('❌ Speech recognition not supported');
       setError('Speech recognition is not supported in this browser');
       return;
     }
 
-    if (isListening) return;
+    if (isListening) {
+      console.log('⏸️ Already listening, skipping start');
+      return;
+    }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    console.log('🎤 Creating speech recognition:', !!SpeechRecognition);
     recognitionRef.current = new SpeechRecognition();
 
     const recognition = recognitionRef.current;
@@ -68,16 +75,19 @@ export function useSpeechRecognition(
     recognition.lang = lang;
 
     recognition.onstart = () => {
+      console.log('✅ Speech recognition started');
       setIsListening(true);
       setError(null);
     };
 
     recognition.onresult = (event: any) => {
+      console.log('🎯 Speech result received:', event.results.length, 'results');
       let interim = '';
       let final = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
+        console.log(`   Result ${i}: "${transcript}" (final: ${event.results[i].isFinal})`);
         if (event.results[i].isFinal) {
           final += transcript + ' ';
         } else {
@@ -85,6 +95,7 @@ export function useSpeechRecognition(
         }
       }
 
+      console.log('📝 Setting transcripts - interim:', interim, 'final:', final);
       setInterimTranscript(interim);
       if (final) {
         setFinalTranscript(prev => prev + final);
@@ -119,9 +130,10 @@ export function useSpeechRecognition(
     };
 
     try {
+      console.log('🚀 Starting speech recognition...');
       recognition.start();
     } catch (err) {
-      console.error('Failed to start speech recognition:', err);
+      console.error('❌ Failed to start speech recognition:', err);
       setError('Failed to start speech recognition');
       setIsListening(false);
     }

@@ -241,7 +241,12 @@ export default function Dashboard() {
 
   // Handle voice control (only in streaming mode) - MANUAL MODE
   const toggleListening = () => {
-    if (appMode !== 'STREAMING') return;
+    console.log('🔘 toggleListening clicked - appMode:', appMode, 'isListening:', isListening);
+    
+    if (appMode !== 'STREAMING') {
+      console.log('❌ Not in STREAMING mode, returning early');
+      return;
+    }
     
     if (isListening) {
       // STOP: Process the pending transcript and send message
@@ -275,10 +280,12 @@ export default function Dashboard() {
       setAiStatus('IDLE');
     } else {
       // START: Begin listening and clear any previous transcript
+      console.log('🎤 Starting to listen...');
       setPendingTranscript('');
       resetTranscript();
       startListening();
       setAiStatus('LISTENING');
+      console.log('✅ Called startListening() and set status to LISTENING');
     }
   };
 
