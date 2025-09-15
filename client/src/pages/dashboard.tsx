@@ -48,7 +48,7 @@ export default function Dashboard() {
   const isProcessingQueueRef = useRef(false);
 
   // Custom hooks
-  const { isListening, startListening, stopListening, transcript, resetTranscript, error: speechError } = useSpeechRecognition();
+  const { isListening, startListening, stopListening, transcript, interimTranscript, resetTranscript, error: speechError } = useSpeechRecognition();
   const { speak: speakBrowser, isSpeaking: isSpeakingBrowser, stop: stopSpeakingBrowser, replay: replayBrowser, canReplay: canReplayBrowser } = useSpeechSynthesis();
   const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopSpeakingElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs, replay: replayElevenLabs, canReplay: canReplayElevenLabs } = useElevenLabsSpeech();
   const voiceActivity = useVoiceActivity(isListening);
@@ -198,11 +198,11 @@ export default function Dashboard() {
 
   // Handle speech recognition transcript - show pending transcript while listening (manual mode)
   useEffect(() => {
-    if (transcript && appMode === 'STREAMING' && isListening) {
-      // Only show pending transcript while listening, don't auto-send
-      setPendingTranscript(transcript);
+    if (appMode === 'STREAMING' && isListening) {
+      // Show live interim transcript while speaking, plus any final transcript
+      setPendingTranscript(interimTranscript || transcript || '');
     }
-  }, [transcript, appMode, isListening]);
+  }, [transcript, interimTranscript, appMode, isListening]);
 
   // Process message queue
   useEffect(() => {

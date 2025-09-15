@@ -21,8 +21,8 @@ interface UseSpeechRecognitionReturn {
 // Extend Window interface for speech recognition
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
   }
 }
 
@@ -41,7 +41,7 @@ export function useSpeechRecognition(
   const [finalTranscript, setFinalTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<any>(null);
   const isSupported = typeof window !== 'undefined' && 
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
@@ -72,7 +72,7 @@ export function useSpeechRecognition(
       setError(null);
     };
 
-    recognition.onresult = (event) => {
+    recognition.onresult = (event: any) => {
       let interim = '';
       let final = '';
 
@@ -92,7 +92,7 @@ export function useSpeechRecognition(
       }
     };
 
-    recognition.onerror = (event) => {
+    recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
       setError(`Speech recognition error: ${event.error}`);
       setIsListening(false);
