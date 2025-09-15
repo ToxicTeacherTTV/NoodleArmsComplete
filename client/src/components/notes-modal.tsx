@@ -19,9 +19,11 @@ export default function NotesModal({ isOpen, onClose }: NotesModalProps) {
   const [isDirty, setIsDirty] = useState(false);
 
   // Fetch notes content
-  const { data: notesData, isLoading } = useQuery<{ content: string }>({
+  const { data: notesData, isLoading, refetch } = useQuery<{ content: string }>({
     queryKey: ['/api/notes'],
     enabled: isOpen,
+    staleTime: 0, // Always fetch fresh data
+    cacheTime: 0, // Don't cache the data
   });
 
   // Save notes mutation
