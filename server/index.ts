@@ -1,6 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { storage } from "./storage";
+import { elevenlabsService } from "./services/elevenlabs";
 
 const app = express();
 app.use(express.json());
@@ -65,7 +67,18 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
     reusePort: true,
-  }, () => {
+  }, async () => {
     log(`serving on port ${port}`);
+    
+    // Initialize voice settings with active profile
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (activeProfile && activeProfile.voiceId) {
+        elevenlabsService.setVoiceId(activeProfile.voiceId);
+        log(`🎵 Initialized voice: ${activeProfile.voiceId} for profile: ${activeProfile.name}`);
+      }
+    } catch (error) {
+      log(`⚠️ Failed to initialize voice settings: ${error}`);
+    }
   });
 })();

@@ -15,15 +15,20 @@ class ElevenLabsService {
     };
   }
 
-  async synthesizeSpeech(text: string): Promise<Buffer> {
+  async synthesizeSpeech(text: string, voiceSettings?: any): Promise<Buffer> {
     if (!this.config.apiKey) {
       throw new Error("ElevenLabs API key not configured");
     }
 
-    console.log(`ElevenLabs request: voice_id=${this.config.voiceId}, model=${this.config.model}`);
+    // Use provided voice settings or fall back to defaults
+    const settings = voiceSettings || {
+      stability: 0.0, // Creative mode for maximum expressiveness 
+      similarity_boost: 0.75,
+    };
+
+    console.log(`ElevenLabs request: voice_id=${this.config.voiceId}, model=${this.config.model}, settings=${JSON.stringify(settings)}`);
 
     try {
-      // Try most basic request first
       const response = await fetch(
         `https://api.elevenlabs.io/v1/text-to-speech/${this.config.voiceId}`,
         {
@@ -36,10 +41,7 @@ class ElevenLabsService {
           body: JSON.stringify({
             text: text,
             model_id: this.config.model,
-            voice_settings: {
-              stability: 0.0, // Creative mode for maximum expressiveness 
-              similarity_boost: 0.75,
-            },
+            voice_settings: settings,
           }),
         },
       );

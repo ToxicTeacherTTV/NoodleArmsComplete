@@ -65,6 +65,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       await storage.setActiveProfile(id);
+      
+      // Get the newly activated profile and set its voice
+      const activeProfile = await storage.getProfile(id);
+      if (activeProfile && activeProfile.voiceId) {
+        elevenlabsService.setVoiceId(activeProfile.voiceId);
+        console.log(`🎵 Voice set to ${activeProfile.voiceId} for activated profile: ${activeProfile.name}`);
+      }
+      
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: 'Failed to activate profile' });
@@ -78,6 +86,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: 'Failed to delete profile' });
+    }
+  });
+
+  // Voice settings endpoints
+  app.get('/api/profiles/:id/voice', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const profile = await storage.getProfile(id);
+      if (!profile) {
+        return res.status(404).json({ error: 'Profile not found' });
+      }
+      res.json({
+        voiceId: profile.voiceId,
+        voiceSettings: profile.voiceSettings
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get voice settings' });
+    }
+  });
+
+  app.put('/api/profiles/:id/voice', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { voiceId, voiceSettings } = req.body;
+      
+      const updateData: any = {};
+      if (voiceId !== undefined) updateData.voiceId = voiceId;
+      if (voiceSettings !== undefined) updateData.voiceSettings = voiceSettings;
+      
+      const profile = await storage.updateProfile(id, updateData);
+      
+      // If this is the active profile, update the ElevenLabs service
+      if (profile.isActive && profile.voiceId) {
+        elevenlabsService.setVoiceId(profile.voiceId);
+      }
+      
+      res.json({
+        voiceId: profile.voiceId,
+        voiceSettings: profile.voiceSettings
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update voice settings' });
+    }
+  });
+
+  app.post('/api/speech/set-voice', async (req, res) => {
+    try {
+      const { voiceId } = req.body;
+      if (!voiceId) {
+        return res.status(400).json({ error: 'Voice ID is required' });
+      }
+      
+      elevenlabsService.setVoiceId(voiceId);
+      res.json({ success: true, voiceId });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to set voice' });
     }
   });
 
@@ -208,7 +272,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Text is required' });
       }
 
-      const audioBuffer = await elevenlabsService.synthesizeSpeech(text);
+      // Get active profile and use its voice settings
+      const activeProfile = await storage.getActiveProfile();
+      let voiceSettings;
+      
+      if (activeProfile && activeProfile.voiceSettings) {
+        voiceSettings = activeProfile.voiceSettings;
+        // Also ensure the voice ID is set
+        if (activeProfile.voiceId) {
+          elevenlabsService.setVoiceId(activeProfile.voiceId);
+        }
+      }
+
+      const audioBuffer = await elevenlabsService.synthesizeSpeech(text, voiceSettings);
       
       res.setHeader('Content-Type', 'audio/mpeg');
       res.setHeader('Content-Length', audioBuffer.length);
