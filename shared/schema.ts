@@ -12,6 +12,13 @@ export const profiles = pgTable("profiles", {
   isActive: boolean("is_active").default(false),
   chaosLevel: integer("chaos_level").default(80), // 0-100 scale, default highly unhinged
   chaosMode: text("chaos_mode").$type<'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 'CONSPIRACY'>().default('FULL_PSYCHO'),
+  voiceId: text("voice_id").default("pNInz6obpgDQGcFmaJgB"), // ElevenLabs voice ID, default Adam voice
+  voiceSettings: json("voice_settings").$type<{
+    stability?: number;
+    similarity_boost?: number;
+    style?: number;
+    use_speaker_boost?: boolean;
+  }>().default(sql`'{"stability": 0.0, "similarity_boost": 0.75}'`),
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
