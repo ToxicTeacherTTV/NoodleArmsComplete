@@ -9,7 +9,12 @@ interface ControlPanelProps {
   onSendText: (text: string) => void;
   onClearChat: () => void;
   onStoreConversation: () => void;
+  onPauseSpeech?: () => void;
+  onResumeSpeech?: () => void;
+  onStopSpeech?: () => void;
   isListening: boolean;
+  isSpeaking?: boolean;
+  isPaused?: boolean;
   appMode?: AppMode;
   pendingTranscript?: string; // Show what user is saying while listening
 }
@@ -19,7 +24,12 @@ export default function ControlPanel({
   onSendText,
   onClearChat,
   onStoreConversation,
+  onPauseSpeech,
+  onResumeSpeech,
+  onStopSpeech,
   isListening,
+  isSpeaking = false,
+  isPaused = false,
   appMode = 'PODCAST',
   pendingTranscript = '',
 }: ControlPanelProps) {
@@ -66,6 +76,42 @@ export default function ControlPanel({
           </div>
           <div className="w-2 h-2 bg-green-400 rounded-full" data-testid="elevenlabs-status"></div>
         </div>
+
+        {/* Speech Control Buttons */}
+        {isSpeaking && (
+          <div className="flex space-x-2">
+            {!isPaused ? (
+              <Button
+                onClick={onPauseSpeech}
+                size="sm"
+                className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-2 px-3 rounded-lg flex items-center justify-center space-x-1 transition-all duration-200"
+                data-testid="button-pause-speech"
+              >
+                <i className="fas fa-pause"></i>
+                <span>Pause</span>
+              </Button>
+            ) : (
+              <Button
+                onClick={onResumeSpeech}
+                size="sm"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded-lg flex items-center justify-center space-x-1 transition-all duration-200"
+                data-testid="button-resume-speech"
+              >
+                <i className="fas fa-play"></i>
+                <span>Resume</span>
+              </Button>
+            )}
+            <Button
+              onClick={onStopSpeech}
+              size="sm"
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded-lg flex items-center justify-center space-x-1 transition-all duration-200"
+              data-testid="button-stop-speech"
+            >
+              <i className="fas fa-stop"></i>
+              <span>Stop</span>
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Text Input */}

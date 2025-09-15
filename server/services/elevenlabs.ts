@@ -20,10 +20,12 @@ class ElevenLabsService {
       throw new Error("ElevenLabs API key not configured");
     }
 
-    // Use provided voice settings or fall back to defaults
+    // Use provided voice settings or fall back to v3 optimized defaults for maximum expressiveness
     const settings = voiceSettings || {
-      stability: 0.0, // Creative mode for maximum expressiveness 
-      similarity_boost: 0.75,
+      stability: 0.3, // v3 Creative mode - optimal emotional range (0.0 too unstable for v3)
+      similarity_boost: 0.75, // Standard recommendation
+      style: 0, // ElevenLabs recommends keeping at 0 always
+      use_speaker_boost: true, // Boosts similarity to original speaker
     };
 
     console.log(`ElevenLabs request: voice_id=${this.config.voiceId}, model=${this.config.model}, settings=${JSON.stringify(settings)}`);

@@ -311,7 +311,12 @@ export default function JazzDashboard() {
                     consolidateMemoryMutation.mutate(currentConversationId);
                   }
                 }}
+                onPauseSpeech={pauseElevenLabs}
+                onResumeSpeech={resumeElevenLabs}
+                onStopSpeech={stopSpeaking}
                 isListening={isListening}
+                isSpeaking={isSpeaking}
+                isPaused={isPausedElevenLabs}
                 appMode={appMode}
                 pendingTranscript={pendingTranscript}
               />
