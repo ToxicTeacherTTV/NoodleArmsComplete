@@ -80,7 +80,7 @@ class AnthropicService {
         // "claude-sonnet-4-20250514"
         model: DEFAULT_MODEL_STR,
         max_tokens: 1024,
-        temperature: 1.3, // Higher creativity for more expressive personality
+        temperature: 1.0, // Maximum creativity (valid range: 0-1)
         system: enhancedCoreIdentity,
         messages: [
           {
