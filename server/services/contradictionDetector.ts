@@ -25,6 +25,17 @@ class ContradictionDetector {
    */
   async detectContradictions(profileId: string, newFact: MemoryEntry): Promise<ContradictionResult> {
     try {
+      // Validate inputs
+      if (!newFact || !newFact.id || !newFact.content) {
+        console.warn('Invalid newFact provided to detectContradictions:', newFact);
+        return {
+          isContradiction: false,
+          conflictingFacts: [],
+          severity: 'LOW',
+          explanation: 'Invalid fact provided for contradiction detection'
+        };
+      }
+
       // Get existing active facts for this profile, excluding the new fact itself
       const existingFacts = await storage.getMemoryEntries(profileId, 500);
       const activeFacts = existingFacts.filter(fact => 

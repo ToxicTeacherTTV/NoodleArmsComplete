@@ -180,7 +180,10 @@ Return as JSON array.`;
       }
     } catch (error) {
       console.error("Gemini atomic fact extraction error:", error);
-      throw new Error(`Failed to extract atomic facts: ${error}`);
+      
+      // Return empty array instead of crashing the app
+      console.warn("Continuing without atomic fact extraction due to API error");
+      return [];
     }
   }
 
