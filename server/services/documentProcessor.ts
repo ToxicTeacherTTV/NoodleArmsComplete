@@ -145,7 +145,7 @@ class DocumentProcessor {
           content: story.content,
           importance: story.importance,
           keywords: story.keywords,
-          source: 'document',
+          source: filename,
           sourceId: documentId,
           canonicalKey,
           isAtomicFact: false, // This is a parent story
@@ -192,7 +192,7 @@ class DocumentProcessor {
               content: atomicFact.content,
               importance: atomicFact.importance,
               keywords: atomicFact.keywords,
-              source: 'document',
+              source: filename,
               sourceId: documentId,
               canonicalKey: atomicCanonicalKey,
               isAtomicFact: true, // This is a granular fact
