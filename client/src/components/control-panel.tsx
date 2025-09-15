@@ -73,7 +73,7 @@ export default function ControlPanel({
         <h3 className="text-sm font-medium text-foreground">Text Chat</h3>
         <form onSubmit={handleSendText} className="space-y-2">
           <Textarea
-            value={isListening && pendingTranscript ? pendingTranscript : textInput}
+            value={isListening ? pendingTranscript : textInput}
             onChange={(e) => setTextInput(e.target.value)}
             className="w-full bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-ring focus:border-transparent"
             placeholder={isListening ? "🎤 Listening... speak now!" : "Type a message to Nicky..."}

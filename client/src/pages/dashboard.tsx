@@ -196,13 +196,15 @@ export default function Dashboard() {
     }
   }, [existingMessages]);
 
-  // Handle speech recognition transcript - show pending transcript while listening (manual mode)
+  // Handle speech recognition transcript - always update pending transcript in streaming mode (manual mode)
   useEffect(() => {
-    if (appMode === 'STREAMING' && isListening) {
-      // Show live interim transcript while speaking, plus any final transcript
-      setPendingTranscript(interimTranscript || transcript || '');
+    if (appMode === 'STREAMING') {
+      // Always show live interim transcript, even when not listening (captures final results)
+      const newPending = interimTranscript || transcript || '';
+      console.log('🔄 Setting pendingTranscript:', newPending, 'from interimTranscript:', interimTranscript, 'transcript:', transcript);
+      setPendingTranscript(newPending);
     }
-  }, [transcript, interimTranscript, appMode, isListening]);
+  }, [transcript, interimTranscript, appMode]);
 
   // Process message queue
   useEffect(() => {
@@ -241,7 +243,6 @@ export default function Dashboard() {
 
   // Handle voice control (only in streaming mode) - MANUAL MODE
   const toggleListening = () => {
-    alert('Button clicked! Mode: ' + appMode + ', Listening: ' + isListening);
     console.log('🔘 toggleListening clicked - appMode:', appMode, 'isListening:', isListening);
     
     if (appMode !== 'STREAMING') {
@@ -253,12 +254,16 @@ export default function Dashboard() {
       // STOP: Process the pending transcript and send message
       stopListening();
       
-      if (pendingTranscript.trim() && currentConversationId) {
+      // Capture final text from available sources to avoid race conditions
+      const finalText = (transcript || interimTranscript || pendingTranscript).trim();
+      console.log('🛑 Stopping with finalText:', finalText);
+      
+      if (finalText && currentConversationId) {
         const userMessage: Message = {
           id: nanoid(),
           conversationId: currentConversationId,
           type: 'USER',
-          content: pendingTranscript.trim(),
+          content: finalText,
           metadata: { voice: true },
           createdAt: new Date().toISOString(),
         };
@@ -270,7 +275,7 @@ export default function Dashboard() {
         sendMessageMutation.mutate({
           conversationId: currentConversationId,
           type: 'USER',
-          content: pendingTranscript.trim(),
+          content: finalText,
           metadata: { voice: true },
         });
       }
