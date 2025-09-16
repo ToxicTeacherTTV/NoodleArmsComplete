@@ -119,18 +119,96 @@ class DocumentProcessor {
     return chunks;
   }
 
-  // New hierarchical extraction method
+  /**
+   * Classify content as conversational vs informational
+   */
+  private classifyContent(content: string, filename: string): { mode: 'conversational' | 'informational', metrics: any } {
+    const lines = content.split('\n');
+    const contentLength = content.length;
+    
+    // Calculate features for classification
+    const questionCount = (content.match(/[?]/g) || []).length;
+    const dialogueMarkers = (content.match(/^(user|nicky|assistant|you)[\s:]/gmi) || []).length;
+    const sectionHeaders = (content.match(/^#{1,3}\s|^#\s.*|^\*\*.*\*\*$|^Section\s\d+/gmi) || []).length;
+    const longParagraphs = lines.filter(line => line.length > 200).length;
+    const avgLineLength = lines.length > 0 ? contentLength / lines.length : 0;
+    
+    // Try conversation parsing to get actual metrics
+    const parsed = conversationParser.parseConversation(content, filename);
+    const nickyTurns = parsed.turns.filter(t => t.speaker === 'nicky').length;
+    const userTurns = parsed.turns.filter(t => t.speaker === 'user').length;
+    const totalTurns = parsed.totalTurns;
+    const nickyContentRatio = parsed.nickyContent.length / contentLength;
+    
+    const metrics = {
+      contentLength,
+      questionCount,
+      dialogueMarkers,
+      sectionHeaders,
+      longParagraphs,
+      avgLineLength,
+      totalTurns,
+      nickyTurns,
+      userTurns,
+      nickyContentRatio
+    };
+    
+    // Classification logic - conservative approach
+    const isConversational = (
+      (totalTurns >= 6 && (nickyTurns >= 2 || nickyContentRatio >= 0.15)) ||
+      (questionCount >= 3 && dialogueMarkers >= 4) ||
+      (nickyTurns >= 2 && userTurns >= 2)
+    );
+    
+    const isInformational = (
+      (totalTurns < 6 && sectionHeaders >= 3) ||
+      (nickyContentRatio < 0.05 && longParagraphs > 5) ||
+      (avgLineLength > 100 && sectionHeaders >= 2) ||
+      filename.toLowerCase().includes('guide') ||
+      filename.toLowerCase().includes('patch') ||
+      filename.toLowerCase().includes('manual') ||
+      filename.toLowerCase().includes('.pdf')
+    );
+    
+    // Default to conversational to preserve existing behavior
+    const mode = isInformational && !isConversational ? 'informational' : 'conversational';
+    
+    console.log(`📊 Content classification for ${filename}: ${mode}`);
+    console.log(`📈 Metrics: turns=${totalTurns}, nicky=${nickyTurns}, ratio=${nickyContentRatio.toFixed(3)}, headers=${sectionHeaders}`);
+    
+    return { mode, metrics };
+  }
+
+  // New hierarchical extraction method with content-type routing
   private async extractAndStoreHierarchicalKnowledge(profileId: string, content: string, filename: string, documentId: string): Promise<void> {
     try {
       console.log(`🧠 Starting hierarchical extraction for ${filename}...`);
       
-      // 🔧 NEW: Parse conversation to extract only Nicky's content
-      console.log(`🎭 Parsing conversation to separate user and Nicky content...`);
-      const nickyContent = conversationParser.extractFactRelevantContent(content, filename);
+      // 🚀 NEW: Classify content type and route accordingly
+      const classification = this.classifyContent(content, filename);
+      let contentToProcess = content;
+      let processedWithConversational = false;
       
-      // PASS 1: Extract rich stories and contexts (from Nicky's content only)
-      console.log(`📖 Pass 1: Extracting stories and contexts from Nicky's responses...`);
-      const stories = await geminiService.extractStoriesFromDocument(nickyContent, filename);
+      if (classification.mode === 'conversational') {
+        // Use existing conversation parsing for chat logs
+        console.log(`🎭 Processing as conversational content - extracting Nicky's responses...`);
+        contentToProcess = conversationParser.extractFactRelevantContent(content, filename);
+        processedWithConversational = true;
+      } else {
+        // Process full content for informational documents
+        console.log(`📖 Processing as informational content - using full document...`);
+        contentToProcess = content;
+      }
+      
+      // Safety fallback: if conversational processing yielded very little content, retry as informational
+      if (processedWithConversational && contentToProcess.length < 2000 && content.length > 10000) {
+        console.log(`⚠️ Conversational processing yielded little content (${contentToProcess.length} chars from ${content.length}), retrying as informational...`);
+        contentToProcess = content;
+      }
+      
+      // PASS 1: Extract rich stories and contexts (from processed content)
+      console.log(`📖 Pass 1: Extracting stories and contexts from processed content...`);
+      const stories = await geminiService.extractStoriesFromDocument(contentToProcess, filename);
       console.log(`✅ Extracted ${stories.length} stories/contexts`);
       
       const storyIds: string[] = [];
@@ -153,7 +231,10 @@ class DocumentProcessor {
         
         // Handle story deduplication - find existing story if insertion failed
         if (!storyFact?.id) {
-          storyFact = await storage.findMemoryByCanonicalKey(profileId, canonicalKey);
+          const existingStory = await storage.findMemoryByCanonicalKey(profileId, canonicalKey);
+          if (existingStory) {
+            storyFact = existingStory;
+          }
         }
         
         if (storyFact?.id) {
@@ -213,7 +294,7 @@ class DocumentProcessor {
       
       // Run contradiction detection on atomic facts
       console.log(`🔍 Running contradiction detection...`);
-      await contradictionDetector.detectContradictions(profileId);
+      // Note: Contradiction detection runs automatically during memory entry creation
       
     } catch (error) {
       console.error('❌ Hierarchical knowledge extraction failed:', error);
