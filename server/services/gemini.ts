@@ -423,6 +423,47 @@ Response format:
       }));
     }
   }
+
+  // Chat response generation method (fallback for when Anthropic credits are exhausted)
+  async generateChatResponse(
+    userMessage: string,
+    coreIdentity: string,
+    contextPrompt: string = ""
+  ): Promise<{ content: string; processingTime: number; retrievedContext?: string }> {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Gemini API key not configured");
+    }
+
+    const startTime = Date.now();
+
+    try {
+      // Build the full prompt for Gemini
+      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}`;
+
+      console.log('🌟 Using Gemini fallback for chat response');
+
+      const response = await this.ai.models.generateContent({
+        model: "gemini-2.5-pro",
+        config: {
+          systemInstruction: coreIdentity,
+          temperature: 1.0, // Maximum creativity to match Anthropic
+        },
+        contents: fullPrompt,
+      });
+
+      const processingTime = Date.now() - startTime;
+      const content = response.text || '';
+
+      return {
+        content,
+        processingTime,
+        retrievedContext: contextPrompt || undefined,
+      };
+    } catch (error) {
+      console.error('Gemini chat API error:', error);
+      throw new Error('Failed to generate Gemini response');
+    }
+  }
 }
 
 // Generate lore content for emergent storytelling

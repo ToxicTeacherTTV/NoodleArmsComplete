@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Message, MemoryEntry } from '@shared/schema';
 import ChaosEngine from './chaosEngine.js';
+import { geminiService } from './gemini.js';
 
 /*
 <important_code_snippet_instructions>
@@ -46,9 +47,10 @@ class AnthropicService {
   ): Promise<AIResponse> {
     const startTime = Date.now();
 
+    // Build context from memories and documents (moved outside try block for fallback access)
+    let contextPrompt = "";
+    
     try {
-      // Build context from memories and documents
-      let contextPrompt = "";
       
       if (relevantMemories.length > 0) {
         contextPrompt += "\n\nRELEVANT MEMORIES:\n";
@@ -113,6 +115,35 @@ class AnthropicService {
       };
     } catch (error) {
       console.error('Anthropic API error:', error);
+      
+      // Check if this is a credit exhaustion error and fallback to Gemini
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isCreditsExhausted = errorMessage.includes('credit balance is too low') || 
+                                errorMessage.includes('insufficient credits') ||
+                                (error as any)?.status === 400;
+
+      if (isCreditsExhausted && process.env.GEMINI_API_KEY) {
+        console.warn('🔄 Anthropic credits exhausted, falling back to Gemini...');
+        try {
+          // Get enhanced system prompt with chaos personality  
+          const chaosModifier = this.chaosEngine.getPersonalityModifier();
+          const enhancedCoreIdentity = `${coreIdentity}\n\n${chaosModifier}`;
+
+          // Use Gemini as fallback
+          const fallbackResponse = await geminiService.generateChatResponse(
+            userMessage,
+            enhancedCoreIdentity,
+            contextPrompt
+          );
+          
+          console.log('✅ Successfully generated response using Gemini fallback');
+          return fallbackResponse;
+        } catch (geminiError) {
+          console.error('Gemini fallback also failed:', geminiError);
+          throw new Error('Both Anthropic and Gemini AI services failed');
+        }
+      }
+      
       throw new Error('Failed to generate AI response');
     }
   }
