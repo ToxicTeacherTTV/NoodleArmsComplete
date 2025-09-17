@@ -442,14 +442,51 @@ Response format:
 
       console.log('🌟 Using Gemini fallback for chat response');
 
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
-        config: {
-          systemInstruction: coreIdentity,
-          temperature: 1.0, // Maximum creativity to match Anthropic
-        },
-        contents: fullPrompt,
-      });
+      // Try multiple times with different models to handle server overload
+      let response;
+      const models = ["gemini-2.5-flash", "gemini-2.5-pro"]; // Try flash first (less busy)
+      
+      for (let attempt = 0; attempt < 3; attempt++) {
+        for (const modelName of models) {
+          try {
+            console.log(`🔄 Gemini attempt ${attempt + 1}/3 with model: ${modelName}`);
+            
+            response = await this.ai.models.generateContent({
+              model: modelName,
+              config: {
+                systemInstruction: coreIdentity,
+                temperature: 1.0, // Maximum creativity to match Anthropic
+              },
+              contents: fullPrompt,
+            });
+            
+            if (response?.text) {
+              console.log(`✅ Gemini success with ${modelName} on attempt ${attempt + 1}`);
+              break;
+            }
+          } catch (modelError: any) {
+            console.warn(`⚠️  ${modelName} failed (attempt ${attempt + 1}):`, modelError?.message || String(modelError));
+            
+            // If it's not an overload error, don't retry this model
+            if (!modelError?.message?.includes('overloaded')) {
+              continue;
+            }
+          }
+        }
+        
+        if (response?.text) break;
+        
+        // Wait before retrying (exponential backoff)
+        if (attempt < 2) {
+          const waitTime = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+          console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+      
+      if (!response?.text) {
+        throw new Error('All Gemini models failed or are overloaded');
+      }
 
       const processingTime = Date.now() - startTime;
       const content = response.text || '';
