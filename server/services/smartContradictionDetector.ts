@@ -3,6 +3,18 @@ import { storage } from '../storage';
 import { MemoryEntry } from '@shared/schema';
 import { randomUUID } from 'crypto';
 
+// 🔒 Job state management to prevent infinite loops
+interface ScanJob {
+  status: 'idle' | 'running' | 'completed' | 'failed';
+  startedAt?: Date;
+  completedAt?: Date;
+  result?: ContradictionResult[];
+  error?: string;
+}
+
+const profileScanJobs = new Map<string, ScanJob>();
+const SCAN_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max
+
 export interface ContradictionResult {
   isContradiction: boolean;
   conflictingFacts: MemoryEntry[];
@@ -30,6 +42,58 @@ interface StructuredFact {
 }
 
 class SmartContradictionDetector {
+  
+  /**
+   * 🔒 Check if a scan is already running or get cached results
+   */
+  checkScanStatus(profileId: string): { canRun: boolean; status: ScanJob['status']; result?: any } {
+    const job = profileScanJobs.get(profileId);
+    
+    if (!job) {
+      return { canRun: true, status: 'idle' };
+    }
+    
+    // Check for timeout
+    if (job.status === 'running' && job.startedAt) {
+      const elapsed = Date.now() - job.startedAt.getTime();
+      if (elapsed > SCAN_TIMEOUT_MS) {
+        console.log(`⏰ Scan timeout for profile ${profileId}, resetting`);
+        job.status = 'failed';
+        job.error = 'Timeout';
+      }
+    }
+    
+    return {
+      canRun: job.status === 'idle' || job.status === 'failed',
+      status: job.status,
+      result: job.result
+    };
+  }
+  
+  /**
+   * 🔒 Start a new scan job
+   */
+  startScanJob(profileId: string): void {
+    profileScanJobs.set(profileId, {
+      status: 'running',
+      startedAt: new Date()
+    });
+    console.log(`🔒 Started contradiction scan for profile ${profileId}`);
+  }
+  
+  /**
+   * 🔒 Complete a scan job
+   */
+  completeScanJob(profileId: string, result: ContradictionResult[], error?: string): void {
+    const job = profileScanJobs.get(profileId);
+    if (job) {
+      job.status = error ? 'failed' : 'completed';
+      job.completedAt = new Date();
+      job.result = result;
+      job.error = error;
+    }
+    console.log(`✅ Completed contradiction scan for profile ${profileId}: ${error ? 'FAILED' : 'SUCCESS'}`);
+  }
   
   /**
    * 🚀 SMART APPROACH: Only check facts that could actually contradict

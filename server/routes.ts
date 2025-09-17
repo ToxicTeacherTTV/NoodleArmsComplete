@@ -1043,6 +1043,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
+      // 🔒 CRITICAL: Check if scan is already running (prevents infinite loops!)
+      const scanStatus = smartContradictionDetector.checkScanStatus(activeProfile.id);
+      
+      if (!scanStatus.canRun) {
+        console.log(`🔒 Scan already ${scanStatus.status} for profile ${activeProfile.id}, returning cached result`);
+        return res.json({
+          status: scanStatus.status,
+          result: scanStatus.result || { message: `Scan is ${scanStatus.status}` }
+        });
+      }
+
+      // 🔒 Start the scan job (mutex protection)
+      smartContradictionDetector.startScanJob(activeProfile.id);
+
       console.log(`🔍 Starting contradiction scan for profile ${activeProfile.id}`);
       
       // Get all ACTIVE facts that don't already have contradiction groups
@@ -1138,6 +1152,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : "No contradictions found in your knowledge base";
 
       console.log(`✅ Contradiction scan complete: ${message}`);
+      
+      // 🔒 Complete the scan job (mutex protection)
+      smartContradictionDetector.completeScanJob(activeProfile.id, [{
+        isContradiction: groupsCreated > 0,
+        conflictingFacts: [],
+        severity: 'LOW' as const,
+        explanation: message
+      }]);
       
       res.json({
         found: groupsCreated,
