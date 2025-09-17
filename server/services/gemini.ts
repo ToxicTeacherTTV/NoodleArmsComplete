@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { contentFilter } from './contentFilter.js';
 
 class GeminiService {
   private ai: GoogleGenAI;
@@ -488,11 +489,18 @@ Response format:
         throw new Error('All Gemini models failed or are overloaded');
       }
 
+      // 🚫 Filter content to prevent cancel-worthy language while keeping profanity
+      const rawContent = response.text || '';
+      const { filtered: filteredContent, wasFiltered } = contentFilter.filterContent(rawContent);
+      
+      if (wasFiltered) {
+        console.warn(`🚫 Gemini content filtered to prevent cancel-worthy language`);
+      }
+
       const processingTime = Date.now() - startTime;
-      const content = response.text || '';
 
       return {
-        content,
+        content: filteredContent,
         processingTime,
         retrievedContext: contextPrompt || undefined,
       };

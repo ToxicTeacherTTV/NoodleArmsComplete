@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { Message, MemoryEntry } from '@shared/schema';
 import ChaosEngine from './chaosEngine.js';
 import { geminiService } from './gemini.js';
+import { contentFilter } from './contentFilter.js';
 
 /*
 <important_code_snippet_instructions>
@@ -108,8 +109,16 @@ class AnthropicService {
         ? (response.content[0] as any).text 
         : (response.content as any);
 
+      // 🚫 Filter content to prevent cancel-worthy language while keeping profanity
+      const rawContent = typeof content === 'string' ? content : '';
+      const { filtered: filteredContent, wasFiltered } = contentFilter.filterContent(rawContent);
+      
+      if (wasFiltered) {
+        console.warn(`🚫 Content filtered to prevent cancel-worthy language`);
+      }
+
       return {
-        content: typeof content === 'string' ? content : '',
+        content: filteredContent,
         processingTime,
         retrievedContext: contextPrompt || undefined,
       };
