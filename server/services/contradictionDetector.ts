@@ -151,15 +151,20 @@ Do these facts make conflicting claims about the same subject/entity? Answer onl
 
           while (retryCount < maxRetries && !success) {
             try {
-              const individualResponse = await geminiService['ai'].models.generateContent({
-                model: "gemini-2.5-pro",
-                contents: individualPrompt,
-              });
+              // Use the proper Gemini service interface
+              const individualResponse = await geminiService.generateChatResponse(
+                individualPrompt,
+                `You are a fact contradiction analyzer. Respond only with "YES" or "NO".`
+              );
               
-              const result = individualResponse.text?.trim().toUpperCase();
+              const result = individualResponse.content?.trim() || "";
               console.log(`🤖 AI contradiction check: "${result}" for facts "${newFact.content.substring(0, 30)}..." vs "${existingFact.content.substring(0, 30)}..."`);
               
-              if (result === "YES") {
+              // More flexible parsing - accept YES if it starts with or contains YES
+              const isContradiction = /^\s*YES\b/i.test(result);
+              console.log(`🤖 Parsed as contradiction: ${isContradiction}`);
+              
+              if (isContradiction) {
                 contradictingFacts.push(existingFact);
                 console.log(`🔍 AI detected contradiction: "${newFact.content.substring(0, 50)}..." vs "${existingFact.content.substring(0, 50)}..."`);
               }
