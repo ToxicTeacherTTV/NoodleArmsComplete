@@ -13,7 +13,7 @@ import EvolutionaryAI from "./services/evolutionaryAI.js";
 import { LoreEngine } from './services/loreEngine.js';
 import { MemoryAnalyzer } from './services/memoryAnalyzer.js';
 import { conversationParser } from './services/conversationParser.js';
-import { contradictionDetector } from './services/contradictionDetector';
+import { smartContradictionDetector } from './services/smartContradictionDetector';
 import { aiFlagger } from './services/aiFlagger';
 import multer from "multer";
 import { z } from "zod";
@@ -1078,8 +1078,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`🔍 Checking fact ${processedCount}/${activeFacts.length}: "${currentFact.content.substring(0, 50)}..."`);
           
           try {
-            // Use the contradiction detector to find conflicts
-            const result = await contradictionDetector.detectContradictions(activeProfile.id, currentFact);
+            // Use the SMART contradiction detector to find conflicts efficiently 
+            const result = await smartContradictionDetector.detectContradictions(activeProfile.id, currentFact);
             
             // Count successful calls (assuming it succeeded if we got a result)
             successfulAICalls++;
