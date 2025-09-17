@@ -510,8 +510,28 @@ export class DatabaseStorage implements IStorage {
     return enrichedMemories;
   }
 
-  // 🚀 NEW: Enhanced search that includes story context for atomic facts
+  // 🚀 ENHANCED: Smart search that extracts keywords and matches partial terms
   async searchEnrichedMemoryEntries(profileId: string, query: string): Promise<Array<MemoryEntry & { parentStory?: MemoryEntry }>> {
+    // Extract keywords from the query for better matching
+    const cleanQuery = query.toLowerCase();
+    const keywords = cleanQuery
+      .replace(/[^\w\s]/g, ' ') // Remove punctuation
+      .split(/\s+/)
+      .filter(word => word.length > 2) // Only words longer than 2 chars
+      .filter(word => !['who', 'what', 'when', 'where', 'why', 'how', 'tell', 'about', 'the', 'and', 'but', 'are', 'you', 'can', 'did', 'know'].includes(word)); // Remove common words
+
+    console.log(`🔍 Smart search for "${query}" -> Keywords: [${keywords.join(', ')}]`);
+
+    // Build flexible search conditions for each keyword
+    const keywordConditions = keywords.map(keyword => 
+      or(
+        // Search in content (case-insensitive)
+        sql`LOWER(${memoryEntries.content}) LIKE ${`%${keyword.toLowerCase()}%`}`,
+        // Search in keywords array  
+        sql`array_to_string(${memoryEntries.keywords}, ',') ILIKE ${`%${keyword}%`}`
+      )
+    );
+
     const memories = await db
       .select()
       .from(memoryEntries)
@@ -519,7 +539,12 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(memoryEntries.profileId, profileId),
           eq(memoryEntries.status, 'ACTIVE'), // Only search active facts, exclude contradictions
-          like(memoryEntries.content, `%${query}%`)
+          or(
+            // Original full-text search for exact matches
+            sql`LOWER(${memoryEntries.content}) LIKE ${`%${cleanQuery}%`}`,
+            // Smart keyword-based search - match ANY keyword
+            keywordConditions.length > 0 ? or(...keywordConditions) : sql`FALSE`
+          )
         )
       )
       .orderBy(
