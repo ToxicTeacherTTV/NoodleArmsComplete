@@ -109,6 +109,10 @@ export default function JazzDashboard() {
           speak(response.content);
         }
       }
+      
+      // 🎲 ENHANCED: Invalidate chaos state after AI response for dynamic UI updates
+      queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
+      
       setAiStatus('IDLE');
     },
     onError: () => {
@@ -347,7 +351,9 @@ export default function JazzDashboard() {
               <CardContent className="p-4">
                 <ChaosMeter 
                   chaosLevel={chaosState.level} 
-                  chaosMode={chaosState.mode} 
+                  chaosMode={chaosState.mode}
+                  manualOverride={chaosState.manualOverride}
+                  effectiveLevel={chaosState.effectiveLevel}
                 />
               </CardContent>
             </Card>

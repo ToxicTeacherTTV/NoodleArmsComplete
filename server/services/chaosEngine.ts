@@ -5,6 +5,8 @@ interface ChaosState {
   level: number; // 0-100
   mode: ChaosMode;
   lastModeChange: Date;
+  manualOverride?: number; // Manual override level for next response only
+  responseCount: number; // Track number of responses for response-based changes
 }
 
 class ChaosEngine {
@@ -17,8 +19,10 @@ class ChaosEngine {
       level: 80, // Default: highly unhinged
       mode: 'FULL_PSYCHO',
       lastModeChange: new Date(),
+      responseCount: 0,
     };
-    this.startChaosTimer();
+    // NOTE: Disabled time-based chaos - now purely response-based as requested
+    // this.startChaosTimer();
   }
 
   static getInstance(): ChaosEngine {
@@ -30,6 +34,82 @@ class ChaosEngine {
 
   getCurrentState(): ChaosState {
     return { ...this.chaosState };
+  }
+
+  // Get the effective chaos level (manual override takes precedence)
+  getEffectiveChaosLevel(): number {
+    return this.chaosState.manualOverride ?? this.chaosState.level;
+  }
+
+  // Set manual override for next response only
+  setManualOverride(level: number): void {
+    this.chaosState.manualOverride = Math.max(0, Math.min(100, level));
+    console.log(`🎛️  Manual chaos override set to ${this.chaosState.manualOverride}% for next response`);
+  }
+
+  // Response-based chaos evolution (called after each AI response)
+  onResponseGenerated(): void {
+    this.chaosState.responseCount++;
+    
+    // Clear manual override after one response
+    if (this.chaosState.manualOverride !== undefined) {
+      console.log(`🔄 Clearing manual override, returning to natural chaos level ${this.chaosState.level}%`);
+      this.chaosState.manualOverride = undefined;
+    }
+
+    // Trigger chaos changes based on response count (every 1-3 responses)
+    if (this.chaosState.responseCount % (Math.floor(Math.random() * 3) + 1) === 0) {
+      this.triggerResponseBasedChaos();
+    }
+  }
+
+  // Response-based chaos changes with specific mode percentages
+  private triggerResponseBasedChaos(): void {
+    const oldLevel = this.chaosState.level;
+    const oldMode = this.chaosState.mode;
+
+    // Natural chaos drift (tends to increase toward psycho state)
+    const drift = Math.random() * 20 - 5; // -5 to +15 range (slightly positive bias)
+    this.chaosState.level = Math.max(0, Math.min(100, this.chaosState.level + drift));
+
+    // Select mode based on current chaos level with specific percentages
+    const roll = Math.random() * 100;
+    
+    if (this.chaosState.level >= 80) {
+      // High chaos (80-100%): Mostly psycho modes
+      if (roll < 50) this.switchToMode('FULL_PSYCHO');        // 50% - Full psycho dominant
+      else if (roll < 75) this.switchToMode('HYPER_FOCUSED'); // 25% - Intense focus
+      else if (roll < 90) this.switchToMode('CONSPIRACY');    // 15% - Paranoid
+      else this.switchToMode('FAKE_PROFESSIONAL');            // 10% - Rare composure
+    } else if (this.chaosState.level >= 60) {
+      // Medium-high chaos (60-79%): Mixed with psycho preference
+      if (roll < 40) this.switchToMode('FULL_PSYCHO');        // 40%
+      else if (roll < 65) this.switchToMode('HYPER_FOCUSED'); // 25%
+      else if (roll < 85) this.switchToMode('CONSPIRACY');    // 20%
+      else this.switchToMode('FAKE_PROFESSIONAL');            // 15%
+    } else if (this.chaosState.level >= 40) {
+      // Medium chaos (40-59%): More balanced but still chaotic
+      if (roll < 30) this.switchToMode('FULL_PSYCHO');        // 30%
+      else if (roll < 55) this.switchToMode('HYPER_FOCUSED'); // 25%
+      else if (roll < 75) this.switchToMode('CONSPIRACY');    // 20%
+      else this.switchToMode('FAKE_PROFESSIONAL');            // 25%
+    } else if (this.chaosState.level >= 20) {
+      // Low-medium chaos (20-39%): More professional attempts
+      if (roll < 20) this.switchToMode('FULL_PSYCHO');        // 20%
+      else if (roll < 40) this.switchToMode('HYPER_FOCUSED'); // 20%
+      else if (roll < 60) this.switchToMode('CONSPIRACY');    // 20%
+      else this.switchToMode('FAKE_PROFESSIONAL');            // 40%
+    } else {
+      // Very low chaos (0-19%): Trying to be professional (rare state)
+      if (roll < 10) this.switchToMode('FULL_PSYCHO');        // 10%
+      else if (roll < 25) this.switchToMode('HYPER_FOCUSED'); // 15%
+      else if (roll < 40) this.switchToMode('CONSPIRACY');    // 15%
+      else this.switchToMode('FAKE_PROFESSIONAL');            // 60%
+    }
+
+    if (oldLevel !== this.chaosState.level || oldMode !== this.chaosState.mode) {
+      console.log(`🎲 Response-based chaos: level ${oldLevel}% → ${this.chaosState.level}%, mode ${oldMode} → ${this.chaosState.mode}`);
+    }
   }
 
   // Chaos events that trigger mode changes
@@ -114,7 +194,8 @@ class ChaosEngine {
 
   // Get personality modifier based on current chaos state
   getPersonalityModifier(): string {
-    const { mode, level } = this.chaosState;
+    const { mode } = this.chaosState;
+    const level = this.getEffectiveChaosLevel(); // Use effective level (manual override or natural)
     
     switch (mode) {
       case 'FULL_PSYCHO':

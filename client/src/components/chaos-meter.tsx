@@ -1,11 +1,37 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
+import { Slider } from '@/components/ui/slider';
+import { Button } from '@/components/ui/button';
+import { Settings, RotateCcw } from 'lucide-react';
 
 interface ChaosMeterProps {
   chaosLevel: number; // 0-100
   chaosMode: 'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 'CONSPIRACY';
+  manualOverride?: number; // Manual override level if active
+  effectiveLevel?: number; // The level actually being used (override or natural)
 }
 
-export default function ChaosMeter({ chaosLevel, chaosMode }: ChaosMeterProps) {
+export default function ChaosMeter({ chaosLevel, chaosMode, manualOverride, effectiveLevel }: ChaosMeterProps) {
+  const [showOverride, setShowOverride] = useState(false);
+  const [sliderValue, setSliderValue] = useState([chaosLevel]);
+  const queryClient = useQueryClient();
+
+  // Display effective level (override or natural)
+  const displayLevel = effectiveLevel ?? chaosLevel;
+  const isOverrideActive = manualOverride !== undefined;
+
+  // Manual override mutation
+  const overrideMutation = useMutation({
+    mutationFn: (level: number) => apiRequest('/api/chaos/override', 'POST', { level }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
+      setShowOverride(false);
+    },
+    onError: (error) => {
+      console.error('Failed to set chaos override:', error);
+    }
+  });
   const getModeLabel = (mode: string) => {
     switch (mode) {
       case 'FULL_PSYCHO': return 'FULL PSYCHO';
@@ -34,23 +60,87 @@ export default function ChaosMeter({ chaosLevel, chaosMode }: ChaosMeterProps) {
     return 'bg-green-500'; // Fake professional (rare)
   };
 
+  const handleOverride = () => {
+    const level = sliderValue[0];
+    overrideMutation.mutate(level);
+  };
+
   return (
     <div className="bg-card border border-border rounded-lg p-3 w-full max-w-sm">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-foreground">Nicky's Chaos Level</h3>
-        <span className={`text-xs font-bold ${getModeColor(chaosMode)}`}>
-          {getModeLabel(chaosMode)}
-        </span>
+        <h3 className="text-sm font-semibold text-foreground">
+          Nicky's Chaos Level
+          {isOverrideActive && (
+            <span className="ml-2 text-xs text-orange-400 font-normal">
+              (Manual Override)
+            </span>
+          )}
+        </h3>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-bold ${getModeColor(chaosMode)}`}>
+            {getModeLabel(chaosMode)}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowOverride(!showOverride)}
+            className="h-6 w-6 p-0"
+            data-testid="button-chaos-override-toggle"
+          >
+            <Settings className="h-3 w-3" />
+          </Button>
+        </div>
       </div>
       
+      {/* Manual Override Slider */}
+      {showOverride && (
+        <div className="mb-4 p-3 bg-muted/50 rounded-md border border-dashed border-orange-400">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-orange-400">Manual Override (Next Response Only)</span>
+            <span className="text-xs text-muted-foreground">{sliderValue[0]}%</span>
+          </div>
+          <Slider
+            value={sliderValue}
+            onValueChange={setSliderValue}
+            max={100}
+            min={0}
+            step={5}
+            className="mb-3"
+            data-testid="slider-chaos-override"
+          />
+          <div className="flex gap-2">
+            <Button
+              onClick={handleOverride}
+              disabled={overrideMutation.isPending}
+              size="sm"
+              className="flex-1 text-xs h-7"
+              data-testid="button-apply-override"
+            >
+              {overrideMutation.isPending ? 'Setting...' : `Set ${sliderValue[0]}%`}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setShowOverride(false)}
+              size="sm"
+              className="h-7 w-7 p-0"
+              data-testid="button-cancel-override"
+            >
+              <RotateCcw className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Gas Tank Style Meter */}
       <div className="relative">
         {/* Tank outline */}
         <div className="w-full h-8 bg-muted border-2 border-border rounded-md relative overflow-hidden">
           {/* Fill */}
           <div 
-            className={`h-full ${getFillColor(chaosLevel)} transition-all duration-500 ease-out`}
-            style={{ width: `${chaosLevel}%` }}
+            className={`h-full ${getFillColor(displayLevel)} transition-all duration-500 ease-out ${
+              isOverrideActive ? 'ring-2 ring-orange-400 ring-inset' : ''
+            }`}
+            style={{ width: `${displayLevel}%` }}
           />
           
           {/* Tank markings */}
@@ -64,9 +154,14 @@ export default function ChaosMeter({ chaosLevel, chaosMode }: ChaosMeterProps) {
           {/* Level indicator */}
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-xs font-bold text-black drop-shadow-sm">
-              {chaosLevel}%
+              {displayLevel}%
             </span>
           </div>
+
+          {/* Override indicator overlay */}
+          {isOverrideActive && (
+            <div className="absolute top-0 right-0 h-2 w-2 bg-orange-400 rounded-full animate-pulse" />
+          )}
         </div>
         
         {/* Labels */}

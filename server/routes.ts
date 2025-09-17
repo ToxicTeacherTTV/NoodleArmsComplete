@@ -250,6 +250,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
+      // 🎲 ENHANCED: Trigger response-based chaos evolution after successful AI response
+      chaosEngine.onResponseGenerated();
+
       res.json(response);
     } catch (error) {
       console.error('Chat error:', error);
@@ -662,7 +665,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/chaos/state', async (req, res) => {
     try {
       const chaosState = chaosEngine.getCurrentState();
-      res.json(chaosState);
+      const effectiveLevel = chaosEngine.getEffectiveChaosLevel();
+      res.json({
+        ...chaosState,
+        effectiveLevel
+      });
     } catch (error) {
       res.status(500).json({ error: 'Failed to get chaos state' });
     }
@@ -682,6 +689,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(newState);
     } catch (error) {
       res.status(500).json({ error: 'Failed to trigger chaos event' });
+    }
+  });
+
+  // Manual chaos level override (for next response only)
+  app.post('/api/chaos/override', async (req, res) => {
+    try {
+      const { level } = req.body;
+      
+      if (typeof level !== 'number' || level < 0 || level > 100) {
+        return res.status(400).json({ error: 'Level must be a number between 0 and 100' });
+      }
+      
+      chaosEngine.setManualOverride(level);
+      const newState = chaosEngine.getCurrentState();
+      res.json({
+        ...newState,
+        effectiveLevel: chaosEngine.getEffectiveChaosLevel(),
+        message: `Manual override set to ${level}% for next response`
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to set chaos override' });
     }
   });
 
