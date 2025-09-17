@@ -94,40 +94,30 @@ class SmartContradictionDetector {
   }
 
   /**
-   * Extract structured information from a fact using pattern matching
-   * This avoids expensive AI calls for structure extraction
+   * Extract granular structured information from a fact
+   * 🚀 GRANULAR APPROACH: Creates specific topic clusters instead of broad categories
    */
   private async extractStructuredFact(fact: MemoryEntry): Promise<StructuredFact | null> {
     const content = fact.content.toLowerCase();
     
-    // Extract subject (usually "nicky", "earl grey", "the stream", etc.)
+    // Extract primary subject
     let subject = 'unknown';
     if (content.includes('nicky')) subject = 'nicky';
     else if (content.includes('earl grey') || content.includes('earl')) subject = 'earl_grey';
     else if (content.includes('stream') || content.includes('podcast')) subject = 'stream';
-    else if (content.includes('bhvr') || content.includes('game')) subject = 'game';
+    else if (content.includes('bhvr') || content.includes('behavior')) subject = 'bhvr';
     else if (content.includes('sabam')) subject = 'sabam';
     
-    // Extract predicate categories (what aspect we're talking about)
-    let predicate = 'general';
-    if (content.includes('prefer') || content.includes('like') || content.includes('love') || content.includes('hate')) predicate = 'preference';
-    else if (content.includes('believe') || content.includes('claim') || content.includes('think')) predicate = 'belief';
-    else if (content.includes('main') || content.includes('play') || content.includes('use')) predicate = 'gameplay';
-    else if (content.includes('is') || content.includes('was') || content.includes('are')) predicate = 'identity';
-    else if (content.includes('honor') || content.includes('rule') || content.includes('code')) predicate = 'ethics';
-    else if (content.includes('always') || content.includes('never') || content.includes('will')) predicate = 'behavior';
-    else if (content.includes('start') || content.includes('time') || content.includes('schedule')) predicate = 'schedule';
-
-    // Extract polarity (positive, negative, or neutral stance)
-    let polarity: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' = 'NEUTRAL';
-    const positiveWords = ['love', 'like', 'prefer', 'always', 'is', 'will', 'believe', 'honor'];
-    const negativeWords = ['hate', 'dislike', 'never', 'not', 'cannot', 'refuses', 'against'];
+    // 🎯 GRANULAR PREDICATE EXTRACTION: Specific topics instead of broad categories
+    let predicate = this.extractGranularTopic(content);
     
-    if (positiveWords.some(word => content.includes(word))) polarity = 'POSITIVE';
-    else if (negativeWords.some(word => content.includes(word))) polarity = 'NEGATIVE';
+    // Extract polarity with more nuanced detection
+    let polarity: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' = this.extractPolarity(content);
+    
+    // Create topic-specific value for better matching
+    const value = this.extractTopicValue(content, predicate);
 
-    // Extract key value/concept
-    const value = content.substring(0, 100); // Use first 100 chars as value representation
+    console.log(`🔍 Granular extraction: "${subject}.${predicate}.${polarity}" for "${fact.content.substring(0, 40)}..."`);
 
     return {
       id: fact.id,
@@ -141,8 +131,134 @@ class SmartContradictionDetector {
   }
 
   /**
+   * 🎯 GRANULAR TOPIC EXTRACTION: Break broad categories into specific clusters
+   * This reduces 800-fact buckets into 20-50 fact clusters!
+   */
+  private extractGranularTopic(content: string): string {
+    // Earl Grey Rivalry Cluster (~30-50 facts)
+    if (content.includes('earl grey') || content.includes('rivalry') || content.includes('feud') || 
+        content.includes('tea') || content.includes('lasagna') || content.includes('yogurt shop') ||
+        content.includes('food fight') || content.includes('cafeteria clash') || content.includes('pasta war')) {
+      return 'earl_grey_rivalry';
+    }
+    
+    // BHVR Conspiracy Cluster (~25-40 facts) 
+    if (content.includes('bhvr') || content.includes('anti-italian') || content.includes('bias') || 
+        content.includes('rigged') || content.includes('matchmaking') || content.includes('ignored') ||
+        content.includes('conspiracy') || content.includes('government') || content.includes('tech')) {
+      return 'bhvr_conspiracy';
+    }
+    
+    // Gameplay Tactics Cluster (~40-60 facts)
+    if (content.includes('camping') || content.includes('tunneling') || content.includes('main') || 
+        content.includes('killer') || content.includes('tactics') || content.includes('mercy') ||
+        content.includes('respect-based') || content.includes('establish territory') || content.includes('twins')) {
+      return 'gameplay_tactics';
+    }
+    
+    // Family Honor/Italian Culture Cluster (~20-30 facts)
+    if (content.includes('honor') || content.includes('family') || content.includes('italian') || 
+        content.includes('marinara') || content.includes('sauce') || content.includes('nonna') ||
+        content.includes('tradition') || content.includes('culture') || content.includes('respect')) {
+      return 'family_honor';
+    }
+    
+    // Streaming/Podcast Cluster (~25-40 facts)
+    if (content.includes('stream') || content.includes('podcast') || content.includes('catchphrase') || 
+        content.includes('audience') || content.includes('segment') || content.includes('camping them softly') ||
+        content.includes('banned in kozani') || content.includes('viewer') || content.includes('chat')) {
+      return 'streaming_persona';
+    }
+    
+    // Personal History/Backstory Cluster (~30-50 facts)
+    if (content.includes('age') || content.includes('history') || content.includes('born') || 
+        content.includes('childhood') || content.includes('school') || content.includes('noodle arms') ||
+        content.includes('mission') || content.includes('caper') || content.includes('story')) {
+      return 'personal_backstory';
+    }
+    
+    // Gaming Skills/Performance Cluster (~20-30 facts)
+    if (content.includes('skill') || content.includes('good at') || content.includes('bad at') || 
+        content.includes('win') || content.includes('lose') || content.includes('rank') ||
+        content.includes('performance') || content.includes('improvement') || content.includes('practice')) {
+      return 'gaming_performance';
+    }
+    
+    // SABAM Organization Cluster (~15-25 facts)  
+    if (content.includes('sabam') || content.includes('organization') || content.includes('member') || 
+        content.includes('mission') || content.includes('restore') || content.includes('society')) {
+      return 'sabam_organization';
+    }
+    
+    // Schedule/Time Cluster (~10-20 facts)
+    if (content.includes('time') || content.includes('schedule') || content.includes('start') || 
+        content.includes('pm') || content.includes('am') || content.includes('hour') || content.includes('minute')) {
+      return 'schedule_timing';
+    }
+    
+    // Physical Description Cluster (~15-25 facts)
+    if (content.includes('appearance') || content.includes('looks') || content.includes('height') || 
+        content.includes('weight') || content.includes('hair') || content.includes('eyes') || content.includes('build')) {
+      return 'physical_appearance';
+    }
+    
+    // Default to confidence-based general categories for remaining facts
+    return 'general_other';
+  }
+
+  /**
+   * Extract more nuanced polarity 
+   */
+  private extractPolarity(content: string): 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' {
+    const strongPositive = ['love', 'excellent', 'perfect', 'amazing', 'always', 'definitely', 'absolutely'];
+    const strongNegative = ['hate', 'terrible', 'awful', 'never', 'refuse', 'against', 'conspiracy', 'rigged'];
+    const weakPositive = ['like', 'prefer', 'good', 'yes', 'will', 'can'];
+    const weakNegative = ['dislike', 'bad', 'not', 'cannot', 'won\'t', 'avoid'];
+    
+    if (strongNegative.some(word => content.includes(word))) return 'NEGATIVE';
+    if (strongPositive.some(word => content.includes(word))) return 'POSITIVE';
+    if (weakNegative.some(word => content.includes(word))) return 'NEGATIVE';
+    if (weakPositive.some(word => content.includes(word))) return 'POSITIVE';
+    
+    return 'NEUTRAL';
+  }
+
+  /**
+   * Extract topic-specific value for better semantic matching
+   */
+  private extractTopicValue(content: string, predicate: string): string {
+    // For Earl Grey rivalry, extract the specific conflict aspect
+    if (predicate === 'earl_grey_rivalry') {
+      if (content.includes('food')) return 'food_conflict';
+      if (content.includes('game') || content.includes('dbd')) return 'gaming_conflict';
+      if (content.includes('stream')) return 'streaming_conflict';
+      return 'general_rivalry';
+    }
+    
+    // For BHVR conspiracy, extract the specific complaint
+    if (predicate === 'bhvr_conspiracy') {
+      if (content.includes('matchmaking')) return 'matchmaking_bias';
+      if (content.includes('ignore') || content.includes('proposal')) return 'ignored_suggestions';
+      if (content.includes('patch') || content.includes('nerf')) return 'patch_complaints';
+      return 'general_conspiracy';
+    }
+    
+    // For gameplay, extract the specific tactic
+    if (predicate === 'gameplay_tactics') {
+      if (content.includes('camping')) return 'camping_philosophy';
+      if (content.includes('tunneling')) return 'tunneling_philosophy';
+      if (content.includes('main')) return 'killer_preference';
+      if (content.includes('mercy')) return 'mercy_beliefs';
+      return 'general_gameplay';
+    }
+    
+    // Default: use first 50 chars as representative value
+    return content.substring(0, 50).trim();
+  }
+
+  /**
    * Find candidate facts that could actually contradict the new fact
-   * This is the KEY optimization - instead of checking 1000+ facts, check ~20
+   * 🎯 GRANULAR OPTIMIZATION: Use specific topic clusters + confidence filtering
    */
   private async findRelevantCandidates(profileId: string, structuredFact: StructuredFact): Promise<MemoryEntry[]> {
     const allFacts = await storage.getMemoryEntries(profileId, 1000);
@@ -153,24 +269,70 @@ class SmartContradictionDetector {
     );
 
     const candidates: MemoryEntry[] = [];
+    const newFactConfidence = structuredFact.confidence;
+
+    console.log(`🎯 Filtering ${activeFacts.length} facts for topic "${structuredFact.predicate}"`);
 
     for (const fact of activeFacts) {
       const candidate = await this.extractStructuredFact(fact);
       if (!candidate) continue;
 
-      // Only consider facts about the same subject AND predicate
-      if (candidate.subject === structuredFact.subject && 
-          candidate.predicate === structuredFact.predicate) {
+      // 🎯 GRANULAR MATCHING: Same subject AND same specific topic cluster
+      const isExactTopicMatch = (
+        candidate.subject === structuredFact.subject && 
+        candidate.predicate === structuredFact.predicate
+      );
+
+      // 🎯 CONFIDENCE OPTIMIZATION: Only compare facts in similar confidence ranges
+      const confidenceGap = Math.abs((candidate.confidence) - newFactConfidence);
+      const isReasonableConfidenceRange = confidenceGap <= 30; // Don't compare 90% confidence vs 10% confidence
+
+      if (isExactTopicMatch && isReasonableConfidenceRange) {
         candidates.push(fact);
+        console.log(`✅ Topic match: ${candidate.predicate} (conf: ${candidate.confidence})`);
       }
       
-      // Also include facts with overlapping keywords for broader matching
-      else if (this.hasOverlappingConcepts(structuredFact.value, candidate.value)) {
-        candidates.push(fact);
+      // 🎯 RELATED TOPIC MATCHING: Some topics can cross-contradict
+      else if (this.areRelatedTopics(structuredFact.predicate, candidate.predicate)) {
+        if (isReasonableConfidenceRange) {
+          candidates.push(fact);
+          console.log(`🔗 Related topics: ${structuredFact.predicate} <-> ${candidate.predicate}`);
+        }
+      }
+      
+      // 🎯 SEMANTIC FALLBACK: Only for high-confidence facts to avoid noise
+      else if (newFactConfidence >= 70 && candidate.confidence >= 70) {
+        if (this.hasOverlappingConcepts(structuredFact.value, candidate.value)) {
+          candidates.push(fact);
+          console.log(`💡 Semantic match: High-confidence facts with overlap`);
+        }
       }
     }
 
+    console.log(`🎯 Filtered to ${candidates.length} relevant candidates (from ${activeFacts.length} total)`);
     return candidates;
+  }
+
+  /**
+   * 🔗 Check if two topics can cross-contradict each other
+   * Some topics naturally relate and can have conflicting claims
+   */
+  private areRelatedTopics(topic1: string, topic2: string): boolean {
+    const relatedGroups = [
+      ['family_honor', 'gameplay_tactics', 'streaming_persona'], // Honor affects gameplay and streaming behavior
+      ['bhvr_conspiracy', 'gaming_performance', 'gameplay_tactics'], // BHVR complaints relate to performance
+      ['earl_grey_rivalry', 'streaming_persona', 'family_honor'], // Rivalry affects streaming and honor
+      ['personal_backstory', 'family_honor', 'streaming_persona'], // History affects current persona
+      ['gaming_performance', 'gameplay_tactics'], // Performance relates to tactics
+    ];
+
+    for (const group of relatedGroups) {
+      if (group.includes(topic1) && group.includes(topic2)) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   /**
