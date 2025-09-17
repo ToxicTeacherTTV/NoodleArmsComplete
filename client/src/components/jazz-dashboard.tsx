@@ -36,7 +36,7 @@ export default function JazzDashboard() {
   const [appMode, setAppMode] = useState<AppMode>('PODCAST');
   const [streamSettings, setStreamSettings] = useState<StreamSettings>({
     autoRespond: true,
-    voiceOutput: true,
+    voiceOutput: false, // Default to false to prevent auto credit burning
     memoryLearning: true,
   });
   const [sessionStartTime, setSessionStartTime] = useState<Date>(new Date());
@@ -104,10 +104,8 @@ export default function JazzDashboard() {
         };
         setMessages(prev => [...prev, aiMessage]);
         
-        // Auto-play when voice output is enabled, regardless of mode
-        if (streamSettings.voiceOutput) {
-          speak(response.content);
-        }
+        // NOTE: Removed auto-play to prevent burning ElevenLabs credits
+        // Users can now click Play button on individual messages for voice synthesis
       }
       
       // 🎲 ENHANCED: Invalidate chaos state after AI response for dynamic UI updates
