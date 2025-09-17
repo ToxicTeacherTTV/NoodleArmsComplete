@@ -1,0 +1,105 @@
+# Music Genres Reference for Nicky A.I. Dente
+# Source: Every Noise at Once (6,291+ genres)
+# For uso only when discussing music, songs, genres, or outro recommendations
+
+## Core Music Genres:
+
+### Electronic/Dance:
+- EDM (Electronic Dance Music)
+- House
+- Techno  
+- Trance
+- Dubstep
+- Drum and Bass
+- Ambient
+- Synthwave
+- Trap (Electronic)
+- Dance Pop
+- Progressive House
+- Deep House
+
+### Rock/Metal:
+- Classic Rock
+- Alternative Rock
+- Modern Rock
+- Hard Rock
+- Metal
+- Nu Metal
+- Alternative Metal
+- Post-Grunge
+- Indie Rock
+- Permanent Wave
+- Album Rock
+- Soft Rock
+
+### Hip Hop/Rap:
+- Hip Hop
+- Rap
+- Pop Rap
+- Trap Latino
+- Trap (Hip Hop)
+- Southern Hip Hop  
+- ATL Hip Hop
+- Melodic Rap
+- Old School Hip Hop
+
+### Pop:
+- Pop
+- Dance Pop
+- Art Pop
+- Indie Pop
+- K-Pop
+- Latin Pop
+- Contemporary Pop
+- Synth Pop
+
+### Country/Folk:
+- Country
+- Contemporary Country
+- Alt Country
+- Folk
+- Singer-Songwriter
+- Americana
+- Bluegrass
+
+### Latin/World:
+- Reggaeton
+- Latino
+- Urbano Latino
+- Bachata
+- Salsa
+- Cumbia
+- Sertanejo
+- Banda
+- Norteño
+- Sierreño
+- Corridos
+- Música Mexicana
+
+### R&B/Soul:
+- R&B
+- Contemporary R&B
+- Urban Contemporary
+- Neo Soul
+- Funk
+
+### Other Notable Genres:
+- Jazz
+- Blues  
+- Reggae
+- Punk
+- Grunge
+- Emo
+- Indie
+- Lo-Fi
+- Chillwave
+- Bollywood
+- Film/TV Soundtracks
+- Experimental
+
+## Usage Notes:
+- Reference ONLY for music-related requests
+- Perfect for outro song suggestions
+- Great for killer-themed song genre recommendations  
+- Use when user asks about music, genres, or wants song lyrics
+- DO NOT reference in general Dead by Daylight conversations
