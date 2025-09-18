@@ -2085,6 +2085,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manual merge endpoint (for frontend compatibility)
+  app.post('/api/memory/merge', async (req, res) => {
+    try {
+      const { primaryId, duplicateIds } = req.body;
+      
+      if (!primaryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
+        return res.status(400).json({ error: 'primaryId and duplicateIds are required' });
+      }
+
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
+
+      // Get the entries to build a duplicate group
+      const allIds = [primaryId, ...duplicateIds];
+      const entries = await db
+        .select()
+        .from(memoryEntries)
+        .where(inArray(memoryEntries.id, allIds));
+
+      if (entries.length !== allIds.length) {
+        return res.status(400).json({ error: 'Some memory entries not found' });
+      }
+
+      const masterEntry = entries.find(e => e.id === primaryId);
+      const duplicateEntries = entries.filter(e => e.id !== primaryId);
+
+      if (!masterEntry) {
+        return res.status(400).json({ error: 'Primary entry not found' });
+      }
+
+      // Build duplicate group and merge
+      const duplicateGroup = {
+        masterEntry,
+        duplicates: duplicateEntries,
+        similarity: 1.0, // Manual merge, assume high similarity
+        mergedContent: masterEntry.content, // Use master content by default
+        combinedImportance: Math.max(masterEntry.importance || 1, ...duplicateEntries.map(d => d.importance || 1)),
+        combinedKeywords: Array.from(new Set([
+          ...(masterEntry.keywords || []),
+          ...duplicateEntries.flatMap(d => d.keywords || [])
+        ])),
+        combinedRelationships: Array.from(new Set([
+          ...(masterEntry.relationships || []),
+          ...duplicateEntries.flatMap(d => d.relationships || [])
+        ]))
+      };
+
+      await memoryDeduplicator.executeMerge(db, duplicateGroup);
+
+      res.json({
+        success: true,
+        mergedCount: duplicateEntries.length,
+        message: `Successfully merged ${duplicateEntries.length} duplicates into primary entry`
+      });
+    } catch (error) {
+      console.error('Error merging memories:', error);
+      res.status(500).json({ error: 'Failed to merge memories' });
+    }
+  });
+
   // Check for duplicates when creating new memory (for prevention)
   app.post('/api/memory/check-duplicates', async (req, res) => {
     try {
