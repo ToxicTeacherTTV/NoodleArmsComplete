@@ -3,6 +3,7 @@ import { contentFlags, memoryEntries } from '@shared/schema';
 import type { ContentFlag, InsertContentFlag, MemoryEntry } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import { geminiService } from './gemini.js';
 
 // Types for flagging responses
 interface FlaggingAnalysis {
@@ -24,15 +25,18 @@ interface FlaggingAnalysis {
 
 export class AIFlaggerService {
   private anthropic: Anthropic;
+  private gemini: any;
 
   constructor() {
     this.anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
+    this.gemini = geminiService;
   }
 
   /**
    * Main flagging method - analyzes content and returns flags
+   * Uses Anthropic first, then Gemini fallback if credits are low
    */
   async analyzeContent(
     content: string,
@@ -44,31 +48,134 @@ export class AIFlaggerService {
     }
   ): Promise<FlaggingAnalysis> {
     try {
-      const prompt = this.buildAnalysisPrompt(content, contentType, context);
+      // Try Anthropic first
+      return await this.analyzeWithAnthropic(content, contentType, context);
+    } catch (anthropicError: any) {
+      console.log('🌟 Anthropic flagging failed, trying Gemini fallback:', anthropicError?.message);
       
-      const response = await this.anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 2000,
-        temperature: 0.1, // Low temperature for consistent flagging
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
-      });
-
-      const textContent = response.content.find(c => c.type === 'text')?.text;
-      if (!textContent) {
-        throw new Error('No text content in Claude response');
+      try {
+        // Fallback to Gemini if Anthropic fails
+        return await this.analyzeWithGemini(content, contentType, context);
+      } catch (geminiError) {
+        console.error('🚨 Both Anthropic and Gemini flagging failed:', geminiError);
+        // Return basic pattern matching as final fallback
+        return this.generateFallbackFlags(content, contentType);
       }
-
-      return this.parseAnalysisResponse(textContent);
-    } catch (error) {
-      console.error('Error in AI content analysis:', error);
-      // Return basic flags as fallback
-      return this.generateFallbackFlags(content, contentType);
     }
+  }
+
+  /**
+   * Analyze content using Anthropic Claude with retry logic
+   */
+  private async analyzeWithAnthropic(
+    content: string,
+    contentType: 'MEMORY' | 'MESSAGE' | 'DOCUMENT' | 'CONVERSATION',
+    context: {
+      profileId: string;
+      sourceId?: string;
+      existingMemories?: MemoryEntry[];
+    }
+  ): Promise<FlaggingAnalysis> {
+    const prompt = this.buildAnalysisPrompt(content, contentType, context);
+    
+    // Retry logic with exponential backoff (same as contradiction detection)
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`🤖 Anthropic flagging attempt ${attempt}/3`);
+        
+        const response = await this.anthropic.messages.create({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 2000,
+          temperature: 0.1, // Low temperature for consistent flagging
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        });
+
+        const textContent = response.content.find(c => c.type === 'text')?.text;
+        if (!textContent) {
+          throw new Error('No text content in Claude response');
+        }
+
+        console.log(`✅ Anthropic flagging successful on attempt ${attempt}`);
+        return this.parseAnalysisResponse(textContent);
+      } catch (error: any) {
+        console.warn(`⚠️ Anthropic flagging attempt ${attempt} failed:`, error?.message);
+        
+        // Don't retry on non-retryable errors
+        if (error?.message?.includes('credit') || error?.message?.includes('quota') || error?.message?.includes('rate limit')) {
+          throw error; // Let it fallback to Gemini immediately
+        }
+        
+        if (attempt < 3) {
+          const waitTime = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
+          console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        } else {
+          throw error; // Final attempt failed
+        }
+      }
+    }
+    
+    throw new Error('All Anthropic attempts failed');
+  }
+
+  /**
+   * Analyze content using Gemini as fallback with retry logic
+   */
+  private async analyzeWithGemini(
+    content: string,
+    contentType: 'MEMORY' | 'MESSAGE' | 'DOCUMENT' | 'CONVERSATION',
+    context: {
+      profileId: string;
+      sourceId?: string;
+      existingMemories?: MemoryEntry[];
+    }
+  ): Promise<FlaggingAnalysis> {
+    console.log('🔄 Using Gemini for content flagging');
+    
+    const prompt = this.buildGeminiAnalysisPrompt(content, contentType, context);
+    
+    // Retry logic with exponential backoff (mirroring Anthropic's approach)
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`🌟 Gemini flagging attempt ${attempt}/3`);
+        
+        // Use centralized geminiService for consistency
+        const result = await this.gemini.analyzeContentForFlags(
+          content,
+          contentType,
+          prompt
+        );
+
+        console.log(`✅ Gemini flagging successful on attempt ${attempt}`);
+        return result;
+      } catch (error: any) {
+        console.warn(`⚠️ Gemini flagging attempt ${attempt} failed:`, error?.message);
+        
+        // Mirror Anthropic's error classification for consistency  
+        if (error?.message?.includes('credit') || 
+            error?.message?.includes('quota') || 
+            error?.message?.includes('rate limit')) {
+          throw error; // Let it fallback to pattern-based flagging immediately
+        }
+        
+        // Treat "overloaded" as retryable (use backoff), not immediate fallback
+        
+        if (attempt < 3) {
+          const waitTime = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
+          console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        } else {
+          throw error; // Final attempt failed
+        }
+      }
+    }
+    
+    throw new Error('All Gemini attempts failed');
   }
 
   /**
@@ -149,6 +256,47 @@ Return analysis in this JSON format:
 }
 
 Focus on actionable flags that help maintain Nicky's character consistency while enabling future segment features.`;
+  }
+
+  /**
+   * Build analysis prompt specifically for Gemini with structured output
+   */
+  private buildGeminiAnalysisPrompt(
+    content: string,
+    contentType: string,
+    context: any
+  ): string {
+    return `Analyze content from Nicky "Noodle Arms" A.I. Dente, the unhinged Dead by Daylight streamer.
+
+CORE PHILOSOPHY: Nicky's lies and contradictions are FEATURES, not bugs. The system treats unreliability as a canonical character trait.
+
+CONTENT TO ANALYZE:
+"""${content}"""
+
+FLAGGING CATEGORIES (choose most relevant):
+
+1. CHARACTER DEVELOPMENT: new_backstory, personality_anomaly, new_skill_claim
+2. RELATIONSHIPS: new_character, relationship_shift, hierarchy_claim  
+3. EMOTIONS: rant_initiated, mask_dropped, chaos_level_1 through chaos_level_5
+4. IMPORTANCE: permanent_fact, high_importance, medium_importance, low_importance, deletion_candidate
+5. META-SYSTEM: fourth_wall_break, ooc_behavior
+6. SPECIAL: pasta_related, dbd_gameplay, family_mention, romance_failure, criminal_activity
+
+REQUIREMENTS:
+- Extract character names (must be ridiculous per system rules)
+- Identify relationships and emotional patterns  
+- Check for contradictions with existing memories
+- Assess canonical importance vs throwaway content
+- Flag any system rule violations
+
+Return as structured JSON with flags array. Each flag should have:
+- flagType: specific category from above
+- priority: CRITICAL, HIGH, MEDIUM, or LOW
+- confidence: number 0-100
+- reason: detailed explanation
+- extractedData: object with relevant arrays (characterNames, relationships, emotions, topics, contradictions, patterns)
+
+Focus on actionable flags that help maintain Nicky's character consistency.`;
   }
 
   /**
@@ -237,19 +385,19 @@ Focus on actionable flags that help maintain Nicky's character consistency while
 
     for (const flag of flags) {
       try {
-        const flagData = {
+        const flagData: InsertContentFlag = {
           profileId,
-          targetType,
+          targetType: targetType as InsertContentFlag['targetType'],
           targetId,
-          flagType: flag.flagType,
-          priority: flag.priority,
+          flagType: flag.flagType as InsertContentFlag['flagType'],
+          priority: flag.priority as InsertContentFlag['priority'],
           confidence: flag.confidence,
           flagReason: flag.reason,
           extractedData: flag.extractedData,
-          reviewStatus: 'PENDING'
-        } as InsertContentFlag;
+          reviewStatus: 'PENDING' as const
+        };
 
-        const [insertedFlag] = await db.insert(contentFlags).values(flagData).returning();
+        const [insertedFlag] = await db.insert(contentFlags).values([flagData]).returning();
         insertedFlags.push(insertedFlag);
       } catch (error) {
         console.error('Error storing flag in database:', error);

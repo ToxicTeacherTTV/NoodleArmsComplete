@@ -509,6 +509,65 @@ Response format:
       throw new Error('Failed to generate Gemini response');
     }
   }
+
+  /**
+   * Analyze content for flags using Gemini with structured response
+   */
+  async analyzeContentForFlags(
+    content: string,
+    contentType: 'MEMORY' | 'MESSAGE' | 'DOCUMENT' | 'CONVERSATION',
+    prompt: string
+  ): Promise<any> {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Gemini API key not configured");
+    }
+
+    const response = await this.ai.models.generateContent({
+      model: "gemini-2.5-flash", // Use flash for speed and availability
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          properties: {
+            flags: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  flagType: { type: "string" },
+                  priority: { type: "string", enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW"] },
+                  confidence: { type: "number" },
+                  reason: { type: "string" },
+                  extractedData: {
+                    type: "object",
+                    properties: {
+                      characterNames: { type: "array", items: { type: "string" } },
+                      relationships: { type: "array", items: { type: "string" } },
+                      emotions: { type: "array", items: { type: "string" } },
+                      topics: { type: "array", items: { type: "string" } },
+                      contradictions: { type: "array", items: { type: "string" } },
+                      patterns: { type: "array", items: { type: "string" } }
+                    }
+                  }
+                },
+                required: ["flagType", "priority", "confidence", "reason"]
+              }
+            }
+          },
+          required: ["flags"]
+        },
+        temperature: 0.1 // Low temperature for consistent flagging
+      },
+      contents: [{ role: "user", parts: [{ text: prompt }] }], // Proper structured format
+    });
+
+    const rawJson = response.text;
+    if (!rawJson) {
+      throw new Error('Empty response from Gemini');
+    }
+
+    return JSON.parse(rawJson);
+  }
 }
 
 // Generate lore content for emergent storytelling
