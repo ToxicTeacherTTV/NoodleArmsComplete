@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, json, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, json, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -381,6 +381,16 @@ export const contentFlags = pgTable("content_flags", {
   
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
+}, (table) => {
+  return {
+    // Prevent duplicate flags for the same content + flag type combination
+    uniqueContentFlag: uniqueIndex("unique_content_flag_idx").on(
+      table.profileId, 
+      table.targetType, 
+      table.targetId, 
+      table.flagType
+    ),
+  };
 });
 
 // Relations for content flags

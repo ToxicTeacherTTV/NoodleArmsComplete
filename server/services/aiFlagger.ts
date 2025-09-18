@@ -372,7 +372,64 @@ Focus on actionable flags that help maintain Nicky's character consistency.`;
   }
 
   /**
-   * Store generated flags in database
+   * Normalize flag data for consistent comparison
+   */
+  private normalizeFlagForComparison(flag: FlaggingAnalysis['flags'][0]): string {
+    const normalizedReason = flag.reason.trim().toLowerCase();
+    const normalizedExtractedData = flag.extractedData ? 
+      JSON.stringify(flag.extractedData, Object.keys(flag.extractedData).sort()) : '';
+    
+    return `${flag.flagType}|${flag.priority}|${normalizedReason}|${normalizedExtractedData}`;
+  }
+
+  /**
+   * Check if flag already exists (simplified to match DB constraint)
+   */
+  private async flagExists(
+    db: PostgresJsDatabase<any>,
+    profileId: string,
+    targetType: ContentFlag['targetType'],
+    targetId: string,
+    flag: FlaggingAnalysis['flags'][0]
+  ): Promise<boolean> {
+    const existingFlags = await db
+      .select()
+      .from(contentFlags)
+      .where(
+        and(
+          eq(contentFlags.profileId, profileId),
+          eq(contentFlags.targetType, targetType),
+          eq(contentFlags.targetId, targetId),
+          eq(contentFlags.flagType, flag.flagType as any)
+        )
+      );
+
+    return existingFlags.length > 0;
+  }
+
+  /**
+   * Remove duplicate flags from AI output (based on flagType only, matching DB constraint)
+   */
+  private deduplicateFlags(flags: FlaggingAnalysis['flags']): FlaggingAnalysis['flags'] {
+    const seen = new Set<string>();
+    const uniqueFlags: FlaggingAnalysis['flags'] = [];
+
+    for (const flag of flags) {
+      // Only consider flagType for uniqueness (matching database constraint)
+      const key = flag.flagType;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueFlags.push(flag);
+      } else {
+        console.log(`🔄 Skipping duplicate flag in AI response: ${flag.flagType}`);
+      }
+    }
+
+    return uniqueFlags;
+  }
+
+  /**
+   * Store generated flags in database with deduplication
    */
   async storeFlagsInDatabase(
     db: PostgresJsDatabase<any>,
@@ -383,27 +440,39 @@ Focus on actionable flags that help maintain Nicky's character consistency.`;
   ): Promise<ContentFlag[]> {
     const insertedFlags: ContentFlag[] = [];
 
-    for (const flag of flags) {
+    // First, remove duplicates within the AI response itself
+    const uniqueFlags = this.deduplicateFlags(flags);
+
+    for (const flag of uniqueFlags) {
       try {
-        const flagData: InsertContentFlag = {
+        // Check if similar flag already exists in database
+        const exists = await this.flagExists(db, profileId, targetType, targetId, flag);
+        if (exists) {
+          console.log(`🔄 Skipping duplicate flag: ${flag.flagType} for ${targetType}:${targetId}`);
+          continue;
+        }
+
+        const flagData: typeof contentFlags.$inferInsert = {
           profileId,
-          targetType: targetType as InsertContentFlag['targetType'],
+          targetType,
           targetId,
-          flagType: flag.flagType as InsertContentFlag['flagType'],
-          priority: flag.priority as InsertContentFlag['priority'],
+          flagType: flag.flagType as any,
+          priority: flag.priority as any,
           confidence: flag.confidence,
           flagReason: flag.reason,
           extractedData: flag.extractedData,
-          reviewStatus: 'PENDING' as const
+          reviewStatus: 'PENDING'
         };
 
         const [insertedFlag] = await db.insert(contentFlags).values([flagData]).returning();
         insertedFlags.push(insertedFlag);
+        console.log(`✅ Stored new flag: ${flag.flagType} for ${targetType}:${targetId}`);
       } catch (error) {
         console.error('Error storing flag in database:', error);
       }
     }
 
+    console.log(`🏁 Flag storage complete: ${insertedFlags.length}/${flags.length} flags stored (${flags.length - insertedFlags.length} duplicates skipped)`);
     return insertedFlags;
   }
 
