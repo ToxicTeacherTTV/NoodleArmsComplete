@@ -269,6 +269,50 @@ export default function BrainManagement() {
   const [showSingleCleanDialog, setShowSingleCleanDialog] = useState(false);
   const [singleCleanPreview, setSingleCleanPreview] = useState<any>(null);
 
+  // Flag management state
+  const [selectedFlagType, setSelectedFlagType] = useState<string>('all');
+  const [flagSearchTerm, setFlagSearchTerm] = useState<string>('');
+
+  // Fetch flags data
+  const { data: flagsData } = useQuery({
+    queryKey: ['/api/flags/pending'],
+    queryFn: async () => {
+      const response = await fetch('/api/flags/pending?limit=1000');
+      if (!response.ok) throw new Error('Failed to fetch flags');
+      return response.json();
+    },
+  });
+
+  // Fetch flag analytics
+  const { data: flagAnalytics } = useQuery({
+    queryKey: ['/api/flags/analytics'],
+    queryFn: async () => {
+      const response = await fetch('/api/flags/analytics');
+      if (!response.ok) throw new Error('Failed to fetch flag analytics');
+      return response.json();
+    },
+  });
+
+  // Flag review mutation
+  const reviewFlagMutation = useMutation({
+    mutationFn: async ({ flagId, reviewStatus, notes }: { flagId: string; reviewStatus: 'APPROVED' | 'REJECTED'; notes?: string }) => {
+      const response = await apiRequest('PUT', `/api/flags/${flagId}/review`, {
+        reviewStatus,
+        reviewNotes: notes || '',
+        reviewedBy: 'user'
+      });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/flags/pending'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/flags/analytics'] });
+      toast({ title: "Flag reviewed successfully!" });
+    },
+    onError: () => {
+      toast({ title: "Failed to review flag", variant: "destructive" });
+    },
+  });
+
   // Function to open edit dialog
   const openEditDialog = (fact: MemoryFact) => {
     setEditingFact(fact);
@@ -795,7 +839,7 @@ export default function BrainManagement() {
 
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="protected-facts" data-testid="tab-protected-facts">
               Protected Facts
             </TabsTrigger>
@@ -810,6 +854,9 @@ export default function BrainManagement() {
             </TabsTrigger>
             <TabsTrigger value="contradictions" data-testid="tab-contradictions">
               Contradictions ({contradictions?.length || 0})
+            </TabsTrigger>
+            <TabsTrigger value="flags" data-testid="tab-flags">
+              Flags ({flagsData?.count || 0})
             </TabsTrigger>
             <TabsTrigger value="all-facts" data-testid="tab-all-facts">
               All Facts
@@ -1118,6 +1165,131 @@ export default function BrainManagement() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Flags Tab */}
+          <TabsContent value="flags" className="mt-6">
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-orange-500" />
+                    Content Flags ({flagsData?.count || 0})
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Search flags..."
+                      value={flagSearchTerm}
+                      onChange={(e) => setFlagSearchTerm(e.target.value)}
+                      className="w-48"
+                      data-testid="input-flag-search"
+                    />
+                    <select
+                      value={selectedFlagType}
+                      onChange={(e) => setSelectedFlagType(e.target.value)}
+                      className="px-3 py-2 border rounded-md bg-background"
+                      data-testid="select-flag-type"
+                    >
+                      <option value="all">All Types</option>
+                      {flagAnalytics?.topFlagTypes?.map((type: any) => (
+                        <option key={type.flagType} value={type.flagType}>
+                          {type.flagType} ({type.count})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {flagAnalytics && (
+                  <div className="grid grid-cols-4 gap-4 mb-6">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-primary">{flagAnalytics.overview?.totalFlags || 0}</div>
+                      <div className="text-sm text-muted-foreground">Total</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-500">{flagAnalytics.overview?.pendingFlags || 0}</div>
+                      <div className="text-sm text-muted-foreground">Pending</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-500">{flagAnalytics.overview?.approvedFlags || 0}</div>
+                      <div className="text-sm text-muted-foreground">Approved</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-red-500">{flagAnalytics.overview?.rejectedFlags || 0}</div>
+                      <div className="text-sm text-muted-foreground">Rejected</div>
+                    </div>
+                  </div>
+                )}
+
+                <ScrollArea className="h-96">
+                  <div className="space-y-3">
+                    {flagsData?.flags
+                      ?.filter((flag: any) => 
+                        (selectedFlagType === 'all' || flag.flagType === selectedFlagType) &&
+                        (flagSearchTerm === '' || 
+                         flag.flagReason?.toLowerCase().includes(flagSearchTerm.toLowerCase()) ||
+                         flag.flagType?.toLowerCase().includes(flagSearchTerm.toLowerCase()))
+                      )
+                      ?.map((flag: any) => (
+                        <Card key={flag.id} className="p-4">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {flag.flagType}
+                                </Badge>
+                                <Badge 
+                                  variant={flag.priority === 'CRITICAL' ? 'destructive' : 
+                                           flag.priority === 'HIGH' ? 'secondary' : 'outline'}
+                                  className="text-xs"
+                                >
+                                  {flag.priority}
+                                </Badge>
+                                {flag.confidence && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {Math.round(flag.confidence * 100)}% confidence
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-2">
+                                {flag.flagReason}
+                              </p>
+                              <div className="text-xs text-muted-foreground">
+                                Target: {flag.targetType} • Created: {new Date(flag.createdAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => reviewFlagMutation.mutate({
+                                  flagId: flag.id,
+                                  reviewStatus: 'APPROVED'
+                                })}
+                                data-testid={`button-approve-flag-${flag.id}`}
+                              >
+                                <CheckCircle className="w-4 h-4 text-green-600" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => reviewFlagMutation.mutate({
+                                  flagId: flag.id,
+                                  reviewStatus: 'REJECTED'
+                                })}
+                                data-testid={`button-reject-flag-${flag.id}`}
+                              >
+                                <XCircle className="w-4 h-4 text-red-600" />
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
                   </div>
                 </ScrollArea>
               </CardContent>
