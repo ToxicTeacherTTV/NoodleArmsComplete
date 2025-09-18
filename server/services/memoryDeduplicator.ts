@@ -105,7 +105,37 @@ export class MemoryDeduplicator {
   }
   
   /**
-   * Find duplicate groups in a set of memory entries
+   * Create a fingerprint for quick similarity filtering
+   */
+  private createFingerprint(content: string): string {
+    const words = content.toLowerCase()
+      .split(/\W+/)
+      .filter(w => w.length > 3) // Only words longer than 3 chars
+      .sort()
+      .slice(0, 10); // Take first 10 significant words
+    return words.join(' ');
+  }
+
+  /**
+   * Quick pre-filter based on word overlap
+   */
+  private hasWordOverlap(text1: string, text2: string): boolean {
+    const words1 = new Set(text1.toLowerCase().split(/\W+/).filter(w => w.length > 3));
+    const words2 = new Set(text2.toLowerCase().split(/\W+/).filter(w => w.length > 3));
+    
+    // Check if they share at least 2 significant words
+    let sharedWords = 0;
+    for (const word of Array.from(words1)) {
+      if (words2.has(word)) {
+        sharedWords++;
+        if (sharedWords >= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Find duplicate groups in a set of memory entries (OPTIMIZED)
    */
   async findDuplicateGroups(
     db: PostgresJsDatabase<any>,
@@ -121,50 +151,81 @@ export class MemoryDeduplicator {
       .where(eq(memoryEntries.profileId, profileId))
       .orderBy(memoryEntries.createdAt);
     
+    console.log(`📊 Processing ${memories.length} memories...`);
+    
+    // Create fingerprints for quick filtering
+    const memoriesWithFingerprints = memories.map(memory => ({
+      ...memory,
+      fingerprint: this.createFingerprint(memory.content)
+    }));
+    
+    // Group by similar fingerprints first (reduces comparisons significantly)
+    const fingerprintGroups = new Map<string, typeof memoriesWithFingerprints>();
+    for (const memory of memoriesWithFingerprints) {
+      const key = memory.fingerprint;
+      if (!fingerprintGroups.has(key)) {
+        fingerprintGroups.set(key, []);
+      }
+      fingerprintGroups.get(key)!.push(memory);
+    }
+    
     const duplicateGroups: DuplicateGroup[] = [];
     const processed = new Set<string>();
+    let comparisons = 0;
     
-    for (let i = 0; i < memories.length; i++) {
-      if (processed.has(memories[i].id)) continue;
+    // Process fingerprint groups
+    for (const [fingerprint, candidateGroup] of Array.from(fingerprintGroups.entries())) {
+      if (candidateGroup.length < 2) continue; // Skip groups with only 1 member
       
-      const currentMemory = memories[i];
-      const duplicates: MemoryEntry[] = [];
-      
-      // Compare with remaining memories
-      for (let j = i + 1; j < memories.length; j++) {
-        if (processed.has(memories[j].id)) continue;
+      for (let i = 0; i < candidateGroup.length; i++) {
+        if (processed.has(candidateGroup[i].id)) continue;
         
-        const similarity = this.calculateSimilarity(
-          currentMemory.content,
-          memories[j].content
-        );
+        const currentMemory = candidateGroup[i];
+        const duplicates: MemoryEntry[] = [];
         
-        if (similarity >= similarityThreshold) {
-          duplicates.push(memories[j]);
-          processed.add(memories[j].id);
+        // Only compare within the same fingerprint group and with word overlap
+        for (let j = i + 1; j < candidateGroup.length; j++) {
+          if (processed.has(candidateGroup[j].id)) continue;
+          
+          // Quick pre-filter: check word overlap
+          if (!this.hasWordOverlap(currentMemory.content, candidateGroup[j].content)) {
+            continue;
+          }
+          
+          comparisons++;
+          const similarity = this.calculateSimilarity(
+            currentMemory.content,
+            candidateGroup[j].content
+          );
+          
+          if (similarity >= similarityThreshold) {
+            duplicates.push(candidateGroup[j]);
+            processed.add(candidateGroup[j].id);
+          }
         }
-      }
-      
-      if (duplicates.length > 0) {
-        processed.add(currentMemory.id);
         
-        const group: DuplicateGroup = {
-          masterEntry: currentMemory,
-          duplicates: duplicates,
-          similarity: duplicates.length > 0 ? 
-            duplicates.reduce((sum, dup) => sum + this.calculateSimilarity(currentMemory.content, dup.content), 0) / duplicates.length : 
-            1.0,
-          mergedContent: this.mergeContent(currentMemory, duplicates),
-          combinedImportance: this.calculateCombinedImportance(currentMemory, duplicates),
-          combinedKeywords: this.mergeKeywords(currentMemory, duplicates),
-          combinedRelationships: this.mergeRelationships(currentMemory, duplicates)
-        };
-        
-        duplicateGroups.push(group);
+        if (duplicates.length > 0) {
+          processed.add(currentMemory.id);
+          
+          const group: DuplicateGroup = {
+            masterEntry: currentMemory,
+            duplicates: duplicates,
+            similarity: duplicates.length > 0 ? 
+              duplicates.reduce((sum, dup) => sum + this.calculateSimilarity(currentMemory.content, dup.content), 0) / duplicates.length : 
+              1.0,
+            mergedContent: this.mergeContent(currentMemory, duplicates),
+            combinedImportance: this.calculateCombinedImportance(currentMemory, duplicates),
+            combinedKeywords: this.mergeKeywords(currentMemory, duplicates),
+            combinedRelationships: this.mergeRelationships(currentMemory, duplicates)
+          };
+          
+          duplicateGroups.push(group);
+        }
       }
     }
     
     console.log(`🎯 Found ${duplicateGroups.length} duplicate groups containing ${duplicateGroups.reduce((sum, group) => sum + group.duplicates.length + 1, 0)} total memories`);
+    console.log(`⚡ Performed ${comparisons} similarity comparisons (reduced from ~${Math.pow(memories.length, 2) / 2})`);
     return duplicateGroups;
   }
   
