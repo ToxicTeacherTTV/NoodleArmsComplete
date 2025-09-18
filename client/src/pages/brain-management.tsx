@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield } from "lucide-react";
+import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield, Copy, Merge } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ProtectedFactsManager } from "@/components/protected-facts-manager";
@@ -272,6 +272,99 @@ export default function BrainManagement() {
   // Flag management state
   const [selectedFlagType, setSelectedFlagType] = useState<string>('all');
   const [flagSearchTerm, setFlagSearchTerm] = useState<string>('');
+  
+  // Duplicates state
+  const [similarityThreshold, setSimilarityThreshold] = useState<number>(0.8);
+  const [duplicateGroups, setDuplicateGroups] = useState<any[]>([]);
+  const [isLoadingDuplicates, setIsLoadingDuplicates] = useState(false);
+  const [autoMergeInProgress, setAutoMergeInProgress] = useState(false);
+
+  // Find duplicates mutation
+  const findDuplicatesMutation = useMutation({
+    mutationFn: async (threshold: number) => {
+      const response = await fetch(`/api/memory/duplicates?threshold=${threshold}`);
+      if (!response.ok) throw new Error('Failed to find duplicates');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setDuplicateGroups(data);
+      setIsLoadingDuplicates(false);
+      toast({
+        title: "Duplicates Found",
+        description: `Found ${data.length} groups of similar memories`,
+      });
+    },
+    onError: (error) => {
+      setIsLoadingDuplicates(false);
+      toast({
+        title: "Error Finding Duplicates",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Auto merge mutation
+  const autoMergeMutation = useMutation({
+    mutationFn: async (threshold: number) => {
+      const response = await fetch('/api/memory/auto-merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threshold }),
+      });
+      if (!response.ok) throw new Error('Failed to auto-merge');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setAutoMergeInProgress(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      toast({
+        title: "Auto-merge Complete",
+        description: `Merged ${data.mergedCount || 0} groups of duplicates`,
+      });
+      // Refresh duplicate search
+      if (duplicateGroups.length > 0) {
+        findDuplicatesMutation.mutate(similarityThreshold);
+      }
+    },
+    onError: (error) => {
+      setAutoMergeInProgress(false);
+      toast({
+        title: "Auto-merge Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Manual merge mutation
+  const manualMergeMutation = useMutation({
+    mutationFn: async ({ primaryId, duplicateIds }: { primaryId: string; duplicateIds: string[] }) => {
+      const response = await fetch('/api/memory/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ primaryId, duplicateIds }),
+      });
+      if (!response.ok) throw new Error('Failed to merge memories');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      toast({
+        title: "Memories Merged",
+        description: `Successfully merged ${data.mergedCount} memories`,
+      });
+      // Refresh duplicate search
+      findDuplicatesMutation.mutate(similarityThreshold);
+    },
+    onError: (error) => {
+      toast({
+        title: "Merge Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   // Fetch flags data
   const { data: flagsData } = useQuery({
@@ -871,7 +964,7 @@ export default function BrainManagement() {
 
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="protected-facts" data-testid="tab-protected-facts">
               Protected Facts
             </TabsTrigger>
@@ -889,6 +982,9 @@ export default function BrainManagement() {
             </TabsTrigger>
             <TabsTrigger value="flags" data-testid="tab-flags">
               Flags ({flagsData?.count || 0})
+            </TabsTrigger>
+            <TabsTrigger value="duplicates" data-testid="tab-duplicates">
+              Duplicates
             </TabsTrigger>
             <TabsTrigger value="all-facts" data-testid="tab-all-facts">
               All Facts
@@ -1422,6 +1518,160 @@ export default function BrainManagement() {
                       })}
                   </div>
                 </ScrollArea>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Duplicates Tab */}
+          <TabsContent value="duplicates" className="mt-6">
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <CardTitle className="flex items-center gap-2">
+                    <Copy className="w-5 h-5 text-blue-500" />
+                    Memory Deduplication
+                  </CardTitle>
+                  <div className="flex gap-2 items-center">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm font-medium">Similarity:</label>
+                      <Slider
+                        value={[similarityThreshold]}
+                        onValueChange={(value) => setSimilarityThreshold(value[0])}
+                        max={1}
+                        min={0.5}
+                        step={0.05}
+                        className="w-32"
+                        data-testid="slider-similarity-threshold"
+                      />
+                      <span className="text-sm text-gray-500 w-12">
+                        {Math.round(similarityThreshold * 100)}%
+                      </span>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        setIsLoadingDuplicates(true);
+                        findDuplicatesMutation.mutate(similarityThreshold);
+                      }}
+                      disabled={isLoadingDuplicates || findDuplicatesMutation.isPending}
+                      data-testid="button-find-duplicates"
+                    >
+                      {isLoadingDuplicates || findDuplicatesMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Search className="h-4 w-4 mr-2" />
+                      )}
+                      Find Duplicates
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setAutoMergeInProgress(true);
+                        autoMergeMutation.mutate(similarityThreshold);
+                      }}
+                      disabled={autoMergeInProgress || autoMergeMutation.isPending}
+                      variant="outline"
+                      data-testid="button-auto-merge"
+                    >
+                      {autoMergeInProgress || autoMergeMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Merge className="h-4 w-4 mr-2" />
+                      )}
+                      Auto-Merge ({Math.round(similarityThreshold * 100)}%+)
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Find and merge similar memory entries to eliminate redundancy and improve knowledge base efficiency.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {duplicateGroups.length === 0 && !isLoadingDuplicates ? (
+                  <div className="text-center py-12">
+                    <Copy className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500 dark:text-gray-400 mb-2">
+                      No duplicate groups found
+                    </p>
+                    <p className="text-sm text-gray-400">
+                      Click "Find Duplicates" to scan for similar memories
+                    </p>
+                  </div>
+                ) : (
+                  <ScrollArea className="h-[600px]">
+                    <div className="space-y-6">
+                      {duplicateGroups.map((group, groupIndex) => (
+                        <Card key={groupIndex} className="border-l-4 border-l-orange-500">
+                          <CardHeader>
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline">
+                                  {group.duplicates.length + 1} similar memories
+                                </Badge>
+                                <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300">
+                                  {Math.round(group.avgSimilarity * 100)}% similar
+                                </Badge>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => manualMergeMutation.mutate({
+                                  primaryId: group.primary.id,
+                                  duplicateIds: group.duplicates.map(d => d.id)
+                                })}
+                                disabled={manualMergeMutation.isPending}
+                                data-testid={`button-merge-group-${groupIndex}`}
+                              >
+                                {manualMergeMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                ) : (
+                                  <Merge className="h-4 w-4 mr-1" />
+                                )}
+                                Merge Group
+                              </Button>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {/* Primary Memory */}
+                            <div className="border border-green-200 dark:border-green-700 rounded p-4 bg-green-50 dark:bg-green-900/20">
+                              <div className="flex items-center justify-between mb-2">
+                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                                  PRIMARY
+                                </Badge>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  Confidence: {group.primary.confidence}% | Importance: {group.primary.importance}
+                                </div>
+                              </div>
+                              <p className="text-sm text-gray-900 dark:text-gray-100">
+                                {group.primary.content}
+                              </p>
+                              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                Source: {group.primary.source} • {new Date(group.primary.createdAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                            
+                            {/* Similar Memories */}
+                            {group.duplicates.map((memory, memoryIndex) => (
+                              <div key={memory.id} className="border border-gray-200 dark:border-gray-700 rounded p-4 bg-white dark:bg-gray-800">
+                                <div className="flex items-center justify-between mb-2">
+                                  <Badge variant="outline">
+                                    SIMILAR ({Math.round(memory.similarity * 100)}%)
+                                  </Badge>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    Confidence: {memory.confidence}% | Importance: {memory.importance}
+                                  </div>
+                                </div>
+                                <p className="text-sm text-gray-900 dark:text-gray-100">
+                                  {memory.content}
+                                </p>
+                                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                  Source: {memory.source} • {new Date(memory.createdAt).toLocaleDateString()}
+                                </div>
+                              </div>
+                            ))}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

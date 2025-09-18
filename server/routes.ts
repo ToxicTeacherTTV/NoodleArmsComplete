@@ -1968,6 +1968,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Memory Deduplication API Endpoints
+  
+  // Find duplicate groups
+  app.get('/api/memory/duplicates', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { threshold = 0.7 } = req.query;
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
+      
+      const duplicateGroups = await memoryDeduplicator.findDuplicateGroups(
+        db, 
+        profile.id, 
+        Number(threshold)
+      );
+
+      res.json({
+        groups: duplicateGroups,
+        totalGroups: duplicateGroups.length,
+        totalDuplicates: duplicateGroups.reduce((sum, group) => sum + group.duplicates.length, 0)
+      });
+    } catch (error) {
+      console.error('Error finding duplicate memories:', error);
+      res.status(500).json({ error: 'Failed to find duplicate memories' });
+    }
+  });
+
+  // Auto-merge high-confidence duplicates
+  app.post('/api/memory/auto-merge', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { threshold = 0.9 } = req.body;
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
+      
+      const mergedCount = await memoryDeduplicator.autoMergeDuplicates(
+        db,
+        profile.id,
+        Number(threshold)
+      );
+
+      res.json({
+        success: true,
+        mergedCount,
+        message: `Successfully merged ${mergedCount} duplicate memories`
+      });
+    } catch (error) {
+      console.error('Error auto-merging duplicates:', error);
+      res.status(500).json({ error: 'Failed to auto-merge duplicates' });
+    }
+  });
+
+  // Manually merge a specific duplicate group
+  app.post('/api/memory/merge-group', async (req, res) => {
+    try {
+      const { masterEntryId, duplicateIds } = req.body;
+      
+      if (!masterEntryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
+        return res.status(400).json({ error: 'masterEntryId and duplicateIds are required' });
+      }
+
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
+
+      // Get the entries to build a duplicate group
+      const allIds = [masterEntryId, ...duplicateIds];
+      const entries = await db
+        .select()
+        .from(memoryEntries)
+        .where(inArray(memoryEntries.id, allIds));
+
+      if (entries.length !== allIds.length) {
+        return res.status(400).json({ error: 'Some memory entries not found' });
+      }
+
+      const masterEntry = entries.find(e => e.id === masterEntryId);
+      const duplicateEntries = entries.filter(e => e.id !== masterEntryId);
+
+      if (!masterEntry) {
+        return res.status(400).json({ error: 'Master entry not found' });
+      }
+
+      // Build duplicate group and merge
+      const duplicateGroup = {
+        masterEntry,
+        duplicates: duplicateEntries,
+        similarity: 1.0, // Manual merge, assume high similarity
+        mergedContent: masterEntry.content, // Use master content by default
+        combinedImportance: Math.max(masterEntry.importance || 1, ...duplicateEntries.map(d => d.importance || 1)),
+        combinedKeywords: Array.from(new Set([
+          ...(masterEntry.keywords || []),
+          ...duplicateEntries.flatMap(d => d.keywords || [])
+        ])),
+        combinedRelationships: Array.from(new Set([
+          ...(masterEntry.relationships || []),
+          ...duplicateEntries.flatMap(d => d.relationships || [])
+        ]))
+      };
+
+      await memoryDeduplicator.executeMerge(db, duplicateGroup);
+
+      res.json({
+        success: true,
+        mergedCount: duplicateEntries.length,
+        message: `Successfully merged ${duplicateEntries.length} duplicates into master entry`
+      });
+    } catch (error) {
+      console.error('Error manually merging duplicate group:', error);
+      res.status(500).json({ error: 'Failed to merge duplicate group' });
+    }
+  });
+
+  // Check for duplicates when creating new memory (for prevention)
+  app.post('/api/memory/check-duplicates', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { content, threshold = 0.8 } = req.body;
+      
+      if (!content) {
+        return res.status(400).json({ error: 'content is required' });
+      }
+
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
+      
+      const duplicates = await memoryDeduplicator.checkForDuplicates(
+        db,
+        profile.id,
+        content,
+        Number(threshold)
+      );
+
+      res.json({
+        isDuplicate: duplicates.length > 0,
+        duplicates: duplicates.slice(0, 5), // Return top 5 matches
+        count: duplicates.length
+      });
+    } catch (error) {
+      console.error('Error checking for duplicates:', error);
+      res.status(500).json({ error: 'Failed to check for duplicates' });
+    }
+  });
+
   // Batch analyze memories (for testing/setup)
   app.post('/api/flags/batch-analyze', async (req, res) => {
     try {
