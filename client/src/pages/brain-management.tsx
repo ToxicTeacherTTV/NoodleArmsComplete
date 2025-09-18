@@ -1613,8 +1613,8 @@ export default function BrainManagement() {
                               <Button
                                 size="sm"
                                 onClick={() => manualMergeMutation.mutate({
-                                  primaryId: group.primary.id,
-                                  duplicateIds: group.duplicates.map(d => d.id)
+                                  primaryId: group.masterEntry.id,
+                                  duplicateIds: group.duplicates.map((d: any) => d.id)
                                 })}
                                 disabled={manualMergeMutation.isPending}
                                 data-testid={`button-merge-group-${groupIndex}`}
@@ -1636,19 +1636,19 @@ export default function BrainManagement() {
                                   PRIMARY
                                 </Badge>
                                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  Confidence: {group.primary.confidence}% | Importance: {group.primary.importance}
+                                  Confidence: {group.masterEntry.confidence}% | Importance: {group.masterEntry.importance}
                                 </div>
                               </div>
                               <p className="text-sm text-gray-900 dark:text-gray-100">
-                                {group.primary.content}
+                                {group.masterEntry.content}
                               </p>
                               <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                Source: {group.primary.source} • {new Date(group.primary.createdAt).toLocaleDateString()}
+                                Source: {group.masterEntry.source} • {new Date(group.masterEntry.createdAt).toLocaleDateString()}
                               </div>
                             </div>
                             
                             {/* Similar Memories */}
-                            {group.duplicates.map((memory, memoryIndex) => (
+                            {group.duplicates.map((memory: any, memoryIndex: number) => (
                               <div key={memory.id} className="border border-gray-200 dark:border-gray-700 rounded p-4 bg-white dark:bg-gray-800">
                                 <div className="flex items-center justify-between mb-2">
                                   <Badge variant="outline">
