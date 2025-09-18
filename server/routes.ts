@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, or } from "drizzle-orm";
 import { db } from "./db";
 import { anthropicService } from "./services/anthropic";
 import { elevenlabsService } from "./services/elevenlabs";
@@ -1688,16 +1688,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { limit = 50 } = req.query;
       const flags = await aiFlagger.getPendingFlags(db, profile.id, Number(limit));
       
+      // Group importance flags for the same target
+      const groupedFlags = [];
+      const importanceGroups = new Map();
+      
+      for (const flag of flags) {
+        const isImportanceFlag = ['high_importance', 'medium_importance', 'low_importance'].includes(flag.flagType);
+        
+        if (isImportanceFlag) {
+          const groupKey = `${flag.targetType}:${flag.targetId}`;
+          if (!importanceGroups.has(groupKey)) {
+            importanceGroups.set(groupKey, {
+              type: 'importance_group',
+              targetType: flag.targetType,
+              targetId: flag.targetId,
+              flags: [],
+              // Use first flag's metadata as representative
+              createdAt: flag.createdAt,
+              extractedData: flag.extractedData
+            });
+          }
+          importanceGroups.get(groupKey).flags.push({
+            ...flag,
+            createdAt: flag.createdAt ? new Date(flag.createdAt).toISOString() : null
+          });
+        } else {
+          // Regular flag - add as individual item
+          groupedFlags.push({
+            ...flag,
+            type: 'individual',
+            createdAt: flag.createdAt ? new Date(flag.createdAt).toISOString() : null
+          });
+        }
+      }
+      
+      // Add importance groups to the result
+      for (const group of Array.from(importanceGroups.values())) {
+        if (group.flags.length > 1) {
+          // Multiple importance levels - use grouped display
+          groupedFlags.push({
+            ...group,
+            createdAt: group.createdAt ? new Date(group.createdAt).toISOString() : null
+          });
+        } else {
+          // Single importance level - add as individual flag
+          groupedFlags.push({
+            ...group.flags[0],
+            type: 'individual'
+          });
+        }
+      }
+      
       res.json({
         count: flags.length,
-        flags: flags.map(flag => ({
-          ...flag,
-          createdAt: flag.createdAt ? new Date(flag.createdAt).toISOString() : null
-        }))
+        flags: groupedFlags
       });
     } catch (error) {
       console.error('Error fetching pending flags:', error);
       res.status(500).json({ error: 'Failed to fetch pending flags' });
+    }
+  });
+
+  // Batch review importance flags for the same target
+  app.put('/api/flags/importance/batch-review', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      // Validate request body
+      const batchSchema = z.object({
+        targetType: z.enum(['MEMORY', 'MESSAGE', 'DOCUMENT', 'CONVERSATION']),
+        targetId: z.string(),
+        selectedImportance: z.enum(['high_importance', 'medium_importance', 'low_importance']),
+        reviewedBy: z.string(),
+        reviewNotes: z.string().optional()
+      });
+
+      const { targetType, targetId, selectedImportance, reviewedBy, reviewNotes } = batchSchema.parse(req.body);
+
+      // Get all importance flags for this target
+      const allFlags = await db
+        .select()
+        .from(contentFlags)
+        .where(
+          and(
+            eq(contentFlags.profileId, profile.id),
+            eq(contentFlags.targetType, targetType),
+            eq(contentFlags.targetId, targetId),
+            or(
+              eq(contentFlags.flagType, 'high_importance' as any),
+              eq(contentFlags.flagType, 'medium_importance' as any),
+              eq(contentFlags.flagType, 'low_importance' as any)
+            )
+          )
+        );
+
+      if (allFlags.length === 0) {
+        return res.status(404).json({ error: 'No importance flags found for this target' });
+      }
+
+      // Batch update: approve selected importance, reject others
+      const updatePromises = allFlags.map(flag => {
+        const status = flag.flagType === selectedImportance ? 'APPROVED' : 'REJECTED';
+        const notes = flag.flagType === selectedImportance 
+          ? reviewNotes || `Selected as ${selectedImportance}`
+          : `Auto-rejected: selected ${selectedImportance} instead`;
+
+        return db
+          .update(contentFlags)
+          .set({
+            reviewStatus: status as any,
+            reviewedBy,
+            reviewNotes: notes,
+            reviewedAt: new Date()
+          })
+          .where(eq(contentFlags.id, flag.id));
+      });
+
+      await Promise.all(updatePromises);
+
+      console.log(`🎯 Batch reviewed importance flags for ${targetType}:${targetId} - selected: ${selectedImportance}`);
+
+      res.json({ 
+        success: true, 
+        updated: allFlags.length,
+        selectedImportance,
+        message: `Approved ${selectedImportance}, rejected ${allFlags.length - 1} others`
+      });
+
+    } catch (error) {
+      console.error('Error in batch importance review:', error);
+      res.status(500).json({ error: 'Failed to batch review importance flags' });
     }
   });
 

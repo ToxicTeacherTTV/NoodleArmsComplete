@@ -313,6 +313,38 @@ export default function BrainManagement() {
     },
   });
 
+  // Batch importance review mutation
+  const batchImportanceReviewMutation = useMutation({
+    mutationFn: async ({ 
+      targetType, 
+      targetId, 
+      selectedImportance, 
+      notes 
+    }: { 
+      targetType: string; 
+      targetId: string; 
+      selectedImportance: 'high_importance' | 'medium_importance' | 'low_importance'; 
+      notes?: string;
+    }) => {
+      const response = await apiRequest('PUT', '/api/flags/importance/batch-review', {
+        targetType,
+        targetId,
+        selectedImportance,
+        reviewedBy: 'user',
+        reviewNotes: notes
+      });
+      return response;
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/flags/pending'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/flags/analytics'] });
+      toast({ title: `Importance set! ${data.message}` });
+    },
+    onError: () => {
+      toast({ title: "Failed to review importance flags", variant: "destructive" });
+    },
+  });
+
   // Function to open edit dialog
   const openEditDialog = (fact: MemoryFact) => {
     setEditingFact(fact);
@@ -1235,61 +1267,129 @@ export default function BrainManagement() {
                          flag.flagReason?.toLowerCase().includes(flagSearchTerm.toLowerCase()) ||
                          flag.flagType?.toLowerCase().includes(flagSearchTerm.toLowerCase()))
                       )
-                      ?.map((flag: any) => (
-                        <Card key={flag.id} className="p-4">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Badge variant="outline" className="text-xs">
-                                  {flag.flagType}
-                                </Badge>
-                                <Badge 
-                                  variant={flag.priority === 'CRITICAL' ? 'destructive' : 
-                                           flag.priority === 'HIGH' ? 'secondary' : 'outline'}
-                                  className="text-xs"
-                                >
-                                  {flag.priority}
-                                </Badge>
-                                {flag.confidence && (
+                      ?.map((flag: any) => {
+                        // Grouped importance flags
+                        if (flag.type === 'importance_group') {
+                          const availableImportanceLevels = flag.flags.map((f: any) => f.flagType);
+                          const sampleFlag = flag.flags[0];
+                          
+                          return (
+                            <Card key={`${flag.targetType}-${flag.targetId}`} className="p-4 border-blue-200">
+                              <div className="space-y-3">
+                                <div className="flex items-start gap-3">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <Badge variant="secondary" className="text-xs">
+                                        Importance Level
+                                      </Badge>
+                                      <Badge variant="outline" className="text-xs">
+                                        {flag.flags.length} levels detected
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground mb-2">
+                                      {sampleFlag.flagReason}
+                                    </p>
+                                    <div className="text-xs text-muted-foreground mb-3">
+                                      Target: {flag.targetType} • Created: {new Date(flag.createdAt).toLocaleDateString()}
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Importance Selector */}
+                                <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                                  <p className="text-sm font-medium mb-3">Choose the correct importance level:</p>
+                                  <div className="flex gap-2 flex-wrap">
+                                    {['high_importance', 'medium_importance', 'low_importance'].map((importance) => {
+                                      const isAvailable = availableImportanceLevels.includes(importance);
+                                      const label = importance.replace('_importance', '').toUpperCase();
+                                      const variant = importance === 'high_importance' ? 'destructive' : 
+                                                    importance === 'medium_importance' ? 'secondary' : 'outline';
+                                      
+                                      return (
+                                        <Button
+                                          key={importance}
+                                          size="sm"
+                                          variant={isAvailable ? variant : 'outline'}
+                                          disabled={!isAvailable || batchImportanceReviewMutation.isPending}
+                                          onClick={() => batchImportanceReviewMutation.mutate({
+                                            targetType: flag.targetType,
+                                            targetId: flag.targetId,
+                                            selectedImportance: importance as 'high_importance' | 'medium_importance' | 'low_importance'
+                                          })}
+                                          data-testid={`button-importance-${importance}-${flag.targetId}`}
+                                          className={`${!isAvailable ? 'opacity-50' : ''}`}
+                                        >
+                                          {label} {isAvailable ? '✓' : '✗'}
+                                        </Button>
+                                      );
+                                    })}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-2">
+                                    Click to approve that importance level and auto-reject the others
+                                  </p>
+                                </div>
+                              </div>
+                            </Card>
+                          );
+                        }
+
+                        // Individual flags (regular display)
+                        return (
+                          <Card key={flag.id} className="p-4">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
                                   <Badge variant="outline" className="text-xs">
-                                    {Math.round(flag.confidence * 100)}% confidence
+                                    {flag.flagType}
                                   </Badge>
-                                )}
+                                  <Badge 
+                                    variant={flag.priority === 'CRITICAL' ? 'destructive' : 
+                                             flag.priority === 'HIGH' ? 'secondary' : 'outline'}
+                                    className="text-xs"
+                                  >
+                                    {flag.priority}
+                                  </Badge>
+                                  {flag.confidence && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {Math.round(flag.confidence * 100)}% confidence
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm text-muted-foreground mb-2">
+                                  {flag.flagReason}
+                                </p>
+                                <div className="text-xs text-muted-foreground">
+                                  Target: {flag.targetType} • Created: {new Date(flag.createdAt).toLocaleDateString()}
+                                </div>
                               </div>
-                              <p className="text-sm text-muted-foreground mb-2">
-                                {flag.flagReason}
-                              </p>
-                              <div className="text-xs text-muted-foreground">
-                                Target: {flag.targetType} • Created: {new Date(flag.createdAt).toLocaleDateString()}
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => reviewFlagMutation.mutate({
+                                    flagId: flag.id,
+                                    reviewStatus: 'APPROVED'
+                                  })}
+                                  data-testid={`button-approve-flag-${flag.id}`}
+                                >
+                                  <CheckCircle className="w-4 h-4 text-green-600" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => reviewFlagMutation.mutate({
+                                    flagId: flag.id,
+                                    reviewStatus: 'REJECTED'
+                                  })}
+                                  data-testid={`button-reject-flag-${flag.id}`}
+                                >
+                                  <XCircle className="w-4 h-4 text-red-600" />
+                                </Button>
                               </div>
                             </div>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => reviewFlagMutation.mutate({
-                                  flagId: flag.id,
-                                  reviewStatus: 'APPROVED'
-                                })}
-                                data-testid={`button-approve-flag-${flag.id}`}
-                              >
-                                <CheckCircle className="w-4 h-4 text-green-600" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => reviewFlagMutation.mutate({
-                                  flagId: flag.id,
-                                  reviewStatus: 'REJECTED'
-                                })}
-                                data-testid={`button-reject-flag-${flag.id}`}
-                              >
-                                <XCircle className="w-4 h-4 text-red-600" />
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-                      ))}
+                          </Card>
+                        );
+                      })}
                   </div>
                 </ScrollArea>
               </CardContent>
