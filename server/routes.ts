@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags } from "@shared/schema";
-import { eq, and, sql, or } from "drizzle-orm";
+import { eq, and, sql, or, inArray } from "drizzle-orm";
 import { db } from "./db";
 import { anthropicService } from "./services/anthropic";
 import { elevenlabsService } from "./services/elevenlabs";
@@ -1703,7 +1703,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             importance: memoryEntries.importance
           })
           .from(memoryEntries)
-          .where(sql`${memoryEntries.id} = ANY(${memoryFlagIds})`);
+          .where(inArray(memoryEntries.id, memoryFlagIds));
           
         memoryContents.forEach(mem => {
           memoryContentMap.set(mem.id, mem);
