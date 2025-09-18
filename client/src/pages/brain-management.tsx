@@ -287,11 +287,11 @@ export default function BrainManagement() {
       return response.json();
     },
     onSuccess: (data) => {
-      setDuplicateGroups(data);
+      setDuplicateGroups(data.groups || []);
       setIsLoadingDuplicates(false);
       toast({
         title: "Duplicates Found",
-        description: `Found ${data.length} groups of similar memories`,
+        description: `Found ${data.groups?.length || 0} groups of similar memories`,
       });
     },
     onError: (error) => {
