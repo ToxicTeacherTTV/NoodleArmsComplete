@@ -1686,13 +1686,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { limit = 50 } = req.query;
+      
+      // Get pending flags using original logic
       const flags = await aiFlagger.getPendingFlags(db, profile.id, Number(limit));
+      
+      // Enrich memory flags with content in one query
+      const memoryFlagIds = flags.filter(f => f.targetType === 'MEMORY').map(f => f.targetId);
+      let memoryContentMap = new Map();
+      
+      if (memoryFlagIds.length > 0) {
+        const memoryContents = await db
+          .select({
+            id: memoryEntries.id,
+            content: memoryEntries.content,
+            type: memoryEntries.type,
+            importance: memoryEntries.importance
+          })
+          .from(memoryEntries)
+          .where(sql`${memoryEntries.id} = ANY(${memoryFlagIds})`);
+          
+        memoryContents.forEach(mem => {
+          memoryContentMap.set(mem.id, mem);
+        });
+      }
+      
+      // Enrich flags with memory content
+      const enrichedFlags = flags.map(flag => {
+        if (flag.targetType === 'MEMORY' && memoryContentMap.has(flag.targetId)) {
+          const memContent = memoryContentMap.get(flag.targetId);
+          return {
+            ...flag,
+            memoryContent: memContent.content,
+            memoryType: memContent.type,
+            memoryImportance: memContent.importance
+          };
+        }
+        return flag;
+      });
       
       // Group importance flags for the same target
       const groupedFlags = [];
       const importanceGroups = new Map();
       
-      for (const flag of flags) {
+      for (const flag of enrichedFlags) {
         const isImportanceFlag = ['high_importance', 'medium_importance', 'low_importance'].includes(flag.flagType);
         
         if (isImportanceFlag) {

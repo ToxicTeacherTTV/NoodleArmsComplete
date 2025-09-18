@@ -1289,6 +1289,21 @@ export default function BrainManagement() {
                                     <p className="text-sm text-muted-foreground mb-2">
                                       {sampleFlag.flagReason}
                                     </p>
+                                    {sampleFlag.memoryContent && (
+                                      <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-3 mb-3 rounded-r">
+                                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
+                                          Flagged Content:
+                                        </p>
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 italic">
+                                          "{sampleFlag.memoryContent}"
+                                        </p>
+                                        {sampleFlag.memoryType && (
+                                          <p className="text-xs text-muted-foreground mt-1">
+                                            Type: {sampleFlag.memoryType}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
                                     <div className="text-xs text-muted-foreground mb-3">
                                       Target: {flag.targetType} • Created: {new Date(flag.createdAt).toLocaleDateString()}
                                     </div>
@@ -1358,6 +1373,21 @@ export default function BrainManagement() {
                                 <p className="text-sm text-muted-foreground mb-2">
                                   {flag.flagReason}
                                 </p>
+                                {flag.memoryContent && (
+                                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-3 mb-3 rounded-r">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
+                                      Flagged Content:
+                                    </p>
+                                    <p className="text-sm text-gray-700 dark:text-gray-300 italic">
+                                      "{flag.memoryContent}"
+                                    </p>
+                                    {flag.memoryType && (
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        Type: {flag.memoryType}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
                                 <div className="text-xs text-muted-foreground">
                                   Target: {flag.targetType} • Created: {new Date(flag.createdAt).toLocaleDateString()}
                                 </div>
