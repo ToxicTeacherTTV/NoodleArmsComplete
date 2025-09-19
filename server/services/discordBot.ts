@@ -386,7 +386,7 @@ export class DiscordBotService {
       messageTypes.push('random');
     }
     
-    return [...new Set(messageTypes)]; // Remove duplicates
+    return Array.from(new Set(messageTypes)); // Remove duplicates
   }
 
   /**
@@ -836,9 +836,15 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
 
       // Generate the response using existing AI service
       const { anthropicService } = await import('./anthropic');
-      const response = await anthropicService.sendMessage(fullContext, this.activeProfile);
+      const response = await anthropicService.generateResponse(
+        fullContext,
+        this.activeProfile.coreIdentity,
+        [], // No specific memories for proactive messages
+        [], // No documents
+        undefined // No lore context
+      );
 
-      return response || null;
+      return response?.message || null;
     } catch (error) {
       console.error('Error generating proactive message:', error);
       return null;
