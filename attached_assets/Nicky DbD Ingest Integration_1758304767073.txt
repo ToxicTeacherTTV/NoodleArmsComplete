@@ -1,0 +1,503 @@
+Nicky DbD Ingest Integration
+
+AUTOMATED DBD CONTENT INGESTION - DEVELOPMENT BRIEF
+PROJECT OVERVIEW & RATIONALE
+THE PROBLEM:
+Currently, keeping Nicky updated on Dead by Daylight content requires manual document uploads. DbD changes constantly - new killers, balance patches, meta shifts, community drama - and manual updates can't keep pace. This leaves Nicky with outdated knowledge about his primary obsession.
+THE SOLUTION:
+Implement automated content ingestion from key DbD sources (Reddit, Steam News, Wiki, YouTube) that feeds into the existing memory system. All automated content will flow through manual curation to maintain character consistency while dramatically reducing manual workload.
+WHY THIS FITS PERFECTLY:
+Your existing architecture already handles everything we need:
+
+Document processing pipeline converts raw text → memory entries
+Confidence scoring prevents low-quality information from corrupting the brain
+Manual curation UI maintains character consistency philosophy
+Contradiction detection catches conflicts between new and existing knowledge
+Protected facts system (999 importance) prevents core personality changes
+
+EXPECTED OUTCOME:
+
+70% reduction in manual DbD content updates
+Real-time awareness of community drama for podcast segments
+Fresh material for "Survivors Saying Stupid Sh*t" and other segments
+Maintained character consistency through existing curation workflow
+
+
+IMPLEMENTATION INSTRUCTIONS
+PHASE 1: DATABASE INFRASTRUCTURE
+Add New Tables to Existing Schema:
+typescript// Add to shared/schema.ts alongside existing tables
+
+export const automatedSources = pgTable('automated_sources', {
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar('profile_id').references(() => profiles.id).notNull(),
+  sourceType: varchar('source_type', { length: 50 }).notNull(), // 'reddit', 'steam', 'wiki', 'youtube'
+  sourceUrl: text('source_url'),
+  isActive: boolean('is_active').default(true),
+  confidenceMultiplier: decimal('confidence_multiplier', { precision: 3, scale: 2 }).default('0.70'),
+  lastProcessedAt: timestamp('last_processed_at'),
+  collectionSchedule: varchar('collection_schedule', { length: 50 }).default('2h'), // '30m', '2h', 'daily'
+  keywords: text('keywords').array().default(sql`ARRAY[]::text[]`), // DbD-specific terms
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
+export const pendingContent = pgTable('pending_content', {
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  sourceId: varchar('source_id').references(() => automatedSources.id).notNull(),
+  profileId: varchar('profile_id').references(() => profiles.id).notNull(),
+  rawContent: text('raw_content').notNull(),
+  title: text('title'),
+  sourceUrl: text('source_url'),
+  extractedAt: timestamp('extracted_at').defaultNow(),
+  processed: boolean('processed').default(false),
+  approved: boolean('approved'),
+  rejectionReason: text('rejection_reason'),
+  processedAt: timestamp('processed_at'),
+  metadata: jsonb('metadata').default(sql`'{}'::jsonb`) // Store upvotes, author, etc.
+});
+
+// Add relations
+export const automatedSourcesRelations = relations(automatedSources, ({ one, many }) => ({
+  profile: one(profiles, { fields: [automatedSources.profileId], references: [profiles.id] }),
+  pendingContent: many(pendingContent)
+}));
+
+export const pendingContentRelations = relations(pendingContent, ({ one }) => ({
+  source: one(automatedSources, { fields: [pendingContent.sourceId], references: [automatedSources.id] }),
+  profile: one(profiles, { fields: [pendingContent.profileId], references: [profiles.id] })
+}));
+Update Storage Interface:
+typescript// Add to server/storage.ts
+
+// Automated Sources Management
+async createAutomatedSource(data: InsertAutomatedSource): Promise<AutomatedSource>
+async getAutomatedSources(profileId: string): Promise<AutomatedSource[]>
+async updateAutomatedSource(id: string, data: Partial<AutomatedSource>): Promise<void>
+async toggleAutomatedSource(id: string, isActive: boolean): Promise<void>
+
+// Pending Content Management  
+async createPendingContent(data: InsertPendingContent): Promise<PendingContent>
+async getPendingContent(profileId: string, processed?: boolean): Promise<PendingContent[]>
+async approvePendingContent(id: string): Promise<void>
+async rejectPendingContent(id: string, reason: string): Promise<void>
+async getPendingContentById(id: string): Promise<PendingContent | null>
+PHASE 2: CONTENT COLLECTION SERVICES
+Create services/ingestion/ directory with the following services:
+RedditService.ts (START HERE - HIGHEST VALUE)
+typescriptimport snoowrap from 'snoowrap';
+
+export class RedditService {
+  private reddit: snoowrap;
+  
+  constructor() {
+    this.reddit = new snoowrap({
+      userAgent: 'DbD-Content-Bot/1.0.0',
+      clientId: process.env.REDDIT_CLIENT_ID!,
+      clientSecret: process.env.REDDIT_CLIENT_SECRET!,
+      username: process.env.REDDIT_USERNAME!,
+      password: process.env.REDDIT_PASSWORD!,
+    });
+  }
+
+  private readonly DBD_KEYWORDS = [
+    'dead by daylight', 'dbd', 'killer', 'survivor', 'perk', 'bloodweb',
+    'entity', 'fog', 'generator', 'hook', 'trial', 'offering', 'addon',
+    'behavior', 'bhvr', 'meta', 'nerf', 'buff', 'patch', 'ptb'
+  ];
+
+  private isDbDRelevant(text: string): boolean {
+    const lowerText = text.toLowerCase();
+    return this.DBD_KEYWORDS.some(keyword => lowerText.includes(keyword));
+  }
+
+  async collectContent(sourceId: string, profileId: string): Promise<number> {
+    try {
+      // Get hot posts from r/deadbydaylight
+      const hotPosts = await this.reddit.getSubreddit('deadbydaylight').getHot({ limit: 25 });
+      
+      let contentCollected = 0;
+      
+      for (const post of hotPosts) {
+        // Quality filters
+        if (post.score < 50) continue; // Minimum upvotes
+        if (post.over_18) continue; // Skip NSFW
+        if (!this.isDbDRelevant(post.title + (post.selftext || ''))) continue;
+        
+        // Check if we already processed this post
+        const existingContent = await storage.db
+          .select()
+          .from(pendingContent)
+          .where(eq(pendingContent.sourceUrl, `https://reddit.com${post.permalink}`))
+          .limit(1);
+          
+        if (existingContent.length > 0) continue;
+
+        // Create pending content entry
+        await storage.createPendingContent({
+          sourceId,
+          profileId,
+          rawContent: `REDDIT POST: ${post.title}\n\n${post.selftext || 'Link post - no text content'}\n\nComments summary: ${await this.getTopComments(post)}`,
+          title: post.title,
+          sourceUrl: `https://reddit.com${post.permalink}`,
+          metadata: {
+            upvotes: post.score,
+            author: post.author.name,
+            created: post.created_utc,
+            subreddit: post.subreddit_name_prefixed,
+            flair: post.link_flair_text
+          }
+        });
+        
+        contentCollected++;
+      }
+      
+      console.log(`✅ Reddit: Collected ${contentCollected} new DbD posts`);
+      return contentCollected;
+      
+    } catch (error) {
+      console.error('❌ Reddit collection failed:', error);
+      throw error;
+    }
+  }
+
+  private async getTopComments(post: any): Promise<string> {
+    try {
+      await post.expandReplies({ limit: 5, depth: 1 });
+      const topComments = post.comments
+        .slice(0, 3)
+        .map((comment: any) => `• ${comment.body.substring(0, 200)}...`)
+        .join('\n');
+      return topComments || 'No significant comments';
+    } catch {
+      return 'Comments unavailable';
+    }
+  }
+}
+SteamNewsService.ts
+typescriptexport class SteamNewsService {
+  private readonly DBD_APP_ID = '381210';
+  private readonly STEAM_NEWS_API = 'https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/';
+
+  async collectContent(sourceId: string, profileId: string): Promise<number> {
+    try {
+      const response = await fetch(
+        `${this.STEAM_NEWS_API}?appid=${this.DBD_APP_ID}&count=10&format=json`
+      );
+      
+      const data = await response.json();
+      let contentCollected = 0;
+      
+      for (const newsItem of data.appnews.newsitems) {
+        // Only get official announcements and patch notes
+        if (!newsItem.feedlabel.includes('Official') && 
+            !newsItem.title.toLowerCase().includes('patch')) continue;
+            
+        // Check if already processed
+        const existing = await storage.db
+          .select()
+          .from(pendingContent)
+          .where(eq(pendingContent.sourceUrl, newsItem.url))
+          .limit(1);
+          
+        if (existing.length > 0) continue;
+
+        await storage.createPendingContent({
+          sourceId,
+          profileId,
+          rawContent: `STEAM NEWS: ${newsItem.title}\n\n${newsItem.contents}`,
+          title: newsItem.title,
+          sourceUrl: newsItem.url,
+          metadata: {
+            date: newsItem.date,
+            feedlabel: newsItem.feedlabel,
+            author: newsItem.author || 'Behaviour Interactive'
+          }
+        });
+        
+        contentCollected++;
+      }
+      
+      console.log(`✅ Steam: Collected ${contentCollected} new announcements`);
+      return contentCollected;
+      
+    } catch (error) {
+      console.error('❌ Steam collection failed:', error);
+      throw error;
+    }
+  }
+}
+ContentCollectionManager.ts
+typescript// Central coordinator for all collection services
+export class ContentCollectionManager {
+  private redditService = new RedditService();
+  private steamService = new SteamNewsService();
+  
+  async runCollection(profileId: string): Promise<CollectionResult> {
+    const results = {
+      reddit: 0,
+      steam: 0,
+      errors: [] as string[],
+      totalCollected: 0
+    };
+    
+    // Get active sources for this profile
+    const activeSources = await storage.getAutomatedSources(profileId)
+      .then(sources => sources.filter(s => s.isActive));
+    
+    for (const source of activeSources) {
+      try {
+        let collected = 0;
+        
+        switch (source.sourceType) {
+          case 'reddit':
+            collected = await this.redditService.collectContent(source.id, profileId);
+            results.reddit = collected;
+            break;
+            
+          case 'steam':
+            collected = await this.steamService.collectContent(source.id, profileId);
+            results.steam = collected;
+            break;
+        }
+        
+        // Update last processed timestamp
+        await storage.updateAutomatedSource(source.id, {
+          lastProcessedAt: new Date()
+        });
+        
+      } catch (error) {
+        results.errors.push(`${source.sourceType}: ${error.message}`);
+      }
+    }
+    
+    results.totalCollected = results.reddit + results.steam;
+    return results;
+  }
+}
+PHASE 3: API ENDPOINTS
+Add to server/routes.ts:
+typescript// Automated content ingestion endpoints
+app.get('/api/ingestion/sources/:profileId', async (req, res) => {
+  try {
+    const sources = await storage.getAutomatedSources(req.params.profileId);
+    res.json({ data: sources });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/ingestion/sources', async (req, res) => {
+  try {
+    const source = await storage.createAutomatedSource(req.body);
+    res.status(201).json({ data: source });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/ingestion/sources/:id/toggle', async (req, res) => {
+  try {
+    await storage.toggleAutomatedSource(req.params.id, req.body.isActive);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Pending content management
+app.get('/api/ingestion/pending/:profileId', async (req, res) => {
+  try {
+    const pending = await storage.getPendingContent(req.params.profileId, false);
+    res.json({ data: pending });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/ingestion/pending/:id/approve', async (req, res) => {
+  try {
+    const pendingItem = await storage.getPendingContentById(req.params.id);
+    if (!pendingItem) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+    
+    // Process through existing document pipeline
+    const processedDocument = await processTextContent(
+      pendingItem.rawContent,
+      pendingItem.profileId
+    );
+    
+    // Mark as approved and processed
+    await storage.approvePendingContent(req.params.id);
+    
+    res.json({ 
+      success: true, 
+      factsExtracted: processedDocument.factsExtracted 
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/ingestion/pending/:id/reject', async (req, res) => {
+  try {
+    await storage.rejectPendingContent(req.params.id, req.body.reason || 'Not relevant');
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Manual collection trigger (for testing)
+app.post('/api/ingestion/collect/:profileId', async (req, res) => {
+  try {
+    const collectionManager = new ContentCollectionManager();
+    const results = await collectionManager.runCollection(req.params.profileId);
+    
+    res.json({ 
+      data: results,
+      message: `Collected ${results.totalCollected} new items for review`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+PHASE 4: FRONTEND INTEGRATION
+Add to Brain Management Dashboard:
+typescript// components/IngestionManager.tsx
+export function IngestionManager({ profileId }: { profileId: string }) {
+  const { data: sources } = useQuery({
+    queryKey: ['/api/ingestion/sources', profileId],
+    enabled: !!profileId
+  });
+  
+  const { data: pendingItems } = useQuery({
+    queryKey: ['/api/ingestion/pending', profileId],
+    enabled: !!profileId
+  });
+  
+  const collectMutation = useMutation({
+    mutationFn: () => fetch(`/api/ingestion/collect/${profileId}`, { method: 'POST' })
+      .then(res => res.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ingestion/pending'] });
+      toast.success('Content collection completed!');
+    }
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">Automated Content Ingestion</h2>
+        <Button 
+          onClick={() => collectMutation.mutate()}
+          disabled={collectMutation.isPending}
+        >
+          {collectMutation.isPending ? 'Collecting...' : 'Run Collection'}
+        </Button>
+      </div>
+      
+      <PendingContentReview items={pendingItems || []} profileId={profileId} />
+      <SourceConfiguration sources={sources || []} profileId={profileId} />
+    </div>
+  );
+}
+
+// components/PendingContentReview.tsx  
+export function PendingContentReview({ items, profileId }: Props) {
+  const approveMutation = useMutation({
+    mutationFn: (id: string) => 
+      fetch(`/api/ingestion/pending/${id}/approve`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/ingestion/pending'] });
+      toast.success('Content approved and processed!');
+    }
+  });
+  
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold">
+        Pending Review ({items.length} items)
+      </h3>
+      
+      {items.map(item => (
+        <Card key={item.id} className="p-4">
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <h4 className="font-medium">{item.title}</h4>
+              <p className="text-sm text-gray-600 mt-1">
+                {item.rawContent.substring(0, 200)}...
+              </p>
+              <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                <Badge variant="outline">{item.source?.sourceType}</Badge>
+                <span>{new Date(item.extractedAt).toLocaleDateString()}</span>
+                {item.metadata && (
+                  <span>↑ {item.metadata.upvotes} upvotes</span>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex gap-2 ml-4">
+              <Button
+                size="sm"
+                onClick={() => approveMutation.mutate(item.id)}
+                disabled={approveMutation.isPending}
+              >
+                Approve
+              </Button>
+              <Button
+                size="sm" 
+                variant="outline"
+                onClick={() => rejectMutation.mutate({ id: item.id, reason: 'Not relevant' })}
+              >
+                Reject
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+PHASE 5: TESTING & DEPLOYMENT
+Manual Testing Steps:
+
+Create automated sources for Reddit and Steam
+Run manual collection via API endpoint
+Verify pending content appears in dashboard
+Approve some content and verify facts are extracted
+Test Nicky's knowledge of approved facts in conversation
+
+Environment Variables to Add:
+bash# Reddit API credentials
+REDDIT_CLIENT_ID=your_reddit_app_id
+REDDIT_CLIENT_SECRET=your_reddit_secret  
+REDDIT_USERNAME=your_bot_username
+REDDIT_PASSWORD=your_bot_password
+Success Criteria:
+
+Manual collection successfully retrieves DbD content
+Content appears in pending review interface
+Approved content integrates into memory system
+Nicky can reference new DbD information in conversations
+No impact on existing character consistency
+
+Future Automation (After Testing):
+
+Set up cron jobs or scheduled functions for automatic collection
+Reddit: Every 2 hours during peak gaming times (2PM-10PM EST)
+Steam: Every 30 minutes for official announcements
+
+
+IMPLEMENTATION ORDER
+
+Database tables and storage methods (foundational)
+RedditService implementation (highest value, easiest to test)
+API endpoints (enables manual testing)
+Basic frontend integration (pending review interface)
+Manual testing and refinement (critical before automation)
+SteamService implementation (official content)
+Automated scheduling (final step after everything is proven)
+
+Start with Reddit - it's the highest signal-to-noise ratio for DbD community drama and meta discussions that will fuel Nicky's personality perfectly.
