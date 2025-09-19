@@ -594,8 +594,8 @@ export default function DiscordManagementPanel() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {members.map((member) => (
-                      <Card key={member.id} className="relative">
+                    {members.map((member, index) => (
+                      <Card key={`${member.id}-${index}`} className="relative">
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between">
                             <div className="space-y-2 flex-1">
