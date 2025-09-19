@@ -223,21 +223,44 @@ export class DiscordBotService {
       }
     }
 
-    // Random response based on server responsiveness setting
-    const randomChance = Math.random() * 100;
-    if (randomChance <= ((server.responsiveness || 60) * 0.1)) { // Scale down responsiveness for random responses
-      return {
-        respond: true,
-        triggerType: 'RANDOM',
-        triggerData: {
-          behaviorSettings: {
-            aggressiveness: server.aggressiveness || 80,
-            responsiveness: server.responsiveness || 60,
-            italianIntensity: server.italianIntensity || 100,
+    // Random response based on effective server responsiveness setting (dynamic)
+    try {
+      const { behaviorModulator } = await import('./behaviorModulator');
+      const effectiveBehavior = await behaviorModulator.getEffectiveBehavior(server.serverId);
+      
+      const randomChance = Math.random() * 100;
+      if (randomChance <= (effectiveBehavior.responsiveness * 0.1)) { // Scale down responsiveness for random responses
+        return {
+          respond: true,
+          triggerType: 'RANDOM',
+          triggerData: {
+            behaviorSettings: {
+              aggressiveness: effectiveBehavior.aggressiveness,
+              responsiveness: effectiveBehavior.responsiveness,
+              italianIntensity: effectiveBehavior.italianIntensity,
+            },
           },
-        },
-        processingTime: Date.now() - startTime,
-      };
+          processingTime: Date.now() - startTime,
+        };
+      }
+    } catch (error) {
+      console.error('Error getting effective behavior for random response:', error);
+      // Fallback to baseline values
+      const randomChance = Math.random() * 100;
+      if (randomChance <= ((server.responsiveness || 60) * 0.1)) {
+        return {
+          respond: true,
+          triggerType: 'RANDOM',
+          triggerData: {
+            behaviorSettings: {
+              aggressiveness: server.aggressiveness || 80,
+              responsiveness: server.responsiveness || 60,
+              italianIntensity: server.italianIntensity || 100,
+            },
+          },
+          processingTime: Date.now() - startTime,
+        };
+      }
     }
 
     return { respond: false, triggerType: 'KEYWORD' };
@@ -251,16 +274,20 @@ export class DiscordBotService {
   ): Promise<string | null> {
     console.log(`🚀 Discord generateResponse called for user: ${member.username}`);
     try {
+      // Get effective behavior values (baseline + drift + chaos + time)
+      const { behaviorModulator } = await import('./behaviorModulator');
+      const effectiveBehavior = await behaviorModulator.getEffectiveBehavior(server.serverId);
+      
       // Build context for Nicky's response
       const contextParts = [];
       
-      // Add server behavior settings
+      // Add effective server behavior settings (live values)
       contextParts.push(`Discord Server Behavior Settings:
-- Aggressiveness: ${server.aggressiveness}/100
-- Responsiveness: ${server.responsiveness}/100  
-- Italian Intensity: ${server.italianIntensity}/100
-- DBD Obsession: ${server.dbdObsession}/100
-- Family Business Mode: ${server.familyBusinessMode}/100`);
+- Aggressiveness: ${effectiveBehavior.aggressiveness}/100
+- Responsiveness: ${effectiveBehavior.responsiveness}/100  
+- Italian Intensity: ${effectiveBehavior.italianIntensity}/100
+- DBD Obsession: ${effectiveBehavior.dbdObsession}/100
+- Family Business Mode: ${effectiveBehavior.familyBusinessMode}/100`);
 
       // Add member facts if available
       if (member.facts && member.facts.length > 0) {
@@ -284,19 +311,27 @@ export class DiscordBotService {
 
       const fullContext = contextParts.join('\n\n');
 
-      // Adjust personality based on behavior settings
+      // Adjust personality based on effective behavior settings (dynamic)
       let personalityAdjustments = '';
-      if ((server.aggressiveness || 80) > 70) {
+      if (effectiveBehavior.aggressiveness > 70) {
         personalityAdjustments += 'Be more aggressive and confrontational. ';
       }
-      if ((server.italianIntensity || 100) > 80) {
+      if (effectiveBehavior.italianIntensity > 80) {
         personalityAdjustments += 'Use more Italian expressions and dramatic gestures. ';
       }
-      if ((server.dbdObsession || 80) > 70) {
+      if (effectiveBehavior.dbdObsession > 70) {
         personalityAdjustments += 'Relate topics back to Dead by Daylight when possible. ';
       }
-      if ((server.familyBusinessMode || 40) > 60) {
+      if (effectiveBehavior.familyBusinessMode > 60) {
         personalityAdjustments += 'Reference family business and mafia terminology more often. ';
+      }
+      
+      // Add dynamic behavior context
+      if (effectiveBehavior.driftFactors) {
+        contextParts.push(`Dynamic Behavior Factors:
+- Time of Day Influence: ${effectiveBehavior.driftFactors.timeOfDay > 0 ? 'Boosted' : effectiveBehavior.driftFactors.timeOfDay < 0 ? 'Dampened' : 'Normal'}
+- Recent Activity Impact: ${effectiveBehavior.driftFactors.recentActivity > 0 ? 'Heightened' : effectiveBehavior.driftFactors.recentActivity < 0 ? 'Calmed' : 'Stable'}
+- Chaos Mode Active: ${effectiveBehavior.driftFactors.chaosMultiplier > 1 ? 'Amplified' : effectiveBehavior.driftFactors.chaosMultiplier < 1 ? 'Suppressed' : 'Baseline'}`);
       }
 
       // Use existing AI service to generate response with Discord context
@@ -399,7 +434,7 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
   private async createServerRecord(serverId: string, serverName: string): Promise<DiscordServer> {
     console.log(`📝 Creating new Discord server record: ${serverName} (${serverId})`);
     
-    return await storage.createDiscordServer({
+    const newServer = await storage.createDiscordServer({
       profileId: this.activeProfile.id,
       serverId,
       serverName,
@@ -411,6 +446,17 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
       dbdObsession: 80,
       familyBusinessMode: 40,
     });
+    
+    // Start automatic behavior drift updates for this server
+    try {
+      const { behaviorModulator } = await import('./behaviorModulator');
+      behaviorModulator.startDriftUpdates(serverId);
+      console.log(`🔄 Started dynamic behavior drift for server: ${serverName}`);
+    } catch (error) {
+      console.error('Failed to start behavior drift updates:', error);
+    }
+    
+    return newServer;
   }
 
   private async createMemberRecord(

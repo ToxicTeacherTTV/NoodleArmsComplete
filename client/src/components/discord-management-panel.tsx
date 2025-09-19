@@ -9,8 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Users, UserPlus, MessageCircle, Edit2, Save, X, Trash2 } from "lucide-react";
+import { Users, UserPlus, MessageCircle, Edit2, Save, X, Trash2, Activity, TrendingUp, Clock } from "lucide-react";
 import { format } from "date-fns";
+import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
 
 type DiscordServer = {
   id: string;
@@ -33,6 +35,28 @@ type DiscordMember = {
   interactionCount: number;
   createdAt: string;
   updatedAt: string;
+};
+
+type BehaviorSettings = {
+  aggressiveness: number;
+  responsiveness: number;
+  italianIntensity: number;
+  dbdObsession: number;
+  familyBusinessMode: number;
+};
+
+type EffectiveBehavior = {
+  aggressiveness: number;
+  responsiveness: number;
+  italianIntensity: number;
+  dbdObsession: number;
+  familyBusinessMode: number;
+  lastUpdated: string;
+  driftFactors: {
+    timeOfDay: number;
+    recentActivity: number;
+    chaosMultiplier: number;
+  };
 };
 
 export default function DiscordManagementPanel() {
@@ -184,11 +208,15 @@ export default function DiscordManagementPanel() {
             )}
 
             {activeServer && (
-              <div className="p-3 bg-muted rounded-md">
-                <h3 className="font-semibold">{activeServer.serverName}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {activeServer.memberCount} members • Active since {format(new Date(activeServer.createdAt), 'MMM dd, yyyy')}
-                </p>
+              <div className="space-y-4">
+                <div className="p-3 bg-muted rounded-md">
+                  <h3 className="font-semibold">{activeServer.serverName}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {activeServer.memberCount} members • Active since {format(new Date(activeServer.createdAt), 'MMM dd, yyyy')}
+                  </p>
+                </div>
+                
+                <DynamicBehaviorPanel serverId={activeServer.serverId} />
               </div>
             )}
 
@@ -404,5 +432,232 @@ export default function DiscordManagementPanel() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// Dynamic Behavior Panel Component
+function DynamicBehaviorPanel({ serverId }: { serverId: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Get baseline behavior settings
+  const { data: baseline, isLoading: baselineLoading, refetch: refetchBaseline } = useQuery<BehaviorSettings>({
+    queryKey: [`/api/discord/servers/${serverId}/behavior`],
+    enabled: !!serverId,
+  });
+
+  // Get effective (live) behavior values 
+  const { data: effective, isLoading: effectiveLoading, refetch: refetchEffective } = useQuery<EffectiveBehavior>({
+    queryKey: [`/api/discord/servers/${serverId}/effective-behavior`],
+    enabled: !!serverId,
+    refetchInterval: 60000, // Refresh every minute to show live changes
+  });
+
+  // Update baseline settings
+  const updateBehaviorMutation = useMutation({
+    mutationFn: async (newSettings: BehaviorSettings) => {
+      const response = await fetch(`/api/discord/servers/${serverId}/behavior`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSettings),
+      });
+      if (!response.ok) throw new Error('Failed to update');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/discord/servers/${serverId}/behavior`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/discord/servers/${serverId}/effective-behavior`] });
+      toast({ title: "✅ Behavior settings updated!" });
+    },
+    onError: () => {
+      toast({ 
+        title: "❌ Failed to update settings", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const handleSliderChange = (setting: keyof BehaviorSettings, value: number[]) => {
+    if (!baseline) return;
+    
+    const newSettings = {
+      ...baseline,
+      [setting]: value[0],
+    };
+    
+    updateBehaviorMutation.mutate(newSettings);
+  };
+
+  if (baselineLoading || effectiveLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Nicky's Discord Personality
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="w-4 h-4 border-2 border-primary border-t-transparent animate-spin rounded-full"></div>
+            Loading dynamic behavior settings...
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!baseline || !effective) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Nicky's Discord Personality
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-4">
+            <p className="text-muted-foreground">Unable to load behavior settings</p>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={() => { refetchBaseline(); refetchEffective(); }}
+              className="mt-2"
+            >
+              Retry
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const behaviorItems = [
+    { 
+      key: 'aggressiveness' as keyof BehaviorSettings, 
+      label: 'Aggressiveness', 
+      icon: '🔥', 
+      description: 'How confrontational and hostile Nicky gets' 
+    },
+    { 
+      key: 'responsiveness' as keyof BehaviorSettings, 
+      label: 'Responsiveness', 
+      icon: '⚡', 
+      description: 'How often he responds to messages' 
+    },
+    { 
+      key: 'italianIntensity' as keyof BehaviorSettings, 
+      label: 'Italian Intensity', 
+      icon: '🇮🇹', 
+      description: 'How much Italian language and expressions he uses' 
+    },
+    { 
+      key: 'dbdObsession' as keyof BehaviorSettings, 
+      label: 'DBD Obsession', 
+      icon: '💀', 
+      description: 'How often he relates everything to Dead by Daylight' 
+    },
+    { 
+      key: 'familyBusinessMode' as keyof BehaviorSettings, 
+      label: 'Family Business Mode', 
+      icon: '👔', 
+      description: 'How often he uses mafia/family business terminology' 
+    },
+  ];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Activity className="h-5 w-5" />
+          Nicky's Discord Personality
+          <Badge variant="outline" className="ml-auto">
+            <TrendingUp className="h-3 w-3 mr-1" />
+            Dynamic
+          </Badge>
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Adjust baseline settings - values change automatically based on time, activity, and chaos mode
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Dynamic Status */}
+        <div className="flex items-center gap-4 p-3 bg-muted rounded-md">
+          <Clock className="h-4 w-4 text-muted-foreground" />
+          <div className="text-sm">
+            <span className="font-medium">Live Status:</span>
+            <span className="ml-2">
+              Time influence: {effective.driftFactors.timeOfDay > 0 ? 'Boosted' : effective.driftFactors.timeOfDay < 0 ? 'Dampened' : 'Normal'}
+            </span>
+            <span className="mx-2">•</span>
+            <span>
+              Chaos mode: {effective.driftFactors.chaosMultiplier > 1 ? 'Amplified' : effective.driftFactors.chaosMultiplier < 1 ? 'Suppressed' : 'Baseline'}
+            </span>
+          </div>
+        </div>
+
+        {/* Behavior Sliders */}
+        <div className="space-y-4">
+          {behaviorItems.map((item) => {
+            const baselineValue = baseline[item.key];
+            const effectiveValue = effective[item.key];
+            const isDifferent = Math.abs(baselineValue - effectiveValue) > 2;
+
+            return (
+              <div key={item.key} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-2">
+                    <span>{item.icon}</span>
+                    {item.label}
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      Baseline: {baselineValue}%
+                    </Badge>
+                    {isDifferent && (
+                      <Badge variant="secondary" className="text-xs">
+                        Live: {effectiveValue}%
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="relative">
+                  <Slider
+                    value={[baselineValue]}
+                    onValueChange={(value) => handleSliderChange(item.key, value)}
+                    max={100}
+                    step={5}
+                    className="w-full"
+                    disabled={updateBehaviorMutation.isPending}
+                  />
+                  
+                  {/* Show effective value indicator if different */}
+                  {isDifferent && (
+                    <div 
+                      className="absolute top-1 w-2 h-2 bg-green-500 rounded-full transform -translate-x-1"
+                      style={{ left: `${effectiveValue}%` }}
+                      title={`Live effective value: ${effectiveValue}%`}
+                    />
+                  )}
+                </div>
+                
+                <p className="text-xs text-muted-foreground">{item.description}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        <Separator />
+
+        {/* Last Update Info */}
+        <div className="text-xs text-muted-foreground text-center">
+          Last updated: {format(new Date(effective.lastUpdated), 'MMM dd, h:mm a')}
+          <span className="mx-2">•</span>
+          Values refresh automatically every minute
+        </div>
+      </CardContent>
+    </Card>
   );
 }

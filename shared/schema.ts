@@ -419,12 +419,16 @@ export const discordServers = pgTable("discord_servers", {
   serverId: text("server_id").notNull().unique(), // Discord server ID
   serverName: text("server_name").notNull(),
   isActive: boolean("is_active").default(true),
-  // Behavior control settings
+  // Baseline behavior settings (user-configurable)
   aggressiveness: integer("aggressiveness").default(80), // 0-100
   responsiveness: integer("responsiveness").default(60), // 0-100 
   italianIntensity: integer("italian_intensity").default(100), // 0-100
   dbdObsession: integer("dbd_obsession").default(80), // 0-100
   familyBusinessMode: integer("family_business_mode").default(40), // 0-100
+  // Dynamic drift state (auto-calculated)
+  lastDriftUpdate: timestamp("last_drift_update").default(sql`now()`),
+  driftMomentum: json("drift_momentum").default('{}'), // EWMA momentum for smooth changes
+  contextNudges: json("context_nudges").default('[]'), // Temporary boosts from events (array)
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
@@ -571,3 +575,32 @@ export type DiscordTopicTrigger = typeof discordTopicTriggers.$inferSelect;
 export type InsertDiscordTopicTrigger = z.infer<typeof insertDiscordTopicTriggerSchema>;
 export type DiscordConversation = typeof discordConversations.$inferSelect;
 export type InsertDiscordConversation = z.infer<typeof insertDiscordConversationSchema>;
+
+// Dynamic behavior types
+export type EffectiveBehavior = {
+  aggressiveness: number;
+  responsiveness: number;
+  italianIntensity: number;
+  dbdObsession: number;
+  familyBusinessMode: number;
+  lastUpdated: string;
+  driftFactors: {
+    timeOfDay: number;
+    recentActivity: number;
+    chaosMultiplier: number;
+  };
+};
+
+export type BehaviorDrift = {
+  aggressiveness: number;
+  responsiveness: number;
+  italianIntensity: number;
+  dbdObsession: number;
+  familyBusinessMode: number;
+};
+
+export type ContextNudge = {
+  type: 'mention_burst' | 'quiet_period' | 'keyword_trigger' | 'moderation_flag';
+  strength: number; // -20 to +20
+  expiresAt: string;
+};

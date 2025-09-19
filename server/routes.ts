@@ -2292,6 +2292,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get Discord server baseline behavior settings
+  app.get('/api/discord/servers/:id/behavior', requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const server = await storage.getDiscordServer(id);
+      
+      if (!server) {
+        return res.status(404).json({ error: 'Discord server not found' });
+      }
+
+      // Return baseline behavior settings
+      const baseline = {
+        aggressiveness: server.aggressiveness || 80,
+        responsiveness: server.responsiveness || 60,
+        italianIntensity: server.italianIntensity || 100,
+        dbdObsession: server.dbdObsession || 80,
+        familyBusinessMode: server.familyBusinessMode || 40,
+      };
+
+      res.json(baseline);
+    } catch (error) {
+      console.error('Error getting Discord server behavior:', error);
+      res.status(500).json({ error: 'Failed to get behavior settings' });
+    }
+  });
+
   // Update Discord server behavior settings
   app.put('/api/discord/servers/:id/behavior', requireAuth, async (req, res) => {
     try {
@@ -2312,6 +2338,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(server);
     } catch (error) {
       res.status(500).json({ error: 'Failed to update Discord server behavior' });
+    }
+  });
+
+  // Get effective Discord behavior (live values with drift/chaos/time modulation)
+  app.get('/api/discord/servers/:serverId/effective-behavior', requireAuth, async (req, res) => {
+    try {
+      const { serverId } = req.params;
+      
+      // Import the behavior modulator here to avoid circular dependency
+      const { behaviorModulator } = await import('./services/behaviorModulator');
+      const effective = await behaviorModulator.getEffectiveBehavior(serverId);
+      
+      res.json(effective);
+    } catch (error) {
+      console.error('Error getting effective Discord behavior:', error);
+      res.status(500).json({ error: 'Failed to get effective behavior' });
+    }
+  });
+
+  // Add context nudge to influence behavior temporarily
+  app.post('/api/discord/servers/:serverId/nudge', requireAuth, async (req, res) => {
+    try {
+      const { serverId } = req.params;
+      const { type, strength, durationMinutes } = req.body;
+      
+      // Validate nudge data
+      const validTypes = ['mention_burst', 'quiet_period', 'keyword_trigger', 'moderation_flag'];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ error: 'Invalid nudge type' });
+      }
+      
+      const nudge = {
+        type,
+        strength: Math.max(-20, Math.min(20, strength || 5)),
+        expiresAt: new Date(Date.now() + (durationMinutes || 30) * 60 * 1000).toISOString(),
+      };
+      
+      // Import the behavior modulator here to avoid circular dependency
+      const { behaviorModulator } = await import('./services/behaviorModulator');
+      await behaviorModulator.addContextNudge(serverId, nudge);
+      
+      res.json({ success: true, nudge });
+    } catch (error) {
+      console.error('Error adding context nudge:', error);
+      res.status(500).json({ error: 'Failed to add context nudge' });
     }
   });
 
