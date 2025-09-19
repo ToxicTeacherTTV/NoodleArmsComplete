@@ -220,6 +220,7 @@ export class DiscordBotService {
     member: DiscordMember,
     responseContext: any
   ): Promise<string | null> {
+    console.log(`🚀 Discord generateResponse called for user: ${member.username}`);
     try {
       // Build context for Nicky's response
       const contextParts = [];
@@ -285,6 +286,7 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
       // Get relevant memories for context
       const relevantMemories = await storage.searchMemoryEntries(this.activeProfile.id, message.content);
       
+      console.log(`🤖 Calling anthropicService.generateResponse...`);
       const aiResponse = await anthropicService.generateResponse(
         prompt,
         this.activeProfile.coreIdentity,
@@ -292,6 +294,7 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
         [], // No documents for now
         fullContext
       );
+      console.log(`✅ Got AI response, processing...`);
 
       // Extract response content from AI response object
       console.log(`🔍 AI Response type: ${typeof aiResponse}, structure:`, JSON.stringify(aiResponse, null, 2));
