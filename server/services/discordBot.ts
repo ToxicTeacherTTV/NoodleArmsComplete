@@ -356,10 +356,10 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
       }
 
       // Add proper @mention for the user being responded to
-      const userMention = `<@${responseContext.userId}>`;
+      const userMention = `<@${message.author.id}>`;
       if (!discordContent.includes(userMention)) {
         discordContent = `${userMention} ${discordContent}`;
-        console.log(`👤 Added user mention for: ${member.username}`);
+        console.log(`👤 Added user mention for: ${member.username} (${message.author.id})`);
       }
 
       // If content is empty after filtering, provide a fallback
