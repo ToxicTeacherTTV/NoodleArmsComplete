@@ -23,6 +23,7 @@ import PersonalityPanel from "@/components/personality-panel";
 import DiscordControlPanel from "@/components/discord-control-panel";
 import DiscordManagementPanel from "@/components/discord-management-panel";
 import ContentIngestionPanel from "@/components/content-ingestion-panel";
+import { IntelligenceDashboard } from "@/components/intelligence-dashboard";
 
 interface MemoryFact {
   id: string;
@@ -967,7 +968,7 @@ export default function BrainManagement() {
 
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7 xl:grid-cols-13">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7 xl:grid-cols-14">
             <TabsTrigger value="recent-memories" data-testid="tab-recent-memories" className="text-xs">
               📝 Recent
             </TabsTrigger>
@@ -1003,6 +1004,9 @@ export default function BrainManagement() {
             </TabsTrigger>
             <TabsTrigger value="all-facts" data-testid="tab-all-facts" className="text-xs">
               🧠 All Facts
+            </TabsTrigger>
+            <TabsTrigger value="intelligence" data-testid="tab-intelligence" className="text-xs">
+              🧠 Intelligence
             </TabsTrigger>
             <TabsTrigger value="content-sources" data-testid="tab-content-sources" className="text-xs">
               📡 Content Sources
@@ -1804,6 +1808,11 @@ export default function BrainManagement() {
                 </ScrollArea>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Intelligence Dashboard */}
+          <TabsContent value="intelligence" className="mt-6">
+            <IntelligenceDashboard />
           </TabsContent>
 
           {/* Content Sources */}
