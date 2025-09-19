@@ -281,6 +281,7 @@ export default function JazzDashboard() {
             <button
               onClick={() => setAppMode(appMode === 'PODCAST' ? 'STREAMING' : 'PODCAST')}
               className="px-2 md:px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors text-sm"
+              data-testid="button-toggle-mode"
             >
               <span className="hidden sm:inline">{appMode === 'PODCAST' ? '🎙️ Podcast Mode' : '🔴 Streaming Mode'}</span>
               <span className="sm:hidden">{appMode === 'PODCAST' ? '🎙️' : '🔴'}</span>
