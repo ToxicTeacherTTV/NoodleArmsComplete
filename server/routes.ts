@@ -1524,6 +1524,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/memory/entries/:id/clean', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      // Get the memory entry to clean
+      const currentFacts = await storage.getMemoryEntries(activeProfile.id, 10000);
+      const currentFact = currentFacts.find(f => f.id === id);
+      
+      if (!currentFact) {
+        return res.status(404).json({ error: 'Fact not found' });
+      }
+
+      // Check if it's a wall of text that can be cleaned
+      const content = currentFact.content.toLowerCase();
+      const hasUserMarkers = /(\byou\s|user:|^### |^> |what|how|why|hey nicky)/i.test(currentFact.content);
+      const hasAIMarkers = /(nicky|assistant:|dente|noodle arms)/i.test(content);
+      const isLong = currentFact.content.length > 300;
+      
+      if (!hasUserMarkers || !hasAIMarkers || !isLong) {
+        return res.status(400).json({ error: 'This fact does not appear to be wall-of-text that can be cleaned' });
+      }
+
+      console.log(`✂️ Cleaning wall-of-text fact: "${currentFact.content.substring(0, 100)}..."`);
+      
+      // Use conversationParser to split into atomic sentences
+      const atomicSentences = conversationParser.splitIntoAtomicSentences(currentFact.content);
+      
+      if (atomicSentences.length <= 1) {
+        return res.status(400).json({ error: 'Could not split this content into multiple atomic facts' });
+      }
+
+      // Create new atomic facts
+      const newFacts = [];
+      for (const sentence of atomicSentences) {
+        try {
+          const newFact = await storage.addMemoryEntry({
+            profileId: activeProfile.id,
+            type: 'FACT',
+            content: sentence.trim(),
+            importance: currentFact.importance || 5,
+            confidence: currentFact.confidence || 50,
+            supportCount: 1,
+            source: 'cleaner',
+            isAtomicFact: true,
+            parentFactId: id,
+          });
+          newFacts.push(newFact);
+        } catch (error) {
+          console.error(`Failed to create atomic fact from: "${sentence.substring(0, 50)}..."`, error);
+        }
+      }
+
+      // Mark original fact as deprecated story to avoid duplication
+      await storage.updateMemoryEntry(id, {
+        type: 'STORY',
+        status: 'DEPRECATED',
+      });
+
+      console.log(`✅ Cleaned wall-of-text into ${newFacts.length} atomic facts`);
+      
+      res.json({
+        success: true,
+        createdCount: newFacts.length,
+        newFactIds: newFacts.map(f => f.id),
+        message: `Successfully split into ${newFacts.length} atomic facts`
+      });
+    } catch (error) {
+      console.error('Clean wall-of-text error:', error);
+      res.status(500).json({ error: 'Failed to clean wall-of-text' });
+    }
+  });
+
   app.post('/api/memory/resolve-contradiction', async (req, res) => {
     try {
       const { winnerFactId, loserFactId } = req.body;
