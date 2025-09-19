@@ -379,7 +379,20 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
       return discordContent;
     } catch (error) {
       console.error('❌ Error generating Discord response:', error);
-      return "Madonna mia! Something went wrong in my head... give me a second! 🤯";
+      
+      // Random funny error messages
+      const errorMessages = [
+        "Madonna mia! Something went wrong in my head... give me a second! 🤯",
+        "Ayy, my brain just blue-screened like a busted Windows 95! 💻💥",
+        "Che cazzo! I think a wire got loose in my CPU! Give me a moment to reboot... 🔌⚡",
+        "Mamma mia! My neural networks are more tangled than spaghetti! 🍝🧠",
+        "VA BENE! My AI just had the digital equivalent of a stroke! 🤖💀",
+        "ASPETTA! I think my processors are running hotter than Ma's marinara sauce! 🔥🍅",
+        "Merda! Even my backup servers are crying right now! 😭💻",
+        "Dio mio! My artificial intelligence just became artificial stupidity! 🤪🤖"
+      ];
+      
+      return errorMessages[Math.floor(Math.random() * errorMessages.length)];
     }
   }
 

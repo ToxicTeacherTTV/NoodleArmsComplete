@@ -50,22 +50,34 @@ export default function DiscordManagementPanel() {
     queryKey: ['/api/discord/servers'],
   });
 
+  // Auto-select if only one server
+  const autoSelectedServerId = servers.length === 1 ? servers[0]?.serverId : selectedServerId;
+  const effectiveServerId = autoSelectedServerId || selectedServerId;
+  
+  // Auto-select the only server on load
+  if (servers.length === 1 && !selectedServerId && servers[0]) {
+    setSelectedServerId(servers[0].serverId);
+  }
+
   // Get members for selected server
   const { data: members = [], isLoading: membersLoading, isError: membersError, refetch: refetchMembers } = useQuery<DiscordMember[]>({
-    queryKey: [`/api/discord/servers/${selectedServerId}/members`],
-    enabled: !!selectedServerId,
+    queryKey: [`/api/discord/servers/${effectiveServerId}/members`],
+    enabled: !!effectiveServerId,
   });
 
   // Update member facts
   const updateMemberMutation = useMutation({
     mutationFn: async ({ id, facts, keywords }: { id: string; facts: string[]; keywords: string[] }) => {
-      return apiRequest(`/api/discord/members/${id}`, {
+      const response = await fetch(`/api/discord/members/${id}`, {
         method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ facts, keywords }),
       });
+      if (!response.ok) throw new Error('Failed to update');
+      return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/discord/servers/${selectedServerId}/members`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/discord/servers/${effectiveServerId}/members`] });
       setEditingMemberId("");
       toast({ title: "✅ Member facts updated!" });
     },
@@ -121,7 +133,7 @@ export default function DiscordManagementPanel() {
     setEditKeywords(editKeywords.filter((_, i) => i !== index));
   };
 
-  const activeServer = servers.find(s => s.serverId === selectedServerId);
+  const activeServer = servers.find(s => s.serverId === effectiveServerId);
 
   return (
     <div className="space-y-6">
@@ -137,37 +149,39 @@ export default function DiscordManagementPanel() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {/* Server Selection */}
-            <div>
-              <Label>Discord Server</Label>
-              {serversLoading ? (
-                <div className="w-full p-2 border rounded-md bg-muted flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-primary border-t-transparent animate-spin rounded-full"></div>
-                  Loading servers...
-                </div>
-              ) : serversError ? (
-                <div className="w-full p-2 border border-destructive rounded-md bg-destructive/10 flex items-center justify-between">
-                  <span className="text-destructive">Failed to load servers</span>
-                  <Button size="sm" variant="outline" onClick={() => refetchServers()}>
-                    Retry
-                  </Button>
-                </div>
-              ) : (
-                <select
-                  data-testid="select-discord-server"
-                  className="w-full p-2 border rounded-md bg-background"
-                  value={selectedServerId}
-                  onChange={(e) => setSelectedServerId(e.target.value)}
-                >
-                  <option value="">Select a Discord server...</option>
-                  {servers.map((server) => (
-                    <option key={server.id} value={server.serverId}>
-                      {server.serverName} ({server.memberCount} members)
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+            {/* Server Selection - Only show if multiple servers */}
+            {servers.length > 1 && (
+              <div>
+                <Label>Discord Server</Label>
+                {serversLoading ? (
+                  <div className="w-full p-2 border rounded-md bg-muted flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent animate-spin rounded-full"></div>
+                    Loading servers...
+                  </div>
+                ) : serversError ? (
+                  <div className="w-full p-2 border border-destructive rounded-md bg-destructive/10 flex items-center justify-between">
+                    <span className="text-destructive">Failed to load servers</span>
+                    <Button size="sm" variant="outline" onClick={() => refetchServers()}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : (
+                  <select
+                    data-testid="select-discord-server"
+                    className="w-full p-2 border rounded-md bg-background"
+                    value={selectedServerId}
+                    onChange={(e) => setSelectedServerId(e.target.value)}
+                  >
+                    <option value="">Select a Discord server...</option>
+                    {servers.map((server) => (
+                      <option key={server.id} value={server.serverId}>
+                        {server.serverName} ({server.memberCount} members)
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
 
             {activeServer && (
               <div className="p-3 bg-muted rounded-md">
@@ -179,7 +193,7 @@ export default function DiscordManagementPanel() {
             )}
 
             {/* Members List */}
-            {selectedServerId && (
+            {effectiveServerId && (
               <div className="space-y-3">
                 <h3 className="font-semibold flex items-center gap-2">
                   <MessageCircle className="h-4 w-4" />
