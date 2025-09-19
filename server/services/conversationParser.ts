@@ -190,25 +190,125 @@ export class ConversationParser {
   }
 
   /**
-   * Split content into atomic sentences for individual fact extraction
+   * Split content into meaningful atomic facts with preserved context
    */
   splitIntoAtomicSentences(content: string): string[] {
-    // Split on sentence boundaries but preserve context
+    // Parse conversation to extract meaningful context
+    const parsed = this.parseConversation(content);
+    
+    // Extract key context elements from the full content
+    const contextElements = this.extractContextElements(content);
+    
+    // Split on sentence boundaries
     const sentences = content
       .split(/(?<=[.!?])\s+(?=[A-Z])/)
-      .filter(sentence => sentence.trim().length > 20) // Minimum length for meaningful facts
+      .filter(sentence => sentence.trim().length > 20)
       .map(sentence => sentence.trim());
 
-    // Limit to 2 sentences max per fact as per prompts
     const atomicFacts: string[] = [];
+    
     for (let i = 0; i < sentences.length; i += 2) {
-      const fact = sentences.slice(i, i + 2).join(' ');
-      if (fact.trim().length > 0) {
-        atomicFacts.push(fact);
+      const sentenceGroup = sentences.slice(i, i + 2);
+      const combinedSentences = sentenceGroup.join(' ');
+      
+      // Check if this group contains meaningful factual content
+      if (this.isMeaningfulFact(combinedSentences, contextElements)) {
+        // Add context if the sentences contain pronouns or location references without clear antecedents
+        const enrichedFact = this.enrichWithContext(combinedSentences, contextElements);
+        atomicFacts.push(enrichedFact);
       }
     }
 
     return atomicFacts;
+  }
+
+  /**
+   * Extract important context elements from the full content
+   */
+  private extractContextElements(content: string): { locations: string[], characters: string[], topics: string[] } {
+    const locations = [];
+    const characters = [];
+    const topics = [];
+
+    // Extract location names (capitalized words that might be places)
+    const locationMatches = content.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g) || [];
+    const knownLocations = ['Nagoya', 'Berlin', 'Tokyo', 'Castle', 'Underground', 'Osu', 'Shopping', 'District'];
+    locations.push(...locationMatches.filter(match => 
+      knownLocations.some(loc => match.includes(loc)) || 
+      /\b(Street|Castle|District|Underground|Shopping|Temple|Park|Station)\b/i.test(match)
+    ));
+
+    // Extract character names and references
+    const characterMatches = content.match(/\b(Nicky|Dente|Earl|Vice Don|Sal|Toxic|SABAM)\b/gi) || [];
+    const uniqueCharacters = Array.from(new Set(characterMatches.map(c => c.toLowerCase())));
+    characters.push(...uniqueCharacters);
+
+    // Extract topic keywords
+    const topicMatches = content.match(/\b(Dead by Daylight|DBD|killer|survivor|mafia|pasta|family|business|respect|territory)\b/gi) || [];
+    const uniqueTopics = Array.from(new Set(topicMatches.map(t => t.toLowerCase())));
+    topics.push(...uniqueTopics);
+
+    return { 
+      locations: Array.from(new Set(locations)), 
+      characters: Array.from(new Set(characters)), 
+      topics: Array.from(new Set(topics)) 
+    };
+  }
+
+  /**
+   * Check if a sentence group contains meaningful factual content
+   */
+  private isMeaningfulFact(sentences: string, contextElements: any): boolean {
+    // Skip pure questions without factual content
+    if (/^[^.!]*\?$/.test(sentences.trim())) {
+      return false;
+    }
+
+    // Skip dialogue that's just pleasantries or generic responses
+    const genericPhrases = [
+      /^(yeah|yes|no|okay|sure|right|well|so|and|but|or)\b/i,
+      /^you got business there/i,
+      /just tryin.* to expand/i,
+      /what.*you.*think/i,
+      /how.*you.*feel/i
+    ];
+    
+    if (genericPhrases.some(pattern => pattern.test(sentences))) {
+      return false;
+    }
+
+    // Keep sentences that contain specific factual information
+    const factualIndicators = [
+      ...contextElements.locations,
+      ...contextElements.characters,
+      ...contextElements.topics,
+      'family', 'business', 'respect', 'territory', 'mafia', 'dente'
+    ];
+
+    return factualIndicators.some(indicator => 
+      sentences.toLowerCase().includes(indicator.toLowerCase())
+    );
+  }
+
+  /**
+   * Enrich sentences with context if they contain unclear references
+   */
+  private enrichWithContext(sentences: string, contextElements: any): string {
+    let enriched = sentences;
+
+    // If sentences contain "there" without clear reference, add location context
+    if (/\bthere\b/i.test(sentences) && contextElements.locations.length > 0) {
+      const primaryLocation = contextElements.locations[0];
+      enriched = `In ${primaryLocation}: ${sentences}`;
+    }
+
+    // If sentences contain "he/she/they" without clear reference, add character context
+    if (/\b(he|she|they)\b/i.test(sentences) && contextElements.characters.length > 0) {
+      const primaryCharacter = contextElements.characters.find((c: string) => c.includes('nicky') || c.includes('dente')) || contextElements.characters[0];
+      enriched = enriched.replace(/\b(he|she)\b/gi, primaryCharacter);
+    }
+
+    return enriched;
   }
 }
 
