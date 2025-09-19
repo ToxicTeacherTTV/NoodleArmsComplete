@@ -2873,6 +2873,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get AI-generated memory summaries
+  app.get('/api/intelligence/summaries', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const options = {
+        summaryType: req.query.type as string || 'overview',
+        timeframe: req.query.timeframe as string || 'all',
+        maxFacts: parseInt(req.query.limit as string) || 100,
+        focusArea: req.query.focus as string
+      };
+
+      const summaries = await intelligenceEngine.generateMemorySummaries(
+        storage.db,
+        activeProfile.id,
+        options
+      );
+
+      res.json(summaries);
+    } catch (error) {
+      console.error('Memory summaries error:', error);
+      res.status(500).json({ error: 'Failed to generate memory summaries' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

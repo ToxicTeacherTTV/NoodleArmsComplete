@@ -45,6 +45,18 @@ interface RelevanceScore {
   reasoning: string;
 }
 
+interface MemorySummary {
+  id: string;
+  type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT' | 'GENERAL';
+  title: string;
+  content: string;
+  factCount: number;
+  confidenceScore: number;
+  lastUpdated: string;
+  insights: string[];
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
 interface IntelligenceSummary {
   clusterAnalysis: ClusterAnalysis[];
   sourceReliability: SourceReliability[];
@@ -381,6 +393,236 @@ If no drift detected, return: []`;
     console.log(`📊 Analyzed ${relevanceScores.length} memories, suggesting ${hiddenCount} for hiding`);
 
     return relevanceScores.sort((a, b) => b.relevanceScore - a.relevanceScore);
+  }
+
+  /**
+   * INTELLIGENCE LAYER 5: AI-Generated Memory Summaries
+   * Creates intelligent overviews instead of individual fact reading
+   */
+  async generateMemorySummaries(
+    db: PostgresJsDatabase<any>,
+    profileId: string,
+    options: {
+      summaryType?: 'overview' | 'recent' | 'topical' | 'trend_analysis';
+      timeframe?: 'day' | 'week' | 'month' | 'all';
+      maxFacts?: number;
+      focusArea?: string;
+    } = {}
+  ): Promise<{
+    summaries: MemorySummary[];
+    overview: string;
+    insights: string[];
+    recommendations: string[];
+  }> {
+    const { summaryType = 'overview', timeframe = 'all', maxFacts = 100, focusArea } = options;
+
+    console.log(`📊 Generating ${summaryType} summaries for profile ${profileId}`);
+
+    // Get memory entries based on parameters
+    const memories = await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .limit(maxFacts)
+      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.confidence));
+
+    if (memories.length === 0) {
+      return {
+        summaries: [],
+        overview: 'No active memories found for summary generation.',
+        insights: ['Memory database is empty or contains no active entries'],
+        recommendations: ['Add more content to build a comprehensive knowledge base']
+      };
+    }
+
+    // Group memories by category/type for better summarization
+    const factsByType = memories.reduce((acc, memory) => {
+      const type = memory.type || 'GENERAL';
+      if (!acc[type]) acc[type] = [];
+      acc[type].push(memory);
+      return acc;
+    }, {} as Record<string, typeof memories>);
+
+    const summaries: MemorySummary[] = [];
+
+    // Generate summaries for each category
+    for (const [type, facts] of Object.entries(factsByType)) {
+      if (facts.length === 0) continue;
+
+      try {        
+        const summary: MemorySummary = {
+          id: `${type}_${Date.now()}`,
+          type: type as any,
+          title: this.generateSummaryTitle(type, facts.length),
+          content: this.generateBasicSummary(facts),
+          factCount: facts.length,
+          confidenceScore: Math.round(facts.reduce((sum, f) => sum + (f.confidence || 50), 0) / facts.length),
+          lastUpdated: new Date().toISOString(),
+          insights: this.extractInsights(facts),
+          priority: facts.some(f => (f.importance || 1) > 7) ? 'HIGH' : 
+                   facts.some(f => (f.importance || 1) > 4) ? 'MEDIUM' : 'LOW'
+        };
+
+        summaries.push(summary);
+      } catch (error) {
+        console.error(`Failed to generate summary for type ${type}:`, error);
+      }
+    }
+
+    // Generate overall overview
+    const overview = this.generateOverallOverview(summaries, memories.length);
+    
+    // Generate insights and recommendations
+    const insights = this.generateInsights(memories, summaries);
+    const recommendations = this.generateRecommendations(memories, summaries);
+
+    console.log(`✅ Generated ${summaries.length} summaries with ${insights.length} insights`);
+
+    return {
+      summaries,
+      overview,
+      insights,
+      recommendations
+    };
+  }
+
+  private generateSummaryTitle(type: string, factCount: number): string {
+    const typeLabels: Record<string, string> = {
+      FACT: 'Key Facts',
+      PREFERENCE: 'Preferences & Likes',
+      LORE: 'Personal Stories',
+      CONTEXT: 'Contextual Information',
+      GENERAL: 'General Knowledge'
+    };
+
+    return `${typeLabels[type] || type} Summary (${factCount} entries)`;
+  }
+
+  private generateBasicSummary(facts: any[]): string {
+    // Create a basic summary without AI calls to avoid costs
+    const highConfidenceFacts = facts.filter(f => (f.confidence || 0) >= 80);
+    const recentFacts = facts.slice(0, 5); // Most recent/important
+    
+    let summary = '';
+    
+    if (highConfidenceFacts.length > 0) {
+      summary += `**High Confidence Information (${highConfidenceFacts.length} items):**\n`;
+      summary += highConfidenceFacts.slice(0, 3).map(f => `• ${f.content.substring(0, 100)}...`).join('\n');
+      summary += '\n\n';
+    }
+    
+    if (recentFacts.length > 0) {
+      summary += `**Key Entries:**\n`;
+      summary += recentFacts.map(f => `• ${f.content.substring(0, 150)}...`).join('\n');
+    }
+    
+    return summary || 'No summary content available.';
+  }
+
+  private extractInsights(facts: any[]): string[] {
+    const insights: string[] = [];
+    
+    const avgConfidence = facts.reduce((sum, f) => sum + (f.confidence || 50), 0) / facts.length;
+    const highImportanceCount = facts.filter(f => (f.importance || 1) > 7).length;
+    const lowConfidenceCount = facts.filter(f => (f.confidence || 50) < 60).length;
+    
+    if (avgConfidence > 80) {
+      insights.push('This category has high overall confidence - information is well-established');
+    } else if (avgConfidence < 60) {
+      insights.push('This category has lower confidence - may need verification or consolidation');
+    }
+    
+    if (highImportanceCount > facts.length * 0.3) {
+      insights.push('Contains many high-importance items - core knowledge area');
+    }
+    
+    if (lowConfidenceCount > facts.length * 0.4) {
+      insights.push('Many entries need confidence improvement - good candidate for review');
+    }
+    
+    return insights;
+  }
+
+  private generateOverallOverview(summaries: MemorySummary[], totalFacts: number): string {
+    const highPriorityCount = summaries.filter(s => s.priority === 'HIGH').length;
+    const avgConfidence = summaries.length > 0 ? summaries.reduce((sum, s) => sum + s.confidenceScore, 0) / summaries.length : 0;
+    
+    return `**Memory Overview**\n\n` +
+           `Total active memories: ${totalFacts}\n` +
+           `Summary categories: ${summaries.length}\n` +
+           `High priority areas: ${highPriorityCount}\n` +
+           `Average confidence: ${Math.round(avgConfidence)}%\n\n` +
+           `The knowledge base contains ${totalFacts} active memory entries across ${summaries.length} categories. ` +
+           `${highPriorityCount > 0 ? `${highPriorityCount} areas require attention, ` : 'All areas are well-maintained, '}` +
+           `with an overall confidence rating of ${Math.round(avgConfidence)}%.`;
+  }
+
+  private generateInsights(memories: any[], summaries: MemorySummary[]): string[] {
+    const insights: string[] = [];
+    
+    const avgConfidence = memories.reduce((sum, m) => sum + (m.confidence || 50), 0) / memories.length;
+    const recentCount = memories.filter(m => {
+      const created = new Date(m.createdAt);
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      return created > weekAgo;
+    }).length;
+    
+    if (avgConfidence > 85) {
+      insights.push('Knowledge base has high overall confidence - well-established information');
+    } else if (avgConfidence < 65) {
+      insights.push('Knowledge base needs attention - many low-confidence entries');
+    }
+    
+    if (recentCount > memories.length * 0.2) {
+      insights.push('High recent activity - knowledge base is actively growing');
+    } else if (recentCount < memories.length * 0.05) {
+      insights.push('Low recent activity - knowledge base may need fresh content');
+    }
+    
+    const typeDistribution = summaries.reduce((acc, s) => {
+      acc[s.type] = (acc[s.type] || 0) + s.factCount;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const dominantType = Object.entries(typeDistribution).sort(([,a], [,b]) => b - a)[0];
+    if (dominantType && dominantType[1] > memories.length * 0.4) {
+      insights.push(`Knowledge heavily focused on ${dominantType[0]} - consider diversifying content types`);
+    }
+    
+    return insights;
+  }
+
+  private generateRecommendations(memories: any[], summaries: MemorySummary[]): string[] {
+    const recommendations: string[] = [];
+    
+    const lowConfidenceCount = memories.filter(m => (m.confidence || 50) < 60).length;
+    const highPriorityCount = summaries.filter(s => s.priority === 'HIGH').length;
+    
+    if (lowConfidenceCount > memories.length * 0.3) {
+      recommendations.push('Review and verify low-confidence entries to improve knowledge quality');
+    }
+    
+    if (highPriorityCount > summaries.length * 0.4) {
+      recommendations.push('Address high-priority categories to optimize knowledge organization');
+    }
+    
+    const avgFactsPerSummary = memories.length / summaries.length;
+    if (avgFactsPerSummary > 50) {
+      recommendations.push('Consider creating more granular categories to improve information organization');
+    }
+    
+    if (summaries.length < 3) {
+      recommendations.push('Diversify content types (FACT, PREFERENCE, LORE) for richer knowledge representation');
+    }
+    
+    recommendations.push('Enable Trust AI mode for automated optimization of low-stakes memory management decisions');
+    
+    return recommendations;
   }
 
   /**
