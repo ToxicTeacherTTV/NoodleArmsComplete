@@ -2901,6 +2901,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 🔧 Repair orphaned facts that lost their story context
+  app.post('/api/intelligence/repair-orphans', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      console.log('🔧 Starting orphan facts repair for profile:', activeProfile.id);
+      const result = await intelligenceEngine.repairOrphanedFacts(activeProfile.id);
+
+      res.json({
+        success: true,
+        message: `Repaired ${result.repairedCount} orphaned facts, reconstructed ${result.storiesReconstructed} stories`,
+        ...result
+      });
+    } catch (error) {
+      console.error('Orphan facts repair error:', error);
+      res.status(500).json({ error: 'Failed to repair orphaned facts' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
