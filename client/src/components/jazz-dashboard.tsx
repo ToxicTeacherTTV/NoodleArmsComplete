@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import ChatPanel from "@/components/chat-panel";
 import ControlPanel from "@/components/control-panel";
+import DiscordManagementPanel from "@/components/discord-management-panel";
 // PersonalityPanel moved to brain-management.tsx
 // MemoryPanel and DocumentPanel moved to brain-management.tsx
 import StatusIndicator from "@/components/status-indicator";

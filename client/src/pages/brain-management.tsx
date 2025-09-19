@@ -21,6 +21,7 @@ import MemoryPanel from "@/components/memory-panel";
 import DocumentPanel from "@/components/document-panel";
 import PersonalityPanel from "@/components/personality-panel";
 import DiscordControlPanel from "@/components/discord-control-panel";
+import DiscordManagementPanel from "@/components/discord-management-panel";
 
 interface MemoryFact {
   id: string;
@@ -1080,8 +1081,10 @@ export default function BrainManagement() {
                   Configure Nicky's Discord bot behavior and server interactions
                 </p>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-6">
                 <DiscordControlPanel />
+                <Separator />
+                <DiscordManagementPanel />
               </CardContent>
             </Card>
           </TabsContent>
