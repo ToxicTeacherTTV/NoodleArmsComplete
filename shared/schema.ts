@@ -411,3 +411,163 @@ export const insertContentFlagSchema = createInsertSchema(contentFlags).omit({
 // Types for content flags
 export type ContentFlag = typeof contentFlags.$inferSelect;
 export type InsertContentFlag = z.infer<typeof insertContentFlagSchema>;
+
+// Discord Integration Tables
+export const discordServers = pgTable("discord_servers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  serverId: text("server_id").notNull().unique(), // Discord server ID
+  serverName: text("server_name").notNull(),
+  isActive: boolean("is_active").default(true),
+  // Behavior control settings
+  aggressiveness: integer("aggressiveness").default(80), // 0-100
+  responsiveness: integer("responsiveness").default(60), // 0-100 
+  italianIntensity: integer("italian_intensity").default(100), // 0-100
+  dbdObsession: integer("dbd_obsession").default(80), // 0-100
+  familyBusinessMode: integer("family_business_mode").default(40), // 0-100
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+export const discordMembers = pgTable("discord_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  serverId: varchar("server_id").references(() => discordServers.id).notNull(),
+  userId: text("user_id").notNull(), // Discord user ID
+  username: text("username").notNull(),
+  nickname: text("nickname"), // Server nickname if different
+  facts: text("facts").array(), // Array of facts about this member
+  keywords: text("keywords").array(), // Keywords for triggering responses about this member
+  lastInteraction: timestamp("last_interaction"),
+  interactionCount: integer("interaction_count").default(0),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+}, (table) => {
+  return {
+    // Unique per server/user combination
+    uniqueServerUser: uniqueIndex("unique_server_user_idx").on(
+      table.serverId, 
+      table.userId
+    ),
+  };
+});
+
+export const discordTopicTriggers = pgTable("discord_topic_triggers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  serverId: varchar("server_id").references(() => discordServers.id).notNull(),
+  topic: text("topic").notNull(), // The trigger word/phrase
+  category: text("category").$type<'HIGH' | 'MEDIUM' | 'LOW'>().default('MEDIUM'),
+  responseChance: integer("response_chance").default(75), // 0-100 chance to respond
+  keywords: text("keywords").array(), // Related keywords
+  customResponse: text("custom_response"), // Optional custom response template
+  isActive: boolean("is_active").default(true),
+  triggerCount: integer("trigger_count").default(0),
+  lastTriggered: timestamp("last_triggered"),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+export const discordConversations = pgTable("discord_conversations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  serverId: varchar("server_id").references(() => discordServers.id).notNull(),
+  channelId: text("channel_id").notNull(), // Discord channel ID
+  channelName: text("channel_name").notNull(),
+  messageId: text("message_id").notNull(), // Discord message ID that triggered response
+  triggerMessage: text("trigger_message").notNull(), // Original message that triggered Nicky
+  nickyResponse: text("nicky_response").notNull(), // Nicky's response
+  triggerType: text("trigger_type").$type<'MENTION' | 'TOPIC_TRIGGER' | 'RANDOM' | 'KEYWORD'>().notNull(),
+  triggerData: json("trigger_data").$type<{
+    topics?: string[];
+    keywords?: string[];
+    responseChance?: number;
+    behaviorSettings?: {
+      aggressiveness: number;
+      responsiveness: number;
+      italianIntensity: number;
+    };
+  }>(),
+  userId: text("user_id").notNull(), // Discord user who triggered response
+  username: text("username").notNull(),
+  processingTime: integer("processing_time"), // Time in ms to generate response
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+// Relations for Discord tables
+export const discordServersRelations = relations(discordServers, ({ one, many }) => ({
+  profile: one(profiles, {
+    fields: [discordServers.profileId],
+    references: [profiles.id],
+  }),
+  members: many(discordMembers),
+  topicTriggers: many(discordTopicTriggers),
+  conversations: many(discordConversations),
+}));
+
+export const discordMembersRelations = relations(discordMembers, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [discordMembers.profileId],
+    references: [profiles.id],
+  }),
+  server: one(discordServers, {
+    fields: [discordMembers.serverId],
+    references: [discordServers.id],
+  }),
+}));
+
+export const discordTopicTriggersRelations = relations(discordTopicTriggers, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [discordTopicTriggers.profileId],
+    references: [profiles.id],
+  }),
+  server: one(discordServers, {
+    fields: [discordTopicTriggers.serverId],
+    references: [discordServers.id],
+  }),
+}));
+
+export const discordConversationsRelations = relations(discordConversations, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [discordConversations.profileId],
+    references: [profiles.id],
+  }),
+  server: one(discordServers, {
+    fields: [discordConversations.serverId],
+    references: [discordServers.id],
+  }),
+}));
+
+// Insert schemas for Discord tables
+export const insertDiscordServerSchema = createInsertSchema(discordServers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDiscordMemberSchema = createInsertSchema(discordMembers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDiscordTopicTriggerSchema = createInsertSchema(discordTopicTriggers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDiscordConversationSchema = createInsertSchema(discordConversations).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types for Discord tables
+export type DiscordServer = typeof discordServers.$inferSelect;
+export type InsertDiscordServer = z.infer<typeof insertDiscordServerSchema>;
+export type DiscordMember = typeof discordMembers.$inferSelect;
+export type InsertDiscordMember = z.infer<typeof insertDiscordMemberSchema>;
+export type DiscordTopicTrigger = typeof discordTopicTriggers.$inferSelect;
+export type InsertDiscordTopicTrigger = z.infer<typeof insertDiscordTopicTriggerSchema>;
+export type DiscordConversation = typeof discordConversations.$inferSelect;
+export type InsertDiscordConversation = z.infer<typeof insertDiscordConversationSchema>;
