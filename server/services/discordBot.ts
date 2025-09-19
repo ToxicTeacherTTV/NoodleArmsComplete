@@ -707,8 +707,8 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
         return;
       }
 
-      // Generate a proactive message with server's enabled message types
-      const proactiveMessage = await this.generateProactiveMessage(server, effectiveBehavior);
+      // Generate a proactive message with server's enabled message types and channel context
+      const proactiveMessage = await this.generateProactiveMessage(server, effectiveBehavior, channel);
       if (proactiveMessage) {
         console.log(`🎲 Sending proactive message to ${guild.name}: ${proactiveMessage.substring(0, 50)}...`);
         await channel.send(proactiveMessage);
@@ -734,7 +734,7 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
     }
   }
 
-  private async generateProactiveMessage(server: any, effectiveBehavior: any): Promise<string | null> {
+  private async generateProactiveMessage(server: any, effectiveBehavior: any, channel?: any): Promise<string | null> {
     try {
       // Get recent activity to avoid interrupting active conversations
       const recentConversations = await storage.getDiscordConversations(server.serverId, 5);
@@ -793,10 +793,22 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
         availablePrompts = promptsByType.random;
       }
 
-      // Pick prompt based on behavior settings and enabled types
+      // Pick prompt based on behavior settings, enabled types, AND channel context
       let selectedPrompts = [...availablePrompts];
       
-      if (effectiveBehavior.dbdObsession > 70 && enabledTypes.includes('dbd')) {
+      // Note: Channel context will be passed from the calling function
+      
+      // Use channel name to influence content selection (if available)
+      const channelName = channel?.name || 'general';
+      if (channelName.includes('dbd') || channelName.includes('dead') || channelName.includes('daylight') || channelName.includes('killer')) {
+        selectedPrompts = enabledTypes.includes('dbd') ? promptsByType.dbd : availablePrompts.filter(p => p.includes('DBD') || p.includes('Dead by Daylight'));
+      } else if (channelName.includes('food') || channelName.includes('cook') || channelName.includes('italian') || channelName.includes('pasta')) {
+        selectedPrompts = enabledTypes.includes('italian') ? promptsByType.italian : availablePrompts.filter(p => p.includes('Italian') || p.includes('food'));
+      } else if (channelName.includes('game') || channelName.includes('gaming') || channelName.includes('play')) {
+        selectedPrompts = enabledTypes.includes('dbd') ? promptsByType.dbd.concat(promptsByType.aggressive) : [...promptsByType.dbd, ...promptsByType.aggressive];
+      } else if (channelName.includes('random') || channelName.includes('chaos') || channelName.includes('off-topic') || channelName.includes('meme')) {
+        selectedPrompts = enabledTypes.includes('random') ? promptsByType.random.concat(promptsByType.aggressive) : [...promptsByType.random, ...promptsByType.aggressive];
+      } else if (effectiveBehavior.dbdObsession > 70 && enabledTypes.includes('dbd')) {
         selectedPrompts = promptsByType.dbd;
       } else if (effectiveBehavior.italianIntensity > 80 && enabledTypes.includes('italian')) {
         selectedPrompts = promptsByType.italian;
@@ -809,6 +821,7 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
       // Build context for the proactive message
       const contextParts = [
         `Generate a spontaneous Discord message for Nicky "Noodle Arms" A.I. Dente.`,
+        `Channel context: This is being posted in #${channelName} - tailor content appropriately for this channel's theme.`,
         `Prompt: ${randomPrompt}`,
         `Behavior Settings:
 - Aggressiveness: ${effectiveBehavior.aggressiveness}/100
