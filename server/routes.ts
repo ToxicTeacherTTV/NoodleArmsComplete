@@ -16,6 +16,8 @@ import { conversationParser } from './services/conversationParser.js';
 import { smartContradictionDetector } from './services/smartContradictionDetector';
 import { aiFlagger } from './services/aiFlagger';
 import { discordBotService } from './services/discordBot';
+import { ContentCollectionManager } from './services/ingestion/ContentCollectionManager';
+import { insertAutomatedSourceSchema, insertPendingContentSchema } from '@shared/schema';
 import multer from "multer";
 import { z } from "zod";
 import { promises as fs } from "fs";
@@ -2565,6 +2567,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(conversations);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch Discord conversations' });
+    }
+  });
+
+  // ========================================
+  // AUTOMATED CONTENT INGESTION ROUTES
+  // ========================================
+
+  const collectionManager = new ContentCollectionManager();
+
+  // Get automated sources for a profile
+  app.get('/api/ingestion/sources/:profileId', async (req, res) => {
+    try {
+      const { profileId } = req.params;
+      const sources = await storage.getAutomatedSources(profileId);
+      res.json({ data: sources });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch automated sources' });
+    }
+  });
+
+  // Create new automated source
+  app.post('/api/ingestion/sources', async (req, res) => {
+    try {
+      const sourceData = insertAutomatedSourceSchema.parse(req.body);
+      const source = await storage.createAutomatedSource(sourceData);
+      res.status(201).json({ data: source });
+    } catch (error) {
+      res.status(400).json({ error: 'Invalid source data' });
+    }
+  });
+
+  // Toggle automated source on/off
+  app.patch('/api/ingestion/sources/:id/toggle', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isActive } = req.body;
+      await storage.toggleAutomatedSource(id, isActive);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to toggle automated source' });
+    }
+  });
+
+  // Get pending content for a profile
+  app.get('/api/ingestion/pending/:profileId', async (req, res) => {
+    try {
+      const { profileId } = req.params;
+      const processed = req.query.processed === 'true' ? true : req.query.processed === 'false' ? false : undefined;
+      const pending = await storage.getPendingContent(profileId, processed);
+      res.json({ data: pending });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch pending content' });
+    }
+  });
+
+  // Approve pending content and process it into memory
+  app.post('/api/ingestion/pending/:id/approve', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const pendingItem = await storage.getPendingContentById(id);
+      if (!pendingItem) {
+        return res.status(404).json({ error: 'Content not found' });
+      }
+      
+      // Process through existing document pipeline  
+      await documentProcessor.reprocessDocument(
+        pendingItem.profileId,
+        pendingItem.rawContent,
+        `reddit-${pendingItem.title}`, // source filename
+        pendingItem.id // document ID
+      );
+      
+      // Mark as approved and processed
+      await storage.approvePendingContent(id);
+      
+      res.json({ 
+        success: true, 
+        message: 'Content approved and processed into memory' 
+      });
+    } catch (error) {
+      console.error('Failed to approve content:', error);
+      res.status(500).json({ error: 'Failed to approve content' });
+    }
+  });
+
+  // Reject pending content
+  app.post('/api/ingestion/pending/:id/reject', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+      
+      if (!reason) {
+        return res.status(400).json({ error: 'Rejection reason required' });
+      }
+      
+      await storage.rejectPendingContent(id, reason);
+      res.json({ 
+        success: true, 
+        message: 'Content rejected' 
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to reject content' });
+    }
+  });
+
+  // Manual collection trigger
+  app.post('/api/ingestion/collect/:profileId', async (req, res) => {
+    try {
+      const { profileId } = req.params;
+      const result = await collectionManager.runCollection(profileId);
+      res.json({
+        success: true,
+        ...result
+      });
+    } catch (error) {
+      console.error('Manual collection failed:', error);
+      res.status(500).json({ error: 'Collection failed' });
+    }
+  });
+
+  // Test collection for specific source
+  app.post('/api/ingestion/test/:profileId/:sourceType', async (req, res) => {
+    try {
+      const { profileId, sourceType } = req.params;
+      
+      if (sourceType !== 'reddit' && sourceType !== 'steam') {
+        return res.status(400).json({ error: 'Invalid source type' });
+      }
+      
+      const collected = await collectionManager.testCollection(profileId, sourceType);
+      res.json({
+        success: true,
+        sourceType,
+        collected,
+        message: `Test collection completed: ${collected} items found`
+      });
+    } catch (error) {
+      console.error(`Test collection failed for ${req.params.sourceType}:`, error);
+      res.status(500).json({ error: `Test collection failed: ${error instanceof Error ? error.message : 'Unknown error'}` });
     }
   });
 

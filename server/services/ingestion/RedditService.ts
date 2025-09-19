@@ -1,4 +1,4 @@
-const snoowrap = require('snoowrap');
+import snoowrap from 'snoowrap';
 import { storage } from '../../storage';
 import { eq } from 'drizzle-orm';
 import { pendingContent } from '@shared/schema';
