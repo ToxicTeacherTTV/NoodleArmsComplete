@@ -505,6 +505,36 @@ export const discordConversations = pgTable("discord_conversations", {
   createdAt: timestamp("created_at").default(sql`now()`),
 });
 
+// DbD Content Ingestion Tables
+export const automatedSources = pgTable('automated_sources', {
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar('profile_id').references(() => profiles.id).notNull(),
+  sourceType: varchar('source_type', { length: 50 }).notNull(), // 'reddit', 'steam', 'wiki', 'youtube'
+  sourceUrl: text('source_url'),
+  isActive: boolean('is_active').default(true),
+  confidenceMultiplier: varchar('confidence_multiplier', { length: 10 }).default('0.70'),
+  lastProcessedAt: timestamp('last_processed_at'),
+  collectionSchedule: varchar('collection_schedule', { length: 50 }).default('2h'), // '30m', '2h', 'daily'
+  keywords: text('keywords').array().default(sql`ARRAY[]::text[]`), // DbD-specific terms
+  createdAt: timestamp('created_at').default(sql`now()`),
+  updatedAt: timestamp('updated_at').default(sql`now()`),
+});
+
+export const pendingContent = pgTable('pending_content', {
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  sourceId: varchar('source_id').references(() => automatedSources.id).notNull(),
+  profileId: varchar('profile_id').references(() => profiles.id).notNull(),
+  rawContent: text('raw_content').notNull(),
+  title: text('title'),
+  sourceUrl: text('source_url'),
+  extractedAt: timestamp('extracted_at').default(sql`now()`),
+  processed: boolean('processed').default(false),
+  approved: boolean('approved'),
+  rejectionReason: text('rejection_reason'),
+  processedAt: timestamp('processed_at'),
+  metadata: json('metadata').default(sql`'{}'::json`) // Store upvotes, author, etc.
+});
+
 // Relations for Discord tables
 export const discordServersRelations = relations(discordServers, ({ one, many }) => ({
   profile: one(profiles, {
@@ -549,6 +579,26 @@ export const discordConversationsRelations = relations(discordConversations, ({ 
   }),
 }));
 
+// Relations for DbD Ingestion tables
+export const automatedSourcesRelations = relations(automatedSources, ({ one, many }) => ({
+  profile: one(profiles, { 
+    fields: [automatedSources.profileId], 
+    references: [profiles.id] 
+  }),
+  pendingContent: many(pendingContent)
+}));
+
+export const pendingContentRelations = relations(pendingContent, ({ one }) => ({
+  source: one(automatedSources, { 
+    fields: [pendingContent.sourceId], 
+    references: [automatedSources.id] 
+  }),
+  profile: one(profiles, { 
+    fields: [pendingContent.profileId], 
+    references: [profiles.id] 
+  })
+}));
+
 // Insert schemas for Discord tables
 export const insertDiscordServerSchema = createInsertSchema(discordServers).omit({
   id: true,
@@ -573,6 +623,18 @@ export const insertDiscordConversationSchema = createInsertSchema(discordConvers
   createdAt: true,
 });
 
+// Insert schemas for DbD Ingestion tables
+export const insertAutomatedSourceSchema = createInsertSchema(automatedSources).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPendingContentSchema = createInsertSchema(pendingContent).omit({
+  id: true,
+  extractedAt: true,
+});
+
 // Types for Discord tables
 export type DiscordServer = typeof discordServers.$inferSelect;
 export type InsertDiscordServer = z.infer<typeof insertDiscordServerSchema>;
@@ -582,6 +644,10 @@ export type DiscordTopicTrigger = typeof discordTopicTriggers.$inferSelect;
 export type InsertDiscordTopicTrigger = z.infer<typeof insertDiscordTopicTriggerSchema>;
 export type DiscordConversation = typeof discordConversations.$inferSelect;
 export type InsertDiscordConversation = z.infer<typeof insertDiscordConversationSchema>;
+export type AutomatedSource = typeof automatedSources.$inferSelect;
+export type InsertAutomatedSource = z.infer<typeof insertAutomatedSourceSchema>;
+export type PendingContent = typeof pendingContent.$inferSelect;
+export type InsertPendingContent = z.infer<typeof insertPendingContentSchema>;
 
 // Dynamic behavior types
 export type EffectiveBehavior = {
