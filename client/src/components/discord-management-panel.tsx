@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -794,7 +794,7 @@ function DynamicBehaviorPanel({ serverId }: { serverId: string }) {
   const { data: effective, isLoading: effectiveLoading, refetch: refetchEffective } = useQuery<EffectiveBehavior>({
     queryKey: [`/api/discord/servers/${serverId}/effective-behavior`],
     enabled: !!serverId,
-    refetchInterval: 60000, // Refresh every minute to show live changes
+    refetchInterval: 300000, // Refresh every 5 minutes (reduced from 1 minute for better performance)
   });
 
   // Update baseline settings
@@ -821,16 +821,37 @@ function DynamicBehaviorPanel({ serverId }: { serverId: string }) {
     },
   });
 
-  const handleSliderChange = (setting: keyof BehaviorSettings, value: number[]) => {
+  // Debounce timer ref to prevent rapid API calls
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Store pending settings to batch updates
+  const pendingSettingsRef = useRef<Partial<BehaviorSettings>>({});
+  
+  const handleSliderChange = useCallback((setting: keyof BehaviorSettings, value: number[]) => {
     if (!baseline) return;
     
-    const newSettings = {
-      ...baseline,
+    // Clear existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // Update pending settings
+    pendingSettingsRef.current = {
+      ...pendingSettingsRef.current,
       [setting]: value[0],
     };
     
-    updateBehaviorMutation.mutate(newSettings);
-  };
+    // Set new timer to send update after 500ms of no changes
+    debounceTimerRef.current = setTimeout(() => {
+      const newSettings = {
+        ...baseline,
+        ...pendingSettingsRef.current,
+      };
+      
+      updateBehaviorMutation.mutate(newSettings);
+      pendingSettingsRef.current = {}; // Clear pending settings
+    }, 500);
+  }, [baseline, updateBehaviorMutation]);
 
   if (baselineLoading || effectiveLoading) {
     return (
