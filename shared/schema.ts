@@ -429,6 +429,13 @@ export const discordServers = pgTable("discord_servers", {
   lastDriftUpdate: timestamp("last_drift_update").default(sql`now()`),
   driftMomentum: json("drift_momentum").default('{}'), // EWMA momentum for smooth changes
   contextNudges: json("context_nudges").default('[]'), // Temporary boosts from events (array)
+  
+  // Proactive messaging controls
+  allowedChannels: json("allowed_channels").default('[]'), // Channel IDs where proactive messages are allowed
+  blockedChannels: json("blocked_channels").default('[]'), // Channel IDs where proactive messages are blocked
+  enabledMessageTypes: json("enabled_message_types").default('["dbd", "italian", "family_business", "aggressive", "random"]'), // Which message types are enabled
+  proactiveEnabled: boolean("proactive_enabled").default(true), // Master toggle for proactive messaging
+  
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });

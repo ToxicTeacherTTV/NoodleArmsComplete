@@ -522,6 +522,12 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
       // Pick a random server
       const server = activeServers[Math.floor(Math.random() * activeServers.length)];
 
+      // Check if proactive messaging is enabled for this server
+      if (!server.proactiveEnabled) {
+        console.log(`🎲 Proactive messaging disabled for server: ${server.serverName}`);
+        return;
+      }
+
       // Get effective behavior to determine proactivity level
       const { behaviorModulator } = await import('./behaviorModulator');
       const effectiveBehavior = await behaviorModulator.getEffectiveBehavior(server.serverId);
@@ -534,15 +540,14 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
       const guild = this.client.guilds.cache.get(server.serverId);
       if (!guild) return;
 
-      // Find a general text channel
-      const channel = guild.channels.cache.find(ch => 
-        ch.type === 0 && // Text channel
-        (ch.name.includes('general') || ch.name.includes('chat') || ch.name.includes('main'))
-      ) as TextChannel;
+      // Find eligible channels based on server settings
+      const channel = this.findEligibleChannel(guild, server);
+      if (!channel) {
+        console.log(`🎲 No eligible channels found for proactive message in: ${server.serverName}`);
+        return;
+      }
 
-      if (!channel) return;
-
-      // Generate a proactive message
+      // Generate a proactive message with server's enabled message types
       const proactiveMessage = await this.generateProactiveMessage(server, effectiveBehavior);
       if (proactiveMessage) {
         console.log(`🎲 Sending proactive message to ${guild.name}: ${proactiveMessage.substring(0, 50)}...`);
@@ -580,49 +585,63 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
         return null;
       }
 
-      // Create personality-driven proactive prompts
-      const proactivePrompts = [
-        // DBD-focused prompts
-        'Ask a random Dead by Daylight question or share a DBD hot take',
-        'Complain about something ridiculous that happened in your last DBD match',
-        'Ask who people think the most annoying killer is and why',
+      // Get enabled message types from server settings
+      const enabledTypes = server.enabledMessageTypes || ['dbd', 'italian', 'family_business', 'aggressive', 'random'];
 
-        // Italian personality
-        'Say something completely random in Italian and then translate it poorly',
-        'Ask a weird question about food or cooking',
-        'Dramatically declare something totally mundane',
+      // Create personality-driven proactive prompts organized by type
+      const promptsByType = {
+        dbd: [
+          'Ask a random Dead by Daylight question or share a DBD hot take',
+          'Complain about something ridiculous that happened in your last DBD match',
+          'Ask who people think the most annoying killer is and why',
+          'Challenge everyone to settle something with DBD 1v1s',
+        ],
+        italian: [
+          'Say something completely random in Italian and then translate it poorly',
+          'Ask a weird question about food or cooking',
+          'Dramatically declare something totally mundane',
+        ],
+        family_business: [
+          'Make a vague reference to "family business" about something silly',
+          'Ask if anyone needs any "favors" but for trivial things',
+          'Reference loyalty or respect in a ridiculous context',
+        ],
+        aggressive: [
+          'Start a mild argument about something completely harmless',
+          'Call someone out for something trivial they did days ago',
+          'Challenge someone to prove their point about anything',
+        ],
+        random: [
+          'Ask a completely bizarre hypothetical question',
+          'Share a random childhood memory that makes no sense',
+          'Demand everyone vote on something ridiculous',
+          'Ask for help with the most basic task possible',
+          'Complain about weather, time, or the concept of Tuesdays',
+        ]
+      };
 
-        // Family business mode
-        'Make a vague reference to "family business" about something silly',
-        'Ask if anyone needs any "favors" but for trivial things',
-        'Reference loyalty or respect in a ridiculous context',
-
-        // Aggressive/confrontational
-        'Start a mild argument about something completely harmless',
-        'Call someone out for something trivial they did days ago',
-        'Challenge everyone to settle something with DBD 1v1s',
-
-        // Random chaos
-        'Ask a completely bizarre hypothetical question',
-        'Share a random childhood memory that makes no sense',
-        'Demand everyone vote on something ridiculous',
-        'Ask for help with the most basic task possible',
-        'Complain about weather, time, or the concept of Tuesdays',
-      ];
-
-      // Pick prompt based on behavior settings
-      let selectedPrompts = [...proactivePrompts];
-      
-      if (effectiveBehavior.dbdObsession > 70) {
-        selectedPrompts = proactivePrompts.filter(p => p.includes('DBD') || p.includes('Dead by Daylight')).concat(proactivePrompts.slice(0, 3));
+      // Collect all prompts from enabled types
+      let availablePrompts: string[] = [];
+      for (const type of enabledTypes) {
+        if (promptsByType[type as keyof typeof promptsByType]) {
+          availablePrompts.push(...promptsByType[type as keyof typeof promptsByType]);
+        }
       }
-      
-      if (effectiveBehavior.italianIntensity > 80) {
-        selectedPrompts = proactivePrompts.filter(p => p.includes('Italian') || p.includes('food')).concat(proactivePrompts.slice(3, 6));
+
+      // If no enabled types or no prompts, fall back to random
+      if (availablePrompts.length === 0) {
+        availablePrompts = promptsByType.random;
       }
+
+      // Pick prompt based on behavior settings and enabled types
+      let selectedPrompts = [...availablePrompts];
       
-      if (effectiveBehavior.familyBusinessMode > 60) {
-        selectedPrompts = proactivePrompts.filter(p => p.includes('family business') || p.includes('favors')).concat(proactivePrompts.slice(6, 9));
+      if (effectiveBehavior.dbdObsession > 70 && enabledTypes.includes('dbd')) {
+        selectedPrompts = promptsByType.dbd;
+      } else if (effectiveBehavior.italianIntensity > 80 && enabledTypes.includes('italian')) {
+        selectedPrompts = promptsByType.italian;
+      } else if (effectiveBehavior.familyBusinessMode > 60 && enabledTypes.includes('family_business')) {
+        selectedPrompts = promptsByType.family_business;
       }
 
       const randomPrompt = selectedPrompts[Math.floor(Math.random() * selectedPrompts.length)];
@@ -651,6 +670,40 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
       console.error('Error generating proactive message:', error);
       return null;
     }
+  }
+
+  // Helper method to find eligible channels for proactive messaging
+  private findEligibleChannel(guild: any, server: any): TextChannel | null {
+    const allowedChannels = server.allowedChannels || [];
+    const blockedChannels = server.blockedChannels || [];
+
+    // Get all text channels
+    const textChannels = guild.channels.cache.filter((ch: any) => ch.type === 0);
+
+    // If there are allowed channels specified, only use those
+    if (allowedChannels.length > 0) {
+      const allowedChannel = textChannels.find((ch: any) => allowedChannels.includes(ch.id));
+      return allowedChannel || null;
+    }
+
+    // Otherwise, find general channels but exclude blocked ones
+    const eligibleChannels = textChannels.filter((ch: any) => {
+      // Skip blocked channels
+      if (blockedChannels.includes(ch.id)) return false;
+      
+      // Look for general chat channels
+      return ch.name.includes('general') || 
+             ch.name.includes('chat') || 
+             ch.name.includes('main') ||
+             ch.name.includes('random') ||
+             ch.name.includes('off-topic');
+    });
+
+    if (eligibleChannels.size === 0) return null;
+
+    // Pick a random eligible channel
+    const channelArray = Array.from(eligibleChannels.values());
+    return channelArray[Math.floor(Math.random() * channelArray.length)];
   }
 
   // Start proactive messaging when a server is added
