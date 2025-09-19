@@ -513,41 +513,29 @@ export default function BrainManagement() {
     return hasUserMarkers && hasAIMarkers && isLong;
   };
 
-  // 🔍 NEW: Single fact cleaning preview mutation
-  const previewSingleFactCleaningMutation = useMutation({
-    mutationFn: async (factId: string): Promise<{ preview: any; found: boolean }> => {
-      // Get the fact first
-      const fact = allFacts.find(f => f.id === factId);
-      if (!fact || !isWallOfText(fact)) {
-        return { preview: null, found: false };
-      }
-
-      // Call the existing preview endpoint but filter for just this fact
-      const response = await fetch('/api/memory/preview-cleaning');
-      if (!response.ok) {
-        throw new Error('Failed to preview cleaning');
-      }
-      const data = await response.json();
-      
-      // Find the preview for this specific fact
-      const preview = data.previews.find((p: any) => p.id === factId);
-      return { preview, found: !!preview };
+  // ✂️ Single fact cleaning mutation
+  const cleanSingleFactMutation = useMutation({
+    mutationFn: async (factId: string) => {
+      const response = await apiRequest('POST', `/api/memory/entries/${factId}/clean`);
+      return await response.json();
     },
-    onSuccess: (data) => {
-      if (data.found && data.preview) {
-        setSingleCleanPreview(data.preview);
-        setShowSingleCleanDialog(true);
-      } else {
-        toast({
-          title: "Already Clean",
-          description: "This fact doesn't need wall-of-text cleaning.",
-        });
-      }
-    },
-    onError: (error) => {
+    onSuccess: (data, factId) => {
       toast({
-        title: "Preview Failed",
-        description: error.message || "Failed to preview cleaning",
+        title: "Wall-of-Text Cleaned!",
+        description: `Successfully split into ${data.createdCount} atomic facts`,
+      });
+      
+      // Invalidate queries to refresh the fact lists
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/high-confidence'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/medium-confidence'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/low-confidence'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/stats'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Cleaning Failed",
+        description: error.message || "Failed to clean wall-of-text",
         variant: "destructive",
       });
     },
@@ -634,12 +622,12 @@ export default function BrainManagement() {
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => previewSingleFactCleaningMutation.mutate(fact.id)}
-              disabled={previewSingleFactCleaningMutation.isPending}
-              data-testid={`button-preview-clean-single-${fact.id}`}
-              title="Preview clean wall-of-text"
+              onClick={() => cleanSingleFactMutation.mutate(fact.id)}
+              disabled={cleanSingleFactMutation.isPending}
+              data-testid={`button-clean-single-${fact.id}`}
+              title="Clean wall-of-text"
             >
-              {previewSingleFactCleaningMutation.isPending ? (
+              {cleanSingleFactMutation.isPending ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
                 <Scissors className="h-3 w-3" />
@@ -699,11 +687,11 @@ export default function BrainManagement() {
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => previewSingleFactCleaningMutation.mutate(fact.id)}
-              disabled={previewSingleFactCleaningMutation.isPending}
+              onClick={() => cleanSingleFactMutation.mutate(fact.id)}
+              disabled={cleanSingleFactMutation.isPending}
               data-testid={`button-preview-clean-single-${fact.id}`}
             >
-              {previewSingleFactCleaningMutation.isPending ? (
+              {cleanSingleFactMutation.isPending ? (
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
               ) : (
                 <Scissors className="h-4 w-4 mr-1" />
