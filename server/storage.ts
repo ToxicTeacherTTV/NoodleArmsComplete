@@ -779,10 +779,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getServerMembers(serverId: string): Promise<DiscordMember[]> {
+    // First, find the Discord server record by its Discord server ID
+    const server = await this.getDiscordServer(serverId);
+    if (!server) {
+      return []; // No server found, return empty array
+    }
+
+    // Then get members using the server's database primary key
     return await db
       .select()
       .from(discordMembers)
-      .where(eq(discordMembers.serverId, serverId))
+      .where(eq(discordMembers.serverId, server.id))
       .orderBy(desc(discordMembers.lastInteraction));
   }
 
