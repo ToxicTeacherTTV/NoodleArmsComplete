@@ -22,6 +22,7 @@ import DocumentPanel from "@/components/document-panel";
 import PersonalityPanel from "@/components/personality-panel";
 import DiscordControlPanel from "@/components/discord-control-panel";
 import DiscordManagementPanel from "@/components/discord-management-panel";
+import ContentIngestionPanel from "@/components/content-ingestion-panel";
 
 interface MemoryFact {
   id: string;
@@ -978,7 +979,7 @@ export default function BrainManagement() {
 
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-7 lg:grid-cols-12">
+          <TabsList className="grid w-full grid-cols-7 lg:grid-cols-13">
             <TabsTrigger value="recent-memories" data-testid="tab-recent-memories" className="text-xs">
               📝 Recent
             </TabsTrigger>
@@ -1014,6 +1015,9 @@ export default function BrainManagement() {
             </TabsTrigger>
             <TabsTrigger value="all-facts" data-testid="tab-all-facts" className="text-xs">
               🧠 All Facts
+            </TabsTrigger>
+            <TabsTrigger value="content-sources" data-testid="tab-content-sources" className="text-xs">
+              📡 Content Sources
             </TabsTrigger>
           </TabsList>
 
@@ -1812,6 +1816,11 @@ export default function BrainManagement() {
                 </ScrollArea>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Content Sources */}
+          <TabsContent value="content-sources" className="mt-6">
+            <ContentIngestionPanel profileId={activeProfile?.id} />
           </TabsContent>
         </Tabs>
       </div>
