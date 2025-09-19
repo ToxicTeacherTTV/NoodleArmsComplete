@@ -10,6 +10,8 @@ import {
   discordMembers,
   discordTopicTriggers,
   discordConversations,
+  automatedSources,
+  pendingContent,
   type Profile, 
   type InsertProfile,
   type Conversation,
@@ -31,7 +33,11 @@ import {
   type DiscordTopicTrigger,
   type InsertDiscordTopicTrigger,
   type DiscordConversation,
-  type InsertDiscordConversation
+  type InsertDiscordConversation,
+  type AutomatedSource,
+  type InsertAutomatedSource,
+  type PendingContent,
+  type InsertPendingContent
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, sql } from "drizzle-orm";
@@ -109,6 +115,19 @@ export interface IStorage {
   // Discord conversation logging
   logDiscordConversation(conversation: InsertDiscordConversation): Promise<DiscordConversation>;
   getDiscordConversations(serverId: string, limit?: number): Promise<DiscordConversation[]>;
+  
+  // Automated Sources Management
+  createAutomatedSource(data: InsertAutomatedSource): Promise<AutomatedSource>;
+  getAutomatedSources(profileId: string): Promise<AutomatedSource[]>;
+  updateAutomatedSource(id: string, data: Partial<AutomatedSource>): Promise<void>;
+  toggleAutomatedSource(id: string, isActive: boolean): Promise<void>;
+
+  // Pending Content Management  
+  createPendingContent(data: InsertPendingContent): Promise<PendingContent>;
+  getPendingContent(profileId: string, processed?: boolean): Promise<PendingContent[]>;
+  approvePendingContent(id: string): Promise<void>;
+  rejectPendingContent(id: string, reason: string): Promise<void>;
+  getPendingContentById(id: string): Promise<PendingContent | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -819,6 +838,92 @@ export class DatabaseStorage implements IStorage {
       .where(eq(discordConversations.serverId, serverId))
       .orderBy(desc(discordConversations.createdAt))
       .limit(limit);
+  }
+
+  // Automated Sources Management
+  async createAutomatedSource(data: InsertAutomatedSource): Promise<AutomatedSource> {
+    const [newSource] = await db
+      .insert(automatedSources)
+      .values([data as any])
+      .returning();
+    return newSource;
+  }
+
+  async getAutomatedSources(profileId: string): Promise<AutomatedSource[]> {
+    return await db
+      .select()
+      .from(automatedSources)
+      .where(eq(automatedSources.profileId, profileId))
+      .orderBy(desc(automatedSources.createdAt));
+  }
+
+  async updateAutomatedSource(id: string, data: Partial<AutomatedSource>): Promise<void> {
+    const updateData = { ...data, updatedAt: sql`now()` };
+    await db
+      .update(automatedSources)
+      .set(updateData as any)
+      .where(eq(automatedSources.id, id));
+  }
+
+  async toggleAutomatedSource(id: string, isActive: boolean): Promise<void> {
+    await db
+      .update(automatedSources)
+      .set({ isActive, updatedAt: sql`now()` })
+      .where(eq(automatedSources.id, id));
+  }
+
+  // Pending Content Management
+  async createPendingContent(data: InsertPendingContent): Promise<PendingContent> {
+    const [newContent] = await db
+      .insert(pendingContent)
+      .values([data as any])
+      .returning();
+    return newContent;
+  }
+
+  async getPendingContent(profileId: string, processed?: boolean): Promise<PendingContent[]> {
+    const conditions = [eq(pendingContent.profileId, profileId)];
+    
+    if (processed !== undefined) {
+      conditions.push(eq(pendingContent.processed, processed));
+    }
+    
+    return await db
+      .select()
+      .from(pendingContent)
+      .where(and(...conditions))
+      .orderBy(desc(pendingContent.extractedAt));
+  }
+
+  async approvePendingContent(id: string): Promise<void> {
+    await db
+      .update(pendingContent)
+      .set({ 
+        approved: true, 
+        processed: true, 
+        processedAt: sql`now()` 
+      })
+      .where(eq(pendingContent.id, id));
+  }
+
+  async rejectPendingContent(id: string, reason: string): Promise<void> {
+    await db
+      .update(pendingContent)
+      .set({ 
+        approved: false, 
+        processed: true, 
+        processedAt: sql`now()`,
+        rejectionReason: reason
+      })
+      .where(eq(pendingContent.id, id));
+  }
+
+  async getPendingContentById(id: string): Promise<PendingContent | null> {
+    const [content] = await db
+      .select()
+      .from(pendingContent)
+      .where(eq(pendingContent.id, id));
+    return content || null;
   }
 }
 
