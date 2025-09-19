@@ -17,6 +17,9 @@ import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDow
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ProtectedFactsManager } from "@/components/protected-facts-manager";
+import MemoryPanel from "@/components/memory-panel";
+import DocumentPanel from "@/components/document-panel";
+import PersonalityPanel from "@/components/personality-panel";
 
 interface MemoryFact {
   id: string;
@@ -43,6 +46,22 @@ interface ContradictionGroup {
 export default function BrainManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Get active profile and other data needed for moved components
+  const { data: activeProfile } = useQuery({
+    queryKey: ['/api/profiles/active'],
+    refetchInterval: false,
+  });
+
+  const { data: memoryStats } = useQuery({
+    queryKey: ['/api/memory/stats'],
+    refetchInterval: 120000,
+  });
+
+  const { data: documents } = useQuery({
+    queryKey: ['/api/documents'],
+    refetchInterval: false,
+  });
 
   // 🔍 NEW: Preview cleaning mutation
   const previewCleaningMutation = useMutation({

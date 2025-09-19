@@ -4,8 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import ChatPanel from "@/components/chat-panel";
 import ControlPanel from "@/components/control-panel";
 import PersonalityPanel from "@/components/personality-panel";
-import MemoryPanel from "@/components/memory-panel";
-import DocumentPanel from "@/components/document-panel";
+// MemoryPanel and DocumentPanel moved to brain-management.tsx
 import StatusIndicator from "@/components/status-indicator";
 import VoiceVisualizer from "@/components/voice-visualizer";
 import ProfileModal from "@/components/profile-modal";
@@ -283,11 +282,11 @@ export default function JazzDashboard() {
         </div>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="max-w-7xl mx-auto p-6 grid grid-cols-12 gap-6 h-[calc(100vh-120px)]">
+      {/* Main Content - Mobile Responsive */}
+      <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-4 md:space-y-0 md:grid md:grid-cols-12 md:gap-6 md:h-[calc(100vh-120px)]">
         
-        {/* Left Panel - Compact Controls */}
-        <div className="col-span-3 space-y-4">
+        {/* Mobile: Controls at top, Desktop: Left Panel */}
+        <div className="md:col-span-3 space-y-4">
           <Card className="border-primary/20 shadow-lg">
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center gap-2">
@@ -334,32 +333,35 @@ export default function JazzDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-secondary/20">
-            <CardContent className="p-4">
-              <PersonalityPanel
-                profile={activeProfile}
-                onOpenProfileManager={() => setIsProfileModalOpen(true)}
-                onResetChat={() => setMessages([])}
-              />
-            </CardContent>
-          </Card>
-
-          {chaosState && (
-            <Card className="border-accent/20">
+          {/* Hide personality and chaos on mobile - moved to brain management */}
+          <div className="hidden md:block space-y-4">
+            <Card className="border-secondary/20">
               <CardContent className="p-4">
-                <ChaosMeter 
-                  chaosLevel={chaosState.level} 
-                  chaosMode={chaosState.mode}
-                  manualOverride={chaosState.manualOverride}
-                  effectiveLevel={chaosState.effectiveLevel}
+                <PersonalityPanel
+                  profile={activeProfile}
+                  onOpenProfileManager={() => setIsProfileModalOpen(true)}
+                  onResetChat={() => setMessages([])}
                 />
               </CardContent>
             </Card>
-          )}
+
+            {chaosState && (
+              <Card className="border-accent/20">
+                <CardContent className="p-4">
+                  <ChaosMeter 
+                    chaosLevel={chaosState.level} 
+                    chaosMode={chaosState.mode}
+                    manualOverride={chaosState.manualOverride}
+                    effectiveLevel={chaosState.effectiveLevel}
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
 
-        {/* Center Panel - Chat */}
-        <div className="col-span-6">
+        {/* Chat Panel - Full width on mobile, centered on desktop */}
+        <div className="md:col-span-9 h-[60vh] md:h-full">
           <Card className="h-full border-primary/20 shadow-xl">
             <ChatPanel
               messages={messages}
@@ -386,35 +388,7 @@ export default function JazzDashboard() {
           </Card>
         </div>
 
-        {/* Right Panel - Memory & Docs */}
-        <div className="col-span-3">
-          <Card className="h-full border-accent/20 shadow-lg">
-            <Tabs defaultValue="memory" className="h-full flex flex-col">
-              <TabsList className="grid grid-cols-2 bg-gradient-to-r from-primary/10 to-secondary/10">
-                <TabsTrigger value="memory" className="data-[state=active]:bg-primary data-[state=active]:text-white">
-                  🧠 Memory
-                </TabsTrigger>
-                <TabsTrigger value="docs" className="data-[state=active]:bg-secondary data-[state=active]:text-white">
-                  📁 Docs
-                </TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="memory" className="flex-1 overflow-hidden">
-                <MemoryPanel
-                  profileId={activeProfile?.id}
-                  memoryStats={memoryStats}
-                />
-              </TabsContent>
-              
-              <TabsContent value="docs" className="flex-1 overflow-hidden">
-                <DocumentPanel
-                  profileId={activeProfile?.id}
-                  documents={documents}
-                />
-              </TabsContent>
-            </Tabs>
-          </Card>
-        </div>
+        {/* Right Panel removed - moved to brain management */}
       </div>
 
       {/* Floating Voice Visualizer */}
