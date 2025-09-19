@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -89,14 +89,15 @@ export default function DiscordManagementPanel() {
     queryKey: ['/api/discord/servers'],
   });
 
-  // Auto-select if only one server
-  const autoSelectedServerId = servers.length === 1 ? servers[0]?.serverId : selectedServerId;
-  const effectiveServerId = autoSelectedServerId || selectedServerId;
+  // Auto-select if only one server - always use it
+  const effectiveServerId = servers.length === 1 ? servers[0]?.serverId : selectedServerId;
   
-  // Auto-select the only server on load
-  if (servers.length === 1 && !selectedServerId && servers[0]) {
-    setSelectedServerId(servers[0].serverId);
-  }
+  // Auto-set selected server immediately when only one server exists
+  useEffect(() => {
+    if (servers.length === 1 && servers[0] && !selectedServerId) {
+      setSelectedServerId(servers[0].serverId);
+    }
+  }, [servers, selectedServerId]);
 
   // Get members for selected server
   const { data: members = [], isLoading: membersLoading, isError: membersError, refetch: refetchMembers } = useQuery<DiscordMember[]>({
