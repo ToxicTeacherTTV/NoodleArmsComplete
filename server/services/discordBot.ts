@@ -70,10 +70,29 @@ export class DiscordBotService {
     if (!message.guild) return;
 
     try {
-      // Get or create server record
+      // Get or create server record with proper error handling
       let discordServer = await storage.getDiscordServer(message.guild.id);
       if (!discordServer) {
+        console.log(`🆕 Creating new server record for: ${message.guild.name} (${message.guild.id})`);
         discordServer = await this.createServerRecord(message.guild.id, message.guild.name);
+      }
+      
+      // CRITICAL FIX: Validate server config has all required fields
+      if (!discordServer.proactiveEnabled && discordServer.proactiveEnabled !== false) {
+        console.warn(`⚠️ Server ${discordServer.serverId} missing proactiveEnabled field, defaulting to true`);
+        discordServer.proactiveEnabled = true;
+      }
+      if (!discordServer.allowedChannels) {
+        console.warn(`⚠️ Server ${discordServer.serverId} missing allowedChannels field, defaulting to empty array`);
+        discordServer.allowedChannels = [];
+      }
+      if (!discordServer.blockedChannels) {
+        console.warn(`⚠️ Server ${discordServer.serverId} missing blockedChannels field, defaulting to empty array`);
+        discordServer.blockedChannels = [];
+      }
+      if (!discordServer.enabledMessageTypes) {
+        console.warn(`⚠️ Server ${discordServer.serverId} missing enabledMessageTypes field, defaulting to all types`);
+        discordServer.enabledMessageTypes = ['dbd', 'italian', 'family_business', 'aggressive', 'random'];
       }
 
       // Get or create member record
@@ -139,6 +158,50 @@ export class DiscordBotService {
     }
   }
 
+  /**
+   * Helper function to check if bot should message in this channel
+   * based on server's allowedChannels and blockedChannels settings
+   */
+  private shouldMessageChannel(serverConfig: DiscordServer, channelId: string): boolean {
+    // If proactive messaging is disabled, don't send proactive messages
+    // Note: Mentions and direct interactions should still work
+    if (!serverConfig.proactiveEnabled) {
+      return false;
+    }
+
+    // Parse allowedChannels and blockedChannels from JSON
+    let allowedChannels: string[] = [];
+    let blockedChannels: string[] = [];
+
+    try {
+      allowedChannels = Array.isArray(serverConfig.allowedChannels) 
+        ? serverConfig.allowedChannels 
+        : JSON.parse(serverConfig.allowedChannels as string || '[]');
+      blockedChannels = Array.isArray(serverConfig.blockedChannels) 
+        ? serverConfig.blockedChannels 
+        : JSON.parse(serverConfig.blockedChannels as string || '[]');
+    } catch (error) {
+      console.error('Error parsing channel arrays:', error);
+      allowedChannels = [];
+      blockedChannels = [];
+    }
+
+    // If channel is explicitly blocked, don't message
+    if (blockedChannels.includes(channelId)) {
+      console.log(`🚫 Channel ${channelId} is blocked for server ${serverConfig.serverId}`);
+      return false;
+    }
+
+    // If allowedChannels is set and non-empty, only message in allowed channels
+    if (allowedChannels.length > 0 && !allowedChannels.includes(channelId)) {
+      console.log(`⚠️ Channel ${channelId} not in allowed list for server ${serverConfig.serverId}`);
+      return false;
+    }
+
+    // Channel is allowed
+    return true;
+  }
+
   private async shouldRespondToMessage(
     message: Message, 
     server: DiscordServer
@@ -150,8 +213,18 @@ export class DiscordBotService {
   }> {
     const startTime = Date.now();
     
-    // Always respond when mentioned
-    if (message.mentions.has(this.client.user!)) {
+    // CRITICAL FIX: Check channel restrictions FIRST before any response logic
+    // For mentions, we allow responses regardless of channel restrictions (direct interaction)
+    const isMention = message.mentions.has(this.client.user!);
+    
+    // For non-mention responses, check channel restrictions  
+    if (!isMention && !this.shouldMessageChannel(server, message.channel.id)) {
+      console.log(`🚫 Channel ${message.channel.id} blocked - skipping response`);
+      return { respond: false, triggerType: 'KEYWORD' };
+    }
+    
+    // Always respond when mentioned (but still respect message type filters in generateResponse)
+    if (isMention) {
       return {
         respond: true,
         triggerType: 'MENTION',
@@ -272,6 +345,75 @@ export class DiscordBotService {
     return { respond: false, triggerType: 'KEYWORD' };
   }
 
+  /**
+   * Classify message content type based on content and trigger context
+   */
+  private classifyMessageType(responseContext: any, effectiveBehavior: any): string[] {
+    const messageTypes: string[] = [];
+    
+    // Classify based on trigger type and context
+    if (responseContext.triggerType === 'MENTION') {
+      messageTypes.push('random'); // Mentions get random type by default
+    }
+    
+    if (responseContext.triggerData?.topics) {
+      const topics = responseContext.triggerData.topics;
+      // Check for specific topic types
+      if (topics.some((t: string) => t.toLowerCase().includes('dbd') || t.toLowerCase().includes('dead by daylight'))) {
+        messageTypes.push('dbd');
+      }
+      if (topics.some((t: string) => t.toLowerCase().includes('italian') || t.toLowerCase().includes('family'))) {
+        messageTypes.push('italian', 'family_business');
+      }
+    }
+    
+    // Classify based on effective behavior thresholds
+    if (effectiveBehavior.aggressiveness > 70) {
+      messageTypes.push('aggressive');
+    }
+    if (effectiveBehavior.italianIntensity > 80) {
+      messageTypes.push('italian');
+    }
+    if (effectiveBehavior.dbdObsession > 70) {
+      messageTypes.push('dbd');
+    }
+    if (effectiveBehavior.familyBusinessMode > 60) {
+      messageTypes.push('family_business');
+    }
+    
+    // Always include random as fallback
+    if (messageTypes.length === 0) {
+      messageTypes.push('random');
+    }
+    
+    return [...new Set(messageTypes)]; // Remove duplicates
+  }
+
+  /**
+   * Check if any of the message types are enabled for this server
+   */
+  private isMessageTypeEnabled(server: DiscordServer, messageTypes: string[]): boolean {
+    let enabledMessageTypes: string[] = [];
+    
+    try {
+      enabledMessageTypes = Array.isArray(server.enabledMessageTypes) 
+        ? server.enabledMessageTypes 
+        : JSON.parse(server.enabledMessageTypes as string || '["dbd", "italian", "family_business", "aggressive", "random"]');
+    } catch (error) {
+      console.error('Error parsing enabledMessageTypes:', error);
+      enabledMessageTypes = ['dbd', 'italian', 'family_business', 'aggressive', 'random']; // Default fallback
+    }
+    
+    // Check if any of the message types are enabled
+    const hasEnabledType = messageTypes.some(type => enabledMessageTypes.includes(type));
+    
+    if (!hasEnabledType) {
+      console.log(`🚫 Message types [${messageTypes.join(', ')}] not enabled for server ${server.serverId}. Enabled: [${enabledMessageTypes.join(', ')}]`);
+    }
+    
+    return hasEnabledType;
+  }
+
   private async generateResponse(
     message: Message,
     server: DiscordServer,
@@ -283,6 +425,34 @@ export class DiscordBotService {
       // Get effective behavior values (baseline + drift + chaos + time)
       const { behaviorModulator } = await import('./behaviorModulator');
       const effectiveBehavior = await behaviorModulator.getEffectiveBehavior(server.serverId);
+      
+      // CRITICAL FIX: Check message type restrictions BEFORE generating response
+      const messageTypes = this.classifyMessageType(responseContext, effectiveBehavior);
+      if (!this.isMessageTypeEnabled(server, messageTypes)) {
+        console.log(`🚫 Response blocked: Message types [${messageTypes.join(', ')}] not enabled for server ${server.serverId}`);
+        return null; // Don't generate response if message type is disabled
+      }
+      
+      console.log(`✅ Message types [${messageTypes.join(', ')}] enabled for server ${server.serverId}`);
+      
+      // Add enabled message types to context for AI
+      const enabledTypesContext = `Enabled message types for this server: [${messageTypes.join(', ')}]`;
+      
+      let personalityAdjustments = `${enabledTypesContext}\n`;
+      
+      // Filter personality adjustments based on enabled message types
+      if (messageTypes.includes('aggressive') && effectiveBehavior.aggressiveness > 70) {
+        personalityAdjustments += 'Be more aggressive and confrontational. ';
+      }
+      if (messageTypes.includes('italian') && effectiveBehavior.italianIntensity > 80) {
+        personalityAdjustments += 'Use more Italian expressions and dramatic gestures. ';
+      }
+      if (messageTypes.includes('dbd') && effectiveBehavior.dbdObsession > 70) {
+        personalityAdjustments += 'Relate topics back to Dead by Daylight when possible. ';
+      }
+      if (messageTypes.includes('family_business') && effectiveBehavior.familyBusinessMode > 60) {
+        personalityAdjustments += 'Reference family business and mafia terminology more often. ';
+      }
       
       // Build context for Nicky's response
       const contextParts = [];
@@ -316,21 +486,6 @@ export class DiscordBotService {
       }
 
       const fullContext = contextParts.join('\n\n');
-
-      // Adjust personality based on effective behavior settings (dynamic)
-      let personalityAdjustments = '';
-      if (effectiveBehavior.aggressiveness > 70) {
-        personalityAdjustments += 'Be more aggressive and confrontational. ';
-      }
-      if (effectiveBehavior.italianIntensity > 80) {
-        personalityAdjustments += 'Use more Italian expressions and dramatic gestures. ';
-      }
-      if (effectiveBehavior.dbdObsession > 70) {
-        personalityAdjustments += 'Relate topics back to Dead by Daylight when possible. ';
-      }
-      if (effectiveBehavior.familyBusinessMode > 60) {
-        personalityAdjustments += 'Reference family business and mafia terminology more often. ';
-      }
       
       // Add dynamic behavior context
       if (effectiveBehavior.driftFactors) {
@@ -451,6 +606,11 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
       italianIntensity: 100,
       dbdObsession: 80,
       familyBusinessMode: 40,
+      // CRITICAL FIX: Include proactive messaging control fields with proper defaults
+      proactiveEnabled: true,
+      allowedChannels: [], // Empty array means all channels allowed
+      blockedChannels: [], // Empty array means no channels blocked
+      enabledMessageTypes: ['dbd', 'italian', 'family_business', 'aggressive', 'random'], // All types enabled by default
     });
     
     // Start automatic behavior drift updates for this server
