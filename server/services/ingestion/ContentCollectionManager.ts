@@ -1,10 +1,12 @@
 import { RedditService } from './RedditService';
 import { SteamNewsService } from './SteamNewsService';
+import { YouTubeService } from './YouTubeService';
 import { storage } from '../../storage';
 
 export interface CollectionResult {
   reddit: number;
   steam: number;
+  youtube: number;
   errors: string[];
   totalCollected: number;
 }
@@ -12,6 +14,7 @@ export interface CollectionResult {
 export class ContentCollectionManager {
   private redditService = new RedditService();
   private steamService = new SteamNewsService();
+  private youtubeService = new YouTubeService();
   
   async runCollection(profileId: string): Promise<CollectionResult> {
     console.log('🚀 Starting automated DbD content collection...');
@@ -19,6 +22,7 @@ export class ContentCollectionManager {
     const results: CollectionResult = {
       reddit: 0,
       steam: 0,
+      youtube: 0,
       errors: [],
       totalCollected: 0
     };
@@ -38,12 +42,17 @@ export class ContentCollectionManager {
         switch (source.sourceType) {
           case 'reddit':
             collected = await this.redditService.collectContent(source.id, profileId);
-            results.reddit = collected;
+            results.reddit += collected;
             break;
             
           case 'steam':
             collected = await this.steamService.collectContent(source.id, profileId);
-            results.steam = collected;
+            results.steam += collected;
+            break;
+            
+          case 'youtube':
+            collected = await this.youtubeService.collectContent(source.id, profileId);
+            results.youtube += collected;
             break;
             
           default:
@@ -64,7 +73,7 @@ export class ContentCollectionManager {
       }
     }
     
-    results.totalCollected = results.reddit + results.steam;
+    results.totalCollected = results.reddit + results.steam + results.youtube;
     
     console.log(`🎯 Collection complete: ${results.totalCollected} total items collected`);
     if (results.errors.length > 0) {
@@ -75,7 +84,7 @@ export class ContentCollectionManager {
   }
 
   // Manual test method for immediate collection
-  async testCollection(profileId: string, sourceType: 'reddit' | 'steam'): Promise<number> {
+  async testCollection(profileId: string, sourceType: 'reddit' | 'steam' | 'youtube'): Promise<number> {
     console.log(`🧪 Testing ${sourceType} collection...`);
     
     try {
@@ -84,6 +93,8 @@ export class ContentCollectionManager {
           return await this.redditService.collectContent('test-reddit', profileId);
         case 'steam':
           return await this.steamService.collectContent('test-steam', profileId);
+        case 'youtube':
+          return await this.youtubeService.collectContent('test-youtube', profileId);
         default:
           throw new Error(`Unknown source type: ${sourceType}`);
       }
