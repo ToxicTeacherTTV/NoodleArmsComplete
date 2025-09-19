@@ -70,8 +70,10 @@ interface IntelligenceSummary {
 export class IntelligenceEngine {
   private anthropic: Anthropic;
   private gemini: any;
+  private storage: any;
 
   constructor() {
+    this.storage = storage;
     this.anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
@@ -676,6 +678,344 @@ If no drift detected, return: []`;
       autoHandled,
       priorityActions
     };
+  }
+
+  /**
+   * 🔧 ORPHAN FACTS REPAIR SYSTEM
+   * Identifies and repairs facts that have been cut off from their original stories
+   */
+  async repairOrphanedFacts(profileId: string): Promise<{
+    orphanedCount: number;
+    repairedCount: number;
+    storiesReconstructed: number;
+    details: Array<{
+      storyId: string;
+      title: string;
+      childFacts: number;
+      context: string;
+    }>;
+  }> {
+    console.log('🔍 Starting orphaned facts repair...');
+    
+    try {
+      // Step 1: Identify orphaned facts
+      const orphanedFacts = await this.identifyOrphanedFacts(profileId);
+      console.log(`📊 Found ${orphanedFacts.length} orphaned facts`);
+      
+      if (orphanedFacts.length === 0) {
+        return {
+          orphanedCount: 0,
+          repairedCount: 0,
+          storiesReconstructed: 0,
+          details: []
+        };
+      }
+
+      // Step 2: Group facts by semantic similarity (reconstruct stories)
+      const factGroups = await this.groupFactsIntoStories(orphanedFacts);
+      console.log(`📚 Reconstructed ${factGroups.length} story groups`);
+
+      // Step 3: Create parent stories and link atomic facts
+      const repairedDetails = [];
+      let repairedCount = 0;
+
+      for (const group of factGroups) {
+        try {
+          const result = await this.createStoryFromFactGroup(profileId, group);
+          if (result) {
+            repairedDetails.push(result);
+            repairedCount += group.length;
+          }
+        } catch (error) {
+          console.error(`❌ Failed to repair fact group:`, error);
+        }
+      }
+
+      console.log(`✅ Orphan facts repair complete: ${repairedCount}/${orphanedFacts.length} facts repaired`);
+      
+      return {
+        orphanedCount: orphanedFacts.length,
+        repairedCount,
+        storiesReconstructed: factGroups.length,
+        details: repairedDetails
+      };
+      
+    } catch (error) {
+      console.error('❌ Orphan facts repair failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Identify facts that are missing story context or parent relationships
+   */
+  private async identifyOrphanedFacts(profileId: string): Promise<any[]> {
+    const allMemories = await this.storage.getMemoryEntries(profileId, { limit: 1000 });
+    
+    const orphaned = allMemories.filter((memory: any) => {
+      return (
+        // Missing story context
+        (!memory.storyContext || memory.storyContext.trim().length === 0) &&
+        // No parent fact ID
+        !memory.parentFactId &&
+        // Either not marked as atomic fact when it should be, or has missing context
+        (!memory.isAtomicFact || memory.storyContext === null) &&
+        // Has substantial content (not just a short phrase)
+        memory.content.length > 30 &&
+        // Is a factual type
+        ['FACT', 'ATOMIC', 'LORE', 'STORY'].includes(memory.type)
+      );
+    });
+
+    return orphaned;
+  }
+
+  /**
+   * Group orphaned facts by semantic similarity to reconstruct original stories
+   */
+  private async groupFactsIntoStories(orphanedFacts: any[]): Promise<any[][]> {
+    const groups: any[][] = [];
+    const processed = new Set<string>();
+
+    for (const fact of orphanedFacts) {
+      if (processed.has(fact.id)) continue;
+
+      const group = [fact];
+      processed.add(fact.id);
+
+      // Find semantically related facts
+      for (const otherFact of orphanedFacts) {
+        if (processed.has(otherFact.id)) continue;
+
+        const similarity = this.calculateSemanticSimilarity(fact, otherFact);
+        if (similarity > 0.6) { // Moderate similarity threshold
+          group.push(otherFact);
+          processed.add(otherFact.id);
+        }
+      }
+
+      // Only create groups with multiple facts (stories)
+      if (group.length >= 2) {
+        groups.push(group);
+      }
+    }
+
+    return groups;
+  }
+
+  /**
+   * Calculate semantic similarity between two facts
+   */
+  private calculateSemanticSimilarity(fact1: any, fact2: any): number {
+    // Simple keyword-based similarity for now
+    const keywords1 = new Set([
+      ...(fact1.keywords || []),
+      ...fact1.content.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3)
+    ]);
+    
+    const keywords2 = new Set([
+      ...(fact2.keywords || []),
+      ...fact2.content.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3)
+    ]);
+
+    const intersection = new Set([...keywords1].filter(x => keywords2.has(x)));
+    const union = new Set([...keywords1, ...keywords2]);
+
+    return intersection.size / union.size;
+  }
+
+  /**
+   * Create a parent story from a group of related facts
+   */
+  private async createStoryFromFactGroup(profileId: string, factGroup: any[]): Promise<{
+    storyId: string;
+    title: string;
+    childFacts: number;
+    context: string;
+  } | null> {
+    try {
+      // Generate story context from the fact group
+      const combinedContent = factGroup.map((f: any) => f.content).join(' ');
+      const storyContext = this.generateStoryContext(factGroup);
+      const storyTitle = this.generateStoryTitle(factGroup);
+
+      // Create parent story
+      const parentStory = await this.storage.addMemoryEntry({
+        profileId,
+        type: 'STORY',
+        content: combinedContent,
+        importance: Math.max(...factGroup.map((f: any) => f.importance || 5)),
+        keywords: this.extractCombinedKeywords(factGroup),
+        source: factGroup[0].source || 'orphan_repair',
+        sourceId: factGroup[0].sourceId,
+        isAtomicFact: false, // This is a parent story
+        storyContext: storyContext
+      });
+
+      if (!parentStory?.id) {
+        console.warn('⚠️ Failed to create parent story');
+        return null;
+      }
+
+      // Update all child facts to link to parent story
+      for (const fact of factGroup) {
+        await this.storage.updateMemoryEntry(fact.id, {
+          parentFactId: parentStory.id,
+          isAtomicFact: true,
+          storyContext: storyContext
+        });
+      }
+
+      console.log(`📚 Created story "${storyTitle}" with ${factGroup.length} child facts`);
+
+      return {
+        storyId: parentStory.id,
+        title: storyTitle,
+        childFacts: factGroup.length,
+        context: storyContext
+      };
+
+    } catch (error) {
+      console.error('❌ Failed to create story from fact group:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Generate narrative context for a group of facts
+   */
+  private generateStoryContext(factGroup: any[]): string {
+    const themes = this.identifyCommonThemes(factGroup);
+    const locations = this.extractLocations(factGroup);
+    const characters = this.extractCharacters(factGroup);
+
+    let context = `Story involving ${characters.join(', ')}`;
+    if (locations.length > 0) {
+      context += ` in ${locations.join(', ')}`;
+    }
+    if (themes.length > 0) {
+      context += ` related to ${themes.join(', ')}`;
+    }
+
+    return context;
+  }
+
+  /**
+   * Generate a descriptive title for a story group
+   */
+  private generateStoryTitle(factGroup: any[]): string {
+    const commonWords = this.findMostCommonWords(factGroup);
+    const themes = this.identifyCommonThemes(factGroup);
+    
+    if (themes.length > 0) {
+      return `${themes[0]} story`;
+    }
+    
+    if (commonWords.length > 0) {
+      return `${commonWords[0]} narrative`;
+    }
+
+    return `Reconstructed story (${factGroup.length} facts)`;
+  }
+
+  /**
+   * Extract combined keywords from fact group
+   */
+  private extractCombinedKeywords(factGroup: any[]): string[] {
+    const allKeywords = new Set<string>();
+    
+    for (const fact of factGroup) {
+      if (fact.keywords) {
+        fact.keywords.forEach((keyword: string) => allKeywords.add(keyword));
+      }
+    }
+
+    return Array.from(allKeywords).slice(0, 10); // Limit to 10 keywords
+  }
+
+  /**
+   * Identify common themes in fact group
+   */
+  private identifyCommonThemes(factGroup: any[]): string[] {
+    const themes = new Set<string>();
+    
+    const combinedText = factGroup.map((f: any) => f.content).join(' ').toLowerCase();
+    
+    const themePatterns = [
+      { pattern: /dead by daylight|dbd|killer|survivor/, theme: 'Dead by Daylight' },
+      { pattern: /pasta|marinara|italian|cooking/, theme: 'cooking' },
+      { pattern: /family|relatives|cousin|uncle/, theme: 'family' },
+      { pattern: /mafia|crime|business|territory/, theme: 'mafia business' },
+      { pattern: /earl|rivalry|competition/, theme: 'rivalry' },
+      { pattern: /podcast|streaming|show/, theme: 'podcast' }
+    ];
+
+    for (const { pattern, theme } of themePatterns) {
+      if (pattern.test(combinedText)) {
+        themes.add(theme);
+      }
+    }
+
+    return Array.from(themes);
+  }
+
+  /**
+   * Extract locations mentioned in fact group
+   */
+  private extractLocations(factGroup: any[]): string[] {
+    const locations = new Set<string>();
+    const combinedText = factGroup.map((f: any) => f.content).join(' ');
+    
+    const locationMatches = combinedText.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g) || [];
+    const knownLocations = ['Nagoya', 'Berlin', 'Tokyo', 'Atlantic City', 'Newark', 'Tulsa', 'Chattanooga'];
+    
+    for (const match of locationMatches) {
+      if (knownLocations.some(loc => match.includes(loc))) {
+        locations.add(match);
+      }
+    }
+
+    return Array.from(locations);
+  }
+
+  /**
+   * Extract character names from fact group
+   */
+  private extractCharacters(factGroup: any[]): string[] {
+    const characters = new Set<string>();
+    const combinedText = factGroup.map((f: any) => f.content).join(' ').toLowerCase();
+    
+    const characterPatterns = ['nicky', 'dente', 'earl', 'toxic', 'sal', 'sabam'];
+    
+    for (const character of characterPatterns) {
+      if (combinedText.includes(character)) {
+        characters.add(character);
+      }
+    }
+
+    return Array.from(characters);
+  }
+
+  /**
+   * Find most common significant words in fact group
+   */
+  private findMostCommonWords(factGroup: any[]): string[] {
+    const wordCounts = new Map<string, number>();
+    const combinedText = factGroup.map((f: any) => f.content).join(' ').toLowerCase();
+    
+    const words = combinedText.split(/\s+/).filter((word: string) => 
+      word.length > 4 && 
+      !/^(the|and|that|this|with|from|they|have|were|been|their)$/.test(word)
+    );
+
+    for (const word of words) {
+      wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
+    }
+
+    return Array.from(wordCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([word]) => word);
   }
 }
 
