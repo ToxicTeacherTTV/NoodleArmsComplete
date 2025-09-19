@@ -638,11 +638,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const document of completedDocs) {
         try {
           if (document.extractedContent) {
-            // Re-extract knowledge using improved logic
-            await documentProcessor.extractAndStoreKnowledge(
+            // Re-extract knowledge using hierarchical logic (prevents orphaned facts)
+            await documentProcessor.extractAndStoreKnowledgeHierarchical(
               activeProfile.id, 
               document.extractedContent, 
-              document.filename
+              document.filename,
+              document.id
             );
             processedCount++;
           }
