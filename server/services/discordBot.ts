@@ -322,6 +322,9 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
         discordContent = discordContent.substring(0, 1900) + "...";
       }
 
+      // TEMPORARY TEST: Force add signature to confirm filter is working
+      discordContent = `${discordContent} [EMOTION-FILTER-ACTIVE]`;
+
       return discordContent;
     } catch (error) {
       console.error('❌ Error generating Discord response:', error);
