@@ -552,9 +552,12 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
         await storage.logDiscordConversation({
           profileId: this.activeProfile.id,
           serverId: server.serverId,
+          channelId: channel.id,
+          channelName: channel.name,
+          messageId: 'PROACTIVE',
           userId: 'PROACTIVE_BOT',
           username: 'Nicky (Proactive)',
-          userMessage: '[PROACTIVE MESSAGE INITIATED]',
+          triggerMessage: '[PROACTIVE MESSAGE INITIATED]',
           nickyResponse: proactiveMessage,
           triggerType: 'PROACTIVE',
           triggerData: { keywords: ['proactive'], responseChance: 100 },
@@ -641,7 +644,7 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
 
       // Generate the response using existing AI service
       const { anthropicService } = await import('./anthropic');
-      const response = await anthropicService.sendMessage(fullContext, this.activeProfile);
+      const response = await anthropicService.generateResponse(fullContext, this.activeProfile);
 
       return response?.message || null;
     } catch (error) {
