@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Message, Events } from 'discord.js';
+import { Client, GatewayIntentBits, Message, Events, TextChannel } from 'discord.js';
 import { storage } from '../storage';
 import { anthropicService } from './anthropic';
 import type { DiscordServer, DiscordMember, DiscordTopicTrigger } from '@shared/schema';
@@ -24,6 +24,9 @@ export class DiscordBotService {
     this.client.once(Events.ClientReady, (readyClient) => {
       console.log(`🤖 Discord bot ready! Logged in as ${readyClient.user.tag}`);
       this.isConnected = true;
+      
+      // Start proactive messaging system
+      this.initializeProactiveMessaging();
     });
 
     this.client.on(Events.MessageCreate, async (message: Message) => {
@@ -229,7 +232,9 @@ export class DiscordBotService {
       const effectiveBehavior = await behaviorModulator.getEffectiveBehavior(server.serverId);
       
       const randomChance = Math.random() * 100;
-      if (randomChance <= (effectiveBehavior.responsiveness * 0.1)) { // Scale down responsiveness for random responses
+      // Higher base response rate - aim for ~70% at max responsiveness (100)
+      const responseRate = Math.min(70, effectiveBehavior.responsiveness * 0.7);
+      if (randomChance <= responseRate) {
         return {
           respond: true,
           triggerType: 'RANDOM',
@@ -247,7 +252,8 @@ export class DiscordBotService {
       console.error('Error getting effective behavior for random response:', error);
       // Fallback to baseline values
       const randomChance = Math.random() * 100;
-      if (randomChance <= ((server.responsiveness || 60) * 0.1)) {
+      const fallbackResponseRate = Math.min(70, (server.responsiveness || 60) * 0.7);
+      if (randomChance <= fallbackResponseRate) {
         return {
           respond: true,
           triggerType: 'RANDOM',
@@ -486,6 +492,167 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
 
   public getClient(): Client {
     return this.client;
+  }
+
+  // Proactive messaging system - Nicky randomly initiates conversations
+  private proactiveMessageTimer: NodeJS.Timeout | null = null;
+
+  private startProactiveMessaging(): void {
+    if (this.proactiveMessageTimer) {
+      clearInterval(this.proactiveMessageTimer);
+    }
+
+    // Check for proactive message opportunity every 2-5 minutes
+    this.proactiveMessageTimer = setInterval(async () => {
+      await this.considerProactiveMessage();
+    }, Math.random() * 180000 + 120000); // 2-5 minutes randomly
+
+    console.log('🎲 Started proactive messaging system');
+  }
+
+  private async considerProactiveMessage(): Promise<void> {
+    try {
+      if (!this.activeProfile) return;
+
+      // Get all active servers
+      const servers = await storage.getProfileDiscordServers(this.activeProfile.id);
+      const activeServers = servers.filter(s => s.isActive);
+      if (activeServers.length === 0) return;
+
+      // Pick a random server
+      const server = activeServers[Math.floor(Math.random() * activeServers.length)];
+
+      // Get effective behavior to determine proactivity level
+      const { behaviorModulator } = await import('./behaviorModulator');
+      const effectiveBehavior = await behaviorModulator.getEffectiveBehavior(server.serverId);
+
+      // Higher responsiveness = more proactive messages
+      const proactiveChance = effectiveBehavior.responsiveness * 0.15; // 15% at max responsiveness
+      if (Math.random() * 100 > proactiveChance) return;
+
+      // Find a suitable channel to send message to
+      const guild = this.client.guilds.cache.get(server.serverId);
+      if (!guild) return;
+
+      // Find a general text channel
+      const channel = guild.channels.cache.find(ch => 
+        ch.type === 0 && // Text channel
+        (ch.name.includes('general') || ch.name.includes('chat') || ch.name.includes('main'))
+      ) as TextChannel;
+
+      if (!channel) return;
+
+      // Generate a proactive message
+      const proactiveMessage = await this.generateProactiveMessage(server, effectiveBehavior);
+      if (proactiveMessage) {
+        console.log(`🎲 Sending proactive message to ${guild.name}: ${proactiveMessage.substring(0, 50)}...`);
+        await channel.send(proactiveMessage);
+
+        // Log this as a conversation
+        await storage.logDiscordConversation({
+          profileId: this.activeProfile.id,
+          serverId: server.serverId,
+          userId: 'PROACTIVE_BOT',
+          username: 'Nicky (Proactive)',
+          userMessage: '[PROACTIVE MESSAGE INITIATED]',
+          nickyResponse: proactiveMessage,
+          triggerType: 'PROACTIVE',
+          triggerData: { keywords: ['proactive'], responseChance: 100 },
+          processingTime: 100,
+        });
+      }
+    } catch (error) {
+      console.error('Error in proactive messaging:', error);
+    }
+  }
+
+  private async generateProactiveMessage(server: any, effectiveBehavior: any): Promise<string | null> {
+    try {
+      // Get recent activity to avoid interrupting active conversations
+      const recentConversations = await storage.getDiscordConversations(server.serverId, 5);
+      const lastMessage = recentConversations[0];
+
+      // Don't send proactive message if someone just talked (within 10 minutes)
+      if (lastMessage && lastMessage.createdAt && (Date.now() - new Date(lastMessage.createdAt).getTime()) < 600000) {
+        return null;
+      }
+
+      // Create personality-driven proactive prompts
+      const proactivePrompts = [
+        // DBD-focused prompts
+        'Ask a random Dead by Daylight question or share a DBD hot take',
+        'Complain about something ridiculous that happened in your last DBD match',
+        'Ask who people think the most annoying killer is and why',
+
+        // Italian personality
+        'Say something completely random in Italian and then translate it poorly',
+        'Ask a weird question about food or cooking',
+        'Dramatically declare something totally mundane',
+
+        // Family business mode
+        'Make a vague reference to "family business" about something silly',
+        'Ask if anyone needs any "favors" but for trivial things',
+        'Reference loyalty or respect in a ridiculous context',
+
+        // Aggressive/confrontational
+        'Start a mild argument about something completely harmless',
+        'Call someone out for something trivial they did days ago',
+        'Challenge everyone to settle something with DBD 1v1s',
+
+        // Random chaos
+        'Ask a completely bizarre hypothetical question',
+        'Share a random childhood memory that makes no sense',
+        'Demand everyone vote on something ridiculous',
+        'Ask for help with the most basic task possible',
+        'Complain about weather, time, or the concept of Tuesdays',
+      ];
+
+      // Pick prompt based on behavior settings
+      let selectedPrompts = [...proactivePrompts];
+      
+      if (effectiveBehavior.dbdObsession > 70) {
+        selectedPrompts = proactivePrompts.filter(p => p.includes('DBD') || p.includes('Dead by Daylight')).concat(proactivePrompts.slice(0, 3));
+      }
+      
+      if (effectiveBehavior.italianIntensity > 80) {
+        selectedPrompts = proactivePrompts.filter(p => p.includes('Italian') || p.includes('food')).concat(proactivePrompts.slice(3, 6));
+      }
+      
+      if (effectiveBehavior.familyBusinessMode > 60) {
+        selectedPrompts = proactivePrompts.filter(p => p.includes('family business') || p.includes('favors')).concat(proactivePrompts.slice(6, 9));
+      }
+
+      const randomPrompt = selectedPrompts[Math.floor(Math.random() * selectedPrompts.length)];
+
+      // Build context for the proactive message
+      const contextParts = [
+        `Generate a spontaneous Discord message for Nicky "Noodle Arms" A.I. Dente.`,
+        `Prompt: ${randomPrompt}`,
+        `Behavior Settings:
+- Aggressiveness: ${effectiveBehavior.aggressiveness}/100
+- Italian Intensity: ${effectiveBehavior.italianIntensity}/100
+- DBD Obsession: ${effectiveBehavior.dbdObsession}/100
+- Family Business Mode: ${effectiveBehavior.familyBusinessMode}/100`,
+        `Make it feel natural and spontaneous, like he just thought of something random to say.`,
+        `Keep it under 200 characters. Be true to his personality.`
+      ];
+
+      const fullContext = contextParts.join('\n\n');
+
+      // Generate the response using existing AI service
+      const { anthropicService } = await import('./anthropic');
+      const response = await anthropicService.sendMessage(fullContext, this.activeProfile);
+
+      return response?.message || null;
+    } catch (error) {
+      console.error('Error generating proactive message:', error);
+      return null;
+    }
+  }
+
+  // Start proactive messaging when a server is added
+  private initializeProactiveMessaging(): void {
+    this.startProactiveMessaging();
   }
 }
 
