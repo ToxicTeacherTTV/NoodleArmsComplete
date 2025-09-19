@@ -663,9 +663,9 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
 
       // Generate the response using existing AI service
       const { anthropicService } = await import('./anthropic');
-      const response = await anthropicService.generateResponse(fullContext, this.activeProfile);
+      const response = await anthropicService.sendMessage(fullContext, this.activeProfile);
 
-      return response?.message || null;
+      return response || null;
     } catch (error) {
       console.error('Error generating proactive message:', error);
       return null;
@@ -702,7 +702,7 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
     if (eligibleChannels.size === 0) return null;
 
     // Pick a random eligible channel
-    const channelArray = Array.from(eligibleChannels.values());
+    const channelArray = Array.from(eligibleChannels.values()) as TextChannel[];
     return channelArray[Math.floor(Math.random() * channelArray.length)];
   }
 

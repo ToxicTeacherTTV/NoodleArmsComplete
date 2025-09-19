@@ -9,10 +9,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Users, UserPlus, MessageCircle, Edit2, Save, X, Trash2, Activity, TrendingUp, Clock } from "lucide-react";
+import { Users, UserPlus, MessageCircle, Edit2, Save, X, Trash2, Activity, TrendingUp, Clock, Bot, Settings, Plus, Hash, Eye, EyeOff, Shield } from "lucide-react";
 import { format } from "date-fns";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type DiscordServer = {
   id: string;
@@ -59,6 +63,13 @@ type EffectiveBehavior = {
   };
 };
 
+type ProactiveSettings = {
+  proactiveEnabled: boolean;
+  allowedChannels: string[];
+  blockedChannels: string[];
+  enabledMessageTypes: string[];
+};
+
 export default function DiscordManagementPanel() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -68,6 +79,10 @@ export default function DiscordManagementPanel() {
   const [editKeywords, setEditKeywords] = useState<string[]>([]);
   const [newFact, setNewFact] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
+  
+  // Proactive messaging state
+  const [newChannelId, setNewChannelId] = useState("");
+  const [channelMode, setChannelMode] = useState<'allowed' | 'blocked'>('allowed');
 
   // Get Discord servers
   const { data: servers = [], isLoading: serversLoading, isError: serversError, refetch: refetchServers } = useQuery<DiscordServer[]>({
@@ -86,6 +101,12 @@ export default function DiscordManagementPanel() {
   // Get members for selected server
   const { data: members = [], isLoading: membersLoading, isError: membersError, refetch: refetchMembers } = useQuery<DiscordMember[]>({
     queryKey: [`/api/discord/servers/${effectiveServerId}/members`],
+    enabled: !!effectiveServerId,
+  });
+
+  // Get proactive settings for selected server
+  const { data: proactiveSettings, isLoading: proactiveLoading, isError: proactiveError } = useQuery<ProactiveSettings>({
+    queryKey: [`/api/discord/servers/${effectiveServerId}/proactive-settings`],
     enabled: !!effectiveServerId,
   });
 
@@ -108,6 +129,29 @@ export default function DiscordManagementPanel() {
     onError: () => {
       toast({ 
         title: "❌ Failed to update member", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  // Update proactive settings
+  const updateProactiveSettingsMutation = useMutation({
+    mutationFn: async (updates: Partial<ProactiveSettings>) => {
+      const response = await fetch(`/api/discord/servers/${effectiveServerId}/proactive-settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!response.ok) throw new Error('Failed to update proactive settings');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/discord/servers/${effectiveServerId}/proactive-settings`] });
+      toast({ title: "✅ Proactive settings updated!" });
+    },
+    onError: () => {
+      toast({ 
+        title: "❌ Failed to update proactive settings", 
         variant: "destructive" 
       });
     },
@@ -156,6 +200,57 @@ export default function DiscordManagementPanel() {
   const removeKeyword = (index: number) => {
     setEditKeywords(editKeywords.filter((_, i) => i !== index));
   };
+
+  // Proactive messaging helper functions
+  const handleProactiveToggle = (enabled: boolean) => {
+    updateProactiveSettingsMutation.mutate({ proactiveEnabled: enabled });
+  };
+
+  const addChannel = () => {
+    if (!newChannelId.trim() || !proactiveSettings) return;
+    
+    const channelId = newChannelId.trim();
+    if (channelMode === 'allowed') {
+      const updatedChannels = [...proactiveSettings.allowedChannels, channelId];
+      updateProactiveSettingsMutation.mutate({ allowedChannels: updatedChannels });
+    } else {
+      const updatedChannels = [...proactiveSettings.blockedChannels, channelId];
+      updateProactiveSettingsMutation.mutate({ blockedChannels: updatedChannels });
+    }
+    setNewChannelId("");
+  };
+
+  const removeChannel = (channelId: string, mode: 'allowed' | 'blocked') => {
+    if (!proactiveSettings) return;
+    
+    if (mode === 'allowed') {
+      const updatedChannels = proactiveSettings.allowedChannels.filter(id => id !== channelId);
+      updateProactiveSettingsMutation.mutate({ allowedChannels: updatedChannels });
+    } else {
+      const updatedChannels = proactiveSettings.blockedChannels.filter(id => id !== channelId);
+      updateProactiveSettingsMutation.mutate({ blockedChannels: updatedChannels });
+    }
+  };
+
+  const toggleMessageType = (messageType: string, enabled: boolean) => {
+    if (!proactiveSettings) return;
+    
+    let updatedTypes;
+    if (enabled) {
+      updatedTypes = [...proactiveSettings.enabledMessageTypes, messageType];
+    } else {
+      updatedTypes = proactiveSettings.enabledMessageTypes.filter(type => type !== messageType);
+    }
+    updateProactiveSettingsMutation.mutate({ enabledMessageTypes: updatedTypes });
+  };
+
+  const messageTypeOptions = [
+    { id: 'dbd', label: 'DBD', icon: '💀', description: 'Dead by Daylight references and gameplay talk' },
+    { id: 'italian', label: 'Italian', icon: '🍝', description: 'Italian phrases, pasta references, and cultural content' },
+    { id: 'family_business', label: 'Family Business', icon: '👔', description: 'Mafia and family business terminology' },
+    { id: 'aggressive', label: 'Aggressive', icon: '😤', description: 'More assertive and confrontational messaging' },
+    { id: 'random', label: 'Random', icon: '🎲', description: 'Completely random and chaotic messages' }
+  ];
 
   const activeServer = servers.find(s => s.serverId === effectiveServerId);
 
@@ -217,6 +312,254 @@ export default function DiscordManagementPanel() {
                 </div>
                 
                 <DynamicBehaviorPanel serverId={activeServer.serverId} />
+              </div>
+            )}
+
+            {/* Proactive Messaging Controls */}
+            {effectiveServerId && (
+              <div className="space-y-3">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Bot className="h-4 w-4" />
+                  Proactive Messaging Controls
+                </h3>
+
+                {proactiveLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <div className="w-8 h-8 border-2 border-primary border-t-transparent animate-spin rounded-full mx-auto mb-2"></div>
+                    <p>Loading proactive settings...</p>
+                  </div>
+                ) : proactiveError ? (
+                  <div className="text-center py-8">
+                    <div className="text-center p-4 border border-destructive rounded-md bg-destructive/10">
+                      <p className="text-destructive mb-2">Failed to load proactive settings</p>
+                    </div>
+                  </div>
+                ) : proactiveSettings && (
+                  <Card data-testid="card-proactive-messaging">
+                    <CardContent className="p-4 space-y-6">
+                      {/* Master Toggle */}
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <Label className="text-base font-medium flex items-center gap-2">
+                            <Bot className="h-4 w-4" />
+                            Enable Proactive Messaging
+                          </Label>
+                          <p className="text-sm text-muted-foreground">
+                            Allow Nicky to initiate conversations randomly across Discord
+                          </p>
+                        </div>
+                        <Switch
+                          checked={proactiveSettings.proactiveEnabled}
+                          onCheckedChange={handleProactiveToggle}
+                          data-testid="switch-proactive-enabled"
+                          disabled={updateProactiveSettingsMutation.isPending}
+                        />
+                      </div>
+
+                      <Separator />
+
+                      {/* Channel Management */}
+                      <div className="space-y-4">
+                        <Label className="text-base font-medium">Channel Management</Label>
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {/* Allowed Channels (Whitelist) */}
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <Eye className="h-4 w-4 text-green-600" />
+                              <Label className="font-medium text-green-700 dark:text-green-400">
+                                Allowed Channels (Whitelist)
+                              </Label>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              If set, Nicky will ONLY message in these channels. Leave empty to allow all channels (except blocked ones).
+                            </p>
+                            
+                            <div className="space-y-2">
+                              {proactiveSettings.allowedChannels.map((channelId) => (
+                                <div key={channelId} className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
+                                  <div className="flex items-center gap-2">
+                                    <Hash className="h-3 w-3 text-green-600" />
+                                    <span className="text-sm font-mono" data-testid={`text-allowed-channel-${channelId}`}>
+                                      {channelId}
+                                    </span>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => removeChannel(channelId, 'allowed')}
+                                    data-testid={`button-remove-allowed-${channelId}`}
+                                    disabled={updateProactiveSettingsMutation.isPending}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                              
+                              {proactiveSettings.allowedChannels.length === 0 && (
+                                <div className="text-center py-4 text-muted-foreground">
+                                  <Shield className="h-8 w-8 mx-auto mb-1 opacity-50" />
+                                  <p className="text-sm">No allowed channels set</p>
+                                  <p className="text-xs">All channels permitted (except blocked)</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Blocked Channels (Blacklist) */}
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <EyeOff className="h-4 w-4 text-red-600" />
+                              <Label className="font-medium text-red-700 dark:text-red-400">
+                                Blocked Channels (Blacklist)
+                              </Label>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Nicky will NEVER message in these channels, regardless of other settings.
+                            </p>
+                            
+                            <div className="space-y-2">
+                              {proactiveSettings.blockedChannels.map((channelId) => (
+                                <div key={channelId} className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
+                                  <div className="flex items-center gap-2">
+                                    <Hash className="h-3 w-3 text-red-600" />
+                                    <span className="text-sm font-mono" data-testid={`text-blocked-channel-${channelId}`}>
+                                      {channelId}
+                                    </span>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => removeChannel(channelId, 'blocked')}
+                                    data-testid={`button-remove-blocked-${channelId}`}
+                                    disabled={updateProactiveSettingsMutation.isPending}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                              
+                              {proactiveSettings.blockedChannels.length === 0 && (
+                                <div className="text-center py-4 text-muted-foreground">
+                                  <EyeOff className="h-8 w-8 mx-auto mb-1 opacity-50" />
+                                  <p className="text-sm">No blocked channels</p>
+                                  <p className="text-xs">All channels available</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Add Channel Interface */}
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Add Channel</Label>
+                          <div className="flex gap-2">
+                            <Select value={channelMode} onValueChange={(value: 'allowed' | 'blocked') => setChannelMode(value)}>
+                              <SelectTrigger className="w-40" data-testid="select-channel-mode">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="allowed">
+                                  <div className="flex items-center gap-2">
+                                    <Eye className="h-3 w-3 text-green-600" />
+                                    Allow
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="blocked">
+                                  <div className="flex items-center gap-2">
+                                    <EyeOff className="h-3 w-3 text-red-600" />
+                                    Block
+                                  </div>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              placeholder="Enter channel ID (e.g., 123456789)"
+                              value={newChannelId}
+                              onChange={(e) => setNewChannelId(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && addChannel()}
+                              data-testid="input-new-channel"
+                              className="flex-1"
+                            />
+                            <Button 
+                              onClick={addChannel} 
+                              size="sm"
+                              data-testid="button-add-channel"
+                              disabled={!newChannelId.trim() || updateProactiveSettingsMutation.isPending}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Right-click on a Discord channel and select "Copy Channel ID" to get the channel ID.
+                          </p>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      {/* Message Type Toggles */}
+                      <div className="space-y-4">
+                        <Label className="text-base font-medium">Enabled Message Types</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Choose which types of proactive messages Nicky can send
+                        </p>
+                        
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {messageTypeOptions.map((messageType) => {
+                            const isEnabled = proactiveSettings.enabledMessageTypes.includes(messageType.id);
+                            return (
+                              <div key={messageType.id} className="flex items-center space-x-3">
+                                <Checkbox
+                                  id={`message-type-${messageType.id}`}
+                                  checked={isEnabled}
+                                  onCheckedChange={(checked) => toggleMessageType(messageType.id, !!checked)}
+                                  data-testid={`checkbox-message-type-${messageType.id}`}
+                                  disabled={updateProactiveSettingsMutation.isPending}
+                                />
+                                <div className="space-y-1 leading-none">
+                                  <Label 
+                                    htmlFor={`message-type-${messageType.id}`}
+                                    className="flex items-center gap-2 cursor-pointer"
+                                  >
+                                    <span>{messageType.icon}</span>
+                                    <span className="font-medium">{messageType.label}</span>
+                                  </Label>
+                                  <p className="text-xs text-muted-foreground">
+                                    {messageType.description}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Status/Summary */}
+                      <div className="mt-4 p-3 bg-muted rounded-md">
+                        <div className="text-sm space-y-1">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${proactiveSettings.proactiveEnabled ? 'bg-green-500' : 'bg-gray-400'}`} />
+                            <span className="font-medium">
+                              Status: {proactiveSettings.proactiveEnabled ? 'Active' : 'Disabled'}
+                            </span>
+                          </div>
+                          <div className="text-muted-foreground">
+                            <span>Message types: {proactiveSettings.enabledMessageTypes.length}/5 enabled</span>
+                            <span className="mx-2">•</span>
+                            <span>
+                              Channels: {
+                                proactiveSettings.allowedChannels.length > 0 
+                                  ? `${proactiveSettings.allowedChannels.length} allowed` 
+                                  : 'All allowed'
+                              }
+                              {proactiveSettings.blockedChannels.length > 0 && `, ${proactiveSettings.blockedChannels.length} blocked`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             )}
 

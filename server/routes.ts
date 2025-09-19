@@ -2386,6 +2386,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get Discord server proactive messaging settings
+  app.get('/api/discord/servers/:serverId/proactive-settings', requireAuth, async (req, res) => {
+    try {
+      const { serverId } = req.params;
+      
+      // Find the Discord server by serverId
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+      
+      const servers = await storage.getProfileDiscordServers(activeProfile.id);
+      const server = servers.find(s => s.serverId === serverId);
+      if (!server) {
+        return res.status(404).json({ error: 'Discord server not found' });
+      }
+
+      // Return proactive messaging settings
+      const settings = {
+        proactiveEnabled: server.proactiveEnabled ?? true,
+        allowedChannels: server.allowedChannels || [],
+        blockedChannels: server.blockedChannels || [],
+        enabledMessageTypes: server.enabledMessageTypes || ['dbd', 'italian', 'family_business', 'aggressive', 'random'],
+      };
+
+      res.json(settings);
+    } catch (error) {
+      console.error('Error getting proactive settings:', error);
+      res.status(500).json({ error: 'Failed to get proactive messaging settings' });
+    }
+  });
+
+  // Update Discord server proactive messaging settings
+  app.patch('/api/discord/servers/:serverId/proactive-settings', requireAuth, async (req, res) => {
+    try {
+      const { serverId } = req.params;
+      const { proactiveEnabled, allowedChannels, blockedChannels, enabledMessageTypes } = req.body;
+      
+      // Find the Discord server by serverId
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+      
+      const servers = await storage.getProfileDiscordServers(activeProfile.id);
+      const server = servers.find(s => s.serverId === serverId);
+      if (!server) {
+        return res.status(404).json({ error: 'Discord server not found' });
+      }
+
+      // Validate and prepare updates
+      const updates: any = {};
+      
+      if (typeof proactiveEnabled === 'boolean') {
+        updates.proactiveEnabled = proactiveEnabled;
+      }
+      
+      if (Array.isArray(allowedChannels)) {
+        // Validate channel IDs are strings
+        const validChannels = allowedChannels.filter(id => typeof id === 'string' && id.trim().length > 0);
+        updates.allowedChannels = validChannels;
+      }
+      
+      if (Array.isArray(blockedChannels)) {
+        // Validate channel IDs are strings
+        const validChannels = blockedChannels.filter(id => typeof id === 'string' && id.trim().length > 0);
+        updates.blockedChannels = validChannels;
+      }
+      
+      if (Array.isArray(enabledMessageTypes)) {
+        // Validate message types
+        const validTypes = ['dbd', 'italian', 'family_business', 'aggressive', 'random'];
+        const validMessageTypes = enabledMessageTypes.filter(type => validTypes.includes(type));
+        updates.enabledMessageTypes = validMessageTypes;
+      }
+
+      const updatedServer = await storage.updateDiscordServer(server.id, updates);
+      res.json(updatedServer);
+    } catch (error) {
+      console.error('Error updating proactive settings:', error);
+      res.status(500).json({ error: 'Failed to update proactive messaging settings' });
+    }
+  });
+
   // Get Discord members for a server
   app.get('/api/discord/servers/:id/members', requireAuth, async (req, res) => {
     try {
