@@ -495,40 +495,21 @@ export class DiscordBotService {
 - Chaos Mode Active: ${effectiveBehavior.driftFactors.chaosMultiplier > 1 ? 'Amplified' : effectiveBehavior.driftFactors.chaosMultiplier < 1 ? 'Suppressed' : 'Baseline'}`);
       }
 
-      // Use existing AI service to generate response with Discord context
-      const prompt = `${fullContext}
-
-${personalityAdjustments}
-
-You are responding in a Discord server called "${server.serverName}". The Discord user "${member.username}" ${member.nickname ? `(nicknamed "${member.nickname}")` : ''} said: "${message.content}"
-
-IMPORTANT CONTEXT:
-- You are NOT talking to your main profile owner/user - you are talking to "${member.username}", a Discord server member
-- This is a different person than your usual conversations
-- Address them as a Discord chatter, not as your owner
-- You can be direct and conversational with Discord users
-- Treat this as a separate conversation from your main chat sessions
-
-IMPORTANT: Do NOT use emotion tags, action descriptions, or stage directions in your response. No *laughs*, *sighs*, *rolls eyes*, (grins), [smiles], or any similar formatting. Write only direct conversational text.
-
-Keep response under 2000 characters for Discord. Be conversational and natural.`;
-
-      // Get relevant memories for context
-      const relevantMemories = await storage.searchMemoryEntries(this.activeProfile.id, message.content);
-      
-      console.log(`🤖 Calling anthropicService.generateResponse...`);
-      const aiResponse = await anthropicService.generateResponse(
-        prompt,
-        this.activeProfile.coreIdentity,
-        relevantMemories,
-        [], // No documents for now
-        fullContext
+      // Use Discord-specific short response generator
+      console.log(`🤖 Calling Discord-specific response generator...`);
+      const aiResponse = await this.generateShortDiscordResponse(
+        `${fullContext}\n\n${personalityAdjustments}\n\nDiscord user "${member.username}" said: "${message.content}"\n\nRespond naturally like in Discord chat. Keep it under 100 characters.`,
+        this.activeProfile.coreIdentity
       );
-      console.log(`✅ Got AI response, processing...`);
+      console.log(`✅ Got Discord response, processing...`);
 
       // Extract response content from AI response object
+      if (!aiResponse) {
+        console.log('❌ No AI response received');
+        return null;
+      }
       console.log(`🔍 AI Response type: ${typeof aiResponse}, structure:`, JSON.stringify(aiResponse, null, 2));
-      const content = typeof aiResponse === 'string' ? aiResponse : aiResponse.content || String(aiResponse);
+      const content = typeof aiResponse === 'string' ? aiResponse : aiResponse || String(aiResponse);
       console.log(`🔍 Extracted content: "${content}"`);
 
       // AGGRESSIVE emotion tag removal for Discord - strip ALL possible formats
@@ -829,25 +810,71 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
 - DBD Obsession: ${effectiveBehavior.dbdObsession}/100
 - Family Business Mode: ${effectiveBehavior.familyBusinessMode}/100`,
         `Make it feel natural and spontaneous, like he just thought of something random to say.`,
-        `Keep it under 200 characters. Be true to his personality.`
+        `CRITICAL: Keep response under 80 characters MAX. Write like people actually text on Discord - short, punchy, casual. No essays or long rants!`
       ];
 
       const fullContext = contextParts.join('\n\n');
 
-      // Generate the response using existing AI service
-      const { anthropicService } = await import('./anthropic');
-      const response = await anthropicService.generateResponse(
-        fullContext,
-        this.activeProfile.coreIdentity,
-        [], // No specific memories for proactive messages
-        [], // No documents
-        undefined // No lore context
-      );
-
-      return response?.message || null;
+      // Generate Discord-specific short proactive message
+      return await this.generateShortDiscordResponse(fullContext, this.activeProfile.coreIdentity);
     } catch (error) {
       console.error('Error generating proactive message:', error);
       return null;
+    }
+  }
+
+  /**
+   * Discord-specific response generator that enforces brevity
+   */
+  private async generateShortDiscordResponse(prompt: string, coreIdentity: string): Promise<string | null> {
+    try {
+      const anthropic = new (await import('@anthropic-ai/sdk')).Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+
+      const response = await anthropic.messages.create({
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 60, // MUCH smaller limit for Discord
+        temperature: 1.0,
+        system: `${coreIdentity}
+
+DISCORD MODE: You are chatting on Discord. Your responses MUST be:
+- Under 100 characters total
+- Conversational and casual like texting
+- No action descriptions (*laughs*, etc.)
+- No long rants or essays
+- Quick, punchy responses like real Discord users`,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }],
+      });
+
+      const content = Array.isArray(response.content) 
+        ? (response.content[0] as any).text 
+        : (response.content as any);
+
+      // Ensure it stays short
+      if (content && content.length > 150) {
+        return content.substring(0, 147) + "...";
+      }
+
+      return content || null;
+    } catch (error) {
+      console.error('Error in Discord-specific response generation:', error);
+      
+      // Simple fallback response
+      const fallbackResponses = [
+        "What's good?",
+        "Sup?",
+        "Hey there!",
+        "Yo!",
+        "What's up?",
+        "Madonna mia...",
+        "Oof...",
+        "Bruh"
+      ];
+      return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
     }
   }
 
