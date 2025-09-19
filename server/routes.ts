@@ -2590,11 +2590,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create new automated source
   app.post('/api/ingestion/sources', async (req, res) => {
     try {
+      console.log('🔍 Creating automated source with data:', JSON.stringify(req.body, null, 2));
       const sourceData = insertAutomatedSourceSchema.parse(req.body);
       const source = await storage.createAutomatedSource(sourceData);
       res.status(201).json({ data: source });
     } catch (error) {
-      res.status(400).json({ error: 'Invalid source data' });
+      console.error('❌ Source creation failed:', error);
+      res.status(400).json({ 
+        error: 'Invalid source data',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
