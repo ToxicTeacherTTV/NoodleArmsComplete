@@ -498,7 +498,7 @@ export class DiscordBotService {
       // Use Discord-specific short response generator
       console.log(`🤖 Calling Discord-specific response generator...`);
       const aiResponse = await this.generateShortDiscordResponse(
-        `${fullContext}\n\n${personalityAdjustments}\n\nDiscord user "${member.username}" said: "${message.content}"\n\nRespond naturally like in Discord chat. Keep it under 100 characters.`,
+        `${fullContext}\n\n${personalityAdjustments}\n\nDiscord user "${member.username}" said: "${message.content}"\n\nRespond naturally like in Discord chat. 3-4 sentences max, no essays.`,
         this.activeProfile.coreIdentity
       );
       console.log(`✅ Got Discord response, processing...`);
@@ -810,7 +810,7 @@ export class DiscordBotService {
 - DBD Obsession: ${effectiveBehavior.dbdObsession}/100
 - Family Business Mode: ${effectiveBehavior.familyBusinessMode}/100`,
         `Make it feel natural and spontaneous, like he just thought of something random to say.`,
-        `CRITICAL: Keep response under 80 characters MAX. Write like people actually text on Discord - short, punchy, casual. No essays or long rants!`
+        `Keep response natural - 3-4 sentences max. Write like people actually chat on Discord - conversational but not essay-length!`
       ];
 
       const fullContext = contextParts.join('\n\n');
@@ -834,16 +834,16 @@ export class DiscordBotService {
 
       const response = await anthropic.messages.create({
         model: "claude-3-5-sonnet-20241022",
-        max_tokens: 60, // MUCH smaller limit for Discord
+        max_tokens: 200, // Reasonable limit for 3-4 sentences
         temperature: 1.0,
         system: `${coreIdentity}
 
 DISCORD MODE: You are chatting on Discord. Your responses MUST be:
-- Under 100 characters total
+- 3-4 sentences maximum 
 - Conversational and casual like texting
 - No action descriptions (*laughs*, etc.)
 - No long rants or essays
-- Quick, punchy responses like real Discord users`,
+- Natural Discord chat style, not walls of text`,
         messages: [{
           role: 'user',
           content: prompt
@@ -854,9 +854,9 @@ DISCORD MODE: You are chatting on Discord. Your responses MUST be:
         ? (response.content[0] as any).text 
         : (response.content as any);
 
-      // Ensure it stays short
-      if (content && content.length > 150) {
-        return content.substring(0, 147) + "...";
+      // Ensure it stays reasonable length
+      if (content && content.length > 500) {
+        return content.substring(0, 497) + "...";
       }
 
       return content || null;
