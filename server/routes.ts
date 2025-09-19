@@ -16,6 +16,7 @@ import { conversationParser } from './services/conversationParser.js';
 import { smartContradictionDetector } from './services/smartContradictionDetector';
 import { aiFlagger } from './services/aiFlagger';
 import { discordBotService } from './services/discordBot';
+import { intelligenceEngine } from './services/intelligenceEngine';
 import { ContentCollectionManager } from './services/ingestion/ContentCollectionManager';
 import { insertAutomatedSourceSchema, insertPendingContentSchema } from '@shared/schema';
 import multer from "multer";
@@ -2789,6 +2790,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error(`Test collection failed for ${req.params.sourceType}:`, error);
       res.status(500).json({ error: `Test collection failed: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // =====================================
+  // INTELLIGENCE ENGINE ROUTES  
+  // =====================================
+
+  // Get comprehensive intelligence analysis
+  app.get('/api/intelligence/analysis', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const analysis = await intelligenceEngine.runFullIntelligenceAnalysis(
+        storage.db,
+        activeProfile.id
+      );
+
+      res.json(analysis);
+    } catch (error) {
+      console.error('Intelligence analysis error:', error);
+      res.status(500).json({ error: 'Failed to run intelligence analysis' });
+    }
+  });
+
+  // Bulk operations for memory management
+  app.post('/api/intelligence/bulk-action', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { action, memoryIds, options = {} } = req.body;
+      let affectedCount = 0;
+
+      switch (action) {
+        case 'hide_irrelevant':
+          // Hide memories with low relevance scores
+          const relevanceScores = await intelligenceEngine.analyzeContextRelevance(
+            storage.db,
+            activeProfile.id
+          );
+          
+          const memoriesToHide = relevanceScores
+            .filter(r => r.shouldHide)
+            .map(r => r.memoryId);
+
+          for (const memoryId of memoriesToHide) {
+            await storage.updateMemoryStatus(memoryId, 'DEPRECATED');
+            affectedCount++;
+          }
+          break;
+
+        case 'delete_selected':
+          // Delete specific memory IDs
+          if (memoryIds && Array.isArray(memoryIds)) {
+            for (const memoryId of memoryIds) {
+              await storage.deleteMemoryEntry(memoryId);
+              affectedCount++;
+            }
+          }
+          break;
+
+        default:
+          return res.status(400).json({ error: 'Invalid bulk action' });
+      }
+
+      res.json({
+        success: true,
+        action,
+        affectedCount,
+        message: `Bulk operation completed: ${affectedCount} memories affected`
+      });
+
+    } catch (error) {
+      console.error('Bulk operation error:', error);
+      res.status(500).json({ error: 'Failed to perform bulk operation' });
     }
   });
 
