@@ -278,6 +278,8 @@ You are responding in a Discord server. The Discord user "${member.username}" ${
 
 Respond directly to ${member.username}. You are NOT talking to your main user/owner - you are talking to this Discord user specifically. Address them by name when appropriate.
 
+IMPORTANT: Do NOT use emotion tags, action descriptions, or stage directions in your response. No *laughs*, *sighs*, *rolls eyes*, (grins), [smiles], or any similar formatting. Write only direct conversational text.
+
 Keep response under 2000 characters for Discord. Be conversational and natural.`;
 
       // Get relevant memories for context
@@ -292,18 +294,28 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
       );
 
       // Extract response content from AI response object
+      console.log(`🔍 AI Response type: ${typeof aiResponse}, structure:`, JSON.stringify(aiResponse, null, 2));
       const content = typeof aiResponse === 'string' ? aiResponse : aiResponse.content || String(aiResponse);
+      console.log(`🔍 Extracted content: "${content}"`);
 
-      // Remove emotion tags for Discord (keep clean text, no *actions* or *emotions*)
-      // This catches: *laughs*, *sighs*, *rolls eyes*, etc.
+      // AGGRESSIVE emotion tag removal for Discord - strip ALL possible formats
       let discordContent = content
-        .replace(/\*[^*]+\*/g, '')  // Remove *emotion* tags
-        .replace(/\([^)]*\)/g, '')  // Remove (emotion) tags  
-        .replace(/\[[^\]]*\]/g, '') // Remove [emotion] tags
-        .replace(/\s+/g, ' ')       // Clean up extra spaces
+        .replace(/\*[^*]*\*/g, '')      // Remove *anything*
+        .replace(/\([^)]*\)/g, '')      // Remove (anything)  
+        .replace(/\[[^\]]*\]/g, '')     // Remove [anything]
+        .replace(/_[^_]*_/g, '')        // Remove _anything_
+        .replace(/~[^~]*~/g, '')        // Remove ~anything~
+        .replace(/\{[^}]*\}/g, '')      // Remove {anything}
+        .replace(/\s*\.\.\.\s*/g, ' ')  // Remove ellipses
+        .replace(/\s+/g, ' ')           // Clean up extra spaces
         .trim();
 
-      console.log(`🎭 Emotion filter: "${content}" → "${discordContent}"`);
+      // If content is empty after filtering, provide a fallback
+      if (!discordContent || discordContent.length < 3) {
+        discordContent = "Hey there! What's up?";
+      }
+
+      console.log(`🎭 AGGRESSIVE Emotion filter: "${content.substring(0, 100)}..." → "${discordContent.substring(0, 100)}..."`);
 
       // Enforce Discord's 2000 character limit
       if (discordContent.length > 1900) {
