@@ -290,7 +290,17 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
       );
 
       // Extract response content from AI response object
-      return typeof aiResponse === 'string' ? aiResponse : aiResponse.content || String(aiResponse);
+      const content = typeof aiResponse === 'string' ? aiResponse : aiResponse.content || String(aiResponse);
+
+      // Remove emotion tags for Discord (keep clean text, no *actions* or *emotions*)
+      let discordContent = content.replace(/\*[^*]+\*/g, '').trim();
+
+      // Enforce Discord's 2000 character limit
+      if (discordContent.length > 1900) {
+        discordContent = discordContent.substring(0, 1900) + "...";
+      }
+
+      return discordContent;
     } catch (error) {
       console.error('❌ Error generating Discord response:', error);
       return "Madonna mia! Something went wrong in my head... give me a second! 🤯";
