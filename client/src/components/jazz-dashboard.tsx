@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import ChatPanel from "@/components/chat-panel";
 import ControlPanel from "@/components/control-panel";
-import PersonalityPanel from "@/components/personality-panel";
+// PersonalityPanel moved to brain-management.tsx
 // MemoryPanel and DocumentPanel moved to brain-management.tsx
 import StatusIndicator from "@/components/status-indicator";
 import VoiceVisualizer from "@/components/voice-visualizer";
@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { Message, Profile, AIStatus, StreamSettings, VoiceActivity, AppMode } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
 import { nanoid } from "nanoid";
@@ -44,6 +45,7 @@ export default function JazzDashboard() {
   const [checkerPosition, setCheckerPosition] = useState({ x: 0, y: 0 });
   const [pendingTranscript, setPendingTranscript] = useState<string>(''); // For manual voice control
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  const [isControlsCollapsed, setIsControlsCollapsed] = useState(true); // Start collapsed on mobile
 
   // Refs for queue management
   const messageQueueRef = useRef<Message[]>([]);
@@ -285,9 +287,71 @@ export default function JazzDashboard() {
       {/* Main Content - Mobile Responsive */}
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-4 md:space-y-0 md:grid md:grid-cols-12 md:gap-6 md:h-[calc(100vh-120px)]">
         
-        {/* Mobile: Controls at top, Desktop: Left Panel */}
+        {/* Mobile: Collapsible Controls, Desktop: Left Panel */}
         <div className="md:col-span-3 space-y-4">
-          <Card className="border-primary/20 shadow-lg">
+          <Collapsible 
+            open={isControlsCollapsed ? false : true} 
+            onOpenChange={(open) => setIsControlsCollapsed(!open)}
+            className="md:hidden"
+          >
+            <Card className="border-primary/20 shadow-lg">
+              <CollapsibleTrigger asChild>
+                <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50">
+                  <CardTitle className="text-lg flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
+                      Live Controls
+                    </div>
+                    <Button variant="ghost" size="sm">
+                      {isControlsCollapsed ? '▼' : '▲'}
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent>
+                  <ControlPanel
+                    onToggleListening={toggleListening}
+                    onSendText={(message: string) => {
+                      if (message.trim()) {
+                        const userMessage: Message = {
+                          id: nanoid(),
+                          conversationId: currentConversationId,
+                          type: 'USER',
+                          content: message,
+                          createdAt: new Date(),
+                        };
+                        setMessages(prev => [...prev, userMessage]);
+                        setAiStatus('PROCESSING');
+                        sendMessageMutation.mutate({
+                          conversationId: currentConversationId,
+                          type: 'USER',
+                          content: message,
+                        });
+                      }
+                    }}
+                    onClearChat={() => setMessages([])}
+                    onStoreConversation={() => {
+                      if (messages.length > 0) {
+                        consolidateMemoryMutation.mutate(currentConversationId);
+                      }
+                    }}
+                    onPauseSpeech={pauseElevenLabs}
+                    onResumeSpeech={resumeElevenLabs}
+                    onStopSpeech={stopSpeaking}
+                    isListening={isListening}
+                    isSpeaking={isSpeaking}
+                    isPaused={isPausedElevenLabs}
+                    appMode={appMode}
+                    pendingTranscript={pendingTranscript}
+                  />
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+          
+          {/* Desktop: Always visible controls */}
+          <Card className="border-primary/20 shadow-lg hidden md:block">
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center gap-2">
                 <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
@@ -333,31 +397,19 @@ export default function JazzDashboard() {
             </CardContent>
           </Card>
 
-          {/* Hide personality and chaos on mobile - moved to brain management */}
-          <div className="hidden md:block space-y-4">
-            <Card className="border-secondary/20">
+          {/* Chaos meter only - personality moved to brain management */}
+          {chaosState && (
+            <Card className="border-accent/20 hidden md:block">
               <CardContent className="p-4">
-                <PersonalityPanel
-                  profile={activeProfile}
-                  onOpenProfileManager={() => setIsProfileModalOpen(true)}
-                  onResetChat={() => setMessages([])}
+                <ChaosMeter 
+                  chaosLevel={chaosState.level} 
+                  chaosMode={chaosState.mode}
+                  manualOverride={chaosState.manualOverride}
+                  effectiveLevel={chaosState.effectiveLevel}
                 />
               </CardContent>
             </Card>
-
-            {chaosState && (
-              <Card className="border-accent/20">
-                <CardContent className="p-4">
-                  <ChaosMeter 
-                    chaosLevel={chaosState.level} 
-                    chaosMode={chaosState.mode}
-                    manualOverride={chaosState.manualOverride}
-                    effectiveLevel={chaosState.effectiveLevel}
-                  />
-                </CardContent>
-              </Card>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Chat Panel - Full width on mobile, centered on desktop */}

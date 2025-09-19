@@ -713,14 +713,7 @@ export default function BrainManagement() {
     </div>
   );
 
-  // Queries
-  const { data: activeProfile } = useQuery({
-    queryKey: ['/api/profiles/active'],
-  });
-
-  const { data: memoryStats } = useQuery<{totalFacts: number; conversations: number}>({
-    queryKey: ['/api/memory/stats'],
-  });
+  // activeProfile and memoryStats already declared above
 
   const { data: highConfidenceFacts = [] } = useQuery<MemoryFact[]>({
     queryKey: ['/api/memory/high-confidence'],
@@ -983,32 +976,96 @@ export default function BrainManagement() {
 
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-7">
-            <TabsTrigger value="protected-facts" data-testid="tab-protected-facts">
-              Protected Facts
+          <TabsList className="grid w-full grid-cols-6 lg:grid-cols-11">
+            <TabsTrigger value="recent-memories" data-testid="tab-recent-memories" className="text-xs">
+              📝 Recent
             </TabsTrigger>
-            <TabsTrigger value="high-confidence" data-testid="tab-high-confidence">
-              High Confidence (90%+)
+            <TabsTrigger value="documents" data-testid="tab-documents" className="text-xs">
+              📁 Docs
             </TabsTrigger>
-            <TabsTrigger value="medium-confidence" data-testid="tab-medium-confidence">
-              Medium Confidence (60-89%)
+            <TabsTrigger value="identity" data-testid="tab-identity" className="text-xs">
+              🎭 Identity
             </TabsTrigger>
-            <TabsTrigger value="low-confidence" data-testid="tab-low-confidence">
-              Low Confidence (0-59%)
+            <TabsTrigger value="protected-facts" data-testid="tab-protected-facts" className="text-xs">
+              🛡️ Protected
             </TabsTrigger>
-            <TabsTrigger value="contradictions" data-testid="tab-contradictions">
-              Contradictions ({contradictions?.length || 0})
+            <TabsTrigger value="high-confidence" data-testid="tab-high-confidence" className="text-xs">
+              ✅ High (90%+)
             </TabsTrigger>
-            <TabsTrigger value="flags" data-testid="tab-flags">
-              Flags ({flagsData?.count || 0})
+            <TabsTrigger value="medium-confidence" data-testid="tab-medium-confidence" className="text-xs">
+              ⚠️ Med (60-89%)
             </TabsTrigger>
-            <TabsTrigger value="duplicates" data-testid="tab-duplicates">
-              Duplicates
+            <TabsTrigger value="low-confidence" data-testid="tab-low-confidence" className="text-xs">
+              ❓ Low (0-59%)
             </TabsTrigger>
-            <TabsTrigger value="all-facts" data-testid="tab-all-facts">
-              All Facts
+            <TabsTrigger value="contradictions" data-testid="tab-contradictions" className="text-xs">
+              🔥 Conflicts ({contradictions?.length || 0})
+            </TabsTrigger>
+            <TabsTrigger value="flags" data-testid="tab-flags" className="text-xs">
+              🚩 Flags ({flagsData?.count || 0})
+            </TabsTrigger>
+            <TabsTrigger value="duplicates" data-testid="tab-duplicates" className="text-xs">
+              📋 Dupes
+            </TabsTrigger>
+            <TabsTrigger value="all-facts" data-testid="tab-all-facts" className="text-xs">
+              🧠 All Facts
             </TabsTrigger>
           </TabsList>
+
+          {/* Recent Memories */}
+          <TabsContent value="recent-memories" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Memories</CardTitle>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Latest memories and interactions with quick search
+                </p>
+              </CardHeader>
+              <CardContent>
+                <MemoryPanel
+                  profileId={activeProfile?.id}
+                  memoryStats={memoryStats}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Documents */}
+          <TabsContent value="documents" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Document Management</CardTitle>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Upload and process documents to extract knowledge
+                </p>
+              </CardHeader>
+              <CardContent>
+                <DocumentPanel
+                  profileId={activeProfile?.id}
+                  documents={documents}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Identity & Core Personality */}
+          <TabsContent value="identity" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Core Identity & Personality</CardTitle>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Manage the AI's core personality traits and identity
+                </p>
+              </CardHeader>
+              <CardContent>
+                <PersonalityPanel
+                  profile={activeProfile}
+                  onOpenProfileManager={() => {/* Navigate to profile management or show modal */}}
+                  onResetChat={() => {/* This could be moved or handled differently in brain management */}}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* Protected Facts */}
           <TabsContent value="protected-facts" className="mt-6">
