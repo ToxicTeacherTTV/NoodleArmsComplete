@@ -270,7 +270,7 @@ export default function BrainManagement() {
 
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTab, setSelectedTab] = useState("protected-facts");
+  const [selectedTab, setSelectedTab] = useState("recent-memories");
   const [sortBy, setSortBy] = useState<'confidence' | 'date'>('confidence');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   

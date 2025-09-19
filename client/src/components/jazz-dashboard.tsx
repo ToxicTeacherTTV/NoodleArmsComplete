@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import ChatPanel from "@/components/chat-panel";
 import ControlPanel from "@/components/control-panel";
@@ -27,6 +28,7 @@ import { nanoid } from "nanoid";
 export default function JazzDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   // State management
   const [currentConversationId, setCurrentConversationId] = useState<string>("");
@@ -261,24 +263,27 @@ export default function JazzDashboard() {
           <div className="flex items-center space-x-4">
             <StatusIndicator status={aiStatus} />
             <button
-              onClick={() => window.location.href = '/workspace'}
-              className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors"
+              onClick={() => setLocation('/workspace')}
+              className="px-2 md:px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors text-sm"
               data-testid="button-project-workspace"
             >
-              🚧 Project Workspace
+              <span className="hidden sm:inline">🚧 Project Workspace</span>
+              <span className="sm:hidden">🚧</span>
             </button>
             <button
-              onClick={() => window.location.href = '/brain'}
-              className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors"
+              onClick={() => setLocation('/brain')}
+              className="px-2 md:px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors text-sm"
               data-testid="button-brain-management"
             >
-              🧠 Brain Management
+              <span className="hidden sm:inline">🧠 Brain Management</span>
+              <span className="sm:hidden">🧠</span>
             </button>
             <button
               onClick={() => setAppMode(appMode === 'PODCAST' ? 'STREAMING' : 'PODCAST')}
-              className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors"
+              className="px-2 md:px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors text-sm"
             >
-              {appMode === 'PODCAST' ? '🎙️ Podcast Mode' : '🔴 Streaming Mode'}
+              <span className="hidden sm:inline">{appMode === 'PODCAST' ? '🎙️ Podcast Mode' : '🔴 Streaming Mode'}</span>
+              <span className="sm:hidden">{appMode === 'PODCAST' ? '🎙️' : '🔴'}</span>
             </button>
           </div>
         </div>
