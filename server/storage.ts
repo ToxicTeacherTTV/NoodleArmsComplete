@@ -6,6 +6,10 @@ import {
   memoryEntries,
   loreEvents,
   loreCharacters,
+  discordServers,
+  discordMembers,
+  discordTopicTriggers,
+  discordConversations,
   type Profile, 
   type InsertProfile,
   type Conversation,
@@ -19,7 +23,15 @@ import {
   type LoreEvent,
   type InsertLoreEvent,
   type LoreCharacter,
-  type InsertLoreCharacter
+  type InsertLoreCharacter,
+  type DiscordServer,
+  type InsertDiscordServer,
+  type DiscordMember,
+  type InsertDiscordMember,
+  type DiscordTopicTrigger,
+  type InsertDiscordTopicTrigger,
+  type DiscordConversation,
+  type InsertDiscordConversation
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, sql } from "drizzle-orm";
@@ -75,6 +87,28 @@ export interface IStorage {
   
   // Contradiction groups methods
   getContradictionGroups(profileId: string): Promise<any[]>;
+
+  // Discord management methods
+  getDiscordServer(serverId: string): Promise<DiscordServer | undefined>;
+  createDiscordServer(server: InsertDiscordServer): Promise<DiscordServer>;
+  updateDiscordServer(id: string, updates: Partial<DiscordServer>): Promise<DiscordServer>;
+  getProfileDiscordServers(profileId: string): Promise<DiscordServer[]>;
+  
+  // Discord member management
+  getDiscordMember(serverId: string, userId: string): Promise<DiscordMember | undefined>;
+  createDiscordMember(member: InsertDiscordMember): Promise<DiscordMember>;
+  updateDiscordMember(id: string, updates: Partial<DiscordMember>): Promise<DiscordMember>;
+  getServerMembers(serverId: string): Promise<DiscordMember[]>;
+  
+  // Discord topic triggers
+  getDiscordTopicTriggers(serverId: string): Promise<DiscordTopicTrigger[]>;
+  createDiscordTopicTrigger(trigger: InsertDiscordTopicTrigger): Promise<DiscordTopicTrigger>;
+  updateDiscordTopicTrigger(id: string, updates: Partial<DiscordTopicTrigger>): Promise<DiscordTopicTrigger>;
+  deleteDiscordTopicTrigger(id: string): Promise<void>;
+  
+  // Discord conversation logging
+  logDiscordConversation(conversation: InsertDiscordConversation): Promise<DiscordConversation>;
+  getDiscordConversations(serverId: string, limit?: number): Promise<DiscordConversation[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -656,6 +690,135 @@ export class DatabaseStorage implements IStorage {
         explanation: `Contradiction group with ${facts.length} conflicting facts`
       };
     });
+  }
+
+  // Discord management methods implementation
+  async getDiscordServer(serverId: string): Promise<DiscordServer | undefined> {
+    const [server] = await db
+      .select()
+      .from(discordServers)
+      .where(eq(discordServers.serverId, serverId));
+    return server || undefined;
+  }
+
+  async createDiscordServer(server: InsertDiscordServer): Promise<DiscordServer> {
+    const [newServer] = await db
+      .insert(discordServers)
+      .values([server as any])
+      .returning();
+    return newServer;
+  }
+
+  async updateDiscordServer(id: string, updates: Partial<DiscordServer>): Promise<DiscordServer> {
+    const updateData = { ...updates, updatedAt: sql`now()` };
+    const [updatedServer] = await db
+      .update(discordServers)
+      .set(updateData as any)
+      .where(eq(discordServers.id, id))
+      .returning();
+    return updatedServer;
+  }
+
+  async getProfileDiscordServers(profileId: string): Promise<DiscordServer[]> {
+    return await db
+      .select()
+      .from(discordServers)
+      .where(eq(discordServers.profileId, profileId))
+      .orderBy(desc(discordServers.createdAt));
+  }
+
+  // Discord member management
+  async getDiscordMember(serverId: string, userId: string): Promise<DiscordMember | undefined> {
+    const [member] = await db
+      .select()
+      .from(discordMembers)
+      .where(
+        and(
+          eq(discordMembers.serverId, serverId),
+          eq(discordMembers.userId, userId)
+        )
+      );
+    return member || undefined;
+  }
+
+  async createDiscordMember(member: InsertDiscordMember): Promise<DiscordMember> {
+    const [newMember] = await db
+      .insert(discordMembers)
+      .values([member as any])
+      .returning();
+    return newMember;
+  }
+
+  async updateDiscordMember(id: string, updates: Partial<DiscordMember>): Promise<DiscordMember> {
+    const updateData = { ...updates, updatedAt: sql`now()` };
+    const [updatedMember] = await db
+      .update(discordMembers)
+      .set(updateData as any)
+      .where(eq(discordMembers.id, id))
+      .returning();
+    return updatedMember;
+  }
+
+  async getServerMembers(serverId: string): Promise<DiscordMember[]> {
+    return await db
+      .select()
+      .from(discordMembers)
+      .where(eq(discordMembers.serverId, serverId))
+      .orderBy(desc(discordMembers.lastInteraction));
+  }
+
+  // Discord topic triggers
+  async getDiscordTopicTriggers(serverId: string): Promise<DiscordTopicTrigger[]> {
+    return await db
+      .select()
+      .from(discordTopicTriggers)
+      .where(
+        and(
+          eq(discordTopicTriggers.serverId, serverId),
+          eq(discordTopicTriggers.isActive, true)
+        )
+      )
+      .orderBy(desc(discordTopicTriggers.responseChance));
+  }
+
+  async createDiscordTopicTrigger(trigger: InsertDiscordTopicTrigger): Promise<DiscordTopicTrigger> {
+    const [newTrigger] = await db
+      .insert(discordTopicTriggers)
+      .values([trigger as any])
+      .returning();
+    return newTrigger;
+  }
+
+  async updateDiscordTopicTrigger(id: string, updates: Partial<DiscordTopicTrigger>): Promise<DiscordTopicTrigger> {
+    const updateData = { ...updates, updatedAt: sql`now()` };
+    const [updatedTrigger] = await db
+      .update(discordTopicTriggers)
+      .set(updateData as any)
+      .where(eq(discordTopicTriggers.id, id))
+      .returning();
+    return updatedTrigger;
+  }
+
+  async deleteDiscordTopicTrigger(id: string): Promise<void> {
+    await db.delete(discordTopicTriggers).where(eq(discordTopicTriggers.id, id));
+  }
+
+  // Discord conversation logging
+  async logDiscordConversation(conversation: InsertDiscordConversation): Promise<DiscordConversation> {
+    const [newConversation] = await db
+      .insert(discordConversations)
+      .values([conversation as any])
+      .returning();
+    return newConversation;
+  }
+
+  async getDiscordConversations(serverId: string, limit: number = 50): Promise<DiscordConversation[]> {
+    return await db
+      .select()
+      .from(discordConversations)
+      .where(eq(discordConversations.serverId, serverId))
+      .orderBy(desc(discordConversations.createdAt))
+      .limit(limit);
   }
 }
 

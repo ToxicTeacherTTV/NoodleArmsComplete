@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { storage } from "./storage";
 import { elevenlabsService } from "./services/elevenlabs";
+import { discordBotService } from "./services/discordBot";
 
 const app = express();
 app.use(express.json());
@@ -70,15 +71,28 @@ app.use((req, res, next) => {
   }, async () => {
     log(`serving on port ${port}`);
     
-    // Initialize voice settings with active profile
+    // Initialize voice settings and Discord bot with active profile
     try {
       const activeProfile = await storage.getActiveProfile();
       if (activeProfile && activeProfile.voiceId) {
         elevenlabsService.setVoiceId(activeProfile.voiceId);
         log(`🎵 Initialized voice: ${activeProfile.voiceId} for profile: ${activeProfile.name}`);
       }
+
+      // Initialize Discord bot if token is available
+      const discordToken = process.env.DISCORD_BOT_TOKEN;
+      if (discordToken && activeProfile) {
+        try {
+          await discordBotService.start(discordToken);
+          log(`🤖 Discord bot initialized for profile: ${activeProfile.name}`);
+        } catch (error) {
+          log(`⚠️ Failed to start Discord bot: ${error}`);
+        }
+      } else {
+        log(`ℹ️ Discord bot not started - missing token or active profile`);
+      }
     } catch (error) {
-      log(`⚠️ Failed to initialize voice settings: ${error}`);
+      log(`⚠️ Failed to initialize services: ${error}`);
     }
   });
 })();

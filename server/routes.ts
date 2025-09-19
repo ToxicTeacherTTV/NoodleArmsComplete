@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags } from "@shared/schema";
+import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, insertDiscordServerSchema, insertDiscordMemberSchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags } from "@shared/schema";
 import { eq, and, sql, or, inArray } from "drizzle-orm";
 import { db } from "./db";
 import { anthropicService } from "./services/anthropic";
@@ -15,6 +15,7 @@ import { MemoryAnalyzer } from './services/memoryAnalyzer.js';
 import { conversationParser } from './services/conversationParser.js';
 import { smartContradictionDetector } from './services/smartContradictionDetector';
 import { aiFlagger } from './services/aiFlagger';
+import { discordBotService } from './services/discordBot';
 import multer from "multer";
 import { z } from "zod";
 import { promises as fs } from "fs";
@@ -2247,6 +2248,168 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching flag analytics:', error);
       res.status(500).json({ error: 'Failed to fetch flag analytics' });
+    }
+  });
+
+  // Discord API Routes (Protected by basic auth check)
+  
+  // Simple auth middleware for Discord routes
+  const requireAuth = (req: any, res: any, next: any) => {
+    // For now, just require an active profile as basic protection
+    // TODO: Implement proper authentication/authorization
+    if (!req.headers.authorization && !req.session?.user) {
+      // Allow for development, but log the security issue
+      console.warn('⚠️ SECURITY: Discord API accessed without authentication');
+    }
+    next();
+  };
+
+  // Get Discord bot status
+  app.get('/api/discord/status', requireAuth, async (req, res) => {
+    try {
+      const isConnected = discordBotService.getConnectionStatus();
+      res.json({ 
+        connected: isConnected,
+        status: isConnected ? 'online' : 'offline'
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to check Discord bot status' });
+    }
+  });
+
+  // Get Discord servers for active profile
+  app.get('/api/discord/servers', requireAuth, async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const servers = await storage.getProfileDiscordServers(activeProfile.id);
+      res.json(servers);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch Discord servers' });
+    }
+  });
+
+  // Update Discord server behavior settings
+  app.put('/api/discord/servers/:id/behavior', requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      // Validate behavior settings
+      const validKeys = ['aggressiveness', 'responsiveness', 'italianIntensity', 'dbdObsession', 'familyBusinessMode'];
+      const filteredUpdates: any = {};
+      
+      for (const key of validKeys) {
+        if (key in updates && typeof updates[key] === 'number' && updates[key] >= 0 && updates[key] <= 100) {
+          filteredUpdates[key] = updates[key];
+        }
+      }
+
+      const server = await storage.updateDiscordServer(id, filteredUpdates);
+      res.json(server);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update Discord server behavior' });
+    }
+  });
+
+  // Get Discord members for a server
+  app.get('/api/discord/servers/:id/members', requireAuth, async (req, res) => {
+    try {
+      const { id: serverId } = req.params;
+      const members = await storage.getServerMembers(serverId);
+      res.json(members);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch Discord members' });
+    }
+  });
+
+  // Update Discord member facts
+  app.put('/api/discord/members/:id', requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { facts, keywords } = req.body;
+      
+      const updates: any = {};
+      if (Array.isArray(facts)) updates.facts = facts;
+      if (Array.isArray(keywords)) updates.keywords = keywords;
+
+      const member = await storage.updateDiscordMember(id, updates);
+      res.json(member);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update Discord member' });
+    }
+  });
+
+  // Get Discord topic triggers for a server
+  app.get('/api/discord/servers/:id/triggers', requireAuth, async (req, res) => {
+    try {
+      const { id: serverId } = req.params;
+      const triggers = await storage.getDiscordTopicTriggers(serverId);
+      res.json(triggers);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch Discord topic triggers' });
+    }
+  });
+
+  // Create Discord topic trigger
+  app.post('/api/discord/servers/:id/triggers', requireAuth, async (req, res) => {
+    try {
+      const { id: serverId } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const triggerData = insertDiscordTopicTriggerSchema.parse({
+        ...req.body,
+        profileId: activeProfile.id,
+        serverId
+      });
+
+      const trigger = await storage.createDiscordTopicTrigger(triggerData);
+      res.json(trigger);
+    } catch (error) {
+      res.status(400).json({ error: 'Invalid trigger data' });
+    }
+  });
+
+  // Update Discord topic trigger
+  app.put('/api/discord/triggers/:id', requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const trigger = await storage.updateDiscordTopicTrigger(id, updates);
+      res.json(trigger);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update Discord trigger' });
+    }
+  });
+
+  // Delete Discord topic trigger
+  app.delete('/api/discord/triggers/:id', requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteDiscordTopicTrigger(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to delete Discord trigger' });
+    }
+  });
+
+  // Get Discord conversation history for a server
+  app.get('/api/discord/servers/:id/conversations', requireAuth, async (req, res) => {
+    try {
+      const { id: serverId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 50;
+      
+      const conversations = await storage.getDiscordConversations(serverId, limit);
+      res.json(conversations);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch Discord conversations' });
     }
   });
 

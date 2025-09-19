@@ -20,6 +20,7 @@ import { ProtectedFactsManager } from "@/components/protected-facts-manager";
 import MemoryPanel from "@/components/memory-panel";
 import DocumentPanel from "@/components/document-panel";
 import PersonalityPanel from "@/components/personality-panel";
+import DiscordControlPanel from "@/components/discord-control-panel";
 
 interface MemoryFact {
   id: string;
@@ -976,7 +977,7 @@ export default function BrainManagement() {
 
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6 lg:grid-cols-11">
+          <TabsList className="grid w-full grid-cols-7 lg:grid-cols-12">
             <TabsTrigger value="recent-memories" data-testid="tab-recent-memories" className="text-xs">
               📝 Recent
             </TabsTrigger>
@@ -985,6 +986,9 @@ export default function BrainManagement() {
             </TabsTrigger>
             <TabsTrigger value="identity" data-testid="tab-identity" className="text-xs">
               🎭 Identity
+            </TabsTrigger>
+            <TabsTrigger value="discord" data-testid="tab-discord" className="text-xs">
+              🤖 Discord
             </TabsTrigger>
             <TabsTrigger value="protected-facts" data-testid="tab-protected-facts" className="text-xs">
               🛡️ Protected
@@ -1063,6 +1067,21 @@ export default function BrainManagement() {
                   onOpenProfileManager={() => {/* Navigate to profile management or show modal */}}
                   onResetChat={() => {/* This could be moved or handled differently in brain management */}}
                 />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Discord Integration */}
+          <TabsContent value="discord" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Discord Integration</CardTitle>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Configure Nicky's Discord bot behavior and server interactions
+                </p>
+              </CardHeader>
+              <CardContent>
+                <DiscordControlPanel />
               </CardContent>
             </Card>
           </TabsContent>
