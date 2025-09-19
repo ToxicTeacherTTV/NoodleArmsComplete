@@ -194,6 +194,35 @@ export class DiscordBotService {
       }
     }
 
+    // Check for conversation continuation - respond if someone just replied to Nicky
+    const recentConversations = await storage.getDiscordConversations(server.id, 5);
+    const lastNickyMessage = recentConversations.find(conv => conv.nickyResponse);
+    
+    if (lastNickyMessage && lastNickyMessage.createdAt) {
+      const timeSinceLastResponse = Date.now() - new Date(lastNickyMessage.createdAt).getTime();
+      const isFromSameUser = message.author.id === lastNickyMessage.userId;
+      const isRecentConversation = timeSinceLastResponse < 300000; // 5 minutes
+      
+      // If same user replied to Nicky within 5 minutes, continue the conversation
+      if (isFromSameUser && isRecentConversation) {
+        console.log(`💬 Conversation continuation detected from ${message.author.username}`);
+        return {
+          respond: true,
+          triggerType: 'TOPIC_TRIGGER',
+          triggerData: {
+            conversationContinuation: true,
+            lastMessage: lastNickyMessage.nickyResponse,
+            behaviorSettings: {
+              aggressiveness: server.aggressiveness || 80,
+              responsiveness: server.responsiveness || 60,
+              italianIntensity: server.italianIntensity || 100,
+            },
+          },
+          processingTime: Date.now() - startTime,
+        };
+      }
+    }
+
     // Random response based on server responsiveness setting
     const randomChance = Math.random() * 100;
     if (randomChance <= ((server.responsiveness || 60) * 0.1)) { // Scale down responsiveness for random responses
@@ -275,9 +304,14 @@ export class DiscordBotService {
 
 ${personalityAdjustments}
 
-You are responding in a Discord server. The Discord user "${member.username}" ${member.nickname ? `(nicknamed "${member.nickname}")` : ''} said: "${message.content}"
+You are responding in a Discord server called "${server.serverName}". The Discord user "${member.username}" ${member.nickname ? `(nicknamed "${member.nickname}")` : ''} said: "${message.content}"
 
-Respond directly to ${member.username}. You are NOT talking to your main user/owner - you are talking to this Discord user specifically. Address them by name when appropriate.
+IMPORTANT CONTEXT:
+- You are NOT talking to your main profile owner/user - you are talking to "${member.username}", a Discord server member
+- This is a different person than your usual conversations
+- Address them as a Discord chatter, not as your owner
+- You can be direct and conversational with Discord users
+- Treat this as a separate conversation from your main chat sessions
 
 IMPORTANT: Do NOT use emotion tags, action descriptions, or stage directions in your response. No *laughs*, *sighs*, *rolls eyes*, (grins), [smiles], or any similar formatting. Write only direct conversational text.
 
@@ -313,6 +347,21 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
         .replace(/\s+/g, ' ')           // Clean up extra spaces
         .trim();
 
+      // Remove self-mentions (bot tagging himself)
+      const botUser = await this.client.user;
+      if (botUser) {
+        const selfMentionPattern = new RegExp(`<@!?${botUser.id}>`, 'g');
+        discordContent = discordContent.replace(selfMentionPattern, '').replace(/\s+/g, ' ').trim();
+        console.log(`🚫 Removed self-mentions for bot ID: ${botUser.id}`);
+      }
+
+      // Add proper @mention for the user being responded to
+      const userMention = `<@${responseContext.userId}>`;
+      if (!discordContent.includes(userMention)) {
+        discordContent = `${userMention} ${discordContent}`;
+        console.log(`👤 Added user mention for: ${member.username}`);
+      }
+
       // If content is empty after filtering, provide a fallback
       if (!discordContent || discordContent.length < 3) {
         discordContent = "Hey there! What's up?";
@@ -325,8 +374,7 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
         discordContent = discordContent.substring(0, 1900) + "...";
       }
 
-      // TEMPORARY TEST: Force add signature to confirm filter is working
-      discordContent = `${discordContent} [EMOTION-FILTER-ACTIVE]`;
+      // Filter is working - debug signature removed
 
       return discordContent;
     } catch (error) {
