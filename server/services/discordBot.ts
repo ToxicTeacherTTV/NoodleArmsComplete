@@ -269,12 +269,14 @@ export class DiscordBotService {
         personalityAdjustments += 'Reference family business and mafia terminology more often. ';
       }
 
-      // Use existing AI service to generate response
+      // Use existing AI service to generate response with Discord context
       const prompt = `${fullContext}
 
 ${personalityAdjustments}
 
-Respond to: "${message.content}"
+You are responding in a Discord server. The Discord user "${member.username}" ${member.nickname ? `(nicknamed "${member.nickname}")` : ''} said: "${message.content}"
+
+Respond directly to ${member.username}. You are NOT talking to your main user/owner - you are talking to this Discord user specifically. Address them by name when appropriate.
 
 Keep response under 2000 characters for Discord. Be conversational and natural.`;
 
@@ -293,7 +295,15 @@ Keep response under 2000 characters for Discord. Be conversational and natural.`
       const content = typeof aiResponse === 'string' ? aiResponse : aiResponse.content || String(aiResponse);
 
       // Remove emotion tags for Discord (keep clean text, no *actions* or *emotions*)
-      let discordContent = content.replace(/\*[^*]+\*/g, '').trim();
+      // This catches: *laughs*, *sighs*, *rolls eyes*, etc.
+      let discordContent = content
+        .replace(/\*[^*]+\*/g, '')  // Remove *emotion* tags
+        .replace(/\([^)]*\)/g, '')  // Remove (emotion) tags  
+        .replace(/\[[^\]]*\]/g, '') // Remove [emotion] tags
+        .replace(/\s+/g, ' ')       // Clean up extra spaces
+        .trim();
+
+      console.log(`🎭 Emotion filter: "${content}" → "${discordContent}"`);
 
       // Enforce Discord's 2000 character limit
       if (discordContent.length > 1900) {
