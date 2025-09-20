@@ -876,10 +876,16 @@ DISCORD CHAT MODE - CRITICAL CONSTRAINTS:
 - Casual conversational tone like texting
 - No essays, rants, or long explanations
 - Simple responses, not walls of text
-- Stay calm and composed`;
+- Stay calm and composed
+- Be friendly and helpful, not aggressive`;
+
+        // Create clean Discord prompt without chaos personality instructions
+        const cleanPrompt = `Discord chat context: Someone said "${prompt.split('Discord user')[1]?.split('said:')[1]?.split('"')[1] || 'hello'}"
+
+Respond naturally in Discord chat style. Keep it short and conversational.`;
 
         const geminiResponse = await geminiService.generateChatResponse(
-          prompt,
+          cleanPrompt,
           discordIdentity,
           ""
         );
