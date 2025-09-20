@@ -462,8 +462,23 @@ export default function JazzDashboard() {
           variant="outline"
           className="p-3 rounded-lg"
           data-testid="button-clear-chat"
+          title="Clear Chat"
         >
           <i className="fas fa-trash"></i>
+        </Button>
+        
+        <Button
+          onClick={() => {
+            if (messages.length > 0) {
+              consolidateMemoryMutation.mutate(currentConversationId);
+            }
+          }}
+          variant="outline"
+          className="p-3 rounded-lg"
+          data-testid="button-store-conversation"
+          title="Store Conversation to Memory"
+        >
+          <i className="fas fa-save"></i>
         </Button>
       </div>
 
