@@ -47,6 +47,12 @@ class ChaosEngine {
     console.log(`🎛️  Manual chaos override set to ${this.chaosState.manualOverride}% for next response`);
   }
 
+  // Set permanent base chaos level
+  setBaseLevel(level: number): void {
+    this.chaosState.level = Math.max(0, Math.min(100, level));
+    console.log(`🎯 Base chaos level permanently set to ${this.chaosState.level}%`);
+  }
+
   // Response-based chaos evolution (called after each AI response)
   onResponseGenerated(): void {
     this.chaosState.responseCount++;

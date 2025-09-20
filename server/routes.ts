@@ -718,6 +718,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Set permanent base chaos level
+  app.post('/api/chaos/set-level', async (req, res) => {
+    try {
+      const { level } = req.body;
+      
+      if (typeof level !== 'number' || level < 0 || level > 100) {
+        return res.status(400).json({ error: 'Level must be a number between 0 and 100' });
+      }
+      
+      chaosEngine.setBaseLevel(level);
+      const newState = chaosEngine.getCurrentState();
+      res.json({
+        ...newState,
+        effectiveLevel: chaosEngine.getEffectiveChaosLevel(),
+        message: `Base chaos level permanently set to ${level}%`
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to set chaos level' });
+    }
+  });
+
   // EVOLUTIONARY AI ROUTES - The Ultimate Brain Upgrade! 🧠
   app.post('/api/memory/evolutionary-optimization', async (req, res) => {
     try {
