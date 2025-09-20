@@ -417,7 +417,11 @@ export default function JazzDashboard() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => apiRequest('/api/chaos/set-level', { method: 'POST', body: { level: 0 } })}
+                onClick={async () => {
+                  await apiRequest('POST', '/api/chaos/set-level', { level: 0 });
+                  // Refresh chaos state
+                  window.location.reload();
+                }}
                 className="h-6 px-2 text-xs hover:bg-green-500/20"
                 data-testid="button-chaos-0"
               >
@@ -426,7 +430,11 @@ export default function JazzDashboard() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => apiRequest('/api/chaos/set-level', { method: 'POST', body: { level: 50 } })}
+                onClick={async () => {
+                  await apiRequest('POST', '/api/chaos/set-level', { level: 50 });
+                  // Refresh chaos state  
+                  window.location.reload();
+                }}
                 className="h-6 px-2 text-xs hover:bg-yellow-500/20"
                 data-testid="button-chaos-50"
               >
@@ -435,7 +443,11 @@ export default function JazzDashboard() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => apiRequest('/api/chaos/set-level', { method: 'POST', body: { level: 80 } })}
+                onClick={async () => {
+                  await apiRequest('POST', '/api/chaos/set-level', { level: 80 });
+                  // Refresh chaos state
+                  window.location.reload();
+                }}
                 className="h-6 px-2 text-xs hover:bg-red-500/20"
                 data-testid="button-chaos-80"
               >
