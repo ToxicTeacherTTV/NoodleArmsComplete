@@ -58,7 +58,7 @@ export default function JazzDashboard() {
   // Custom hooks
   const { isListening, startListening, stopListening, transcript, interimTranscript, resetTranscript, error: speechError } = useSpeechRecognition();
   const { speak: speakBrowser, isSpeaking: isSpeakingBrowser, stop: stopSpeakingBrowser } = useSpeechSynthesis();
-  const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopSpeakingElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs } = useElevenLabsSpeech();
+  const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopSpeakingElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs, replay: replayElevenLabs, canReplay: canReplayElevenLabs } = useElevenLabsSpeech();
   const voiceActivity = useVoiceActivity(isListening);
 
   // Always use ElevenLabs when available and voice output is enabled, fall back to browser if needed
@@ -324,16 +324,14 @@ export default function JazzDashboard() {
               }}
               onReplayAudio={() => {
                 if (appMode === 'PODCAST') {
-                  if (lastGeneratedAudio) {
-                    speakElevenLabs(lastGeneratedAudio);
-                  }
+                  replayElevenLabs();
                 } else {
                   replayLastAudio();
                 }
               }}
               isPlayingAudio={appMode === 'PODCAST' ? isSpeakingElevenLabs && !isPausedElevenLabs : isSpeaking && !isPaused}
               isPausedAudio={appMode === 'PODCAST' ? isPausedElevenLabs : isPaused}
-              canReplay={appMode === 'PODCAST' ? !!lastGeneratedAudio : canReplay}
+              canReplay={appMode === 'PODCAST' ? canReplayElevenLabs : canReplay}
               onTextSelection={handleTextSelection}
             />
           </Card>
