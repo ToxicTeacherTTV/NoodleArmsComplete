@@ -583,7 +583,7 @@ export function IntelligenceDashboard() {
                 <Target className="h-5 w-5" />
                 Fact Clusters
                 <Badge variant="outline">
-                  {analysis.factClusters.length} clusters found
+                  {(analysis?.factClusters || []).length} clusters found
                 </Badge>
               </CardTitle>
             </CardHeader>
