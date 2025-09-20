@@ -641,7 +641,7 @@ export function IntelligenceDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {analysis.sourceReliability.map((source) => (
+              {(analysis?.sourceReliability || []).length > 0 ? (analysis.sourceReliability || []).map((source) => (
                 <div
                   key={source.sourceId}
                   className="p-4 border rounded-lg"
@@ -649,19 +649,23 @@ export function IntelligenceDashboard() {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <div className="font-medium">{source.sourceName}</div>
+                      <div className="font-medium">{source.sourceName || 'Unknown source'}</div>
                       <div className="text-sm text-gray-600 dark:text-gray-400">
-                        {source.factCount} facts • {source.accuracyRate}% accuracy
+                        {source.factCount || 0} facts • {source.accuracyRate || 0}% accuracy
                       </div>
                     </div>
                     <PriorityBadge 
-                      priority={source.recommendation} 
-                      score={source.reliabilityScore}
+                      priority={source.recommendation || 'LOW'} 
+                      score={source.reliabilityScore || 0}
                     />
                   </div>
-                  <Progress value={source.reliabilityScore} className="w-full" />
+                  <Progress value={source.reliabilityScore || 0} className="w-full" />
                 </div>
-              ))}
+              )) : (
+                <div className="text-center py-8 text-gray-500">
+                  No source reliability data available.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -736,8 +740,10 @@ export function IntelligenceDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {analysis.contextRelevance
-                .filter(item => item.shouldHide)
+              {(analysis?.contextRelevance || [])
+                .filter(item => item?.shouldHide)
+                .length > 0 ? (analysis?.contextRelevance || [])
+                .filter(item => item?.shouldHide)
                 .map((item) => (
                 <div
                   key={item.memoryId}
@@ -747,16 +753,16 @@ export function IntelligenceDashboard() {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <div className="text-sm mb-2">
-                        {item.content.substring(0, 150)}...
+                        {(item.content || 'No content').substring(0, 150)}...
                       </div>
                       <div className="text-xs text-gray-600 dark:text-gray-400">
-                        {item.reasoning}
+                        {item.reasoning || 'No reasoning provided'}
                       </div>
                     </div>
                     <div className="ml-4 flex flex-col items-end space-y-2">
                       <PriorityBadge 
                         priority={item.shouldHide ? 'HIGH' : 'LOW'} 
-                        score={item.relevanceScore}
+                        score={item.relevanceScore || 0}
                       />
                       <Button
                         variant="outline"
@@ -768,9 +774,13 @@ export function IntelligenceDashboard() {
                       </Button>
                     </div>
                   </div>
-                  <Progress value={item.relevanceScore} className="w-full" />
+                  <Progress value={item.relevanceScore || 0} className="w-full" />
                 </div>
-              ))}
+              )) : (
+                <div className="text-center py-8 text-gray-500">
+                  No low-relevance memories found for hiding.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
