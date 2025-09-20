@@ -828,6 +828,7 @@ export class DiscordBotService {
    */
   private async generateShortDiscordResponse(prompt: string, coreIdentity: string): Promise<string | null> {
     try {
+      // First try Anthropic
       const anthropic = new (await import('@anthropic-ai/sdk')).Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
       });
@@ -863,18 +864,51 @@ DISCORD MODE: You are chatting on Discord. Your responses MUST be:
     } catch (error) {
       console.error('Error in Discord-specific response generation:', error);
       
-      // Simple fallback response
-      const fallbackResponses = [
-        "What's good?",
-        "Sup?",
-        "Hey there!",
-        "Yo!",
-        "What's up?",
-        "Madonna mia...",
-        "Oof...",
-        "Bruh"
-      ];
-      return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+      // Fallback to Gemini with Discord-specific constraints
+      try {
+        console.log('🔄 Anthropic failed, using Gemini for Discord response...');
+        const { geminiService } = await import('./gemini');
+        
+        const discordIdentity = `${coreIdentity}
+
+DISCORD CHAT MODE - CRITICAL CONSTRAINTS:
+- Maximum 3-4 sentences only
+- Casual conversational tone like texting
+- No essays, rants, or long explanations
+- Simple responses, not walls of text
+- Stay calm and composed`;
+
+        const geminiResponse = await geminiService.generateChatResponse(
+          prompt,
+          discordIdentity,
+          ""
+        );
+        
+        let content = geminiResponse.content;
+        
+        // Aggressively limit length for Discord
+        if (content.length > 300) {
+          content = content.substring(0, 297) + "...";
+        }
+        
+        console.log('✅ Gemini Discord response generated successfully');
+        return content;
+      } catch (geminiError) {
+        console.error('Gemini Discord fallback also failed:', geminiError);
+        
+        // Last resort: simple responses
+        const fallbackResponses = [
+          "What's good?",
+          "Sup?",
+          "Hey there!",
+          "Yo!",
+          "What's up?",
+          "Madonna mia...",
+          "Oof...",
+          "Bruh"
+        ];
+        return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+      }
     }
   }
 
