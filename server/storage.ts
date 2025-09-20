@@ -226,11 +226,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProfileDocuments(profileId: string): Promise<Document[]> {
+    // Optimized: Select only essential columns and limit to recent documents
     return await db
-      .select()
+      .select({
+        id: documents.id,
+        filename: documents.filename,
+        contentType: documents.contentType,
+        size: documents.size,
+        processingStatus: documents.processingStatus,
+        profileId: documents.profileId,
+        createdAt: documents.createdAt,
+        updatedAt: documents.updatedAt,
+        chunks: documents.chunks,
+        extractedContent: documents.extractedContent,
+        retrievalCount: documents.retrievalCount,
+      })
       .from(documents)
       .where(eq(documents.profileId, profileId))
-      .orderBy(desc(documents.createdAt));
+      .orderBy(desc(documents.createdAt))
+      .limit(50); // Limit to most recent 50 documents
   }
 
   async updateDocument(id: string, updates: Partial<Document>): Promise<Document> {
@@ -369,23 +383,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getMemoryStats(profileId: string): Promise<{ totalFacts: number; conversations: number }> {
-    const [memoryStats] = await db
+    // Optimized: Single query with subqueries instead of two separate queries
+    const [stats] = await db
       .select({
-        totalFacts: sql<number>`count(*)`,
+        totalFacts: sql<number>`(SELECT count(*) FROM memory_entries WHERE profile_id = ${profileId})`,
+        conversations: sql<number>`(SELECT count(*) FROM conversations WHERE profile_id = ${profileId})`,
       })
-      .from(memoryEntries)
-      .where(eq(memoryEntries.profileId, profileId));
-
-    const [conversationStats] = await db
-      .select({
-        conversations: sql<number>`count(*)`,
-      })
-      .from(conversations)
-      .where(eq(conversations.profileId, profileId));
+      .from(sql`(SELECT 1) AS dummy`);
 
     return {
-      totalFacts: memoryStats.totalFacts || 0,
-      conversations: conversationStats.conversations || 0,
+      totalFacts: stats.totalFacts || 0,
+      conversations: stats.conversations || 0,
     };
   }
 

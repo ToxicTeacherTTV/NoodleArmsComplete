@@ -15,8 +15,9 @@ class ChaosEngine {
   private modeChangeTimer: NodeJS.Timeout | null = null;
 
   constructor() {
+    // Start with calm defaults, will be overridden by setBaseLevel calls
     this.chaosState = {
-      level: 80, // Default: highly unhinged
+      level: 0, // Default to calm, controlled by API calls
       mode: 'FULL_PSYCHO',
       lastModeChange: new Date(),
       responseCount: 0,

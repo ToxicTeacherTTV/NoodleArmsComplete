@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import type { Message, Profile, AIStatus, StreamSettings, VoiceActivity, AppMode } from "@/types";
+import type { Message, Profile, AIStatus, StreamSettings, VoiceActivity, AppMode, ChatResponse, ConversationResponse, ChaosState, MemoryStats } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
 import { nanoid } from "nanoid";
 
@@ -74,25 +74,42 @@ export default function JazzDashboard() {
   const isPaused = false; // Browser speech doesn't have pause state
   const speakText = speakBrowser;
 
-  // Queries
-  const { data: activeProfile } = useQuery({
+  // Queries with proper error and loading handling
+  const { data: activeProfile, isLoading: profileLoading, isError: profileError } = useQuery<Profile>({
     queryKey: ['/api/profiles/active'],
     refetchInterval: false,
+    onError: (error) => {
+      console.error('Failed to fetch active profile:', error);
+      toast({
+        title: "Profile Error",
+        description: "Failed to load active profile. Please refresh the page.",
+        variant: "destructive",
+      });
+    },
   });
 
-  const { data: memoryStats } = useQuery({
+  const { data: memoryStats, isLoading: statsLoading, isError: statsError } = useQuery<MemoryStats>({
     queryKey: ['/api/memory/stats'],
     refetchInterval: 120000, // Reduced from 30s to 2min to reduce flickering
+    onError: (error) => {
+      console.error('Failed to fetch memory stats:', error);
+    },
   });
 
-  const { data: documents } = useQuery({
+  const { data: documents, isLoading: documentsLoading, isError: documentsError } = useQuery({
     queryKey: ['/api/documents'],
     refetchInterval: false,
+    onError: (error) => {
+      console.error('Failed to fetch documents:', error);
+    },
   });
 
-  const { data: chaosState } = useQuery({
+  const { data: chaosState, isLoading: chaosLoading, isError: chaosError } = useQuery<ChaosState>({
     queryKey: ['/api/chaos/state'],
     refetchInterval: 15000, // Reduced from 5s to 15s to reduce flickering
+    onError: (error) => {
+      console.error('Failed to fetch chaos state:', error);
+    },
   });
 
   // Mutations
@@ -113,7 +130,7 @@ export default function JazzDashboard() {
           conversationId: currentConversationId,
           type: 'AI',
           content: response.content,
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         };
         setMessages(prev => [...prev, aiMessage]);
         
@@ -131,7 +148,7 @@ export default function JazzDashboard() {
     },
   });
 
-  const createConversationMutation = useMutation({
+  const createConversationMutation = useMutation<ConversationResponse, Error>({
     mutationFn: async () => {
       const response = await apiRequest('POST', '/api/conversations', {
         profileId: activeProfile?.id,
@@ -361,7 +378,7 @@ export default function JazzDashboard() {
                 conversationId: currentConversationId,
                 type: 'USER',
                 content: message,
-                createdAt: new Date(),
+                createdAt: new Date().toISOString(),
               };
               setMessages(prev => [...prev, userMessage]);
               setAiStatus('PROCESSING');
@@ -512,7 +529,7 @@ export default function JazzDashboard() {
                           conversationId: currentConversationId,
                           type: 'USER',
                           content: message,
-                          createdAt: new Date(),
+                          createdAt: new Date().toISOString(),
                         };
                         setMessages(prev => [...prev, userMessage]);
                         setAiStatus('PROCESSING');
@@ -561,7 +578,7 @@ export default function JazzDashboard() {
                       conversationId: currentConversationId,
                       type: 'USER',
                       content: message,
-                      createdAt: new Date(),
+                      createdAt: new Date().toISOString(),
                     };
                     setMessages(prev => [...prev, userMessage]);
                     setAiStatus('PROCESSING');

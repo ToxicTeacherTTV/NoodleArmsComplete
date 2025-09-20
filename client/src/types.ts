@@ -61,7 +61,7 @@ export interface MemoryStats {
   conversations: number;
 }
 
-export type AIStatus = 'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING';
+export type AIStatus = 'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING' | 'PROCESSING' | 'ERROR';
 
 export interface VoiceActivity {
   isActive: boolean;
@@ -80,4 +80,25 @@ export type AppMode = 'PODCAST' | 'STREAMING';
 export interface VoiceSettings {
   useElevenLabs: boolean;
   voiceId?: string;
+}
+
+// API Response Interfaces
+export interface ChatResponse {
+  content: string;
+  id?: string;
+}
+
+export interface ConversationResponse {
+  id: string;
+  title: string;
+  profileId: string;
+  createdAt: string;
+}
+
+export interface ChaosState {
+  level: number;
+  mode: 'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 'CONSPIRACY';
+  effectiveLevel?: number;
+  manualOverride?: number;
+  lastModeChange?: string;
 }

@@ -639,7 +639,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           if (document.extractedContent) {
             // Re-extract knowledge using hierarchical logic (prevents orphaned facts)
-            await documentProcessor.extractAndStoreKnowledgeHierarchical(
+            await documentProcessor.extractAndStoreKnowledge(
               activeProfile.id, 
               document.extractedContent, 
               document.filename,
@@ -2904,8 +2904,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const options = {
-        summaryType: req.query.type as string || 'overview',
-        timeframe: req.query.timeframe as string || 'all',
+        summaryType: (req.query.type as string || 'overview') as 'overview' | 'recent' | 'topical' | 'trend_analysis',
+        timeframe: (req.query.timeframe as string || 'all') as 'all' | 'day' | 'week' | 'month',
         maxFacts: parseInt(req.query.limit as string) || 100,
         focusArea: req.query.focus as string
       };
