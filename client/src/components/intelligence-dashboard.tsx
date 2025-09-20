@@ -679,14 +679,14 @@ export function IntelligenceDashboard() {
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium">Overall Drift Score</span>
                   <span className="text-lg font-bold" data-testid="overall-drift-score">
-                    {analysis.personalityDrift.overallDrift}%
+                    {analysis?.personalityDrift?.overallDrift || 0}%
                   </span>
                 </div>
-                <Progress value={analysis.personalityDrift.overallDrift} className="w-full" />
+                <Progress value={analysis?.personalityDrift?.overallDrift || 0} className="w-full" />
               </div>
 
               <div className="space-y-3">
-                {analysis.personalityDrift.driftAreas.map((area, index) => (
+                {(analysis?.personalityDrift?.driftAreas || []).length > 0 ? (analysis?.personalityDrift?.driftAreas || []).map((area, index) => (
                   <div
                     key={area.trait}
                     className="p-3 border rounded-lg"
@@ -708,15 +708,21 @@ export function IntelligenceDashboard() {
                       </span>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="text-center py-8 text-gray-500">
+                    No personality drift detected. This could be due to API limitations or stable personality traits.
+                  </div>
+                )}
               </div>
 
-              <Alert>
-                <Brain className="h-4 w-4" />
-                <AlertDescription>
-                  {analysis.personalityDrift.recommendation}
-                </AlertDescription>
-              </Alert>
+              {analysis?.personalityDrift?.recommendation && (
+                <Alert>
+                  <Brain className="h-4 w-4" />
+                  <AlertDescription>
+                    {analysis.personalityDrift.recommendation}
+                  </AlertDescription>
+                </Alert>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
