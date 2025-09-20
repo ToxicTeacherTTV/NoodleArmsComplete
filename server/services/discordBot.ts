@@ -8,6 +8,8 @@ export class DiscordBotService {
   private isConnected: boolean = false;
   private activeProfile: any = null;
   private recentResponses?: Set<string>;
+  private dailyProactiveCount: number = 0;
+  private lastProactiveDate: string = '';
 
   constructor() {
     this.client = new Client({
@@ -656,10 +658,10 @@ export class DiscordBotService {
       clearInterval(this.proactiveMessageTimer);
     }
 
-    // Check for proactive message opportunity every 2-5 minutes
+    // Check for proactive message opportunity every 2-4 hours
     this.proactiveMessageTimer = setInterval(async () => {
       await this.considerProactiveMessage();
-    }, Math.random() * 180000 + 120000); // 2-5 minutes randomly
+    }, Math.random() * 7200000 + 7200000); // 2-4 hours randomly (much less frequent!)
 
     console.log('🎲 Started proactive messaging system');
   }
@@ -667,6 +669,18 @@ export class DiscordBotService {
   private async considerProactiveMessage(): Promise<void> {
     try {
       if (!this.activeProfile) return;
+
+      // Check daily limit (max 2 proactive messages per day)
+      const today = new Date().toDateString();
+      if (this.lastProactiveDate !== today) {
+        this.dailyProactiveCount = 0;
+        this.lastProactiveDate = today;
+      }
+      
+      if (this.dailyProactiveCount >= 2) {
+        console.log(`🎲 Daily proactive message limit reached (${this.dailyProactiveCount}/2)`);
+        return;
+      }
 
       // Get all active servers
       const servers = await storage.getProfileDiscordServers(this.activeProfile.id);
@@ -704,7 +718,8 @@ export class DiscordBotService {
       // Generate a proactive message with server's enabled message types and channel context
       const proactiveMessage = await this.generateProactiveMessage(server, effectiveBehavior, channel);
       if (proactiveMessage) {
-        console.log(`🎲 Sending proactive message to ${guild.name}: ${proactiveMessage.substring(0, 50)}...`);
+        this.dailyProactiveCount++;
+        console.log(`🎲 Sending proactive message to ${guild.name} (${this.dailyProactiveCount}/2 today): ${proactiveMessage.substring(0, 50)}...`);
         await channel.send(proactiveMessage);
 
         // Log this as a conversation
