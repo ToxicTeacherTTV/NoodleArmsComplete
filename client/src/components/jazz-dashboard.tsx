@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { Message, Profile, AIStatus, StreamSettings, VoiceActivity, AppMode } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
@@ -294,8 +295,102 @@ export default function JazzDashboard() {
       {/* Main Content - Mobile Responsive */}
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-4 md:space-y-0 md:grid md:grid-cols-12 md:gap-6 md:h-[calc(100vh-120px)]">
         
-        {/* Mobile: Collapsible Controls, Desktop: Left Panel */}
-        <div className="md:col-span-3 space-y-4">
+        {/* Chat Panel - Full width */}
+        <div className="md:col-span-9 h-[60vh] md:h-[calc(100vh-200px)] order-1">
+          <Card className="h-full border-primary/20 shadow-xl">
+            <ChatPanel
+              messages={messages}
+              sessionDuration={getSessionDuration()}
+              messageCount={messages.length}
+              appMode={appMode}
+              onPlayAudio={(content: string) => {
+                if (appMode === 'PODCAST') {
+                  if (isSpeakingElevenLabs && !isPausedElevenLabs) {
+                    pauseElevenLabs();
+                  } else if (isPausedElevenLabs) {
+                    resumeElevenLabs();
+                  } else {
+                    speakElevenLabs(content);
+                  }
+                } else {
+                  if (isSpeaking && !isPaused) {
+                    pausePlayback();
+                  } else if (isPaused) {
+                    resumePlayback();
+                  } else {
+                    speakText(content);
+                  }
+                }
+              }}
+              onReplayAudio={() => {
+                if (appMode === 'PODCAST') {
+                  if (lastGeneratedAudio) {
+                    speakElevenLabs(lastGeneratedAudio);
+                  }
+                } else {
+                  replayLastAudio();
+                }
+              }}
+              isPlayingAudio={appMode === 'PODCAST' ? isSpeakingElevenLabs && !isPausedElevenLabs : isSpeaking && !isPaused}
+              isPausedAudio={appMode === 'PODCAST' ? isPausedElevenLabs : isPaused}
+              canReplay={appMode === 'PODCAST' ? !!lastGeneratedAudio : canReplay}
+              onTextSelection={handleTextSelection}
+            />
+          </Card>
+        </div>
+
+        {/* Text Input - Below chat */}
+        <div className="md:col-span-9 order-2">
+          <Card className="border-primary/20 shadow-lg">
+            <CardContent className="p-4">
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-foreground">Text Chat</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.target as HTMLFormElement);
+                  const message = formData.get('message') as string;
+                  if (message.trim()) {
+                    const userMessage: Message = {
+                      id: nanoid(),
+                      conversationId: currentConversationId,
+                      type: 'USER',
+                      content: message,
+                      createdAt: new Date(),
+                    };
+                    setMessages(prev => [...prev, userMessage]);
+                    setAiStatus('PROCESSING');
+                    sendMessageMutation.mutate({
+                      conversationId: currentConversationId,
+                      type: 'USER',
+                      content: message,
+                    });
+                    (e.target as HTMLFormElement).reset();
+                  }
+                }} className="space-y-2">
+                  <Textarea
+                    name="message"
+                    className="w-full bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                    placeholder={isListening ? "🎤 Listening... speak now!" : "Type a message to Nicky..."}
+                    rows={3}
+                    data-testid="textarea-message-input"
+                    readOnly={isListening}
+                  />
+                  <Button 
+                    type="submit" 
+                    className="w-full bg-accent hover:bg-accent/90 text-accent-foreground py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200"
+                    data-testid="button-send-message"
+                  >
+                    <i className="fas fa-paper-plane"></i>
+                    <span>Send Message</span>
+                  </Button>
+                </form>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Mobile: Collapsible Controls, Desktop: Side Panel */}
+        <div className="md:col-span-3 space-y-4 order-3">
           <Collapsible 
             open={isControlsCollapsed ? false : true} 
             onOpenChange={(open) => setIsControlsCollapsed(!open)}
@@ -419,33 +514,6 @@ export default function JazzDashboard() {
           )}
         </div>
 
-        {/* Chat Panel - Full width on mobile, centered on desktop */}
-        <div className="md:col-span-9 h-[60vh] md:h-full">
-          <Card className="h-full border-primary/20 shadow-xl">
-            <ChatPanel
-              messages={messages}
-              sessionDuration={getSessionDuration()}
-              messageCount={messages.length}
-              appMode={appMode}
-              onPlayAudio={(content: string) => {
-                if (appMode === 'PODCAST') {
-                  if (isSpeakingElevenLabs && !isPausedElevenLabs) {
-                    pauseElevenLabs();
-                  } else if (isPausedElevenLabs) {
-                    resumeElevenLabs();
-                  } else {
-                    speakElevenLabs(content);
-                  }
-                } else {
-                  speakBrowser(content);
-                }
-              }}
-              isPlayingAudio={appMode === 'PODCAST' ? isSpeakingElevenLabs : isSpeakingBrowser}
-              isPausedAudio={isPausedElevenLabs}
-              onTextSelection={handleTextSelection}
-            />
-          </Card>
-        </div>
 
         {/* Right Panel removed - moved to brain management */}
       </div>
