@@ -7,6 +7,7 @@ export class DiscordBotService {
   private client: Client;
   private isConnected: boolean = false;
   private activeProfile: any = null;
+  private recentResponses?: Set<string>;
 
   constructor() {
     this.client = new Client({
@@ -131,7 +132,19 @@ export class DiscordBotService {
           shouldRespond
         );
         
-        if (response) {
+        if (response && response.trim()) {
+          // Ensure only one response per message - add deduplication
+          const messageKey = `${message.id}-${message.author.id}`;
+          if (this.recentResponses?.has(messageKey)) {
+            console.log(`🚫 Duplicate response prevented for message ${message.id}`);
+            return;
+          }
+          
+          // Track this response to prevent duplicates
+          if (!this.recentResponses) this.recentResponses = new Set();
+          this.recentResponses.add(messageKey);
+          setTimeout(() => this.recentResponses?.delete(messageKey), 5000); // Clean up after 5 seconds
+          
           // Send response to Discord
           await message.reply(response);
           
