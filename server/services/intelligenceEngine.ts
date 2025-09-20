@@ -637,43 +637,58 @@ If no drift detected, return: []`;
   ): Promise<IntelligenceSummary> {
     console.log(`🧠 Running full intelligence analysis for profile ${profileId}`);
 
-    const [clusterAnalysis, sourceReliability, personalityDrift, relevanceScores] = await Promise.all([
-      this.analyzeFactClusters(db, profileId),
-      this.analyzeSourceReliability(db, profileId),
-      this.analyzePersonalityDrift(db, profileId),
-      this.analyzeContextRelevance(db, profileId)
-    ]);
+    // Run analyses individually with error handling to ensure partial success
+    const clusterAnalysis = await this.analyzeFactClusters(db, profileId).catch(error => {
+      console.error('❌ Fact clustering analysis failed:', error);
+      return [];
+    });
+    
+    const sourceReliability = await this.analyzeSourceReliability(db, profileId).catch(error => {
+      console.error('❌ Source reliability analysis failed:', error);
+      return [];
+    });
+    
+    const personalityDrift = await this.analyzePersonalityDrift(db, profileId).catch(error => {
+      console.error('❌ Personality drift analysis failed:', error);
+      return [];
+    });
+    
+    const relevanceScores = await this.analyzeContextRelevance(db, profileId).catch(error => {
+      console.error('❌ Context relevance analysis failed:', error);
+      return [];
+    });
 
-    // Calculate action counts
-    const actionRequired = clusterAnalysis.filter(c => c.priority === 'HIGH').length +
-                           personalityDrift.filter(d => d.severity === 'MAJOR').length +
-                           sourceReliability.filter(s => s.recommendation === 'DISTRUST').length;
+    // Calculate action counts with null safety
+    const actionRequired = (clusterAnalysis || []).filter(c => c.priority === 'HIGH').length +
+                           (personalityDrift || []).filter(d => d.severity === 'MAJOR').length +
+                           (sourceReliability || []).filter(s => s.recommendation === 'DISTRUST').length;
 
-    const autoHandled = relevanceScores.filter(r => r.shouldHide).length +
-                        sourceReliability.filter(s => s.recommendation === 'TRUST').length;
+    const autoHandled = (relevanceScores || []).filter(r => r.shouldHide).length +
+                        (sourceReliability || []).filter(s => s.recommendation === 'TRUST').length;
 
-    // Generate priority actions
+    // Generate priority actions with null safety
     const priorityActions: string[] = [];
     
-    if (clusterAnalysis.length > 0) {
+    if ((clusterAnalysis || []).length > 0) {
       priorityActions.push(`${clusterAnalysis.length} fact clusters need consolidation`);
     }
     
-    if (personalityDrift.length > 0) {
+    if ((personalityDrift || []).length > 0) {
       priorityActions.push(`${personalityDrift.length} personality drifts detected`);
     }
     
-    if (sourceReliability.filter(s => s.recommendation === 'DISTRUST').length > 0) {
-      priorityActions.push(`${sourceReliability.filter(s => s.recommendation === 'DISTRUST').length} unreliable sources need review`);
+    const distrustSources = (sourceReliability || []).filter(s => s.recommendation === 'DISTRUST');
+    if (distrustSources.length > 0) {
+      priorityActions.push(`${distrustSources.length} unreliable sources need review`);
     }
 
     console.log(`✅ Intelligence analysis complete: ${actionRequired} actions needed, ${autoHandled} auto-handled`);
 
     return {
-      clusterAnalysis,
-      sourceReliability,
-      personalityDrift,
-      relevanceScores,
+      clusterAnalysis: clusterAnalysis || [],
+      sourceReliability: sourceReliability || [],
+      personalityDrift: personalityDrift || [],
+      relevanceScores: relevanceScores || [],
       actionRequired,
       autoHandled,
       priorityActions

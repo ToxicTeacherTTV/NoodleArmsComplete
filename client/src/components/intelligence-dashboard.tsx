@@ -31,12 +31,15 @@ interface IntelligenceAnalysis {
   sourceReliability: SourceReliability[];
   personalityDrift: PersonalityDrift;
   contextRelevance: ContextRelevance[];
-  summary: {
+  summary?: {
     totalIssues: number;
     highPriority: number;
     mediumPriority: number;
     autoHandled: number;
   };
+  actionRequired?: number;
+  autoHandled?: number;
+  priorityActions?: string[];
 }
 
 interface FactCluster {
@@ -58,15 +61,31 @@ interface SourceReliability {
 }
 
 interface PersonalityDrift {
-  overallDrift: number;
-  driftAreas: Array<{
+  overallDrift?: number;
+  driftAreas?: Array<{
     trait: string;
     originalValue: number;
     currentValue: number;
     drift: number;
     severity: 'LOW' | 'MEDIUM' | 'HIGH';
   }>;
-  recommendation: string;
+  recommendation?: string;
+}
+
+interface SummaryData {
+  overview?: string;
+  summaries?: Array<{
+    id: string;
+    type: string;
+    title: string;
+    content: string;
+    priority: string;
+    factCount: number;
+    confidenceScore: number;
+    insights?: string[];
+  }>;
+  insights?: string[];
+  recommendations?: string[];
 }
 
 interface ContextRelevance {
@@ -133,9 +152,7 @@ export function IntelligenceDashboard() {
   // Orphan facts repair mutation
   const repairOrphansMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('/api/intelligence/repair-orphans', {
-        method: 'POST'
-      });
+      return apiRequest('/api/intelligence/repair-orphans', 'POST');
     },
     onSuccess: (data: any) => {
       toast({
@@ -164,7 +181,7 @@ export function IntelligenceDashboard() {
   });
 
   // Fetch AI-generated summaries
-  const { data: summaryData, isLoading: summariesLoading } = useQuery({
+  const { data: summaryData, isLoading: summariesLoading } = useQuery<SummaryData>({
     queryKey: ['/api/intelligence/summaries'],
     refetchInterval: 60000, // Refresh every minute
   });
@@ -315,7 +332,7 @@ export function IntelligenceDashboard() {
               <AlertTriangle className="h-5 w-5 text-red-600" />
               <div>
                 <div className="text-2xl font-bold text-red-600" data-testid="high-priority-count">
-                  {analysis?.summary?.highPriority || 0}
+                  {analysis?.summary?.highPriority || analysis?.actionRequired || 0}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
                   High Priority
@@ -347,7 +364,7 @@ export function IntelligenceDashboard() {
               <CheckCircle className="h-5 w-5 text-green-600" />
               <div>
                 <div className="text-2xl font-bold text-green-600" data-testid="auto-handled-count">
-                  {analysis?.summary?.autoHandled || 0}
+                  {analysis?.summary?.autoHandled || analysis?.autoHandled || 0}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
                   Auto-Handled
@@ -455,15 +472,15 @@ export function IntelligenceDashboard() {
                   <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg" data-testid="summaries-overview">
                     <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Knowledge Base Overview</h3>
                     <div className="text-sm text-blue-800 dark:text-blue-200 whitespace-pre-wrap">
-                      {summaryData.overview}
+                      {summaryData?.overview || 'No overview available'}
                     </div>
                   </div>
 
                   {/* Category Summaries */}
-                  {summaryData.summaries && summaryData.summaries.length > 0 ? (
+                  {summaryData?.summaries && summaryData.summaries.length > 0 ? (
                     <div className="space-y-4">
                       <h3 className="font-semibold">Category Summaries</h3>
-                      {summaryData.summaries.map((summary: any) => (
+                      {summaryData.summaries.map((summary) => (
                         <div
                           key={summary.id}
                           className="p-4 border rounded-lg space-y-3"
@@ -508,11 +525,11 @@ export function IntelligenceDashboard() {
                   )}
 
                   {/* Insights and Recommendations */}
-                  {summaryData.insights && summaryData.insights.length > 0 && (
+                  {summaryData?.insights && summaryData.insights.length > 0 && (
                     <div className="space-y-3">
                       <h3 className="font-semibold">AI Insights</h3>
                       <div className="space-y-2" data-testid="ai-insights">
-                        {summaryData.insights.map((insight: string, idx: number) => (
+                        {summaryData.insights.map((insight, idx) => (
                           <div key={idx} className="p-3 bg-yellow-50 dark:bg-yellow-900 border-l-4 border-yellow-400 text-sm">
                             💡 {insight}
                           </div>
@@ -521,11 +538,11 @@ export function IntelligenceDashboard() {
                     </div>
                   )}
 
-                  {summaryData.recommendations && summaryData.recommendations.length > 0 && (
+                  {summaryData?.recommendations && summaryData.recommendations.length > 0 && (
                     <div className="space-y-3">
                       <h3 className="font-semibold">AI Recommendations</h3>
                       <div className="space-y-2" data-testid="ai-recommendations">
-                        {summaryData.recommendations.map((rec: string, idx: number) => (
+                        {summaryData.recommendations.map((rec, idx) => (
                           <div key={idx} className="p-3 bg-green-50 dark:bg-green-900 border-l-4 border-green-400 text-sm flex items-start justify-between">
                             <div>🎯 {rec}</div>
                             {trustAIMode && (
@@ -571,7 +588,7 @@ export function IntelligenceDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {analysis.factClusters.map((cluster) => (
+              {(analysis?.factClusters || []).length > 0 ? (analysis.factClusters || []).map((cluster) => (
                 <div
                   key={cluster.clusterId}
                   className="p-4 border rounded-lg space-y-3"
@@ -584,7 +601,7 @@ export function IntelligenceDashboard() {
                         score={cluster.consolidationScore}
                       />
                       <span className="text-sm text-gray-600 dark:text-gray-400">
-                        {cluster.factIds.length} facts
+                        {(cluster.factIds || []).length} facts
                       </span>
                     </div>
                     {trustAIMode && cluster.priority === 'HIGH' && (
@@ -597,16 +614,20 @@ export function IntelligenceDashboard() {
                   <div className="space-y-2">
                     <div className="font-medium">Suggested merge:</div>
                     <div className="text-sm bg-gray-50 dark:bg-gray-800 p-3 rounded">
-                      {cluster.suggestedMerge}
+                      {cluster.suggestedMerge || 'No suggestion available'}
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">
-                      {cluster.reasoning}
+                      {cluster.reasoning || 'No reasoning provided'}
                     </div>
                   </div>
 
-                  <Progress value={cluster.consolidationScore} className="w-full" />
+                  <Progress value={cluster.consolidationScore || 0} className="w-full" />
                 </div>
-              ))}
+              )) : (
+                <div className="text-center py-8 text-gray-500">
+                  No fact clusters found. This could be due to API limitations or insufficient data for clustering.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
