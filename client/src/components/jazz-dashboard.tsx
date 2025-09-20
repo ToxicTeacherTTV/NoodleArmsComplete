@@ -459,12 +459,11 @@ export default function JazzDashboard() {
         
         <Button
           onClick={() => setMessages([])}
-          variant="outline"
-          className="p-3 rounded-lg"
+          className="p-3 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-700 dark:text-red-300 border border-red-500/30"
           data-testid="button-clear-chat"
           title="Clear Chat"
         >
-          <i className="fas fa-trash"></i>
+          🗑️
         </Button>
         
         <Button
@@ -473,12 +472,11 @@ export default function JazzDashboard() {
               consolidateMemoryMutation.mutate(currentConversationId);
             }
           }}
-          variant="outline"
-          className="p-3 rounded-lg"
+          className="p-3 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 border border-blue-500/30"
           data-testid="button-store-conversation"
           title="Store Conversation to Memory"
         >
-          <i className="fas fa-save"></i>
+          💾
         </Button>
       </div>
 
