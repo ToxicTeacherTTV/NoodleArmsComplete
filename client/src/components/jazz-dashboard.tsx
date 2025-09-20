@@ -66,6 +66,14 @@ export default function JazzDashboard() {
   const isSpeaking = isSpeakingElevenLabs;
   const stopSpeaking = stopSpeakingElevenLabs;
 
+  // Browser speech doesn't support pause/resume/replay - create safe fallbacks
+  const pausePlayback = () => stopSpeakingBrowser();
+  const resumePlayback = () => {}; // Browser speech can't resume
+  const replayLastAudio = () => {}; // Browser speech can't replay
+  const canReplay = false; // Browser speech doesn't support replay
+  const isPaused = false; // Browser speech doesn't have pause state
+  const speakText = speakBrowser;
+
   // Queries
   const { data: activeProfile } = useQuery({
     queryKey: ['/api/profiles/active'],
@@ -292,12 +300,12 @@ export default function JazzDashboard() {
         </div>
       </div>
 
-      {/* Main Content - Mobile Responsive */}
-      <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-4 md:space-y-0 md:grid md:grid-cols-12 md:gap-6 md:h-[calc(100vh-120px)]">
+      {/* Main Content - Full width chat */}
+      <div className="max-w-7xl mx-auto p-4 md:p-6 h-[calc(100vh-120px)]">
         
-        {/* Chat Panel - Full width */}
-        <div className="md:col-span-9 h-[60vh] md:h-[calc(100vh-200px)] order-1">
-          <Card className="h-full border-primary/20 shadow-xl">
+        {/* Chat Panel - Full width with bottom padding for fixed input */}
+        <Card className="h-full border-primary/20 shadow-xl">
+          <div className="h-full flex flex-col">
             <ChatPanel
               messages={messages}
               sessionDuration={getSessionDuration()}
@@ -334,59 +342,95 @@ export default function JazzDashboard() {
               canReplay={appMode === 'PODCAST' ? canReplayElevenLabs : canReplay}
               onTextSelection={handleTextSelection}
             />
-          </Card>
-        </div>
+            
+            {/* Fixed space for input and status bars at bottom */}
+            <div className="h-40"></div>
+          </div>
+        </Card>
 
-        {/* Text Input - Below chat */}
-        <div className="md:col-span-9 order-2">
-          <Card className="border-primary/20 shadow-lg">
-            <CardContent className="p-4">
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium text-foreground">Text Chat</h3>
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  const formData = new FormData(e.target as HTMLFormElement);
-                  const message = formData.get('message') as string;
-                  if (message.trim()) {
-                    const userMessage: Message = {
-                      id: nanoid(),
-                      conversationId: currentConversationId,
-                      type: 'USER',
-                      content: message,
-                      createdAt: new Date(),
-                    };
-                    setMessages(prev => [...prev, userMessage]);
-                    setAiStatus('PROCESSING');
-                    sendMessageMutation.mutate({
-                      conversationId: currentConversationId,
-                      type: 'USER',
-                      content: message,
-                    });
-                    (e.target as HTMLFormElement).reset();
-                  }
-                }} className="space-y-2">
-                  <Textarea
-                    name="message"
-                    className="w-full bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                    placeholder={isListening ? "🎤 Listening... speak now!" : "Type a message to Nicky..."}
-                    rows={3}
-                    data-testid="textarea-message-input"
-                    readOnly={isListening}
-                  />
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-accent hover:bg-accent/90 text-accent-foreground py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200"
-                    data-testid="button-send-message"
-                  >
-                    <i className="fas fa-paper-plane"></i>
-                    <span>Send Message</span>
-                  </Button>
-                </form>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      </div>
 
+      {/* Fixed Bottom Input Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur border-t pb-[env(safe-area-inset-bottom)]">
+        <div className="max-w-7xl mx-auto p-4">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target as HTMLFormElement);
+            const message = formData.get('message') as string;
+            if (message.trim()) {
+              const userMessage: Message = {
+                id: nanoid(),
+                conversationId: currentConversationId,
+                type: 'USER',
+                content: message,
+                createdAt: new Date(),
+              };
+              setMessages(prev => [...prev, userMessage]);
+              setAiStatus('PROCESSING');
+              sendMessageMutation.mutate({
+                conversationId: currentConversationId,
+                type: 'USER',
+                content: message,
+              });
+              (e.target as HTMLFormElement).reset();
+            }
+          }} className="flex gap-2">
+            <Textarea
+              name="message"
+              className="flex-1 bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-ring focus:border-transparent"
+              placeholder={isListening ? "🎤 Listening... speak now!" : "Type a message to Nicky..."}
+              rows={2}
+              data-testid="textarea-message-input"
+              readOnly={isListening}
+            />
+            <Button 
+              type="submit" 
+              className="bg-accent hover:bg-accent/90 text-accent-foreground px-4 rounded-lg flex items-center justify-center transition-all duration-200"
+              data-testid="button-send-message"
+            >
+              <i className="fas fa-paper-plane"></i>
+            </Button>
+          </form>
+        </div>
+      </div>
+
+      {/* Floating Live Controls */}
+      <div className="fixed bottom-24 right-4 sm:right-6 z-50 rounded-xl shadow-lg bg-card/90 backdrop-blur p-3 space-x-2 flex">
+        <Button
+          onClick={toggleListening}
+          className={`p-3 rounded-lg transition-all duration-200 ${
+            isListening 
+              ? 'bg-red-500 hover:bg-red-600 text-white' 
+              : 'bg-primary hover:bg-primary/90 text-primary-foreground'
+          }`}
+          data-testid="button-toggle-voice"
+        >
+          <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'}`}></i>
+        </Button>
+        
+        {chaosState && (
+          <div className="bg-accent/20 rounded-lg p-2 min-w-[120px]">
+            <div className="text-xs text-center text-foreground">
+              Chaos: {Math.round(chaosState.effectiveLevel || chaosState.level)}%
+            </div>
+            <div className="text-xs text-center text-muted-foreground">
+              {chaosState.mode.replace('_', ' ')}
+            </div>
+          </div>
+        )}
+        
+        <Button
+          onClick={() => setMessages([])}
+          variant="outline"
+          className="p-3 rounded-lg"
+          data-testid="button-clear-chat"
+        >
+          <i className="fas fa-trash"></i>
+        </Button>
+      </div>
+
+      {/* Legacy controls section - now hidden */}
+      <div className="hidden">
         {/* Mobile: Collapsible Controls, Desktop: Side Panel */}
         <div className="md:col-span-3 space-y-4 order-3">
           <Collapsible 
@@ -511,9 +555,6 @@ export default function JazzDashboard() {
             </Card>
           )}
         </div>
-
-
-        {/* Right Panel removed - moved to brain management */}
       </div>
 
       {/* Floating Voice Visualizer */}
@@ -548,7 +589,7 @@ export default function JazzDashboard() {
       />
 
       {/* Jazz Cup Status Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 p-2">
+      <div className="fixed bottom-20 left-0 right-0 bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 p-2 z-30">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-black">
           <div className="flex items-center space-x-4">
             <span className="flex items-center gap-1">
