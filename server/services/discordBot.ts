@@ -527,17 +527,8 @@ export class DiscordBotService {
       const content = typeof aiResponse === 'string' ? aiResponse : aiResponse || String(aiResponse);
       console.log(`🔍 Extracted content: "${content}"`);
 
-      // AGGRESSIVE emotion tag removal for Discord - strip ALL possible formats
-      let discordContent = content
-        .replace(/\*[^*]*\*/g, '')      // Remove *anything*
-        .replace(/\([^)]*\)/g, '')      // Remove (anything)  
-        .replace(/\[[^\]]*\]/g, '')     // Remove [anything]
-        .replace(/_[^_]*_/g, '')        // Remove _anything_
-        .replace(/~[^~]*~/g, '')        // Remove ~anything~
-        .replace(/\{[^}]*\}/g, '')      // Remove {anything}
-        .replace(/\s*\.\.\.\s*/g, ' ')  // Remove ellipses
-        .replace(/\s+/g, ' ')           // Clean up extra spaces
-        .trim();
+      // Emotion tags are now stripped centrally in generateShortDiscordResponse()
+      let discordContent = content;
 
       // Remove self-mentions (bot tagging himself)
       const botUser = await this.client.user;
@@ -852,6 +843,25 @@ export class DiscordBotService {
   }
 
   /**
+   * Centralized emotion tag removal for ALL Discord responses
+   */
+  private stripEmotionTags(content: string): string {
+    // AGGRESSIVE emotion tag removal for Discord - strip ALL possible formats
+    let discordContent = content
+      .replace(/\*[^*]*\*/g, '')      // Remove *anything*
+      .replace(/\([^)]*\)/g, '')      // Remove (anything)  
+      .replace(/\[[^\]]*\]/g, '')     // Remove [anything]
+      .replace(/_[^_]*_/g, '')        // Remove _anything_
+      .replace(/~[^~]*~/g, '')        // Remove ~anything~
+      .replace(/\{[^}]*\}/g, '')      // Remove {anything}
+      .replace(/\s*\.\.\.\s*/g, ' ')  // Remove ellipses
+      .replace(/\s+/g, ' ')           // Clean up extra spaces
+      .trim();
+    
+    return discordContent;
+  }
+
+  /**
    * Discord-specific response generator that enforces brevity
    */
   private async generateShortDiscordResponse(prompt: string, coreIdentity: string): Promise<string | null> {
@@ -883,12 +893,17 @@ DISCORD MODE: You are chatting on Discord. Your responses MUST be:
         ? (response.content[0] as any).text 
         : (response.content as any);
 
+      if (!content) return null;
+
+      // Strip emotion tags from Anthropic response
+      let cleanContent = this.stripEmotionTags(content);
+
       // Ensure it stays reasonable length
-      if (content && content.length > 500) {
-        return content.substring(0, 497) + "...";
+      if (cleanContent.length > 500) {
+        cleanContent = cleanContent.substring(0, 497) + "...";
       }
 
-      return content || null;
+      return cleanContent;
     } catch (error) {
       console.error('Error in Discord-specific response generation:', error);
       
@@ -919,6 +934,9 @@ Respond naturally in Discord chat style. Keep it short and conversational.`;
         );
         
         let content = geminiResponse.content;
+        
+        // Strip emotion tags from Gemini response too
+        content = this.stripEmotionTags(content);
         
         // Aggressively limit length for Discord
         if (content.length > 300) {
