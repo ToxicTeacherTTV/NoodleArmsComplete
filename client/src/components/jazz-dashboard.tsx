@@ -344,7 +344,7 @@ export default function JazzDashboard() {
             />
             
             {/* Fixed space for input and status bars at bottom */}
-            <div className="h-40"></div>
+            <div className="h-48"></div>
           </div>
         </Card>
 
@@ -409,12 +409,38 @@ export default function JazzDashboard() {
         </Button>
         
         {chaosState && (
-          <div className="bg-accent/20 rounded-lg p-2 min-w-[120px]">
+          <div className="bg-accent/20 rounded-lg p-2 min-w-[120px] space-y-1">
             <div className="text-xs text-center text-foreground">
               Chaos: {Math.round(chaosState.effectiveLevel || chaosState.level)}%
             </div>
-            <div className="text-xs text-center text-muted-foreground">
-              {chaosState.mode.replace('_', ' ')}
+            <div className="flex gap-1 justify-center">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => apiRequest('/api/chaos/set-level', { method: 'POST', body: { level: 0 } })}
+                className="h-6 px-2 text-xs hover:bg-green-500/20"
+                data-testid="button-chaos-0"
+              >
+                0%
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => apiRequest('/api/chaos/set-level', { method: 'POST', body: { level: 50 } })}
+                className="h-6 px-2 text-xs hover:bg-yellow-500/20"
+                data-testid="button-chaos-50"
+              >
+                50%
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => apiRequest('/api/chaos/set-level', { method: 'POST', body: { level: 80 } })}
+                className="h-6 px-2 text-xs hover:bg-red-500/20"
+                data-testid="button-chaos-80"
+              >
+                80%
+              </Button>
             </div>
           </div>
         )}
@@ -589,7 +615,7 @@ export default function JazzDashboard() {
       />
 
       {/* Jazz Cup Status Bar */}
-      <div className="fixed bottom-20 left-0 right-0 bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 p-2 z-30">
+      <div className="fixed bottom-32 left-0 right-0 bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 p-2 z-30">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-black">
           <div className="flex items-center space-x-4">
             <span className="flex items-center gap-1">
