@@ -303,9 +303,10 @@ export default function JazzDashboard() {
       {/* Main Content - Full width chat */}
       <div className="max-w-7xl mx-auto p-4 md:p-6 h-[calc(100vh-120px)]">
         
-        {/* Chat Panel - Full width with bottom padding for fixed input */}
-        <Card className="h-full border-primary/20 shadow-xl">
-          <div className="h-full flex flex-col">
+        {/* Chat Panel - Scrollable Window */}
+        <Card className="border-primary/20 shadow-xl">
+          {/* Chat window with fixed height and scrolling */}
+          <div className="h-[calc(100vh-16rem)] flex flex-col">
             <ChatPanel
               messages={messages}
               sessionDuration={getSessionDuration()}
@@ -342,9 +343,6 @@ export default function JazzDashboard() {
               canReplay={appMode === 'PODCAST' ? canReplayElevenLabs : canReplay}
               onTextSelection={handleTextSelection}
             />
-            
-            {/* Fixed space for input, status bars, and floating controls at bottom */}
-            <div className="h-64"></div>
           </div>
         </Card>
 
