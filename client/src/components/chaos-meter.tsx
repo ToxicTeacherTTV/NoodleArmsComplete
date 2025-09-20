@@ -23,7 +23,7 @@ export default function ChaosMeter({ chaosLevel, chaosMode, manualOverride, effe
 
   // Manual override mutation
   const overrideMutation = useMutation({
-    mutationFn: (level: number) => apiRequest('/api/chaos/override', 'POST', { level }),
+    mutationFn: (level: number) => apiRequest('POST', '/api/chaos/override', { level }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
       setShowOverride(false);
