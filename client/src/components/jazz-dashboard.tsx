@@ -343,8 +343,8 @@ export default function JazzDashboard() {
               onTextSelection={handleTextSelection}
             />
             
-            {/* Fixed space for input and status bars at bottom */}
-            <div className="h-48"></div>
+            {/* Fixed space for input, status bars, and floating controls at bottom */}
+            <div className="h-64"></div>
           </div>
         </Card>
 
