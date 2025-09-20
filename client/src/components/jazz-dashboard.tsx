@@ -305,8 +305,8 @@ export default function JazzDashboard() {
         
         {/* Chat Panel - Scrollable Window */}
         <Card className="border-primary/20 shadow-xl">
-          {/* Chat window with fixed height and scrolling */}
-          <div className="h-[calc(100vh-16rem)] flex flex-col">
+          {/* Chat window with responsive height and scrolling */}
+          <div className="h-[calc(100vh-12rem)] sm:h-[calc(100vh-14rem)] md:h-[calc(100vh-16rem)] flex flex-col">
             <ChatPanel
               messages={messages}
               sessionDuration={getSessionDuration()}
@@ -393,7 +393,7 @@ export default function JazzDashboard() {
       </div>
 
       {/* Floating Live Controls */}
-      <div className="fixed bottom-24 right-4 sm:right-6 z-50 rounded-xl shadow-lg bg-card/90 backdrop-blur p-3 space-x-2 flex">
+      <div className="fixed bottom-24 sm:bottom-32 right-2 sm:right-4 md:right-6 z-50 rounded-xl shadow-lg bg-card/90 backdrop-blur p-2 sm:p-3 space-x-1 sm:space-x-2 flex flex-wrap">
         <Button
           onClick={toggleListening}
           className={`p-3 rounded-lg transition-all duration-200 ${
@@ -417,8 +417,8 @@ export default function JazzDashboard() {
                 variant="ghost"
                 onClick={async () => {
                   await apiRequest('POST', '/api/chaos/set-level', { level: 0 });
-                  // Refresh chaos state
-                  window.location.reload();
+                  // Update chaos state without page reload
+                  queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
                 }}
                 className="h-6 px-2 text-xs hover:bg-green-500/20"
                 data-testid="button-chaos-0"
@@ -430,8 +430,8 @@ export default function JazzDashboard() {
                 variant="ghost"
                 onClick={async () => {
                   await apiRequest('POST', '/api/chaos/set-level', { level: 50 });
-                  // Refresh chaos state  
-                  window.location.reload();
+                  // Update chaos state without page reload  
+                  queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
                 }}
                 className="h-6 px-2 text-xs hover:bg-yellow-500/20"
                 data-testid="button-chaos-50"
@@ -443,8 +443,8 @@ export default function JazzDashboard() {
                 variant="ghost"
                 onClick={async () => {
                   await apiRequest('POST', '/api/chaos/set-level', { level: 80 });
-                  // Refresh chaos state
-                  window.location.reload();
+                  // Update chaos state without page reload
+                  queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
                 }}
                 className="h-6 px-2 text-xs hover:bg-red-500/20"
                 data-testid="button-chaos-80"
