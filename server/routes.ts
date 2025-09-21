@@ -24,7 +24,30 @@ import { z } from "zod";
 import { promises as fs } from "fs";
 import path from "path";
 
-const upload = multer({ storage: multer.memoryStorage() });
+// CRITICAL SECURITY: Add file size limits and type validation to prevent DoS attacks
+const SUPPORTED_FILE_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'text/markdown',
+];
+
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit to prevent DoS attacks
+    files: 1, // Only allow one file at a time
+  },
+  fileFilter: (req, file, cb) => {
+    // Validate MIME type to prevent malicious uploads
+    if (SUPPORTED_FILE_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      // Multer expects null as first parameter for rejection, boolean as second
+      cb(null, false);
+    }
+  }
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Profile management routes
@@ -307,11 +330,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Multer error handling middleware
+  const handleMulterError = (err: any, req: any, res: any, next: any) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+      }
+      if (err.code === 'LIMIT_FILE_COUNT') {
+        return res.status(400).json({ error: 'Too many files. Only one file allowed at a time.' });
+      }
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    }
+    if (err) {
+      return res.status(400).json({ error: err.message || 'File upload failed' });
+    }
+    next();
+  };
+
   // Document upload and processing
-  app.post('/api/documents/upload', upload.single('document'), async (req, res) => {
+  app.post('/api/documents/upload', upload.single('document'), handleMulterError, async (req, res) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
+        return res.status(400).json({ error: 'No file uploaded or unsupported file type. Supported types: PDF, DOCX, TXT, MD' });
       }
 
       const activeProfile = await storage.getActiveProfile();
