@@ -1,4 +1,6 @@
 // Nicky's Chaos Engine - Makes him an unpredictable maniac
+import type { ChaosState as DbChaosState, InsertChaosState } from '@shared/schema';
+
 export type ChaosMode = 'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 'CONSPIRACY';
 
 interface ChaosState {

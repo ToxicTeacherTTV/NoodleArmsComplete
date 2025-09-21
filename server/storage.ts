@@ -4,6 +4,7 @@ import {
   messages, 
   documents, 
   memoryEntries,
+  chaosState,
   loreEvents,
   loreCharacters,
   discordServers,
@@ -22,6 +23,8 @@ import {
   type InsertDocument,
   type MemoryEntry,
   type InsertMemoryEntry,
+  type ChaosState,
+  type InsertChaosState,
   type LoreEvent,
   type InsertLoreEvent,
   type LoreCharacter,
@@ -94,6 +97,10 @@ export interface IStorage {
   // Contradiction groups methods
   getContradictionGroups(profileId: string): Promise<any[]>;
 
+  // Chaos State management
+  getChaosState(): Promise<ChaosState | undefined>;
+  createOrUpdateChaosState(state: InsertChaosState): Promise<ChaosState>;
+  
   // Discord management methods
   getDiscordServer(serverId: string): Promise<DiscordServer | undefined>;
   createDiscordServer(server: InsertDiscordServer): Promise<DiscordServer>;
@@ -717,6 +724,54 @@ export class DatabaseStorage implements IStorage {
         explanation: `Contradiction group with ${facts.length} conflicting facts`
       };
     });
+  }
+
+  // Chaos State management implementation
+  async getChaosState(): Promise<ChaosState | undefined> {
+    const [state] = await db
+      .select()
+      .from(chaosState)
+      .where(eq(chaosState.isGlobal, true))
+      .limit(1);
+    return state;
+  }
+
+  async createOrUpdateChaosState(state: InsertChaosState): Promise<ChaosState> {
+    // Check if global chaos state already exists
+    const existingState = await this.getChaosState();
+    
+    if (existingState) {
+      // Update existing state
+      const updateData = {
+        level: state.level,
+        mode: state.mode,
+        lastModeChange: state.lastModeChange,
+        responseCount: state.responseCount,
+        manualOverride: state.manualOverride,
+        updatedAt: sql`now()`
+      };
+      const [updatedState] = await db
+        .update(chaosState)
+        .set(updateData)
+        .where(eq(chaosState.id, existingState.id))
+        .returning();
+      return updatedState;
+    } else {
+      // Create new global state
+      const insertData = {
+        level: state.level || 0,
+        mode: state.mode || 'FULL_PSYCHO' as const,
+        lastModeChange: state.lastModeChange || sql`now()`,
+        responseCount: state.responseCount || 0,
+        manualOverride: state.manualOverride,
+        isGlobal: true
+      };
+      const [newState] = await db
+        .insert(chaosState)
+        .values(insertData)
+        .returning();
+      return newState;
+    }
   }
 
   // Discord management methods implementation
