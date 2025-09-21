@@ -709,7 +709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/chaos/state', async (req, res) => {
     try {
-      const chaosState = chaosEngine.getCurrentState();
+      const chaosState = await chaosEngine.getCurrentState();
       const effectiveLevel = chaosEngine.getEffectiveChaosLevel();
       res.json({
         ...chaosState,
@@ -729,8 +729,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Invalid event type' });
       }
       
-      chaosEngine.triggerChaosEvent(eventType);
-      const newState = chaosEngine.getCurrentState();
+      await chaosEngine.triggerChaosEvent(eventType);
+      const newState = await chaosEngine.getCurrentState();
       res.json(newState);
     } catch (error) {
       res.status(500).json({ error: 'Failed to trigger chaos event' });
@@ -746,8 +746,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Level must be a number between 0 and 100' });
       }
       
-      chaosEngine.setManualOverride(level);
-      const newState = chaosEngine.getCurrentState();
+      await chaosEngine.setManualOverride(level);
+      const newState = await chaosEngine.getCurrentState();
       res.json({
         ...newState,
         effectiveLevel: chaosEngine.getEffectiveChaosLevel(),
@@ -767,8 +767,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Level must be a number between 0 and 100' });
       }
       
-      chaosEngine.setBaseLevel(level);
-      const newState = chaosEngine.getCurrentState();
+      await chaosEngine.setBaseLevel(level);
+      const newState = await chaosEngine.getCurrentState();
       res.json({
         ...newState,
         effectiveLevel: chaosEngine.getEffectiveChaosLevel(),
