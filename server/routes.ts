@@ -331,7 +331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Multer error handling middleware
-  const handleMulterError = (err: any, req: any, res: any, next: any) => {
+  const handleMulterError = (err: any, req: Express.Request, res: Express.Response, next: any) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
