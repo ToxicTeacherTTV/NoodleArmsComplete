@@ -15,17 +15,72 @@ class ChaosEngine {
   private static instance: ChaosEngine;
   private chaosState: ChaosState;
   private modeChangeTimer: NodeJS.Timeout | null = null;
+  private initializePromise: Promise<void> | null = null;
 
   constructor() {
-    // Start with calm defaults, will be overridden by setBaseLevel calls
+    // Start with calm defaults - will be loaded from database
     this.chaosState = {
-      level: 0, // Default to calm, controlled by API calls
+      level: 0,
       mode: 'FULL_PSYCHO',
       lastModeChange: new Date(),
       responseCount: 0,
     };
-    // NOTE: Disabled time-based chaos - now purely response-based as requested
-    // this.startChaosTimer();
+    // Initialize from database asynchronously
+    this.initializePromise = this.initializeFromDatabase();
+  }
+
+  // Load state from database on startup
+  private async initializeFromDatabase(): Promise<void> {
+    try {
+      const { storage } = await import('../storage.js');
+      const savedState = await storage.getChaosState();
+      
+      if (savedState) {
+        this.chaosState = {
+          level: savedState.level,
+          mode: savedState.mode as ChaosMode,
+          lastModeChange: savedState.lastModeChange ? new Date(savedState.lastModeChange) : new Date(),
+          responseCount: savedState.responseCount || 0,
+          manualOverride: savedState.manualOverride || undefined
+        };
+        console.log(`🔄 Loaded chaos state from database: level=${this.chaosState.level}%, mode=${this.chaosState.mode}, responses=${this.chaosState.responseCount}`);
+      } else {
+        // Create initial state in database
+        await this.saveStateToDatabase();
+        console.log(`🆕 Created initial chaos state in database: level=${this.chaosState.level}%, mode=${this.chaosState.mode}`);
+      }
+    } catch (error) {
+      console.error('Failed to initialize chaos state from database:', error);
+      // Continue with default in-memory state as fallback
+    }
+  }
+
+  // Save current state to database
+  private async saveStateToDatabase(): Promise<void> {
+    try {
+      const { storage } = await import('../storage.js');
+      const stateData: InsertChaosState = {
+        level: this.chaosState.level,
+        mode: this.chaosState.mode,
+        lastModeChange: this.chaosState.lastModeChange,
+        responseCount: this.chaosState.responseCount,
+        manualOverride: this.chaosState.manualOverride
+      };
+      
+      await storage.createOrUpdateChaosState(stateData);
+      console.log(`💾 Saved chaos state to database: level=${this.chaosState.level}%, mode=${this.chaosState.mode}`);
+    } catch (error) {
+      console.error('Failed to save chaos state to database:', error);
+      // Continue with in-memory state - don't crash the system
+    }
+  }
+
+  // Ensure initialization is complete before operations
+  private async ensureInitialized(): Promise<void> {
+    if (this.initializePromise) {
+      await this.initializePromise;
+      this.initializePromise = null;
+    }
   }
 
   static getInstance(): ChaosEngine {
@@ -35,7 +90,8 @@ class ChaosEngine {
     return ChaosEngine.instance;
   }
 
-  getCurrentState(): ChaosState {
+  async getCurrentState(): Promise<ChaosState> {
+    await this.ensureInitialized();
     return { ...this.chaosState };
   }
 
@@ -45,19 +101,24 @@ class ChaosEngine {
   }
 
   // Set manual override for next response only
-  setManualOverride(level: number): void {
+  async setManualOverride(level: number): Promise<void> {
+    await this.ensureInitialized();
     this.chaosState.manualOverride = Math.max(0, Math.min(100, level));
     console.log(`🎛️  Manual chaos override set to ${this.chaosState.manualOverride}% for next response`);
+    await this.saveStateToDatabase();
   }
 
   // Set permanent base chaos level
-  setBaseLevel(level: number): void {
+  async setBaseLevel(level: number): Promise<void> {
+    await this.ensureInitialized();
     this.chaosState.level = Math.max(0, Math.min(100, level));
     console.log(`🎯 Base chaos level permanently set to ${this.chaosState.level}%`);
+    await this.saveStateToDatabase();
   }
 
   // Response-based chaos evolution (called after each AI response)
-  onResponseGenerated(): void {
+  async onResponseGenerated(): Promise<void> {
+    await this.ensureInitialized();
     this.chaosState.responseCount++;
     
     // Clear manual override after one response
@@ -68,12 +129,15 @@ class ChaosEngine {
 
     // Trigger chaos changes based on response count (every 1-3 responses)
     if (this.chaosState.responseCount % (Math.floor(Math.random() * 3) + 1) === 0) {
-      this.triggerResponseBasedChaos();
+      await this.triggerResponseBasedChaos();
     }
+    
+    // Save state after response generation
+    await this.saveStateToDatabase();
   }
 
   // Response-based chaos changes with specific mode percentages
-  private triggerResponseBasedChaos(): void {
+  private async triggerResponseBasedChaos(): Promise<void> {
     const oldLevel = this.chaosState.level;
     const oldMode = this.chaosState.mode;
 
@@ -118,11 +182,13 @@ class ChaosEngine {
 
     if (oldLevel !== this.chaosState.level || oldMode !== this.chaosState.mode) {
       console.log(`🎲 Response-based chaos: level ${oldLevel}% → ${this.chaosState.level}%, mode ${oldMode} → ${this.chaosState.mode}`);
+      // Don't save here - parent method will save after all changes
     }
   }
 
   // Chaos events that trigger mode changes
-  triggerChaosEvent(eventType: 'death' | 'win' | 'trolled' | 'compliment' | 'random'): void {
+  async triggerChaosEvent(eventType: 'death' | 'win' | 'trolled' | 'compliment' | 'random'): Promise<void> {
+    await this.ensureInitialized();
     const oldLevel = this.chaosState.level;
     
     switch (eventType) {
@@ -157,6 +223,9 @@ class ChaosEngine {
     }
 
     console.log(`Chaos event: ${eventType}, level: ${oldLevel} → ${this.chaosState.level}, mode: ${this.chaosState.mode}`);
+    
+    // Save state after chaos event
+    await this.saveStateToDatabase();
   }
 
   private switchToMode(mode: ChaosMode): void {

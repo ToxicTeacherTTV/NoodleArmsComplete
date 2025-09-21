@@ -742,9 +742,9 @@ export class DatabaseStorage implements IStorage {
     
     if (existingState) {
       // Update existing state
-      const updateData = {
+      const updateData: any = {
         level: state.level,
-        mode: state.mode,
+        mode: state.mode as 'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 'CONSPIRACY',
         lastModeChange: state.lastModeChange,
         responseCount: state.responseCount,
         manualOverride: state.manualOverride,
@@ -760,7 +760,7 @@ export class DatabaseStorage implements IStorage {
       // Create new global state
       const insertData = {
         level: state.level || 0,
-        mode: state.mode || 'FULL_PSYCHO' as const,
+        mode: (state.mode || 'FULL_PSYCHO') as 'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 'CONSPIRACY',
         lastModeChange: state.lastModeChange || sql`now()`,
         responseCount: state.responseCount || 0,
         manualOverride: state.manualOverride,
@@ -768,7 +768,7 @@ export class DatabaseStorage implements IStorage {
       };
       const [newState] = await db
         .insert(chaosState)
-        .values(insertData)
+        .values([insertData as any])
         .returning();
       return newState;
     }
