@@ -29,12 +29,12 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const [isDirty, setIsDirty] = useState(false);
 
   // Queries
-  const { data: profiles } = useQuery({
+  const { data: profiles } = useQuery<Profile[]>({
     queryKey: ['/api/profiles'],
     enabled: isOpen,
   });
 
-  const { data: activeProfile } = useQuery({
+  const { data: activeProfile } = useQuery<Profile>({
     queryKey: ['/api/profiles/active'],
     enabled: isOpen,
   });

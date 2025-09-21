@@ -1,60 +1,35 @@
-export interface Message {
-  id: string;
-  conversationId: string;
-  type: 'USER' | 'AI' | 'CHATTER' | 'SYSTEM';
-  content: string;
-  metadata?: {
-    voice?: boolean;
-    speaker?: string;
-    processingTime?: number;
-    retrieved_context?: string;
-  };
-  createdAt: string;
-}
+// CRITICAL FIX: Import shared types instead of duplicating them
+import type { 
+  Message as DbMessage, 
+  Profile as DbProfile, 
+  MemoryEntry as DbMemoryEntry, 
+  Document as DbDocument,
+  Conversation as DbConversation
+} from '@shared/schema';
 
-export interface Profile {
-  id: string;
-  name: string;
-  coreIdentity: string;
-  knowledgeBase: string;
-  isActive: boolean;
-  chaosLevel: number;
-  chaosMode: 'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 'CONSPIRACY';
-  voiceId: string;
-  voiceSettings: {
-    stability?: number;
-    similarity_boost?: number;
-    style?: number;
-    use_speaker_boost?: boolean;
-  };
+// Client-compatible types with Date -> string serialization
+export type Message = Omit<DbMessage, 'createdAt'> & {
+  createdAt: string;
+};
+
+export type Profile = Omit<DbProfile, 'createdAt' | 'updatedAt'> & {
   createdAt: string;
   updatedAt: string;
-}
+};
 
-export interface MemoryEntry {
-  id: string;
-  profileId: string;
-  type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
-  content: string;
-  importance: number;
-  retrievalCount: number;
-  source?: string;
+export type MemoryEntry = Omit<DbMemoryEntry, 'createdAt' | 'updatedAt'> & {
   createdAt: string;
-}
+  updatedAt?: string;
+};
 
-export interface Document {
-  id: string;
-  profileId: string;
-  filename: string;
-  contentType: string;
-  size: number;
-  chunks?: string[];
-  extractedContent?: string;
-  processingStatus: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
-  retrievalCount: number;
+export type Document = Omit<DbDocument, 'createdAt' | 'updatedAt'> & {
   createdAt: string;
   updatedAt: string;
-}
+};
+
+export type Conversation = Omit<DbConversation, 'createdAt'> & {
+  createdAt: string;
+};
 
 export interface MemoryStats {
   totalFacts: number;
