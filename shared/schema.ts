@@ -436,6 +436,10 @@ export const discordServers = pgTable("discord_servers", {
   enabledMessageTypes: json("enabled_message_types").default('["dbd", "italian", "family_business", "aggressive", "random"]'), // Which message types are enabled
   proactiveEnabled: boolean("proactive_enabled").default(true), // Master toggle for proactive messaging
   
+  // Daily proactive messaging limits (CRITICAL FIX: persist to prevent spam after restarts)
+  dailyProactiveCount: integer("daily_proactive_count").default(0), // Number of proactive messages sent today
+  lastProactiveDate: text("last_proactive_date").default(''), // Date string for tracking daily resets
+  
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });

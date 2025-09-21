@@ -8,8 +8,6 @@ export class DiscordBotService {
   private isConnected: boolean = false;
   private activeProfile: any = null;
   private recentResponses?: Set<string>;
-  private dailyProactiveCount: number = 0;
-  private lastProactiveDate: string = '';
 
   constructor() {
     this.client = new Client({
@@ -661,22 +659,33 @@ export class DiscordBotService {
     try {
       if (!this.activeProfile) return;
 
-      // Check daily limit (max 2 proactive messages per day)
+      // Check daily limit (max 2 proactive messages per day) - PERSISTENT VERSION
       const today = new Date().toDateString();
-      if (this.lastProactiveDate !== today) {
-        this.dailyProactiveCount = 0;
-        this.lastProactiveDate = today;
-      }
-      
-      if (this.dailyProactiveCount >= 2) {
-        console.log(`🎲 Daily proactive message limit reached (${this.dailyProactiveCount}/2)`);
-        return;
+
+      // Get all active servers and check/reset daily limits
+      const servers = await storage.getProfileDiscordServers(this.activeProfile.id);
+      const activeServers = servers.filter(s => s.isActive && s.proactiveEnabled);
+      if (activeServers.length === 0) return;
+
+      // Check daily limits across all servers (global daily limit)
+      let totalDailyCount = 0;
+      for (const server of activeServers) {
+        // Reset daily count if it's a new day
+        if (server.lastProactiveDate !== today) {
+          await storage.updateDiscordServer(server.serverId, {
+            dailyProactiveCount: 0,
+            lastProactiveDate: today
+          });
+          console.log(`🔄 Reset daily proactive count for server: ${server.serverName}`);
+        } else {
+          totalDailyCount += server.dailyProactiveCount || 0;
+        }
       }
 
-      // Get all active servers
-      const servers = await storage.getProfileDiscordServers(this.activeProfile.id);
-      const activeServers = servers.filter(s => s.isActive);
-      if (activeServers.length === 0) return;
+      if (totalDailyCount >= 2) {
+        console.log(`🎲 Daily proactive message limit reached (${totalDailyCount}/2) across all servers`);
+        return;
+      }
 
       // Pick a random server
       const server = activeServers[Math.floor(Math.random() * activeServers.length)];
@@ -709,8 +718,14 @@ export class DiscordBotService {
       // Generate a proactive message with server's enabled message types and channel context
       const proactiveMessage = await this.generateProactiveMessage(server, effectiveBehavior, channel);
       if (proactiveMessage) {
-        this.dailyProactiveCount++;
-        console.log(`🎲 Sending proactive message to ${guild.name} (${this.dailyProactiveCount}/2 today): ${proactiveMessage.substring(0, 50)}...`);
+        // CRITICAL FIX: Update database counter instead of in-memory
+        const currentCount = server.dailyProactiveCount || 0;
+        await storage.updateDiscordServer(server.id, {
+          dailyProactiveCount: currentCount + 1,
+          lastProactiveDate: today
+        });
+        
+        console.log(`🎲 Sending proactive message to ${guild.name} (${currentCount + 1}/2 today): ${proactiveMessage.substring(0, 50)}...`);
         await channel.send(proactiveMessage);
 
         // Log this as a conversation
