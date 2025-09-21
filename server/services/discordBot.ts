@@ -71,13 +71,44 @@ export class DiscordBotService {
     if (!message.guild) return;
 
     try {
-      // Get or create server record with proper error handling
-      let discordServer = await storage.getDiscordServer(message.guild.id);
-      if (!discordServer) {
-        console.log(`🆕 Creating new server record for: ${message.guild.name} (${message.guild.id})`);
-        discordServer = await this.createServerRecord(message.guild.id, message.guild.name);
+      // Get or create server record with robust error handling
+      let discordServer: DiscordServer | null = null;
+      try {
+        discordServer = await storage.getDiscordServer(message.guild.id) || null;
+        if (!discordServer) {
+          console.log(`🆕 Creating new server record for: ${message.guild.name} (${message.guild.id})`);
+          discordServer = await this.createServerRecord(message.guild.id, message.guild.name);
+        }
+      } catch (storageError) {
+        console.error(`❌ Database error for server ${message.guild.id}:`, storageError);
+        // Try to continue with minimal server config
+        discordServer = {
+          createdAt: null,
+          id: `fallback-${message.guild.id}`,
+          isActive: true,
+          updatedAt: null,
+          profileId: this.activeProfile?.id || 'default',
+          serverId: message.guild.id,
+          serverName: message.guild.name,
+          aggressiveness: 80,
+          responsiveness: 60,
+          italianIntensity: 100,
+          dbdObsession: 70,
+          familyBusinessMode: 60,
+          proactiveEnabled: true,
+          allowedChannels: [],
+          blockedChannels: [],
+          enabledMessageTypes: ['dbd', 'italian', 'family_business', 'aggressive', 'random'],
+          lastProactiveDate: null
+        } satisfies DiscordServer;
       }
       
+      // Early exit if we couldn't get server config
+      if (!discordServer) {
+        console.error(`❌ Unable to get server config for ${message.guild.id}, skipping message`);
+        return;
+      }
+
       // CRITICAL FIX: Validate server config has all required fields
       if (!discordServer.proactiveEnabled && discordServer.proactiveEnabled !== false) {
         console.warn(`⚠️ Server ${discordServer.serverId} missing proactiveEnabled field, defaulting to true`);
@@ -96,22 +127,48 @@ export class DiscordBotService {
         discordServer.enabledMessageTypes = ['dbd', 'italian', 'family_business', 'aggressive', 'random'];
       }
 
-      // Get or create member record
-      let discordMember = await storage.getDiscordMember(discordServer.id, message.author.id);
-      if (!discordMember) {
-        discordMember = await this.createMemberRecord(
-          discordServer.id, 
-          message.author.id, 
-          message.author.username,
-          message.member?.nickname || undefined
-        );
+      // Get or create member record with error handling
+      let discordMember: DiscordMember | null = null;
+      try {
+        discordMember = await storage.getDiscordMember(discordServer!.id, message.author.id) || null;
+        if (!discordMember) {
+          discordMember = await this.createMemberRecord(
+            discordServer!.id, 
+            message.author.id, 
+            message.author.username,
+            message.member?.nickname || undefined
+          );
+        }
+
+        // Update member last interaction
+        await storage.updateDiscordMember(discordMember.id, {
+          lastInteraction: new Date(),
+          interactionCount: (discordMember.interactionCount || 0) + 1,
+        });
+      } catch (memberError) {
+        console.error(`❌ Database error for member ${message.author.id}:`, memberError);
+        // Create minimal member record for this session
+        discordMember = {
+          createdAt: null,
+          id: `fallback-${message.author.id}`,
+          nickname: message.member?.nickname || null,
+          username: message.author.username,
+          updatedAt: null,
+          profileId: this.activeProfile?.id || 'default',
+          serverId: discordServer!.id,
+          userId: message.author.id,
+          facts: null,
+          keywords: null,
+          lastInteraction: new Date(),
+          interactionCount: 1
+        } satisfies DiscordMember;
       }
 
-      // Update member last interaction
-      await storage.updateDiscordMember(discordMember.id, {
-        lastInteraction: new Date(),
-        interactionCount: (discordMember.interactionCount || 0) + 1,
-      });
+      // Early exit if we don't have member record
+      if (!discordMember) {
+        console.error(`❌ Unable to get member record for ${message.author.id}, skipping message`);
+        return;
+      }
 
       // Determine if Nicky should respond
       const shouldRespond = await this.shouldRespondToMessage(message, discordServer);
@@ -124,13 +181,25 @@ export class DiscordBotService {
           await message.channel.sendTyping();
         }
         
-        // Generate response using existing AI pipeline
-        const response = await this.generateResponse(
-          message, 
-          discordServer, 
-          discordMember, 
-          shouldRespond
-        );
+        // Generate response using existing AI pipeline with error handling
+        let response: string | null = null;
+        try {
+          response = await this.generateResponse(
+            message, 
+            discordServer, 
+            discordMember, 
+            shouldRespond
+          );
+        } catch (aiError) {
+          console.error(`❌ AI service error for message from ${message.author.username}:`, aiError);
+          // Provide fallback response when AI fails
+          const fallbackResponses = [
+            "Madonna mia! My brain's having a moment... give me a sec! 🤯",
+            "Ay, something's not right up here! *taps head* Try again in a minute! 🤖",
+            "Dio santo! The AI gods are testing me right now... 😅"
+          ];
+          response = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+        }
         
         if (response && response.trim()) {
           // Ensure only one response per message - add deduplication
@@ -145,29 +214,55 @@ export class DiscordBotService {
           this.recentResponses.add(messageKey);
           setTimeout(() => this.recentResponses?.delete(messageKey), 5000); // Clean up after 5 seconds
           
-          // Send response to Discord
-          await message.reply(response);
+          // Send response to Discord with retry logic
+          try {
+            await message.reply(response);
+          } catch (discordError) {
+            console.error(`❌ Discord API error sending message:`, discordError);
+            // Try alternative sending method
+            try {
+              if ('send' in message.channel) {
+                await message.channel.send(`<@${message.author.id}> ${response}`);
+              }
+            } catch (fallbackError) {
+              console.error(`❌ Discord fallback send also failed:`, fallbackError);
+              // Log the failure but don't crash
+              return;
+            }
+          }
           
-          // Log the conversation
-          await storage.logDiscordConversation({
-            profileId: this.activeProfile.id,
-            serverId: discordServer.id,
-            channelId: message.channel.id,
-            channelName: 'name' in message.channel ? (message.channel.name || 'Unknown') : 'DM',
-            messageId: message.id,
-            triggerMessage: message.content,
-            nickyResponse: response,
-            triggerType: shouldRespond.triggerType,
-            triggerData: shouldRespond.triggerData,
-            userId: message.author.id,
-            username: message.author.username,
-            processingTime: shouldRespond.processingTime,
-          });
+          // Log the conversation with error handling
+          try {
+            await storage.logDiscordConversation({
+              profileId: this.activeProfile?.id || 'default',
+              serverId: discordServer!.id,
+              channelId: message.channel.id,
+              channelName: 'name' in message.channel ? (message.channel.name || 'Unknown') : 'DM',
+              messageId: message.id,
+              triggerMessage: message.content,
+              nickyResponse: response,
+              triggerType: shouldRespond.triggerType,
+              triggerData: shouldRespond.triggerData,
+              userId: message.author.id,
+              username: message.author.username,
+              processingTime: shouldRespond.processingTime,
+            });
+          } catch (loggingError) {
+            console.error(`❌ Failed to log Discord conversation:`, loggingError);
+            // Continue execution - logging failure shouldn't stop the bot
+          }
         }
       }
     } catch (error) {
-      console.error('❌ Error handling Discord message:', error);
-      // Don't reply with error messages to avoid spam
+      console.error(`❌ Critical error handling Discord message from ${message.author.username}:`, error);
+      console.error('Full error details:', {
+        messageId: message.id,
+        channelId: message.channel.id,
+        guildId: message.guild?.id,
+        content: message.content.substring(0, 100) + (message.content.length > 100 ? '...' : ''),
+        timestamp: new Date().toISOString()
+      });
+      // Don't reply with error messages to avoid spam, but ensure we don't crash
     }
   }
 
