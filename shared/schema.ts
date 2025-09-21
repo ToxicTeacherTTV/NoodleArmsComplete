@@ -91,6 +91,18 @@ export const memoryEntries = pgTable("memory_entries", {
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
 
+// Chaos Engine State - Global persistent state for Nicky's chaos system
+export const chaosState = pgTable("chaos_state", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  level: integer("level").notNull().default(0), // 0-100 chaos level
+  mode: text("mode").$type<'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 'CONSPIRACY'>().notNull().default('FULL_PSYCHO'),
+  lastModeChange: timestamp("last_mode_change").default(sql`now()`),
+  responseCount: integer("response_count").default(0), // Track responses for evolution
+  manualOverride: integer("manual_override"), // Optional temporary override level
+  isGlobal: boolean("is_global").default(true), // Singleton pattern flag
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
 // Relations
 export const profilesRelations = relations(profiles, ({ many }) => ({
   conversations: many(conversations),
@@ -156,6 +168,11 @@ export const insertMemoryEntrySchema = createInsertSchema(memoryEntries).omit({
   updatedAt: true,
 });
 
+export const insertChaosStateSchema = createInsertSchema(chaosState).omit({
+  id: true,
+  updatedAt: true,
+});
+
 // Types
 export type Profile = typeof profiles.$inferSelect;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
@@ -167,6 +184,8 @@ export type Document = typeof documents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type MemoryEntry = typeof memoryEntries.$inferSelect;
 export type InsertMemoryEntry = z.infer<typeof insertMemoryEntrySchema>;
+export type ChaosState = typeof chaosState.$inferSelect;
+export type InsertChaosState = z.infer<typeof insertChaosStateSchema>;
 
 // Emergent Lore System - Nicky's ongoing life events
 export const loreEvents = pgTable("lore_events", {
