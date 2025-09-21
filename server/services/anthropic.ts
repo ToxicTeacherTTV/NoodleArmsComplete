@@ -123,22 +123,37 @@ class AnthropicService {
         retrievedContext: contextPrompt || undefined,
       };
     } catch (error) {
-      console.error('Anthropic API error:', error);
+      console.error('❌ Anthropic API error:', error);
       
-      // Check if this is a credit exhaustion error and fallback to Gemini
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const isCreditsExhausted = errorMessage.includes('credit balance is too low') || 
-                                errorMessage.includes('insufficient credits') ||
-                                (error as any)?.status === 400;
-
-      if (isCreditsExhausted && process.env.GEMINI_API_KEY) {
-        console.warn('🔄 Anthropic credits exhausted, falling back to Gemini...');
+      // Classify error for appropriate handling
+      const errorInfo = this.classifyError(error);
+      console.log(`🔄 Error classified as: ${errorInfo.type} (retryable: ${errorInfo.retryable})`);
+      
+      // Attempt retry for retryable errors
+      if (errorInfo.retryable && errorInfo.retryCount < 3) {
+        const delay = Math.min(1000 * Math.pow(2, errorInfo.retryCount), 10000); // Exponential backoff, max 10s
+        console.log(`⏳ Retrying Anthropic API in ${delay}ms... (attempt ${errorInfo.retryCount + 1}/3)`);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        // Recursive retry with incremented count
         try {
-          // Get enhanced system prompt with chaos personality  
+          return await this.generateResponseWithRetry(
+            userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, errorInfo.retryCount + 1
+          );
+        } catch (retryError) {
+          console.error(`❌ Retry ${errorInfo.retryCount + 1} failed:`, retryError);
+        }
+      }
+      
+      // Fallback to Gemini for credits, rate limits, or after retry exhaustion
+      if ((errorInfo.type === 'CREDITS_EXHAUSTED' || errorInfo.type === 'RATE_LIMIT' || errorInfo.retryCount >= 3) && process.env.GEMINI_API_KEY) {
+        console.warn(`🔄 Falling back to Gemini due to ${errorInfo.type}...`);
+        
+        try {
           const chaosModifier = this.chaosEngine.getPersonalityModifier();
           const enhancedCoreIdentity = `${coreIdentity}\n\n${chaosModifier}`;
-
-          // Use Gemini as fallback
+          
           const fallbackResponse = await geminiService.generateChatResponse(
             userMessage,
             enhancedCoreIdentity,
@@ -147,14 +162,83 @@ class AnthropicService {
           
           console.log('✅ Successfully generated response using Gemini fallback');
           return fallbackResponse;
+          
         } catch (geminiError) {
-          console.error('Gemini fallback also failed:', geminiError);
-          throw new Error('Both Anthropic and Gemini AI services failed');
+          console.error('❌ Gemini fallback failed:', geminiError);
+          
+          // Last resort: provide a meaningful error response
+          return {
+            content: "Madonna mia! Both my brain circuits are having issues right now! Give me a minute to get my thoughts together... 🤖😅",
+            processingTime: Date.now() - startTime,
+            retrievedContext: contextPrompt || undefined
+          };
         }
       }
       
-      throw new Error('Failed to generate AI response');
+      // For non-retryable errors without fallback, provide graceful degradation
+      return {
+        content: "Ay, something's not working right in my digital noggin! Try asking me again in a moment! 🤯",
+        processingTime: Date.now() - startTime,
+        retrievedContext: contextPrompt || undefined
+      };
     }
+  }
+
+  /**
+   * Enhanced generateResponse with retry capability
+   */
+  private async generateResponseWithRetry(
+    userMessage: string,
+    coreIdentity: string,
+    relevantMemories: Array<MemoryEntry & { parentStory?: MemoryEntry }>,
+    relevantDocs: any[] = [],
+    loreContext?: string,
+    retryCount = 0
+  ): Promise<AIResponse> {
+    // Use original method but track retry count for error classification
+    return this.generateResponse(userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext);
+  }
+
+  /**
+   * Classify API errors for appropriate handling strategy
+   */
+  private classifyError(error: any) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const statusCode = error?.status || error?.response?.status;
+    
+    // Credits exhausted
+    if (errorMessage.includes('credit balance is too low') || 
+        errorMessage.includes('insufficient credits') ||
+        statusCode === 400) {
+      return { type: 'CREDITS_EXHAUSTED', retryable: false, retryCount: 0 };
+    }
+    
+    // Rate limiting
+    if (statusCode === 429 || errorMessage.includes('rate limit')) {
+      return { type: 'RATE_LIMIT', retryable: true, retryCount: 0 };
+    }
+    
+    // Network/timeout errors
+    if (statusCode >= 500 || 
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('ETIMEDOUT') ||
+        errorMessage.includes('ECONNRESET') ||
+        errorMessage.includes('network')) {
+      return { type: 'NETWORK_ERROR', retryable: true, retryCount: 0 };
+    }
+    
+    // Service unavailable
+    if (statusCode === 503 || errorMessage.includes('service unavailable')) {
+      return { type: 'SERVICE_UNAVAILABLE', retryable: true, retryCount: 0 };
+    }
+    
+    // Client errors (bad request, auth issues)
+    if (statusCode >= 400 && statusCode < 500) {
+      return { type: 'CLIENT_ERROR', retryable: false, retryCount: 0 };
+    }
+    
+    // Unknown errors - be conservative and don't retry
+    return { type: 'UNKNOWN', retryable: false, retryCount: 0 };
   }
 
   async consolidateMemories(recentMessages: Message[]): Promise<ConsolidatedMemory[]> {

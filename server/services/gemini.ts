@@ -505,8 +505,20 @@ Response format:
         retrievedContext: contextPrompt || undefined,
       };
     } catch (error) {
-      console.error('Gemini chat API error:', error);
-      throw new Error('Failed to generate Gemini response');
+      console.error('❌ Gemini chat API error:', error);
+      
+      // Classify error for appropriate handling
+      const errorInfo = this.classifyGeminiError(error);
+      console.log(`🔄 Gemini error classified as: ${errorInfo.type}`);
+      
+      // Provide graceful degradation instead of throwing
+      console.warn("⚠️ Gemini API failed, providing fallback response");
+      
+      return {
+        content: "Ay, my backup brain's having a moment! Give me a sec to recalibrate... 🤖💭",
+        processingTime: Date.now() - startTime,
+        retrievedContext: contextPrompt || undefined
+      };
     }
   }
 
