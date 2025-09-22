@@ -17,6 +17,7 @@ import { smartContradictionDetector } from './services/smartContradictionDetecto
 import { aiFlagger } from './services/aiFlagger';
 import { discordBotService } from './services/discordBot';
 import { intelligenceEngine } from './services/intelligenceEngine';
+import { storyReconstructor } from './services/storyReconstructor';
 import { ContentCollectionManager } from './services/ingestion/ContentCollectionManager';
 import { insertAutomatedSourceSchema, insertPendingContentSchema } from '@shared/schema';
 import multer from "multer";
@@ -2319,6 +2320,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error checking for duplicates:', error);
       res.status(500).json({ error: 'Failed to check for duplicates' });
+    }
+  });
+
+  // Story reconstruction endpoints
+  app.post('/api/memory/reconstruct', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      console.log('🔧 Starting story reconstruction for profile:', profile.id);
+      const result = await storyReconstructor.reconstructStories(profile.id);
+
+      res.json({
+        success: true,
+        ...result,
+        message: `Story reconstruction completed: ${result.processedOrphans}/${result.processedOrphans + result.remainingOrphans} orphaned facts processed`
+      });
+    } catch (error) {
+      console.error('❌ Story reconstruction failed:', error);
+      res.status(500).json({ error: 'Failed to reconstruct stories' });
+    }
+  });
+
+  app.post('/api/memory/reconstruct/approve', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { attachments = [], stories = [] } = req.body;
+
+      let processedAttachments = 0;
+      let processedStories = 0;
+
+      // Process approved attachments
+      for (const attachment of attachments) {
+        if (attachment.approved) {
+          try {
+            // Update the orphaned fact to link to the target
+            await storage.updateMemoryEntry(attachment.orphanId, {
+              relationships: [`belongsTo:${attachment.targetId}`],
+              confidence: Math.min(90, (attachment.score * 100)),
+              status: 'ACTIVE'
+            });
+            processedAttachments++;
+          } catch (error) {
+            console.error(`❌ Failed to process attachment for ${attachment.orphanId}:`, error);
+          }
+        }
+      }
+
+      // Process approved stories
+      for (const story of stories) {
+        if (story.approved) {
+          try {
+            // Create the story container
+            const storyId = await storage.createMemoryEntry({
+              profileId: profile.id,
+              type: 'STORY',
+              content: `${story.suggestedTitle}: ${story.suggestedSynopsis}`,
+              importance: 5,
+              confidence: 80,
+              keywords: [story.suggestedTitle.toLowerCase(), 'reconstructed-story'],
+              relationships: story.factIds.map((id: string) => `contains:${id}`),
+              source: 'story-reconstruction',
+              status: 'ACTIVE'
+            });
+
+            // Update each fact to link to the story
+            for (let i = 0; i < story.factIds.length; i++) {
+              const factId = story.factIds[i];
+              await storage.updateMemoryEntry(factId, {
+                parentFactId: storyId,
+                relationships: [`belongsTo:${storyId}`],
+                storyContext: story.orderedEvents[i]?.description || `Event ${i + 1} in ${story.suggestedTitle}`,
+                confidence: Math.max(60, (story.coherenceScore * 100)),
+                status: 'ACTIVE'
+              });
+            }
+            processedStories++;
+          } catch (error) {
+            console.error(`❌ Failed to process story ${story.id}:`, error);
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        processedAttachments,
+        processedStories,
+        message: `Applied ${processedAttachments} attachments and created ${processedStories} stories`
+      });
+    } catch (error) {
+      console.error('❌ Failed to approve reconstructions:', error);
+      res.status(500).json({ error: 'Failed to approve story reconstructions' });
     }
   });
 
