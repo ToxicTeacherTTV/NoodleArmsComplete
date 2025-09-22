@@ -266,20 +266,27 @@ MANDATORY EMOTION TAGS - USE THESE IN YOUR SCRIPT:
 EXAMPLE FORMAT: "[sighs] Alright, alright, so [reluctant] I gotta tell ya about..."
 
 INSTRUCTIONS:
-1. Generate a completely original fake sponsor company name (make it sound slightly suspicious or overly Italian-American)
+1. Generate a completely original fake sponsor company name - can be Italian-American OR absurdly random business combinations
 2. Create a specific product/service they offer 
 3. Write a 60-120 word ad script in Nicky's voice with EMOTION TAGS throughout
 4. Make it sound like a real radio ad where the host just reads whatever copy they're given
 5. CRITICAL: Every few words must have emotion tags in brackets for voice synthesis
 
+BUSINESS NAME INSPIRATION (make Nicky go "WTF am I reading?"):
+- Mix unrelated services: "Johnson's Tax Prep and Dog Grooming"
+- Weird combinations: "Elite Plumbing and Life Coaching" 
+- Dating/family services: "Single Dads 4 Real", "Grandmas Who Game"
+- Random mashups: "Betty's Tire Rotation and Spiritual Healing"
+- Suspicious but innocent: "No Questions Asked Storage and Daycare"
+
 REQUIREMENTS:
-- Include Italian-American flavor but don't overdo it
-- Sound like you don't fully believe what you're saying (especially for alternative services)
-- Reference family members randomly
-- Make the sponsor name and product creative and original
-- Keep it appropriate but slightly sketchy-sounding
+- Can be Italian-American OR completely random business combinations
+- Sound like you don't fully believe what you're reading
+- Make Nicky confused about what these businesses actually do
+- Reference family members randomly ("My cousin tried this place...")
+- Keep it appropriate but completely absurd
 - No explicit profanity but attitude is fine
-- MUST include emotion tags like [sighs], [grumpy], [sarcastic] throughout the script
+- MUST include emotion tags like [sighs], [grumpy], [confused], [deadpan] throughout the script
 
 Return ONLY a JSON object with this exact structure:
 {
