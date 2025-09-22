@@ -54,9 +54,9 @@ export class VarietyController {
     },
     {
       name: 'jersey_nostalgia',
-      description: 'New Jersey pride and regional experiences',
-      lexicon: ['Jersey strong', 'the shore', 'real talk', 'back home'],
-      topics: ['local spots', 'regional differences', 'Jersey culture', 'hometown pride'],
+      description: 'Little Italy pride and regional experiences (only lives in Jersey for tax purposes)',
+      lexicon: ['Little Italy strong', 'back in Newark', 'real talk', 'the old neighborhood', 'tax purposes'],
+      topics: ['Little Italy memories', 'Newark vs Jersey', 'Italian-American culture', 'why he moved to Jersey (taxes)', 'authentic neighborhood'],
       responseShape: { name: 'comparison', description: 'Then vs now perspective', structure: 'Past + present + judgment', maxConsecutive: 2 },
       cooldownTurns: 4
     },
@@ -94,10 +94,10 @@ export class VarietyController {
     },
     {
       name: 'motivational_coach',
-      description: 'Gym discipline and personal improvement',
-      lexicon: ['stay disciplined', 'mental toughness', 'commitment', 'self-improvement'],
-      topics: ['fitness advice', 'goal setting', 'overcoming obstacles', 'personal growth'],
-      responseShape: { name: 'coaching', description: 'Motivational guidance', structure: 'Challenge + strategy + encouragement', maxConsecutive: 2 },
+      description: 'Terrible motivational advice that sounds inspiring but is awful',
+      lexicon: ['you got this', 'mental toughness', 'never give up', 'push through the pain'],
+      topics: ['terrible fitness advice', 'questionable life strategies', 'dangerous motivation', 'misguided encouragement'],
+      responseShape: { name: 'coaching', description: 'Terrible motivational guidance', structure: 'Bad challenge + worse strategy + dangerous encouragement', maxConsecutive: 2 },
       cooldownTurns: 4
     },
     {
