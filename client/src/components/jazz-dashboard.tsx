@@ -146,6 +146,13 @@ export default function JazzDashboard() {
         
         // NOTE: Removed auto-play to prevent burning ElevenLabs credits
         // Users can now click Play button on individual messages for voice synthesis
+        
+        // BUT: Auto-play IS enabled in STREAMING mode for interactive experience
+        if (appMode === 'STREAMING' && streamSettings.voiceOutput) {
+          console.log('🔊 Auto-playing AI response in STREAMING mode');
+          speakElevenLabs(response.content);
+          setAiStatus('SPEAKING');
+        }
       }
       
       // 🎲 ENHANCED: Invalidate chaos state after AI response for dynamic UI updates
