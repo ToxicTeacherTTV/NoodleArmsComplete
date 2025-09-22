@@ -64,8 +64,8 @@ export class StoryReconstructor {
     }
 
     // Get all existing memories for comparison
-    const allMemories = await this.storage.getMemoryEntries(profileId, { limit: 10000 });
-    const anchorMemories = allMemories.filter((m: MemoryEntry) => m.confidence >= 60 && m.id);
+    const allMemories = await this.storage.getMemoryEntries(profileId, 10000);
+    const anchorMemories = allMemories.filter((m: MemoryEntry) => (m.confidence || 50) >= 60 && m.id);
     console.log(`📚 Analyzing against ${anchorMemories.length} anchor memories`);
 
     // Pass A: Connect orphans to existing high-confidence memories/stories
@@ -93,7 +93,7 @@ export class StoryReconstructor {
    * Get orphaned facts - low confidence facts with minimal connections
    */
   private async getOrphanedFacts(profileId: string): Promise<MemoryEntry[]> {
-    const allMemories = await this.storage.getMemoryEntries(profileId, { limit: 10000 });
+    const allMemories = await this.storage.getMemoryEntries(profileId, 10000);
     
     return allMemories.filter((memory: MemoryEntry) => {
       // Low confidence facts

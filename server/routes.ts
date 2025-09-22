@@ -2379,7 +2379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (story.approved) {
           try {
             // Create the story container
-            const storyId = await storage.createMemoryEntry({
+            const storyEntry = await storage.addMemoryEntry({
               profileId: profile.id,
               type: 'STORY',
               content: `${story.suggestedTitle}: ${story.suggestedSynopsis}`,
@@ -2395,8 +2395,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             for (let i = 0; i < story.factIds.length; i++) {
               const factId = story.factIds[i];
               await storage.updateMemoryEntry(factId, {
-                parentFactId: storyId,
-                relationships: [`belongsTo:${storyId}`],
+                parentFactId: storyEntry.id,
+                relationships: [`belongsTo:${storyEntry.id}`],
                 storyContext: story.orderedEvents[i]?.description || `Event ${i + 1} in ${story.suggestedTitle}`,
                 confidence: Math.max(60, (story.coherenceScore * 100)),
                 status: 'ACTIVE'
