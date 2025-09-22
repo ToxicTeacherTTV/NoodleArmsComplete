@@ -382,10 +382,11 @@ export default function JazzDashboard() {
           </Card>
         </div>
 
-        {/* Bottom Window: Control Panel */}
-        <div className="flex-shrink-0 bg-background/95 backdrop-blur border-t">
-          {/* Input Bar Window */}
-          <div className="p-4">
+        {/* Bottom Dock: Fixed Controls */}
+        <div className="flex-shrink-0 bg-background/95 backdrop-blur border-t border-border/20 shadow-lg">
+          {/* Main Control Row */}
+          <div className="p-3 flex gap-3 items-center">
+            {/* Chat Input - Takes most space */}
             <form onSubmit={(e) => {
               e.preventDefault();
               const formData = new FormData(e.target as HTMLFormElement);
@@ -407,7 +408,7 @@ export default function JazzDashboard() {
                 });
                 (e.target as HTMLFormElement).reset();
               }
-            }} className="flex gap-2">
+            }} className="flex-1 flex gap-2">
               <Textarea
                 name="message"
                 className="flex-1 bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-ring focus:border-transparent"
@@ -424,10 +425,89 @@ export default function JazzDashboard() {
                 <i className="fas fa-paper-plane"></i>
               </Button>
             </form>
+
+            {/* Voice Control */}
+            <Button
+              onClick={toggleListening}
+              className={`p-3 rounded-lg transition-all duration-200 ${
+                isListening 
+                  ? 'bg-red-500 hover:bg-red-600 text-white' 
+                  : 'bg-primary hover:bg-primary/90 text-primary-foreground'
+              }`}
+              data-testid="button-toggle-voice"
+            >
+              <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'}`}></i>
+            </Button>
+            
+            {/* Chaos Controls */}
+            {chaosState && (
+              <div className="bg-accent/20 rounded-lg p-2 min-w-[120px] space-y-1">
+                <div className="text-xs text-center text-foreground">
+                  Chaos: {Math.round(chaosState.effectiveLevel || chaosState.level)}%
+                </div>
+                <div className="flex gap-1 justify-center">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={async () => {
+                      try {
+                        await apiRequest('POST', '/api/chaos/trigger-mutation');
+                        queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
+                      } catch (error) {
+                        console.error('Failed to trigger chaos mutation:', error);
+                      }
+                    }}
+                    className="text-xs px-2 py-1 h-6"
+                    data-testid="button-chaos-trigger"
+                  >
+                    🎲
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={async () => {
+                      try {
+                        await apiRequest('POST', '/api/chaos/reset');
+                        queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
+                      } catch (error) {
+                        console.error('Failed to reset chaos:', error);
+                      }
+                    }}
+                    className="text-xs px-2 py-1 h-6"
+                    data-testid="button-chaos-reset"
+                  >
+                    🔄
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <Button
+              onClick={() => setMessages([])}
+              className="p-3 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-700 dark:text-red-300 border border-red-500/30"
+              data-testid="button-clear-chat"
+              title="Clear Chat"
+            >
+              🗑️
+            </Button>
+            
+            <Button
+              onClick={() => {
+                if (messages.length > 0) {
+                  consolidateMemoryMutation.mutate(currentConversationId);
+                }
+              }}
+              className="p-3 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 border border-blue-500/30"
+              data-testid="button-store-conversation"
+              title="Store Conversation to Memory"
+            >
+              💾
+            </Button>
           </div>
 
-          {/* Status Bar Window */}
-          <div className="bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 p-2">
+          {/* Status Bar */}
+          <div className="bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 px-3 py-2">
             <div className="flex items-center justify-between text-xs text-black">
               <div className="flex items-center space-x-4">
                 <span className="flex items-center gap-1">
@@ -448,91 +528,6 @@ export default function JazzDashboard() {
         </div>
       </div>
 
-      {/* Floating Live Controls */}
-      <div className="fixed bottom-24 sm:bottom-32 right-2 sm:right-4 md:right-6 z-50 rounded-xl shadow-lg bg-card/90 backdrop-blur p-2 sm:p-3 space-x-1 sm:space-x-2 flex flex-wrap">
-        <Button
-          onClick={toggleListening}
-          className={`p-3 rounded-lg transition-all duration-200 ${
-            isListening 
-              ? 'bg-red-500 hover:bg-red-600 text-white' 
-              : 'bg-primary hover:bg-primary/90 text-primary-foreground'
-          }`}
-          data-testid="button-toggle-voice"
-        >
-          <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'}`}></i>
-        </Button>
-        
-        {chaosState && (
-          <div className="bg-accent/20 rounded-lg p-2 min-w-[120px] space-y-1">
-            <div className="text-xs text-center text-foreground">
-              Chaos: {Math.round(chaosState.effectiveLevel || chaosState.level)}%
-            </div>
-            <div className="flex gap-1 justify-center">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  await apiRequest('POST', '/api/chaos/set-level', { level: 0 });
-                  // Update chaos state without page reload
-                  queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
-                }}
-                className="h-6 px-2 text-xs hover:bg-green-500/20"
-                data-testid="button-chaos-0"
-              >
-                0%
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  await apiRequest('POST', '/api/chaos/set-level', { level: 50 });
-                  // Update chaos state without page reload  
-                  queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
-                }}
-                className="h-6 px-2 text-xs hover:bg-yellow-500/20"
-                data-testid="button-chaos-50"
-              >
-                50%
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  await apiRequest('POST', '/api/chaos/set-level', { level: 80 });
-                  // Update chaos state without page reload
-                  queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
-                }}
-                className="h-6 px-2 text-xs hover:bg-red-500/20"
-                data-testid="button-chaos-80"
-              >
-                80%
-              </Button>
-            </div>
-          </div>
-        )}
-        
-        <Button
-          onClick={() => setMessages([])}
-          className="p-3 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-700 dark:text-red-300 border border-red-500/30"
-          data-testid="button-clear-chat"
-          title="Clear Chat"
-        >
-          🗑️
-        </Button>
-        
-        <Button
-          onClick={() => {
-            if (messages.length > 0) {
-              consolidateMemoryMutation.mutate(currentConversationId);
-            }
-          }}
-          className="p-3 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 border border-blue-500/30"
-          data-testid="button-store-conversation"
-          title="Store Conversation to Memory"
-        >
-          💾
-        </Button>
-      </div>
 
       {/* Legacy controls section - now hidden */}
       <div className="hidden">
