@@ -43,6 +43,16 @@ export default function JazzDashboard() {
     voiceOutput: false, // Default to false to prevent auto credit burning
     memoryLearning: true,
   });
+
+  // Auto-enable voice output when switching to STREAMING mode
+  useEffect(() => {
+    if (appMode === 'STREAMING') {
+      setStreamSettings(prev => ({
+        ...prev,
+        voiceOutput: true // Auto-enable voice output in streaming mode
+      }));
+    }
+  }, [appMode]);
   const [sessionStartTime, setSessionStartTime] = useState<Date>(new Date());
   const [memoryCheckerOpen, setMemoryCheckerOpen] = useState(false);
   const [selectedText, setSelectedText] = useState("");
