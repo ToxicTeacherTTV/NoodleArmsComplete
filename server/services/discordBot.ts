@@ -21,8 +21,6 @@ export class DiscordBotService {
   }
 
   private setupEventHandlers() {
-    console.log(`🔧 Setting up Discord event handlers (handlersAttached: ${this.handlersAttached})`);
-    
     this.client.once(Events.ClientReady, (readyClient) => {
       console.log(`🤖 Discord bot ready! Logged in as ${readyClient.user.tag}`);
       this.isConnected = true;
@@ -32,15 +30,12 @@ export class DiscordBotService {
     });
 
     this.client.on(Events.MessageCreate, async (message: Message) => {
-      console.log(`🎯 MessageCreate event triggered for message ${message.id} from ${message.author.username}`);
       await this.handleMessage(message);
     });
 
     this.client.on(Events.Error, (error) => {
       console.error('🚨 Discord client error:', error);
     });
-    
-    console.log(`✅ Discord event handlers attached`);
   }
 
   public async start(token: string) {
@@ -80,19 +75,11 @@ export class DiscordBotService {
   }
 
   private async handleMessage(message: Message) {
-    console.log(`🚨 HANDLEME SSAGE ENTRY: ${message.id} from ${message.author.username} - Start processing`);
-    
     // Ignore bot messages to prevent loops
-    if (message.author.bot) {
-      console.log(`🚫 Ignoring bot message ${message.id} from ${message.author.username}`);
-      return;
-    }
+    if (message.author.bot) return;
     
     // Ignore DMs for now - only respond in servers
-    if (!message.guild) {
-      console.log(`🚫 Ignoring DM ${message.id} from ${message.author.username}`);
-      return;
-    }
+    if (!message.guild) return;
 
     try {
       // Database-based idempotency check - prevent duplicates across all instances
@@ -257,9 +244,7 @@ export class DiscordBotService {
           
           // Send response to Discord with single send method
           try {
-            console.log(`📤 SENDING Discord reply for message ${message.id} with content: "${response.substring(0, 100)}..."`);
-            const sentMessage = await message.reply(response);
-            console.log(`✅ SENT Discord reply successfully! Message ID: ${sentMessage.id}`);
+            await message.reply(response);
           } catch (discordError) {
             console.error(`❌ Discord API error sending message:`, discordError);
             // Don't try fallback to prevent duplicate messages
