@@ -259,6 +259,7 @@ INSTRUCTIONS:
 2. Create a specific product/service they offer 
 3. Write a 60-120 word ad script in Nicky's voice
 4. Make it sound like a real radio ad where the host just reads whatever copy they're given
+5. IMPORTANT: Include ElevenLabs emotion tags in brackets throughout the script for voice synthesis
 
 REQUIREMENTS:
 - Include Italian-American flavor but don't overdo it
@@ -267,6 +268,14 @@ REQUIREMENTS:
 - Make the sponsor name and product creative and original
 - Keep it appropriate but slightly sketchy-sounding
 - No explicit profanity but attitude is fine
+
+EMOTION TAGS FOR VOICE SYNTHESIS:
+Use these ElevenLabs v3 emotion tags in brackets throughout the script:
+- [grumpy] [reluctant] [tired] [annoyed] [sarcastic] 
+- [sighs] [clears throat] [deadpan] [matter-of-fact]
+- [hesitant] [resigned tone] [quietly] [flatly]
+- For alternative services: [skeptical] [disbelieving] [sarcastically]
+- For unhinged personality: [excited] [manic] [laughs] [dramatic]
 
 Return ONLY a JSON object with this exact structure:
 {
