@@ -19,7 +19,8 @@ import { discordBotService } from './services/discordBot';
 import { intelligenceEngine } from './services/intelligenceEngine';
 import { storyReconstructor } from './services/storyReconstructor';
 import { ContentCollectionManager } from './services/ingestion/ContentCollectionManager';
-import { insertAutomatedSourceSchema, insertPendingContentSchema } from '@shared/schema';
+import { adGenerationService } from './services/AdGenerationService';
+import { insertAutomatedSourceSchema, insertPendingContentSchema, insertAdTemplateSchema, insertPrerollAdSchema } from '@shared/schema';
 import multer from "multer";
 import { z } from "zod";
 import { promises as fs } from "fs";
@@ -2954,6 +2955,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error(`Test collection failed for ${req.params.sourceType}:`, error);
       res.status(500).json({ error: `Test collection failed: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // =====================================
+  // PRE-ROLL AD GENERATION ROUTES  
+  // =====================================
+  
+  // Generate a new pre-roll ad
+  app.post('/api/ads/generate', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { category, personalityFacet, forceNew } = req.body;
+      
+      const adRequest = {
+        profileId: activeProfile.id,
+        category,
+        personalityFacet,
+        forceNew
+      };
+      
+      const newAd = await adGenerationService.generateAd(adRequest);
+      res.json({ data: newAd });
+    } catch (error) {
+      console.error('Ad generation failed:', error);
+      res.status(500).json({ error: 'Failed to generate ad' });
+    }
+  });
+
+  // Get ads for a profile
+  app.get('/api/ads/:profileId', async (req, res) => {
+    try {
+      const { profileId } = req.params;
+      const { category, limit, includeUsed } = req.query;
+      
+      const options = {
+        category: category as string,
+        limit: limit ? parseInt(limit as string) : undefined,
+        includeUsed: includeUsed === 'true'
+      };
+      
+      const ads = await adGenerationService.getAds(profileId, options);
+      res.json({ data: ads });
+    } catch (error) {
+      console.error('Failed to fetch ads:', error);
+      res.status(500).json({ error: 'Failed to fetch ads' });
+    }
+  });
+
+  // Mark an ad as used
+  app.post('/api/ads/:id/use', async (req, res) => {
+    try {
+      const { id } = req.params;
+      await adGenerationService.markAdAsUsed(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to mark ad as used:', error);
+      res.status(500).json({ error: 'Failed to mark ad as used' });
+    }
+  });
+
+  // Rate an ad (1-5 stars)
+  app.post('/api/ads/:id/rate', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { rating } = req.body;
+      
+      if (!rating || rating < 1 || rating > 5) {
+        return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+      }
+      
+      await adGenerationService.rateAd(id, rating);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to rate ad:', error);
+      res.status(500).json({ error: 'Failed to rate ad' });
+    }
+  });
+
+  // Toggle favorite status
+  app.post('/api/ads/:id/favorite', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isFavorite } = req.body;
+      
+      await adGenerationService.toggleFavorite(id, isFavorite);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to toggle favorite:', error);
+      res.status(500).json({ error: 'Failed to toggle favorite' });
+    }
+  });
+
+  // Get ad statistics
+  app.get('/api/ads/:profileId/stats', async (req, res) => {
+    try {
+      const { profileId } = req.params;
+      const stats = await adGenerationService.getAdStats(profileId);
+      res.json({ data: stats });
+    } catch (error) {
+      console.error('Failed to get ad stats:', error);
+      res.status(500).json({ error: 'Failed to get ad stats' });
     }
   });
 
