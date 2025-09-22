@@ -4,6 +4,7 @@ import ChaosEngine from './chaosEngine.js';
 import { geminiService } from './gemini.js';
 import { contentFilter } from './contentFilter.js';
 import { varietyController } from './VarietyController.js';
+import { ContentSuggestionService } from './ContentSuggestionService.js';
 import { storage } from '../storage.js';
 
 /*
@@ -36,9 +37,11 @@ interface ConsolidatedMemory {
 
 class AnthropicService {
   private chaosEngine: ChaosEngine;
+  private contentSuggestionService: ContentSuggestionService;
 
   constructor() {
     this.chaosEngine = ChaosEngine.getInstance();
+    this.contentSuggestionService = new ContentSuggestionService();
   }
 
   async generateResponse(
@@ -48,9 +51,31 @@ class AnthropicService {
     relevantDocs: any[] = [],
     loreContext?: string,
     mode?: string,
-    conversationId?: string
+    conversationId?: string,
+    profileId?: string
   ): Promise<AIResponse> {
     const startTime = Date.now();
+
+    // 🎯 NEW: Check if this is a content suggestion request
+    if (conversationId && profileId && this.contentSuggestionService.isContentSuggestionRequest(userMessage)) {
+      try {
+        console.log('🎪 Detected content suggestion request, generating suggestions...');
+        const suggestionResponse = await this.contentSuggestionService.generateSuggestions(
+          conversationId,
+          profileId,
+          userMessage
+        );
+        
+        return {
+          content: suggestionResponse.nickyResponse,
+          processingTime: Date.now() - startTime,
+          retrievedContext: `Content suggestions generated using ${suggestionResponse.variety_info.facet_used} personality facet`
+        };
+      } catch (error) {
+        console.error('❌ Content suggestion generation failed:', error);
+        // Fall through to regular processing if suggestion generation fails
+      }
+    }
 
     // Build context from memories and documents (moved outside try block for fallback access)
     let contextPrompt = "";
@@ -247,7 +272,7 @@ class AnthropicService {
       // Get recent messages from this conversation to check patterns
       const recentMessages = await storage.getRecentMessages(conversationId, 10);
       const recentAIResponses = recentMessages
-        .filter((msg: Message) => msg.role === 'assistant')
+        .filter((msg: Message) => msg.type === 'AI')
         .map((msg: Message) => msg.content.toLowerCase())
         .slice(-5); // Last 5 AI responses
 
