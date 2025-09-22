@@ -314,35 +314,35 @@ export class ContentSuggestionService {
   }
 
   /**
-   * Get response style for each facet (UNHINGED and conspiratorial)
+   * Get response style for each facet (Nicky's authentic grumpy personality)
    */
   private getFacetResponseStyle(facetName: string): { opener: string; closer: string } {
     const styles: Record<string, { opener: string; closer: string }> = {
       'dbd_expert': {
-        opener: 'YO, I got some EXPLOSIVE gaming theories that\'ll blow your mind:',
-        closer: 'Trust me, once you see it, you CAN\'T unsee it!'
+        opener: 'Christ, you want ideas? Fine, here\'s what\'s pissing me off about games:',
+        closer: 'Pick one, I don\'t care. They\'re all gonna annoy me anyway.'
       },
       'street_hustler': {
-        opener: 'Listen up, I got the REAL scoop from the streets:',
-        closer: 'This goes deeper than anyone wants to admit, capisce?'
+        opener: 'Ay, you want the real deal? Here\'s some shit from the neighborhood:',
+        closer: 'Don\'t say I didn\'t warn ya when this gets ugly.'
       },
       'food_family': {
-        opener: 'Madonna mia, the CONSPIRACY runs through everything, even our food:',
-        closer: 'They\'re trying to erase our heritage, but I got the RECEIPTS!'
+        opener: 'Madonna mia, fine, here\'s some family stuff that\'s been bugging me:',
+        closer: 'Nonna\'s rolling in her grave watching what passes for content these days.'
       },
       'jersey_nostalgia': {
-        opener: 'THEY don\'t want you knowing what really happened back home:',
-        closer: 'This is the REAL history they buried!'
+        opener: 'You wanna talk? Here\'s some crap from back home that still gets me heated:',
+        closer: 'Jersey\'s gone to hell, but whatever, pick your poison.'
       },
       'pop_culture_critic': {
-        opener: 'The BRAINWASHING is everywhere, but I see through their lies:',
-        closer: 'Wake up! This isn\'t random - it\'s ALL CONNECTED!'
+        opener: 'Jesus, everything\'s garbage now. Here\'s what I\'m pissed about today:',
+        closer: 'Kids today wouldn\'t know real content if it bit \'em in the ass.'
       }
     };
     
     return styles[facetName] || {
-      opener: 'OH, you want topics? I got THEORIES that\'ll change EVERYTHING:',
-      closer: 'Choose wisely - once you go down these rabbit holes, there\'s NO GOING BACK!'
+      opener: 'What, you can\'t think of your own topics? Alright, here:',
+      closer: 'There, happy? Pick one and let\'s get this over with.'
     };
   }
 
@@ -355,32 +355,32 @@ export class ContentSuggestionService {
       return topic;
     }
     
-    // Transform generic topics into UNHINGED Nicky conspiracies
+    // Transform generic topics into authentically pissed-off Nicky topics
     const personalizedTopics: Record<string, string[]> = {
       'dbd_expert': [
-        'BHVR is literally rigging my matches - I got PROOF',
-        'The Entity is based on a REAL GOVERNMENT EXPERIMENT',
-        'Why Dead by Daylight is CIA mind control disguised as gaming'
+        'Why every DbD update makes the game worse',
+        'These entitled survivor mains ruining everything',
+        'BHVR doesn\'t give a shit about killer players'
       ],
       'street_hustler': [
-        'The Newark gas station cartel nobody talks about',
-        'How Wawa is secretly controlling the tri-state economy',
-        'Why parking meters are actually government surveillance devices'
+        'That Newark parking situation is a complete scam',
+        'Why Wawa ain\'t what it used to be',
+        'These gentrification assholes destroying the neighborhood'
       ],
       'food_family': [
-        'Big Tomato is destroying authentic Italian cuisine ON PURPOSE',
-        'Why modern "pizza" is a psychological warfare operation',
-        'The family recipe they DON\'T want you to know about'
+        'What they\'re calling "Italian food" these days is insulting',
+        'Why nobody knows how to cook anymore',
+        'The family recipe disaster from last week'
       ],
       'jersey_nostalgia': [
-        'How they systematically destroyed Little Italy to hide the TRUTH',
-        'The Atlantic City cover-up that goes ALL THE WAY TO THE TOP',
-        'Why Jersey Shore was actually a documentary about government experiments'
+        'How they completely destroyed Little Italy',
+        'That Atlantic City bullshit nobody talks about',
+        'Why everything was better back in the day'
       ],
       'pop_culture_critic': [
-        'Hollywood\'s deliberate campaign to make people stupid',
-        'How streaming services are erasing REAL culture',
-        'The algorithm conspiracy that\'s destroying human creativity'
+        'These kids don\'t appreciate real music anymore',
+        'Why modern movies are complete garbage',
+        'Social media rotting everyone\'s brains'
       ]
     };
     
