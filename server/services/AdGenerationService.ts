@@ -60,7 +60,12 @@ export class AdGenerationService {
     overly_excited: 'manic',
     conspiracy_adjacent: 'conspiratorial',
     manic_energy: 'manic',
-    family_chaos: 'manic'
+    family_chaos: 'manic',
+    complete_psycho: 'psycho',
+    unhinged_madman: 'psycho',
+    absolutely_insane: 'psycho',
+    totally_mental: 'psycho',
+    psychotic_break: 'psycho'
   };
 
   // Validate sponsor name against banned patterns
