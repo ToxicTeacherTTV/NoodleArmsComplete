@@ -19,11 +19,19 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
+    // Force immediate scroll to ensure visibility
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Backup: Force scroll after a short delay to handle layout timing
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // Use requestAnimationFrame to ensure DOM is ready
+    requestAnimationFrame(() => {
+      scrollToBottom();
+    });
   }, [messages]);
 
   const formatTime = (timestamp: string) => {
@@ -84,7 +92,7 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
       </div>
 
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 chat-scroll" data-testid="chat-messages">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 chat-scroll scroll-smooth" data-testid="chat-messages">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-muted-foreground">
