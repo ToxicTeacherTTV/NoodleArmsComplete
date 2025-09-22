@@ -65,7 +65,12 @@ export class StoryReconstructor {
 
     // Get all existing memories for comparison
     const allMemories = await this.storage.getMemoryEntries(profileId, 10000);
-    const anchorMemories = allMemories.filter((m: MemoryEntry) => (m.confidence || 50) >= 60 && m.id);
+    const anchorMemories = allMemories.filter((m: MemoryEntry) => {
+      // Include high-confidence facts (≥60%) or any STORY type (even low confidence)
+      const isHighConfidence = (m.confidence || 50) >= 60;
+      const isStory = m.type === 'STORY';
+      return (isHighConfidence || isStory) && m.id;
+    });
     console.log(`📚 Analyzing against ${anchorMemories.length} anchor memories`);
 
     // Pass A: Connect orphans to existing high-confidence memories/stories
