@@ -265,7 +265,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         relevantMemories,
         relevantDocs,
         loreContext,
-        mode
+        mode,
+        conversationId
       );
 
       // Store the AI response
