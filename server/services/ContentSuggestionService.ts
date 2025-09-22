@@ -381,6 +381,31 @@ export class ContentSuggestionService {
         'These kids don\'t appreciate real music anymore',
         'Why modern movies are complete garbage',
         'Social media rotting everyone\'s brains'
+      ],
+      'overly_excited': [
+        'This AMAZING thing that happened to me yesterday',
+        'The BEST fucking story you\'ve never heard',
+        'Why everything is SO MUCH BETTER than people think'
+      ],
+      'conspiracy_theories': [
+        'The real reason they don\'t want you knowing about this',
+        'How they\'re covering up the obvious truth',
+        'Why the government doesn\'t want you talking about this'
+      ],
+      'deadpan': [
+        'Another boring thing that somehow matters',
+        'Why people get excited about absolutely nothing',
+        'The least interesting story that everyone cares about'
+      ],
+      'angry_rants': [
+        'What\'s really pissing me off about this situation',
+        'Why I\'m completely done with this bullshit',
+        'The thing that\'s driving me absolutely insane'
+      ],
+      'psycho': [
+        'The twisted shit nobody wants to acknowledge',
+        'Why normal people can\'t handle the truth',
+        'The dark reality everyone\'s ignoring'
       ]
     };
     
@@ -418,6 +443,31 @@ export class ContentSuggestionService {
         'back when Jersey meant something',
         'and why they don\'t make \'em like that anymore',
         'the Little Italy way of handling it'
+      ],
+      'overly_excited': [
+        'and it\'s gonna BLOW YOUR MIND',
+        'trust me, this is INCREDIBLE',
+        'and it\'s the BEST thing ever'
+      ],
+      'conspiracy_theories': [
+        'and they don\'t want you knowing',
+        'wake up, this is the truth',
+        'connect the dots, it\'s obvious'
+      ],
+      'deadpan': [
+        'if you care about that sort of thing',
+        'not that anyone gives a shit',
+        'because apparently that matters'
+      ],
+      'angry_rants': [
+        'and it\'s pissing me the fuck off',
+        'this bullshit has got to stop',
+        'I\'m done with this garbage'
+      ],
+      'psycho': [
+        'and it\'s darker than you think',
+        'the twisted truth nobody admits',
+        'embrace the chaos'
       ]
     };
     
