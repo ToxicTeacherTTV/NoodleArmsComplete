@@ -335,12 +335,12 @@ export default function JazzDashboard() {
       </div>
 
       {/* Main Content - Full width chat */}
-      <div className="max-w-7xl mx-auto p-4 md:p-6 h-[calc(100vh-120px)]">
+      <div className="max-w-7xl mx-auto p-4 md:p-6 h-[calc(100vh-120px)] pb-40 md:pb-32">
         
         {/* Chat Panel - Scrollable Window */}
         <Card className="border-primary/20 shadow-xl">
           {/* Chat window with responsive height and scrolling */}
-          <div className="h-[calc(100vh-12rem)] sm:h-[calc(100vh-14rem)] md:h-[calc(100vh-16rem)] flex flex-col">
+          <div className="h-[calc(100vh-20rem)] sm:h-[calc(100vh-22rem)] md:h-[calc(100vh-20rem)] flex flex-col">
             <ChatPanel
               messages={messages}
               sessionDuration={getSessionDuration()}
@@ -672,7 +672,7 @@ export default function JazzDashboard() {
       />
 
       {/* Jazz Cup Status Bar */}
-      <div className="fixed bottom-32 left-0 right-0 bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 p-2 z-30">
+      <div className="fixed bottom-20 left-0 right-0 bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 p-2 z-30">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-black">
           <div className="flex items-center space-x-4">
             <span className="flex items-center gap-1">
