@@ -13,6 +13,7 @@ interface ScanJob {
 }
 
 const profileScanJobs = new Map<string, ScanJob>();
+const profileLocks = new Map<string, Promise<ContradictionResult>>();
 const SCAN_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max
 
 export interface ContradictionResult {
@@ -96,6 +97,30 @@ class SmartContradictionDetector {
   }
   
   /**
+   * 🚀 ATOMIC CONTRADICTION DETECTION: Prevents race conditions
+   * Uses promise-based locking to ensure only one scan per profile at a time
+   */
+  async detectContradictions(profileId: string, newFact: MemoryEntry): Promise<ContradictionResult> {
+    // Check for existing operation
+    const existing = profileLocks.get(profileId);
+    if (existing) {
+      console.log(`⏳ Waiting for existing contradiction scan to complete for profile ${profileId}`);
+      return existing;
+    }
+
+    // Create atomic operation
+    const operation = this._doDetectContradictions(profileId, newFact);
+    profileLocks.set(profileId, operation);
+    
+    try {
+      const result = await operation;
+      return result;
+    } finally {
+      profileLocks.delete(profileId);
+    }
+  }
+
+  /**
    * 🚀 SMART APPROACH: Only check facts that could actually contradict
    * Instead of N x N comparisons, we:
    * 1. Extract structure from new fact
@@ -103,7 +128,7 @@ class SmartContradictionDetector {
    * 3. Apply fast rule-based checks
    * 4. Use AI only for ambiguous cases (max 5-10 calls)
    */
-  async detectContradictions(profileId: string, newFact: MemoryEntry): Promise<ContradictionResult> {
+  private async _doDetectContradictions(profileId: string, newFact: MemoryEntry): Promise<ContradictionResult> {
     try {
       console.log(`🧠 Smart contradiction check for: "${newFact.content.substring(0, 50)}..."`);
       
