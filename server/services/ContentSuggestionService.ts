@@ -350,11 +350,8 @@ export class ContentSuggestionService {
    * Make topics more specific and personal using Nicky's lexicon
    */
   private personalizeTopic(topic: string, facetName: string, isMultiple: boolean): string {
-    console.log(`🔍 DEBUG personalizeTopic: topic="${topic}", facetName="${facetName}", isMultiple=${isMultiple}`);
-    
     // If topic is already specific enough, keep it
     if (topic.length > 20 && !this.isGenericTopic(topic)) {
-      console.log(`✅ Topic already specific enough: "${topic}"`);
       return topic;
     }
     
@@ -385,30 +382,30 @@ export class ContentSuggestionService {
         'Why modern movies are complete garbage',
         'Social media rotting everyone\'s brains'
       ],
-      'overly_excited': [
-        'This AMAZING thing that happened to me yesterday',
-        'The BEST fucking story you\'ve never heard',
-        'Why everything is SO MUCH BETTER than people think'
+      'news_correspondent': [
+        'Breaking: Local situation completely out of control',
+        'EXCLUSIVE: The real story behind recent events',
+        'This just in: Everything you thought was wrong'
       ],
-      'conspiracy_theories': [
-        'The real reason they don\'t want you knowing about this',
-        'How they\'re covering up the obvious truth',
-        'Why the government doesn\'t want you talking about this'
+      'advice_don': [
+        'Why you need to handle this situation properly',
+        'The right way to deal with this mess',
+        'Let me tell you how we solve this problem'
       ],
-      'deadpan': [
-        'Another boring thing that somehow matters',
-        'Why people get excited about absolutely nothing',
-        'The least interesting story that everyone cares about'
+      'tech_skeptic': [
+        'Why this technology is ruining everything',
+        'How they\'re using tech to screw you over',
+        'The surveillance state nobody talks about'
       ],
-      'angry_rants': [
-        'What\'s really pissing me off about this situation',
-        'Why I\'m completely done with this bullshit',
-        'The thing that\'s driving me absolutely insane'
+      'motivational_coach': [
+        'Why you\'re CRUSHING IT and don\'t even know',
+        'The MINDSET that\'ll change your entire life',
+        'How to DOMINATE this situation completely'
       ],
-      'psycho': [
-        'The twisted shit nobody wants to acknowledge',
-        'Why normal people can\'t handle the truth',
-        'The dark reality everyone\'s ignoring'
+      'petty_rival': [
+        'That time someone tried to show me up',
+        'Why I\'m still better than that other guy',
+        'The grudge I\'m definitely not holding'
       ]
     };
     
@@ -418,11 +415,7 @@ export class ContentSuggestionService {
       'Why everything\'s backwards these days'
     ];
     
-    console.log(`🎯 Available topics for facet "${facetName}":`, facetTopics);
-    const selectedTopic = facetTopics[Math.floor(Math.random() * facetTopics.length)];
-    console.log(`✅ Selected topic: "${selectedTopic}"`);
-    
-    return selectedTopic;
+    return facetTopics[Math.floor(Math.random() * facetTopics.length)];
   }
   
   /**
@@ -451,30 +444,30 @@ export class ContentSuggestionService {
         'and why they don\'t make \'em like that anymore',
         'the Little Italy way of handling it'
       ],
-      'overly_excited': [
-        'and it\'s gonna BLOW YOUR MIND',
-        'trust me, this is INCREDIBLE',
-        'and it\'s the BEST thing ever'
+      'news_correspondent': [
+        'and we\'ll have more on this story',
+        'sources confirm this is developing',
+        'stay tuned for updates'
       ],
-      'conspiracy_theories': [
+      'advice_don': [
+        'and trust me, I know what I\'m talking about',
+        'take my word for it',
+        'this is how you get respect'
+      ],
+      'tech_skeptic': [
         'and they don\'t want you knowing',
-        'wake up, this is the truth',
-        'connect the dots, it\'s obvious'
+        'wake up to what\'s really happening',
+        'the truth they\'re hiding from you'
       ],
-      'deadpan': [
-        'if you care about that sort of thing',
-        'not that anyone gives a shit',
-        'because apparently that matters'
+      'motivational_coach': [
+        'and you\'re gonna DOMINATE',
+        'this is your BREAKTHROUGH moment',
+        'time to UNLEASH your potential'
       ],
-      'angry_rants': [
-        'and it\'s pissing me the fuck off',
-        'this bullshit has got to stop',
-        'I\'m done with this garbage'
-      ],
-      'psycho': [
-        'and it\'s darker than you think',
-        'the twisted truth nobody admits',
-        'embrace the chaos'
+      'petty_rival': [
+        'and I\'m definitely not bitter about it',
+        'not that I\'m keeping track',
+        'but who\'s counting, right?'
       ]
     };
     
