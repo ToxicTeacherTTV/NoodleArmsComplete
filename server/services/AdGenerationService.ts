@@ -196,6 +196,7 @@ export class AdGenerationService {
 
   // Select a varied naming format with anti-repetition (10 total formats)
   private selectVariedNamingFormat(): { format: string; instruction: string; examples: string[] } {
+    console.log(`🔍 DEBUG: selectVariedNamingFormat called!`);
     const availableFormats = [
       {
         format: "the_weird_thing",
