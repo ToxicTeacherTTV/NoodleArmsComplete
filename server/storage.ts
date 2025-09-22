@@ -13,6 +13,8 @@ import {
   discordConversations,
   automatedSources,
   pendingContent,
+  adTemplates,
+  prerollAds,
   type Profile, 
   type InsertProfile,
   type Conversation,
@@ -40,7 +42,11 @@ import {
   type AutomatedSource,
   type InsertAutomatedSource,
   type PendingContent,
-  type InsertPendingContent
+  type InsertPendingContent,
+  type AdTemplate,
+  type InsertAdTemplate,
+  type PrerollAd,
+  type InsertPrerollAd
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, sql } from "drizzle-orm";
@@ -994,6 +1000,83 @@ export class DatabaseStorage implements IStorage {
       .from(pendingContent)
       .where(eq(pendingContent.id, id));
     return content || null;
+  }
+
+  // Ad Template Management
+  async createAdTemplate(data: InsertAdTemplate): Promise<AdTemplate> {
+    const [newTemplate] = await db
+      .insert(adTemplates)
+      .values([data as any])
+      .returning();
+    return newTemplate;
+  }
+
+  async getAdTemplates(): Promise<AdTemplate[]> {
+    return await db
+      .select()
+      .from(adTemplates)
+      .orderBy(desc(adTemplates.createdAt));
+  }
+
+  async updateAdTemplate(id: string, data: Partial<AdTemplate>): Promise<void> {
+    const updateData = { ...data, updatedAt: sql`now()` };
+    await db
+      .update(adTemplates)
+      .set(updateData as any)
+      .where(eq(adTemplates.id, id));
+  }
+
+  // Preroll Ad Management
+  async createPrerollAd(data: InsertPrerollAd): Promise<PrerollAd> {
+    const [newAd] = await db
+      .insert(prerollAds)
+      .values([data as any])
+      .returning();
+    return newAd;
+  }
+
+  async getPrerollAds(profileId: string, options: {
+    category?: string;
+    limit?: number;
+    includeUsed?: boolean;
+  } = {}): Promise<PrerollAd[]> {
+    const conditions = [eq(prerollAds.profileId, profileId)];
+    
+    if (options.category) {
+      conditions.push(eq(prerollAds.category, options.category));
+    }
+    
+    if (!options.includeUsed) {
+      conditions.push(eq(prerollAds.lastUsed, sql`NULL`));
+    }
+    
+    let query = db
+      .select()
+      .from(prerollAds)
+      .where(and(...conditions))
+      .orderBy(desc(prerollAds.generatedAt));
+    
+    if (options.limit) {
+      query = query.limit(options.limit);
+    }
+    
+    return await query;
+  }
+
+  async updatePrerollAd(id: string, data: Partial<PrerollAd>): Promise<void> {
+    const updateData = { ...data, updatedAt: sql`now()` };
+    await db
+      .update(prerollAds)
+      .set(updateData as any)
+      .where(eq(prerollAds.id, id));
+  }
+
+  async getPrerollAdById(id: string): Promise<PrerollAd | null> {
+    const [ad] = await db
+      .select()
+      .from(prerollAds)
+      .where(eq(prerollAds.id, id));
+    return ad || null;
   }
 }
 
