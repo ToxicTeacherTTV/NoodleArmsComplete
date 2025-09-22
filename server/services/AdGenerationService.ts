@@ -38,7 +38,7 @@ export class AdGenerationService {
 
   // Track recent sponsor name format patterns to prevent repetitive title structures
   private recentNameFormats: string[] = [];
-  private maxRecentFormats = 4;
+  private maxRecentFormats = 6; // Increased for 10 formats
 
   // Map personality facets to emotion profiles for voice synthesis
   private readonly PERSONALITY_TO_EMOTION_MAP: Record<string, string> = {
@@ -194,7 +194,7 @@ export class AdGenerationService {
     }
   }
 
-  // Select a varied naming format with anti-repetition
+  // Select a varied naming format with anti-repetition (10 total formats)
   private selectVariedNamingFormat(): { format: string; instruction: string; examples: string[] } {
     const availableFormats = [
       {
@@ -236,6 +236,46 @@ export class AdGenerationService {
           "Amazon My Problems", "Microsoft My Life", "Netflix My Regrets",
           "Uber My Emotions", "Spotify My Decisions", "Google My Mistakes"
         ]
+      },
+      {
+        format: "bureaucratic_department",
+        instruction: "Use format: Department of [Absurd Focus]",
+        examples: [
+          "Department of Sauce Integrity", "Department of Missing Socks", "Department of Emotional Parking",
+          "Department of Pasta Quality Control", "Department of Sidewalk Justice", "Department of Umbrella Distribution"
+        ]
+      },
+      {
+        format: "animal_service",
+        instruction: "Use format: [Animal] [Service]",
+        examples: [
+          "Raccoon Legal Aid", "Pigeon Data Recovery", "Ferret Logistics",
+          "Squirrel Consulting", "Hamster Crisis Management", "Penguin Tax Services"
+        ]
+      },
+      {
+        format: "abstract_management",
+        instruction: "Use format: [Abstract Concept] Management",
+        examples: [
+          "Regret Management", "Dignity Preservation Management", "Chaos Containment Management",
+          "Anxiety Distribution Management", "Hope Allocation Services", "Confusion Mitigation Group"
+        ]
+      },
+      {
+        format: "mythic_service",
+        instruction: "Use format: [Mythical Figure] [Service]",
+        examples: [
+          "Medusa Property Management", "Apollo Energy Solutions", "Minotaur Conflict Resolution",
+          "Zeus Electrical Services", "Hercules Moving Company", "Athena Strategic Planning"
+        ]
+      },
+      {
+        format: "numerical_solutions",
+        instruction: "Use format: [Number] [Noun] Solutions",
+        examples: [
+          "Three Meatball Solutions", "Seven Alibi Systems", "Nine Umbrella Services",
+          "Five Spoon Industries", "Twelve Sock Solutions", "Four Corner Consulting"
+        ]
       }
     ];
     
@@ -253,7 +293,15 @@ export class AdGenerationService {
     // Track this format
     this.addToRecentNameFormats(selectedFormat.format);
     
+    // Log format distribution for telemetry
+    const formatDistribution = this.recentNameFormats.slice(0, Math.min(10, this.recentNameFormats.length))
+      .reduce((acc, format) => {
+        acc[format] = (acc[format] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+    
     console.log(`🏷️ Selected naming format: ${selectedFormat.format} (avoided: ${this.recentNameFormats.slice(1).join(', ')})`);
+    console.log(`📊 Recent format distribution (last 10): ${JSON.stringify(formatDistribution)}`);
     return selectedFormat;
   }
   
