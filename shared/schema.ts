@@ -99,6 +99,7 @@ export const chaosState = pgTable("chaos_state", {
   lastModeChange: timestamp("last_mode_change").default(sql`now()`),
   responseCount: integer("response_count").default(0), // Track responses for evolution
   manualOverride: integer("manual_override"), // Optional temporary override level
+  overrideExpiry: timestamp("override_expiry"), // Timeout for manual override
   isGlobal: boolean("is_global").default(true), // Singleton pattern flag
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });

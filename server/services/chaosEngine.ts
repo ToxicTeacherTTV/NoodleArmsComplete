@@ -8,6 +8,7 @@ interface ChaosState {
   mode: ChaosMode;
   lastModeChange: Date;
   manualOverride?: number; // Manual override level for next response only
+  overrideExpiry?: Date; // Timeout for manual override
   responseCount: number; // Track number of responses for response-based changes
 }
 
@@ -41,7 +42,8 @@ class ChaosEngine {
           mode: savedState.mode as ChaosMode,
           lastModeChange: savedState.lastModeChange ? new Date(savedState.lastModeChange) : new Date(),
           responseCount: savedState.responseCount || 0,
-          manualOverride: savedState.manualOverride || undefined
+          manualOverride: savedState.manualOverride || undefined,
+          overrideExpiry: savedState.overrideExpiry ? new Date(savedState.overrideExpiry) : undefined
         };
         console.log(`🔄 Loaded chaos state from database: level=${this.chaosState.level}%, mode=${this.chaosState.mode}, responses=${this.chaosState.responseCount}`);
       } else {
@@ -64,7 +66,8 @@ class ChaosEngine {
         mode: this.chaosState.mode,
         lastModeChange: this.chaosState.lastModeChange,
         responseCount: this.chaosState.responseCount,
-        manualOverride: this.chaosState.manualOverride
+        manualOverride: this.chaosState.manualOverride,
+        overrideExpiry: this.chaosState.overrideExpiry
       };
       
       await storage.createOrUpdateChaosState(stateData);
@@ -97,14 +100,29 @@ class ChaosEngine {
 
   // Get the effective chaos level (manual override takes precedence)
   getEffectiveChaosLevel(): number {
+    // Check for expired override
+    if (this.chaosState.manualOverride !== undefined && 
+        this.chaosState.overrideExpiry && 
+        new Date() > this.chaosState.overrideExpiry) {
+      console.log(`⏰ Manual chaos override expired, clearing and returning to natural level ${this.chaosState.level}%`);
+      this.clearManualOverride();
+    }
     return this.chaosState.manualOverride ?? this.chaosState.level;
   }
 
-  // Set manual override for next response only
+  // Clear manual override (used by timeout logic)
+  private async clearManualOverride(): Promise<void> {
+    this.chaosState.manualOverride = undefined;
+    this.chaosState.overrideExpiry = undefined;
+    await this.saveStateToDatabase();
+  }
+
+  // Set manual override with timeout (5 minutes max)
   async setManualOverride(level: number): Promise<void> {
     await this.ensureInitialized();
     this.chaosState.manualOverride = Math.max(0, Math.min(100, level));
-    console.log(`🎛️  Manual chaos override set to ${this.chaosState.manualOverride}% for next response`);
+    this.chaosState.overrideExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 min timeout
+    console.log(`🎛️ Manual chaos override set to ${this.chaosState.manualOverride}% (expires in 5 minutes)`);
     await this.saveStateToDatabase();
   }
 
@@ -121,10 +139,10 @@ class ChaosEngine {
     await this.ensureInitialized();
     this.chaosState.responseCount++;
     
-    // Clear manual override after one response
+    // Clear manual override after one response (legacy behavior)
     if (this.chaosState.manualOverride !== undefined) {
       console.log(`🔄 Clearing manual override, returning to natural chaos level ${this.chaosState.level}%`);
-      this.chaosState.manualOverride = undefined;
+      await this.clearManualOverride();
     }
 
     // Trigger chaos changes based on response count (every 1-3 responses)
