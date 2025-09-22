@@ -3,6 +3,8 @@ import { Message, MemoryEntry } from '@shared/schema';
 import ChaosEngine from './chaosEngine.js';
 import { geminiService } from './gemini.js';
 import { contentFilter } from './contentFilter.js';
+import { varietyController } from './VarietyController.js';
+import { storage } from '../storage.js';
 
 /*
 <important_code_snippet_instructions>
@@ -45,7 +47,8 @@ class AnthropicService {
     relevantMemories: Array<MemoryEntry & { parentStory?: MemoryEntry }>,
     relevantDocs: any[] = [],
     loreContext?: string,
-    mode?: string
+    mode?: string,
+    conversationId?: string
   ): Promise<AIResponse> {
     const startTime = Date.now();
 
@@ -104,10 +107,27 @@ class AnthropicService {
 
       // Get current chaos state and personality modifier
       const chaosModifier = this.chaosEngine.getPersonalityModifier();
-      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}${modeContext}`;
+      
+      // ✨ NEW: Get variety controller facet and prompt
+      let varietyPrompt = "";
+      let sceneCard = "";
+      if (conversationId) {
+        const { facet, variety } = await varietyController.selectPersonaFacet(conversationId, userMessage);
+        varietyPrompt = varietyController.generateVarietyPrompt(facet, variety);
+        
+        // Add scene card for storytelling facets
+        if (facet.responseShape.name === 'storylet' || facet.responseShape.name === 'nostalgic_riff') {
+          const card = await varietyController.getRandomSceneCard(variety);
+          if (card) {
+            sceneCard = `\n\nSTORYTELLING PROMPT: Consider incorporating this scene from your past: "${card}"`;
+          }
+        }
+      }
+      
+      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}${modeContext}${sceneCard}`;
 
-      // Enhanced system prompt with chaos personality
-      const enhancedCoreIdentity = `${coreIdentity}\n\n${chaosModifier}`;
+      // Enhanced system prompt with chaos personality AND variety control
+      const enhancedCoreIdentity = `${coreIdentity}\n\n${chaosModifier}\n\n${varietyPrompt}`;
 
       const response = await anthropic.messages.create({
         // "claude-sonnet-4-20250514"
@@ -136,8 +156,15 @@ class AnthropicService {
         console.warn(`🚫 Content filtered to prevent cancel-worthy language`);
       }
 
+      // ✨ NEW: Post-generation repetition filter
+      let finalContent = filteredContent;
+      if (conversationId) {
+        const repetitionCheck = await this.checkForRepetition(conversationId, filteredContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
+        finalContent = repetitionCheck.content;
+      }
+
       return {
-        content: filteredContent,
+        content: finalContent,
         processingTime,
         retrievedContext: contextPrompt || undefined,
       };
@@ -158,7 +185,7 @@ class AnthropicService {
         // Recursive retry with incremented count
         try {
           return await this.generateResponseWithRetry(
-            userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, errorInfo.retryCount + 1
+            userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, errorInfo.retryCount + 1, mode, conversationId
           );
         } catch (retryError) {
           console.error(`❌ Retry ${errorInfo.retryCount + 1} failed:`, retryError);
@@ -204,6 +231,128 @@ class AnthropicService {
   }
 
   /**
+   * Check for repetitive patterns and regenerate if needed
+   */
+  private async checkForRepetition(
+    conversationId: string,
+    content: string,
+    userMessage: string,
+    coreIdentity: string,
+    relevantMemories: Array<MemoryEntry & { parentStory?: MemoryEntry }>,
+    relevantDocs: any[] = [],
+    loreContext?: string,
+    mode?: string
+  ): Promise<{ content: string; wasRegenerated: boolean }> {
+    try {
+      // Get recent messages from this conversation to check patterns
+      const recentMessages = await storage.getRecentMessages(conversationId, 10);
+      const recentAIResponses = recentMessages
+        .filter((msg: Message) => msg.role === 'assistant')
+        .map((msg: Message) => msg.content.toLowerCase())
+        .slice(-5); // Last 5 AI responses
+
+      const currentContentLower = content.toLowerCase();
+      
+      // Check for problematic patterns
+      const problematicPatterns = [
+        /my name is nicky|i'm nicky|call me nicky/gi,
+        /it's all rigged|everything's rigged/gi,
+        /anti-italian/gi,
+        /madonna mia!/gi,
+        /dead by daylight/gi
+      ];
+
+      // Check for self-introductions (major red flag)
+      const hasSelfIntro = /my name is|i'm nicky|call me nicky/i.test(currentContentLower);
+      
+      // Check for n-gram repetition (4-6 word phrases)
+      const hasRepetitiveNGrams = this.detectNGramRepetition(currentContentLower, recentAIResponses);
+      
+      // Check for overused motifs
+      const overusedMotifCount = problematicPatterns.reduce((count, pattern) => {
+        return count + (pattern.test(currentContentLower) ? 1 : 0);
+      }, 0);
+
+      const needsRegeneration = hasSelfIntro || hasRepetitiveNGrams || overusedMotifCount >= 2;
+
+      if (needsRegeneration) {
+        console.warn(`🔄 Detected repetitive patterns, regenerating response...`);
+        console.warn(`- Self intro: ${hasSelfIntro}`);
+        console.warn(`- N-gram repetition: ${hasRepetitiveNGrams}`);
+        console.warn(`- Overused motifs: ${overusedMotifCount}`);
+
+        // Get different facet and regenerate
+        const { facet: altFacet } = await varietyController.selectPersonaFacet(conversationId, userMessage);
+        const altVarietyPrompt = varietyController.generateVarietyPrompt(altFacet, await varietyController.getSessionVariety(conversationId));
+        
+        const antiRepetitionPrompt = `
+REGENERATION RULES:
+- NEVER introduce yourself or say your name
+- NO catchphrases this turn
+- Avoid these overused topics: Dead by Daylight complaints, anti-Italian tech, "Madonna mia!"
+- Use a completely different angle from your recent responses
+- Focus on: ${altFacet.description}
+- ${altFacet.responseShape.structure}
+`;
+
+        const regenerationResponse = await anthropic.messages.create({
+          model: DEFAULT_MODEL_STR,
+          max_tokens: 1024,
+          temperature: 0.8, // Slightly lower for more focused response
+          system: `${coreIdentity}\n\n${altVarietyPrompt}\n\n${antiRepetitionPrompt}`,
+          messages: [
+            {
+              role: 'user',
+              content: `The Toxic Teacher says: "${userMessage}"`
+            }
+          ],
+        });
+
+        const regenContent = Array.isArray(regenerationResponse.content) 
+          ? (regenerationResponse.content[0] as any).text 
+          : (regenerationResponse.content as any);
+
+        const finalRegenContent = typeof regenContent === 'string' ? regenContent : content;
+        
+        console.log(`✅ Successfully regenerated response to avoid repetition`);
+        return { content: finalRegenContent, wasRegenerated: true };
+      }
+
+      return { content, wasRegenerated: false };
+      
+    } catch (error) {
+      console.error('❌ Repetition check failed:', error);
+      return { content, wasRegenerated: false };
+    }
+  }
+
+  /**
+   * Detect n-gram repetition in recent responses
+   */
+  private detectNGramRepetition(currentContent: string, recentResponses: string[]): boolean {
+    const words = currentContent.split(/\s+/);
+    
+    // Check 4-6 word phrases
+    for (let n = 4; n <= 6; n++) {
+      for (let i = 0; i <= words.length - n; i++) {
+        const ngram = words.slice(i, i + n).join(' ');
+        
+        // Skip very short or common phrases
+        if (ngram.length < 15) continue;
+        
+        // Check if this n-gram appears in recent responses
+        const foundInRecent = recentResponses.some(response => response.includes(ngram));
+        if (foundInRecent) {
+          console.warn(`📝 Found repeated n-gram: "${ngram}"`);
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  /**
    * Enhanced generateResponse with retry capability
    */
   private async generateResponseWithRetry(
@@ -212,10 +361,12 @@ class AnthropicService {
     relevantMemories: Array<MemoryEntry & { parentStory?: MemoryEntry }>,
     relevantDocs: any[] = [],
     loreContext?: string,
-    retryCount = 0
+    retryCount = 0,
+    mode?: string,
+    conversationId?: string
   ): Promise<AIResponse> {
     // Use original method but track retry count for error classification
-    return this.generateResponse(userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext);
+    return this.generateResponse(userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode, conversationId);
   }
 
   /**
