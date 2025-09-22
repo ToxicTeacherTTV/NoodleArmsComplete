@@ -28,6 +28,10 @@ export class AdGenerationService {
   private recentSponsorNames: string[] = [];
   private maxRecentNames = 50;
 
+  // Track recent personality facets to prevent emotion profile repetition
+  private recentPersonalityFacets: string[] = [];
+  private maxRecentFacets = 5;
+
   // Map personality facets to emotion profiles for voice synthesis
   private readonly PERSONALITY_TO_EMOTION_MAP: Record<string, string> = {
     grumpy_mentor: 'grumpy',
@@ -81,6 +85,41 @@ export class AdGenerationService {
     if (this.recentSponsorNames.length > this.maxRecentNames) {
       this.recentSponsorNames.pop();
     }
+  }
+
+  // Check if personality facet was recently used
+  private isPersonalityFacetRecentlyUsed(facet: string): boolean {
+    return this.recentPersonalityFacets.includes(facet);
+  }
+
+  // Add personality facet to recent list
+  private addToRecentFacets(facet: string): void {
+    this.recentPersonalityFacets.unshift(facet);
+    if (this.recentPersonalityFacets.length > this.maxRecentFacets) {
+      this.recentPersonalityFacets.pop();
+    }
+  }
+
+  // Select a varied personality facet with anti-repetition
+  private selectVariedPersonalityFacet(): string {
+    const availableFacets = Object.keys(this.PERSONALITY_TO_EMOTION_MAP);
+    
+    // Filter out recently used facets
+    const unusedFacets = availableFacets.filter(facet => 
+      !this.isPersonalityFacetRecentlyUsed(facet)
+    );
+    
+    // If all facets were used recently, reset and use all
+    const candidates = unusedFacets.length > 0 ? unusedFacets : availableFacets;
+    
+    // Select random facet
+    const selectedFacet = candidates[Math.floor(Math.random() * candidates.length)];
+    
+    // Track this facet
+    this.addToRecentFacets(selectedFacet);
+    
+    console.log(`🎭 Selected personality facet: ${selectedFacet} (avoided: ${this.recentPersonalityFacets.slice(1).join(', ')})`);
+    return selectedFacet;
   }
   
   // 🇮🇹 Fake Italian-American Sponsors
@@ -241,8 +280,11 @@ export class AdGenerationService {
     const { profileId, category, personalityFacet } = request;
     
     try {
+      // Use provided facet or select a varied one for anti-repetition
+      const selectedFacet = personalityFacet || this.selectVariedPersonalityFacet();
+      
       // Generate completely original ad content using AI
-      const adContent = await this.generateOriginalAdContent(category, personalityFacet);
+      const adContent = await this.generateOriginalAdContent(category, selectedFacet);
       
       // Estimate duration (rough calculation: ~150 words per minute speaking)
       const wordCount = adContent.adScript.split(' ').length;
@@ -256,7 +298,7 @@ export class AdGenerationService {
         productName: adContent.productName,
         category: adContent.category,
         adScript: adContent.adScript,
-        personalityFacet: personalityFacet || 'general',
+        personalityFacet: selectedFacet,
         duration: estimatedDuration,
         usageCount: 0,
         rating: null,
