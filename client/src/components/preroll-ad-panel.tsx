@@ -68,7 +68,8 @@ const PERSONALITY_FACETS = [
   { value: 'dbd_expert', label: '🎮 DbD Expert' },
   { value: 'reluctant_helper', label: '🤷 Reluctant Helper' },
   { value: 'conspiracy_theories', label: '🕵️ Conspiracy Theories' },
-  { value: 'old_school_wisdom', label: '👴 Old School Wisdom' }
+  { value: 'old_school_wisdom', label: '👴 Old School Wisdom' },
+  { value: 'unhinged_lunatic', label: '🤪 Unhinged Lunatic' }
 ];
 
 export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {

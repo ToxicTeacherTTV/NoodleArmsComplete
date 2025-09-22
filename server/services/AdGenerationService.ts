@@ -133,6 +133,20 @@ export class AdGenerationService {
       template: `So I got this piece of paper here that says I gotta read you some nonsense about {SPONSOR}. Apparently they do {PRODUCT}, which is supposed to help with... *squints at paper* ...{BENEFIT}. Look, I don't understand any of this new-age mumbo jumbo, but my sister-in-law dragged me to one of these places once, and she seemed less miserable afterward. Could be coincidence, could be the placebo effect, could be aliens - who knows? If you're into this spiritual whatever stuff, go check 'em out. Just don't expect me to understand why.`,
       italianFlavor: "medium",
       personalityTags: ["confused_endorsement", "reluctant_reader", "family_pressure"]
+    },
+    {
+      name: "Unhinged Rant Special",
+      category: "general",
+      template: `LISTEN UP YOU BEAUTIFUL DISASTERS! {SPONSOR} just changed my entire worldview about {PRODUCT}! I was sittin' there, mindin' my own business, when BAM! {BENEFIT}! Now I'm out here tellin' EVERYONE about this place because my brain is MELTING with how good this stuff is! My neighbor's dog even looks at me different now! Call {SPONSOR} right NOW before the government realizes what they're doin' and shuts 'em down! THIS IS NOT A DRILL! I'M LITERALLY VIBRATING WITH EXCITEMENT!`,
+      italianFlavor: "heavy",
+      personalityTags: ["unhinged_lunatic", "overly_excited", "conspiracy_adjacent"]
+    },
+    {
+      name: "Chaotic Energy Explosion",
+      category: "general", 
+      template: `OH MY GOD OH MY GOD OH MY GOD! You guys! {SPONSOR} is absolutely DESTROYING the competition with their {PRODUCT}! I can't even - I LITERALLY CAN'T EVEN! {BENEFIT} and now I'm seeing colors that don't exist! My cousin Vinny called me yesterday screaming about how his life changed after using their stuff! WE'RE ALL GOING CRAZY OVER HERE! If you don't call {SPONSOR} in the next ten minutes I will personally come to your house and explain why you're making a HUGE mistake! DON'T TEST ME!`,
+      italianFlavor: "extreme",
+      personalityTags: ["unhinged_lunatic", "manic_energy", "family_chaos"]
     }
   ];
 
