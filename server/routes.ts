@@ -215,7 +215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Chat routes
   app.post('/api/chat', async (req, res) => {
     try {
-      const { message, conversationId } = req.body;
+      const { message, conversationId, mode } = req.body;
       
       if (!message || !conversationId) {
         return res.status(400).json({ error: 'Message and conversation ID required' });
@@ -257,13 +257,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get enhanced lore context (includes extracted knowledge from memories)
       const loreContext = await MemoryAnalyzer.getEnhancedLoreContext(activeProfile.id);
 
-      // Generate AI response with lore context
+      // Generate AI response with lore context and mode awareness
       const response = await anthropicService.generateResponse(
         message,
         activeProfile.coreIdentity,
         relevantMemories,
         relevantDocs,
-        loreContext
+        loreContext,
+        mode
       );
 
       // Store the AI response

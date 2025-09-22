@@ -44,7 +44,8 @@ class AnthropicService {
     coreIdentity: string,
     relevantMemories: Array<MemoryEntry & { parentStory?: MemoryEntry }>,
     relevantDocs: any[] = [],
-    loreContext?: string
+    loreContext?: string,
+    mode?: string
   ): Promise<AIResponse> {
     const startTime = Date.now();
 
@@ -83,9 +84,27 @@ class AnthropicService {
         contextPrompt += `\n\n${loreContext}`;
       }
 
+      // Add mode context so Nicky knows what format he's in
+      let modeContext = "";
+      if (mode) {
+        switch (mode) {
+          case 'STREAMING':
+            modeContext = "\n\n🔴 STREAMING MODE: You are currently in a LIVE STREAM session. Respond as if you're live streaming to viewers on Twitch/YouTube. Reference the stream, viewers, chat, and streaming context appropriately.";
+            break;
+          case 'PODCAST':
+            modeContext = "\n\n🎧 PODCAST MODE: You are currently recording a podcast episode. Reference episodes, podcast format, and audio content appropriately.";
+            break;
+          case 'DISCORD':
+            modeContext = "\n\n💬 DISCORD MODE: You are currently in a Discord server chat. Respond as if you're chatting in a Discord channel with server members.";
+            break;
+          default:
+            modeContext = "";
+        }
+      }
+
       // Get current chaos state and personality modifier
       const chaosModifier = this.chaosEngine.getPersonalityModifier();
-      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}`;
+      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}${modeContext}`;
 
       // Enhanced system prompt with chaos personality
       const enhancedCoreIdentity = `${coreIdentity}\n\n${chaosModifier}`;
