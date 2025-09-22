@@ -119,6 +119,20 @@ export class AdGenerationService {
       template: `Back in my day, we didn't need fancy advertisements to know quality when we saw it. {SPONSOR} is one of the few places left that actually understands this. Their {PRODUCT} works, period. {BENEFIT}! No bells, no whistles, no stupid jingles - just results. If my arthritis-ridden hands can handle orderin' from these people, so can you. Now get off my lawn and go buy their stuff.`,
       italianFlavor: "light",
       personalityTags: ["old_school_wisdom", "no_nonsense", "quality_over_flash"]
+    },
+    {
+      name: "Skeptical Alternative BS",
+      category: "alternative",
+      template: `Alright, so apparently I gotta tell ya about {SPONSOR} now. Look, do I believe in this {PRODUCT} crap? Hell no. But they're payin' for this ad, so here we go. They claim {BENEFIT}, which sounds like a load of garbage to me, but hey - my cousin Sal swears by this stuff, and he's only slightly less crazy than the rest of my family. If you're the type of person who thinks crystals fix your problems instead of therapy, knock yourself out. Call {SPONSOR} or whatever. Just don't blame me when your chakras are still outta whack.`,
+      italianFlavor: "heavy",
+      personalityTags: ["reluctant_helper", "skeptical", "family_endorsement"]
+    },
+    {
+      name: "Mystical Nonsense Reader",
+      category: "alternative", 
+      template: `So I got this piece of paper here that says I gotta read you some nonsense about {SPONSOR}. Apparently they do {PRODUCT}, which is supposed to help with... *squints at paper* ...{BENEFIT}. Look, I don't understand any of this new-age mumbo jumbo, but my sister-in-law dragged me to one of these places once, and she seemed less miserable afterward. Could be coincidence, could be the placebo effect, could be aliens - who knows? If you're into this spiritual whatever stuff, go check 'em out. Just don't expect me to understand why.`,
+      italianFlavor: "medium",
+      personalityTags: ["confused_endorsement", "reluctant_reader", "family_pressure"]
     }
   ];
 
