@@ -350,8 +350,11 @@ export class ContentSuggestionService {
    * Make topics more specific and personal using Nicky's lexicon
    */
   private personalizeTopic(topic: string, facetName: string, isMultiple: boolean): string {
+    console.log(`🔍 DEBUG personalizeTopic: topic="${topic}", facetName="${facetName}", isMultiple=${isMultiple}`);
+    
     // If topic is already specific enough, keep it
     if (topic.length > 20 && !this.isGenericTopic(topic)) {
+      console.log(`✅ Topic already specific enough: "${topic}"`);
       return topic;
     }
     
@@ -415,7 +418,11 @@ export class ContentSuggestionService {
       'Why everything\'s backwards these days'
     ];
     
-    return facetTopics[Math.floor(Math.random() * facetTopics.length)];
+    console.log(`🎯 Available topics for facet "${facetName}":`, facetTopics);
+    const selectedTopic = facetTopics[Math.floor(Math.random() * facetTopics.length)];
+    console.log(`✅ Selected topic: "${selectedTopic}"`);
+    
+    return selectedTopic;
   }
   
   /**
