@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 
 interface UseElevenLabsSpeechReturn {
-  speak: (text: string, onEnd?: () => void) => void;
+  speak: (text: string, emotionProfile?: string, onEnd?: () => void) => void;
   stop: () => void;
   pause: () => void;
   resume: () => void;
@@ -20,9 +20,10 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
   const [isPaused, setIsPaused] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const onEndCallbackRef = useRef<(() => void) | undefined>();
-  const speechQueue = useRef<string[]>([]);
+  const speechQueue = useRef<Array<{ text: string; emotionProfile?: string }>>([]);
   const isProcessingRef = useRef(false);
   const lastSpokenTextRef = useRef<string>('');
+  const lastEmotionProfileRef = useRef<string | undefined>();
   const canReplayRef = useRef(false);
   const lastAudioBlobRef = useRef<Blob | null>(null);
   const lastAudioUrlRef = useRef<string | null>(null);
@@ -36,20 +37,27 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
       return;
     }
 
-    const text = speechQueue.current.shift();
-    if (!text) return;
+    const speechItem = speechQueue.current.shift();
+    if (!speechItem) return;
 
-    // Store the text being spoken for replay
-    lastSpokenTextRef.current = text;
+    // Store the text and emotion profile being spoken for replay
+    lastSpokenTextRef.current = speechItem.text;
+    lastEmotionProfileRef.current = speechItem.emotionProfile;
     canReplayRef.current = true;
     
     isProcessingRef.current = true;
     setIsSpeaking(true);
 
     try {
-      const response = await apiRequest('POST', '/api/speech/synthesize', {
-        text: text
-      });
+      const requestBody: { text: string; emotionProfile?: string } = {
+        text: speechItem.text
+      };
+      
+      if (speechItem.emotionProfile) {
+        requestBody.emotionProfile = speechItem.emotionProfile;
+      }
+      
+      const response = await apiRequest('POST', '/api/speech/synthesize', requestBody);
 
       if (!response.ok) {
         throw new Error('Failed to synthesize speech');
@@ -127,7 +135,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     }
   }, [isSupported]);
 
-  const speak = useCallback((text: string, onEnd?: () => void) => {
+  const speak = useCallback((text: string, emotionProfile?: string, onEnd?: () => void) => {
     if (!isSupported || !text.trim()) return;
 
     // Store the callback
@@ -136,7 +144,10 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     }
 
     // Add to queue
-    speechQueue.current.push(text.trim());
+    speechQueue.current.push({ 
+      text: text.trim(), 
+      emotionProfile 
+    });
     
     // Start processing if not already doing so
     if (!isProcessingRef.current) {
@@ -192,7 +203,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
 
   const replay = useCallback(() => {
     if (!isSupported || !lastSpokenTextRef.current.trim()) return;
-    speak(lastSpokenTextRef.current);
+    speak(lastSpokenTextRef.current, lastEmotionProfileRef.current);
   }, [isSupported, speak]);
 
   return {

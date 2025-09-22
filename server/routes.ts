@@ -306,7 +306,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Speech synthesis route
   app.post('/api/speech/synthesize', async (req, res) => {
     try {
-      const { text } = req.body;
+      const { text, emotionProfile } = req.body;
       
       if (!text) {
         return res.status(400).json({ error: 'Text is required' });
@@ -324,7 +324,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const audioBuffer = await elevenlabsService.synthesizeSpeech(text, voiceSettings);
+      // Use emotion profile if provided, otherwise use default voice settings
+      const audioBuffer = await elevenlabsService.synthesizeSpeech(text, emotionProfile, voiceSettings);
       
       res.setHeader('Content-Type', 'audio/mpeg');
       res.setHeader('Content-Length', audioBuffer.length);
@@ -3060,6 +3061,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Failed to get ad stats:', error);
       res.status(500).json({ error: 'Failed to get ad stats' });
+    }
+  });
+
+  // Get emotion profile for ad's personality facet
+  app.get('/api/ads/:id/emotion-profile', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const ad = await storage.getPrerollAdById(id);
+      if (!ad) {
+        return res.status(404).json({ error: 'Ad not found' });
+      }
+      
+      const emotionProfile = adGenerationService.getEmotionProfileForFacet(ad.personalityFacet);
+      res.json({ 
+        emotionProfile,
+        personalityFacet: ad.personalityFacet,
+        availableProfiles: elevenlabsService.getEmotionProfiles()
+      });
+    } catch (error) {
+      console.error('Failed to get emotion profile:', error);
+      res.status(500).json({ error: 'Failed to get emotion profile' });
     }
   });
 

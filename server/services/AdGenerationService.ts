@@ -28,6 +28,37 @@ export class AdGenerationService {
   private recentSponsorNames: string[] = [];
   private maxRecentNames = 50;
 
+  // Map personality facets to emotion profiles for voice synthesis
+  private readonly PERSONALITY_TO_EMOTION_MAP: Record<string, string> = {
+    grumpy_mentor: 'grumpy',
+    family_business: 'warm',
+    italian_pride: 'salesman',
+    dbd_expert: 'excited',
+    reluctant_helper: 'reluctant',
+    conspiracy_theories: 'conspiratorial',
+    old_school_wisdom: 'deadpan',
+    unhinged_lunatic: 'manic',
+    authentic_recommendation: 'warm',
+    family_approval: 'warm',
+    anti_establishment: 'conspiratorial',
+    urgent_warning: 'excited',
+    family_values: 'warm',
+    nostalgia: 'warm',
+    personal_connection: 'warm',
+    gaming_metaphors: 'excited',
+    no_nonsense: 'deadpan',
+    quality_over_flash: 'grumpy',
+    skeptical: 'reluctant',
+    family_endorsement: 'reluctant',
+    confused_endorsement: 'reluctant',
+    reluctant_reader: 'reluctant',
+    family_pressure: 'grumpy',
+    overly_excited: 'manic',
+    conspiracy_adjacent: 'conspiratorial',
+    manic_energy: 'manic',
+    family_chaos: 'manic'
+  };
+
   // Validate sponsor name against banned patterns
   private isValidSponsorName(sponsorName: string): boolean {
     // Ban patterns: Salvatore, "X and Y", "X & Y"
@@ -480,6 +511,17 @@ Return JSON:
   // Toggle favorite status
   async toggleFavorite(adId: string, isFavorite: boolean): Promise<void> {
     await storage.updatePrerollAd(adId, { isFavorite });
+  }
+
+  // Get emotion profile for personality facet
+  getEmotionProfileForFacet(personalityFacet?: string): string | undefined {
+    if (!personalityFacet) return undefined;
+    return this.PERSONALITY_TO_EMOTION_MAP[personalityFacet];
+  }
+
+  // Get available emotion profiles
+  getAvailableEmotionProfiles(): Record<string, string> {
+    return this.PERSONALITY_TO_EMOTION_MAP;
   }
 
   // Get ad statistics
