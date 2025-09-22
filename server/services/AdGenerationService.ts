@@ -327,14 +327,26 @@ REQUIRED: Use ONE of these exact formats:
 4. "[City/Location] [Weird Thing]" - Example: "Newark Banana Emergency", "Downtown Confusion Services"
 5. Random company: "Banana Republic Thoughts", "Microsoft My Life", "Amazon My Problems"
 
-EMOTION TAGS (MANDATORY): [sighs] [grumpy] [reluctant] [confused] [deadpan] [clears throat]
+EMOTION TAGS (AVAILABLE): [grumpy] [reluctant] [confused] [deadpan] [clears throat] [annoyed] [matter-of-fact] [under-the-breath] [exasperated]
 
 CREATE: ~2500 character script with emotion tags throughout
 
 CATEGORY: ${categoryDesc}
 ${facetDesc ? `PERSONALITY: ${facetDesc}` : ''}
 
-START LIKE: "[sighs] Alright, so [reluctant] I gotta tell ya about [deadpan] The Sock Conspiracy..."
+OPENING VARIETY (Choose ONE, vary each time):
+1. "[annoyed] Listen up, mooks!"
+2. "[deadpan] So apparently I gotta tell ya about..."
+3. "[grumpy] Ya know what's been pissin' me off?"
+4. "[matter-of-fact] Alright, here's the deal with..."
+5. "[under-the-breath] Can't believe I'm doin' this..."
+6. "[reluctant] They're makin' me talk about..."
+7. "[clears throat] Ey, you beautiful disasters!"
+8. "Look, I don't usually do this, but..."
+9. "[exasperated] My cousin Sal told me to mention..."
+10. "This is gonna sound crazy, but..."
+
+NO SIGHING at the start - save [sighs] for MIDDLE of ads only, max 20% usage.
 
 Return JSON:
 {
