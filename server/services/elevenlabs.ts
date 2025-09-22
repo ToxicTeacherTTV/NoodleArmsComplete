@@ -23,7 +23,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   grumpy: {
     name: "Grumpy",
     settings: {
-      stability: 0.25,
+      stability: 0.15,
       similarity_boost: 0.85,
       style: 0.6,
       use_speaker_boost: true
@@ -37,7 +37,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   conspiratorial: {
     name: "Conspiratorial",
     settings: {
-      stability: 0.35,
+      stability: 0.15,
       similarity_boost: 0.75,
       style: 0.8,
       use_speaker_boost: true
@@ -51,7 +51,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   reluctant: {
     name: "Reluctant",
     settings: {
-      stability: 0.45,
+      stability: 0.15,
       similarity_boost: 0.7,
       style: 0.4,
       use_speaker_boost: true
@@ -65,7 +65,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   warm: {
     name: "Warm",
     settings: {
-      stability: 0.55,
+      stability: 0.15,
       similarity_boost: 0.8,
       style: 0.5,
       use_speaker_boost: true
@@ -107,7 +107,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   deadpan: {
     name: "Deadpan",
     settings: {
-      stability: 0.65,
+      stability: 0.15,
       similarity_boost: 0.85,
       style: 0.3,
       use_speaker_boost: true
@@ -121,7 +121,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   salesman: {
     name: "Salesman",
     settings: {
-      stability: 0.35,
+      stability: 0.15,
       similarity_boost: 0.75,
       style: 0.7,
       use_speaker_boost: true
