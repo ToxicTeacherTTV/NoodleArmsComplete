@@ -214,21 +214,14 @@ export class DiscordBotService {
           this.recentResponses.add(messageKey);
           setTimeout(() => this.recentResponses?.delete(messageKey), 5000); // Clean up after 5 seconds
           
-          // Send response to Discord with retry logic
+          // Send response to Discord with single send method
           try {
             await message.reply(response);
           } catch (discordError) {
             console.error(`❌ Discord API error sending message:`, discordError);
-            // Try alternative sending method
-            try {
-              if ('send' in message.channel) {
-                await message.channel.send(`<@${message.author.id}> ${response}`);
-              }
-            } catch (fallbackError) {
-              console.error(`❌ Discord fallback send also failed:`, fallbackError);
-              // Log the failure but don't crash
-              return;
-            }
+            // Don't try fallback to prevent duplicate messages
+            // Log the failure but don't crash
+            return;
           }
           
           // Log the conversation with error handling
