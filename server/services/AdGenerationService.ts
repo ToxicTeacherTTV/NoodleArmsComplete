@@ -179,6 +179,10 @@ export class AdGenerationService {
       ? this.FAKE_SPONSORS.filter(s => s.category === category)
       : this.FAKE_SPONSORS;
     
+    if (availableSponsors.length === 0) {
+      throw new Error(`No sponsors available for category: ${category}`);
+    }
+    
     const sponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)];
     const product = sponsor.products[Math.floor(Math.random() * sponsor.products.length)];
     
