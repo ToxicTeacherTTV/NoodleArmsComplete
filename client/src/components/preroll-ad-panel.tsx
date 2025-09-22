@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useElevenLabsSpeech } from "@/hooks/use-elevenlabs-speech";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   Megaphone, 
@@ -20,7 +21,10 @@ import {
   Sparkles,
   Dice3,
   Timer,
-  Trophy
+  Trophy,
+  Pause,
+  Download,
+  RotateCcw
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -79,6 +83,9 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
   const [selectedFacet, setSelectedFacet] = useState<string>('');
   const [viewingAd, setViewingAd] = useState<PrerollAd | null>(null);
   const [generatingAd, setGeneratingAd] = useState(false);
+
+  // Audio functionality
+  const { speak, isSpeaking, isPaused, stop, pause, resume, replay, canReplay, saveAudio, canSave } = useElevenLabsSpeech();
 
   // Fetch ads
   const { data: ads = [], isLoading } = useQuery<PrerollAd[]>({
@@ -424,14 +431,55 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
                                   onRate={(rating) => handleRating(ad.id, rating)}
                                   adId={ad.id}
                                 />
-                                <Button
-                                  onClick={() => markUsedMutation.mutate(ad.id)}
-                                  size="sm"
-                                  data-testid={`button-use-${ad.id}`}
-                                >
-                                  <Play className="h-3 w-3 mr-1" />
-                                  Mark as Used
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                  {/* Audio Controls */}
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      onClick={() => {
+                                        if (isSpeaking && !isPaused) {
+                                          pause();
+                                        } else if (isPaused) {
+                                          resume();
+                                        } else {
+                                          speak(ad.adScript);
+                                        }
+                                      }}
+                                      size="sm"
+                                      variant="outline"
+                                      data-testid={`button-play-${ad.id}`}
+                                    >
+                                      {isSpeaking ? (isPaused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />) : <Play className="h-3 w-3" />}
+                                    </Button>
+                                    {canReplay && (
+                                      <Button
+                                        onClick={replay}
+                                        size="sm"
+                                        variant="outline"
+                                        data-testid={`button-replay-${ad.id}`}
+                                      >
+                                        <RotateCcw className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                    {canSave && (
+                                      <Button
+                                        onClick={() => saveAudio(`${ad.sponsorName.replace(/[^a-zA-Z0-9]/g, '-')}-ad.mp3`)}
+                                        size="sm"
+                                        variant="outline"
+                                        data-testid={`button-save-${ad.id}`}
+                                      >
+                                        <Download className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                  <Button
+                                    onClick={() => markUsedMutation.mutate(ad.id)}
+                                    size="sm"
+                                    data-testid={`button-use-${ad.id}`}
+                                  >
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    Mark as Used
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           </DialogContent>

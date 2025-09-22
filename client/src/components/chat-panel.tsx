@@ -9,13 +9,15 @@ interface ChatPanelProps {
   appMode?: AppMode;
   onPlayAudio?: (content: string) => void;
   onReplayAudio?: () => void;
+  onSaveAudio?: (filename?: string) => void;
   isPlayingAudio?: boolean;
   isPausedAudio?: boolean;
   canReplay?: boolean;
+  canSave?: boolean;
   onTextSelection?: () => void;
 }
 
-export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', onPlayAudio, onReplayAudio, isPlayingAudio = false, isPausedAudio = false, canReplay = false, onTextSelection }: ChatPanelProps) {
+export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', onPlayAudio, onReplayAudio, onSaveAudio, isPlayingAudio = false, isPausedAudio = false, canReplay = false, canSave = false, onTextSelection }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -163,6 +165,16 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                               >
                                 <i className="fas fa-redo text-xs"></i>
                                 <span className="text-xs">Replay</span>
+                              </button>
+                            )}
+                            {onSaveAudio && canSave && (
+                              <button
+                                onClick={() => onSaveAudio(`nicky-message-${message.id}.mp3`)}
+                                className="flex items-center space-x-1 text-accent hover:text-accent/80 transition-colors"
+                                data-testid={`save-audio-${message.id}`}
+                              >
+                                <i className="fas fa-download text-xs"></i>
+                                <span className="text-xs">Save</span>
                               </button>
                             )}
                           </div>

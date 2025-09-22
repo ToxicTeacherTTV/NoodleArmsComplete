@@ -68,7 +68,7 @@ export default function JazzDashboard() {
   // Custom hooks
   const { isListening, startListening, stopListening, transcript, interimTranscript, resetTranscript, error: speechError } = useSpeechRecognition();
   const { speak: speakBrowser, isSpeaking: isSpeakingBrowser, stop: stopSpeakingBrowser } = useSpeechSynthesis();
-  const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopSpeakingElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs, replay: replayElevenLabs, canReplay: canReplayElevenLabs } = useElevenLabsSpeech();
+  const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopSpeakingElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs, replay: replayElevenLabs, canReplay: canReplayElevenLabs, saveAudio: saveAudioElevenLabs, canSave: canSaveElevenLabs } = useElevenLabsSpeech();
   const voiceActivity = useVoiceActivity(isListening);
 
   // Always use ElevenLabs when available and voice output is enabled, fall back to browser if needed
@@ -373,9 +373,15 @@ export default function JazzDashboard() {
                   replayLastAudio();
                 }
               }}
+              onSaveAudio={(filename?: string) => {
+                if (appMode === 'PODCAST') {
+                  saveAudioElevenLabs(filename);
+                }
+              }}
               isPlayingAudio={appMode === 'PODCAST' ? isSpeakingElevenLabs && !isPausedElevenLabs : isSpeaking && !isPaused}
               isPausedAudio={appMode === 'PODCAST' ? isPausedElevenLabs : isPaused}
               canReplay={appMode === 'PODCAST' ? canReplayElevenLabs : canReplay}
+              canSave={appMode === 'PODCAST' ? canSaveElevenLabs : false}
               onTextSelection={handleTextSelection}
             />
           </div>

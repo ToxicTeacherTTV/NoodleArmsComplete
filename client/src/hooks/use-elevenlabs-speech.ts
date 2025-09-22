@@ -7,10 +7,12 @@ interface UseElevenLabsSpeechReturn {
   pause: () => void;
   resume: () => void;
   replay: () => void;
+  saveAudio: (filename?: string) => void;
   isSpeaking: boolean;
   isPaused: boolean;
   isSupported: boolean;
   canReplay: boolean;
+  canSave: boolean;
 }
 
 export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
@@ -22,6 +24,9 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
   const isProcessingRef = useRef(false);
   const lastSpokenTextRef = useRef<string>('');
   const canReplayRef = useRef(false);
+  const lastAudioBlobRef = useRef<Blob | null>(null);
+  const lastAudioUrlRef = useRef<string | null>(null);
+  const canSaveRef = useRef(false);
 
   const isSupported = typeof window !== 'undefined' && typeof Audio !== 'undefined';
 
@@ -53,6 +58,14 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       
+      // Store blob and URL for saving
+      lastAudioBlobRef.current = audioBlob;
+      if (lastAudioUrlRef.current) {
+        URL.revokeObjectURL(lastAudioUrlRef.current);
+      }
+      lastAudioUrlRef.current = audioUrl;
+      canSaveRef.current = true;
+      
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
 
@@ -61,7 +74,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
         setIsPaused(false);
         isProcessingRef.current = false;
         audioRef.current = null;
-        URL.revokeObjectURL(audioUrl);
+        // Don't revoke URL immediately - keep it for saving
         
         if (onEndCallbackRef.current) {
           onEndCallbackRef.current();
@@ -86,7 +99,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
         setIsPaused(false);
         isProcessingRef.current = false;
         audioRef.current = null;
-        URL.revokeObjectURL(audioUrl);
+        // Don't revoke URL on error - keep it for saving
         
         if (onEndCallbackRef.current) {
           onEndCallbackRef.current();
@@ -131,6 +144,27 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     }
   }, [isSupported, processQueue]);
 
+  const saveAudio = useCallback((filename?: string) => {
+    if (!isSupported || !lastAudioBlobRef.current || !canSaveRef.current) return;
+
+    // Generate filename based on spoken text or default
+    const defaultFilename = lastSpokenTextRef.current 
+      ? `audio-${lastSpokenTextRef.current.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '-')}.mp3`
+      : `audio-${Date.now()}.mp3`;
+    
+    const finalFilename = filename || defaultFilename;
+
+    // Create download link
+    const downloadUrl = URL.createObjectURL(lastAudioBlobRef.current);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = downloadUrl;
+    downloadLink.download = finalFilename;
+    downloadLink.click();
+    
+    // Clean up the download URL
+    URL.revokeObjectURL(downloadUrl);
+  }, [isSupported]);
+
   const stop = useCallback(() => {
     if (!isSupported) return;
 
@@ -167,9 +201,11 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     pause,
     resume,
     replay,
+    saveAudio,
     isSpeaking,
     isPaused,
     isSupported,
     canReplay: canReplayRef.current,
+    canSave: canSaveRef.current,
   };
 }
