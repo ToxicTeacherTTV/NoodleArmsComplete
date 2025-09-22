@@ -558,6 +558,38 @@ export const pendingContent = pgTable('pending_content', {
   metadata: json('metadata').default(sql`'{}'::json`) // Store upvotes, author, etc.
 });
 
+// Pre-Roll Ad Generation Tables
+export const adTemplates = pgTable('ad_templates', {
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar('name', { length: 100 }).notNull(),
+  category: varchar('category', { length: 50 }).notNull(), // 'food', 'health', 'tech', 'home', 'automotive'
+  template: text('template').notNull(), // Template with {SPONSOR}, {PRODUCT}, {BENEFIT} placeholders
+  italianFlavor: varchar('italian_flavor', { length: 20 }).default('medium'), // 'light', 'medium', 'heavy'
+  personalityTags: text('personality_tags').array().default(sql`ARRAY[]::text[]`), // Which facets work best
+  isActive: boolean('is_active').default(true),
+  usageCount: integer('usage_count').default(0),
+  createdAt: timestamp('created_at').default(sql`now()`),
+  updatedAt: timestamp('updated_at').default(sql`now()`),
+});
+
+export const prerollAds = pgTable('preroll_ads', {
+  id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar('profile_id').references(() => profiles.id).notNull(),
+  templateId: varchar('template_id').references(() => adTemplates.id).notNull(),
+  sponsorName: varchar('sponsor_name', { length: 100 }).notNull(),
+  productName: varchar('product_name', { length: 100 }).notNull(),
+  category: varchar('category', { length: 50 }).notNull(),
+  adScript: text('ad_script').notNull(), // The generated ad content
+  personalityFacet: text('personality_facet'), // Which facet was active during generation
+  duration: integer('duration'), // Estimated duration in seconds
+  lastUsed: timestamp('last_used'),
+  usageCount: integer('usage_count').default(0),
+  rating: integer('rating'), // User can rate ads 1-5
+  isFavorite: boolean('is_favorite').default(false),
+  generatedAt: timestamp('generated_at').default(sql`now()`),
+  updatedAt: timestamp('updated_at').default(sql`now()`),
+});
+
 // Relations for Discord tables
 export const discordServersRelations = relations(discordServers, ({ one, many }) => ({
   profile: one(profiles, {
@@ -658,6 +690,19 @@ export const insertPendingContentSchema = createInsertSchema(pendingContent).omi
   extractedAt: true,
 });
 
+// Insert schemas for Pre-Roll Ad tables
+export const insertAdTemplateSchema = createInsertSchema(adTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPrerollAdSchema = createInsertSchema(prerollAds).omit({
+  id: true,
+  generatedAt: true,
+  updatedAt: true,
+});
+
 // Types for Discord tables
 export type DiscordServer = typeof discordServers.$inferSelect;
 export type InsertDiscordServer = z.infer<typeof insertDiscordServerSchema>;
@@ -671,6 +716,10 @@ export type AutomatedSource = typeof automatedSources.$inferSelect;
 export type InsertAutomatedSource = z.infer<typeof insertAutomatedSourceSchema>;
 export type PendingContent = typeof pendingContent.$inferSelect;
 export type InsertPendingContent = z.infer<typeof insertPendingContentSchema>;
+export type AdTemplate = typeof adTemplates.$inferSelect;
+export type InsertAdTemplate = z.infer<typeof insertAdTemplateSchema>;
+export type PrerollAd = typeof prerollAds.$inferSelect;
+export type InsertPrerollAd = z.infer<typeof insertPrerollAdSchema>;
 
 // Dynamic behavior types
 export type EffectiveBehavior = {
