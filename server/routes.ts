@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, insertDiscordServerSchema, insertDiscordMemberSchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags } from "@shared/schema";
@@ -52,6 +52,55 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoint with system status
+  app.get('/api/health', async (req, res) => {
+    try {
+      const healthStatus = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        memory: {
+          used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+          total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+          rss: Math.round(process.memoryUsage().rss / 1024 / 1024)
+        },
+        services: {
+          database: false,
+          anthropic: Boolean(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY),
+          elevenlabs: Boolean(process.env.ELEVENLABS_API_KEY),
+          gemini: Boolean(process.env.GEMINI_API_KEY),
+          discord: Boolean(process.env.DISCORD_BOT_TOKEN)
+        }
+      };
+
+      // Test database connection
+      try {
+        await db.select().from(memoryEntries).limit(1);
+        healthStatus.services.database = true;
+      } catch (dbError) {
+        console.warn('Database health check failed:', dbError);
+      }
+
+      const hasIssues = !healthStatus.services.database || 
+                        !healthStatus.services.anthropic ||
+                        !healthStatus.services.gemini;
+      
+      if (hasIssues) {
+        healthStatus.status = 'degraded';
+        return res.status(200).json(healthStatus); // Still return 200 for monitoring
+      }
+
+      res.json(healthStatus);
+    } catch (error) {
+      console.error('Health check error:', error);
+      res.status(503).json({
+        status: 'unhealthy',
+        timestamp: new Date().toISOString(),
+        error: 'Internal server error'
+      });
+    }
+  });
+
   // Profile management routes
   app.get('/api/profiles', async (req, res) => {
     try {
@@ -337,7 +386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Multer error handling middleware
-  const handleMulterError = (err: any, req: Express.Request, res: Express.Response, next: any) => {
+  const handleMulterError = (err: any, req: Request, res: Response, next: NextFunction) => {
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
@@ -354,7 +403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Document upload and processing
-  app.post('/api/documents/upload', upload.single('document'), handleMulterError, async (req, res) => {
+  app.post('/api/documents/upload', upload.single('document'), handleMulterError, async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded or unsupported file type. Supported types: PDF, DOCX, TXT, MD' });
@@ -3073,7 +3122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Ad not found' });
       }
       
-      const emotionProfile = adGenerationService.getEmotionProfileForFacet(ad.personalityFacet);
+      const emotionProfile = adGenerationService.getEmotionProfileForFacet(ad.personalityFacet || undefined);
       res.json({ 
         emotionProfile,
         personalityFacet: ad.personalityFacet,
