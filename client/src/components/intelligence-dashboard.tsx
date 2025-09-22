@@ -152,7 +152,7 @@ export function IntelligenceDashboard() {
   // Orphan facts repair mutation
   const repairOrphansMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('/api/intelligence/repair-orphans', 'POST');
+      return apiRequest('POST', '/api/intelligence/repair-orphans');
     },
     onSuccess: (data: any) => {
       toast({
