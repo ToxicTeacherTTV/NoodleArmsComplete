@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import PrerollAdPanel from "@/components/preroll-ad-panel";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -62,6 +63,12 @@ export default function ProjectWorkspace() {
   const [editingIdea, setEditingIdea] = useState<ProjectIdea | null>(null);
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<{milestoneId: string, taskIndex: number, taskText: string} | null>(null);
+  
+  // Fetch active profile for Pre-Roll Ad Panel
+  const { data: activeProfile } = useQuery({
+    queryKey: ['/api/profiles/active'],
+    enabled: selectedTab === 'preroll-ads', // Only fetch when ads tab is selected
+  });
   
   // Mock data for now - would be connected to API later
   const [ideas, setIdeas] = useState<ProjectIdea[]>([
@@ -1033,7 +1040,7 @@ This represents the current state as of September 2025 with major personality im
 
         {/* Main Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview" data-testid="tab-overview">
               📊 Overview
             </TabsTrigger>
@@ -1045,6 +1052,9 @@ This represents the current state as of September 2025 with major personality im
             </TabsTrigger>
             <TabsTrigger value="notes" data-testid="tab-notes">
               📝 Notes ({notes.length})
+            </TabsTrigger>
+            <TabsTrigger value="preroll-ads" data-testid="tab-preroll-ads">
+              🎪 Pre-Roll Ads
             </TabsTrigger>
           </TabsList>
 
@@ -1441,6 +1451,11 @@ This represents the current state as of September 2025 with major personality im
                 </ScrollArea>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Pre-Roll Ads Tab */}
+          <TabsContent value="preroll-ads" className="mt-6">
+            <PrerollAdPanel profileId={activeProfile?.id} />
           </TabsContent>
         </Tabs>
       </div>
