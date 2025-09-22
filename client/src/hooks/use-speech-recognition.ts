@@ -40,8 +40,10 @@ export function useSpeechRecognition(
   const [interimTranscript, setInterimTranscript] = useState('');
   const [finalTranscript, setFinalTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   const recognitionRef = useRef<any>(null);
+  const maxRetries = 3;
   const isSupported = typeof window !== 'undefined' && 
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
@@ -78,6 +80,7 @@ export function useSpeechRecognition(
       console.log('✅ Speech recognition started');
       setIsListening(true);
       setError(null);
+      setRetryCount(0); // Reset retry count on successful start
     };
 
     recognition.onresult = (event: any) => {
@@ -108,24 +111,33 @@ export function useSpeechRecognition(
       setError(`Speech recognition error: ${event.error}`);
       setIsListening(false);
       
-      // Auto-restart on network errors
-      if (event.error === 'network' || event.error === 'no-speech') {
+      // Smart retry with exponential backoff
+      if ((event.error === 'network' || event.error === 'no-speech') && retryCount < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Exponential backoff, max 10s
+        console.log(`🔄 Retrying speech recognition in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+        
         setTimeout(() => {
           if (recognitionRef.current && !isListening) {
+            setRetryCount(prev => prev + 1);
             startListening();
           }
-        }, 1000);
+        }, delay);
+      } else if (retryCount >= maxRetries) {
+        console.warn('❌ Max speech recognition retries reached, stopping auto-restart');
+        setError(`Speech recognition failed after ${maxRetries} attempts. Please try manually.`);
       }
     };
 
     recognition.onend = () => {
       setIsListening(false);
       
-      // Auto-restart if we were supposed to be continuous
-      if (continuous && recognitionRef.current) {
+      // Auto-restart if we were supposed to be continuous (but respect retry limits)
+      if (continuous && recognitionRef.current && retryCount < maxRetries) {
         setTimeout(() => {
           startListening();
         }, 100);
+      } else if (retryCount >= maxRetries) {
+        console.warn('❌ Speech recognition onend: Max retries reached, not restarting');
       }
     };
 
