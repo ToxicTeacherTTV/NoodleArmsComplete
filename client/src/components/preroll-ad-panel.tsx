@@ -291,7 +291,6 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
                   <SelectValue placeholder="Random category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="" data-testid="category-random">🎲 Random Category</SelectItem>
                   {AD_CATEGORIES.map(cat => (
                     <SelectItem key={cat.value} value={cat.value} data-testid={`category-${cat.value}`}>
                       {cat.label}
@@ -308,7 +307,6 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
                   <SelectValue placeholder="Random facet" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="" data-testid="facet-random">🎲 Random Facet</SelectItem>
                   {PERSONALITY_FACETS.map(facet => (
                     <SelectItem key={facet.value} value={facet.value} data-testid={`facet-${facet.value}`}>
                       {facet.label}
