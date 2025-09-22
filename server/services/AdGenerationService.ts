@@ -271,7 +271,14 @@ NICKY'S PERSONALITY: Grumpy, reluctant, references family members, doesn't belie
 ${facetDesc ? `PERSONALITY FOCUS: ${facetDesc}` : ''}
 CATEGORY: ${categoryDesc}
 
-EXAMPLE: "[sighs] Alright, alright, so [reluctant] I gotta tell ya about [deadpan] Johnson's Tax Prep and Dog Grooming. [confused] I don't know what the hell this is about, but [grumpy] my cousin says..."
+BUSINESS NAME FORMATS (pick any style, NOT just "X and Y"):
+- Single weird service: "Mystical Pet Readings", "Uncle Tony's Questionable Investments"  
+- Company with weird focus: "Accurate-ish Accounting Solutions", "Maybe Legal Law Firm"
+- Normal name, weird service: "Smith & Associates Portal Maintenance", "Downtown Bigfoot Consulting"
+- Dating/family services: "Dads 4 Real", "Lonely Grandmas Network"
+- Completely random: "The Sauce Situation", "Interdimensional Steve's"
+
+EXAMPLE: "[sighs] Alright, alright, so [reluctant] I gotta tell ya about [deadpan] Mystical Pet Readings. [confused] I don't know what the hell this is about, but [grumpy] my cousin says..."
 
 Return JSON:
 {
