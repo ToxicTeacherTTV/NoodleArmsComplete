@@ -241,7 +241,8 @@ export function IntelligenceDashboard() {
   const handleRunStoryReconstruction = async () => {
     setIsReconstructing(true);
     try {
-      const result = await apiRequest('POST', '/api/memory/reconstruct', {}) as any;
+      const response = await apiRequest('POST', '/api/memory/reconstruct', {});
+      const result = await response.json();
       setReconstructionResult(result);
       toast({
         title: "Story Reconstruction Complete",
