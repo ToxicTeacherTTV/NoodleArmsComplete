@@ -24,6 +24,34 @@ const anthropic = new Anthropic({
 
 export class AdGenerationService {
   
+  // Track recent sponsor names to prevent repetition
+  private recentSponsorNames: string[] = [];
+  private maxRecentNames = 50;
+
+  // Validate sponsor name against banned patterns
+  private isValidSponsorName(sponsorName: string): boolean {
+    // Ban patterns: Salvatore, "X and Y", "X & Y"
+    const bannedPatterns = [
+      /\bSalvatore'?s?\b/i,
+      /\b(?:and|&)\b/i
+    ];
+    
+    return !bannedPatterns.some(pattern => pattern.test(sponsorName));
+  }
+
+  // Check if name was recently used
+  private isRecentlyUsed(sponsorName: string): boolean {
+    return this.recentSponsorNames.includes(sponsorName.toLowerCase());
+  }
+
+  // Add name to recent list
+  private addToRecentNames(sponsorName: string): void {
+    this.recentSponsorNames.unshift(sponsorName.toLowerCase());
+    if (this.recentSponsorNames.length > this.maxRecentNames) {
+      this.recentSponsorNames.pop();
+    }
+  }
+  
   // 🇮🇹 Fake Italian-American Sponsors
   private readonly FAKE_SPONSORS: FakeSponsor[] = [
     // Food & Restaurants
@@ -215,7 +243,7 @@ export class AdGenerationService {
     }
   }
 
-  // Generate completely original ad content using AI
+  // Generate completely original ad content using AI with validation and retry
   private async generateOriginalAdContent(category?: string, personalityFacet?: string): Promise<{
     sponsorName: string;
     productName: string;
@@ -288,7 +316,8 @@ Return JSON:
     const response = await anthropic.messages.create({
       model: DEFAULT_MODEL_STR,
       max_tokens: 800,
-      temperature: 0.9, // High creativity for original content
+      temperature: 0.6, // Reduced to prevent drift to familiar patterns
+      system: "You must output strict JSON and choose sponsorName matching one of these formats: 'The [Something]', '[Name]'s [Service]', '[Adjective] [Service]', '[Location] [Thing]', '[Random Company Name]'. Never include 'and' or '&' in sponsorName. Never use 'Salvatore' or 'Salvatore's'.",
       messages: [
         {
           role: 'user',
@@ -303,18 +332,60 @@ Return JSON:
     // Clean up code blocks if AI returns them
     textContent = textContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     
-    try {
-      const adContent = JSON.parse(textContent);
-      return {
-        sponsorName: adContent.sponsorName || 'Unknown Sponsor',
-        productName: adContent.productName || 'Mystery Product',
-        category: adContent.category || category || 'general',
-        adScript: adContent.adScript || 'Something went wrong with the ad generation...'
-      };
-    } catch (parseError) {
-      console.error('Failed to parse AI ad response:', parseError);
-      throw new Error('Failed to parse AI-generated ad content');
+    // Retry up to 3 times if name validation fails
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const adContent = JSON.parse(textContent);
+        const sponsorName = adContent.sponsorName || 'Unknown Sponsor';
+        
+        // Validate sponsor name
+        if (!this.isValidSponsorName(sponsorName)) {
+          console.warn(`🚫 Attempt ${attempt}: Invalid sponsor name "${sponsorName}" (contains banned patterns)`);
+          if (attempt < maxRetries) {
+            // Retry with stronger prompt
+            const retryPrompt = `CRITICAL: Generate a business name that does NOT contain "Salvatore", "and", or "&". Use formats like "The Pickle Crisis", "Gary's Regret Service", "Suspicious Lawn Care", "Newark Confusion Inc". Return JSON only.`;
+            const retryResponse = await anthropic.messages.create({
+              model: DEFAULT_MODEL_STR,
+              max_tokens: 800,
+              temperature: 0.5, // Even lower temperature for retry
+              system: "Generate only valid business names. BANNED: Salvatore, 'and', '&'. Required formats: 'The [Thing]', '[Name]'s [Service]', '[Adjective] [Service]'.",
+              messages: [{ role: 'user', content: retryPrompt }],
+            });
+            
+            const retryContent = Array.isArray(retryResponse.content) ? retryResponse.content[0] : retryResponse.content;
+            textContent = retryContent && 'text' in retryContent ? retryContent.text : '';
+            textContent = textContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+            continue;
+          }
+        }
+        
+        // Check if recently used
+        if (this.isRecentlyUsed(sponsorName)) {
+          console.warn(`🔄 Attempt ${attempt}: Recently used sponsor name "${sponsorName}"`);
+          if (attempt < maxRetries) continue;
+        }
+        
+        // Valid and unique name found
+        this.addToRecentNames(sponsorName);
+        console.log(`✅ Generated unique sponsor: "${sponsorName}"`);
+        
+        return {
+          sponsorName,
+          productName: adContent.productName || 'Mystery Product',
+          category: adContent.category || category || 'general',
+          adScript: adContent.adScript || 'Something went wrong with the ad generation...'
+        };
+      } catch (parseError) {
+        console.error(`Failed to parse AI ad response on attempt ${attempt}:`, parseError);
+        if (attempt === maxRetries) {
+          throw new Error('Failed to parse AI-generated ad content after retries');
+        }
+      }
     }
+    
+    throw new Error('Failed to generate valid ad content after retries');
   }
 
   // Generate contextual benefit based on category
