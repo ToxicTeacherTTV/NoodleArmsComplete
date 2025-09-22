@@ -21,6 +21,8 @@ export class DiscordBotService {
   }
 
   private setupEventHandlers() {
+    console.log(`🔧 Setting up Discord event handlers (handlersAttached: ${this.handlersAttached})`);
+    
     this.client.once(Events.ClientReady, (readyClient) => {
       console.log(`🤖 Discord bot ready! Logged in as ${readyClient.user.tag}`);
       this.isConnected = true;
@@ -30,12 +32,15 @@ export class DiscordBotService {
     });
 
     this.client.on(Events.MessageCreate, async (message: Message) => {
+      console.log(`🎯 MessageCreate event triggered for message ${message.id} from ${message.author.username}`);
       await this.handleMessage(message);
     });
 
     this.client.on(Events.Error, (error) => {
       console.error('🚨 Discord client error:', error);
     });
+    
+    console.log(`✅ Discord event handlers attached`);
   }
 
   public async start(token: string) {
