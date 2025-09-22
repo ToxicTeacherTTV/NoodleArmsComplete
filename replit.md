@@ -110,3 +110,70 @@ Preferred communication style: Simple, everyday language.
 - **nanoid**: Unique ID generation for entities
 - **pdf-parse**: PDF text extraction for document processing
 - **multer**: File upload handling middleware
+
+## Development Roadmap
+
+### ✅ Recently Completed
+- **Dynamic Personality System**: 10-facet personality rotation with anti-repetition guards
+- **Enhanced Reddit Collection**: 9 subreddits across 3 content streams (NNN, Word from Don, DbD)
+- **Anti-Repetition Engine**: N-gram detection, catchphrase limits, automatic regeneration
+- **Character Accuracy**: Little Italy origins, tax-purposes Jersey residence, terrible motivation coaching
+
+### 🚀 High Priority Features
+
+#### Content & Personality Enhancements
+- **Expanded Backstory Variety**: Develop more non-DbD stories (target 60-70% DbD, 30-40% other topics)
+  - Newark business ventures and family stories
+  - Italian-American cultural experiences
+  - Street wisdom and neighborhood tales
+- **Content Suggestion System**: Allow Nicky to propose podcast topics when asked
+  - "What should we talk about today?" feature
+  - Topic generation based on recent news and memories
+- **Enhanced Memory Persistence**: Better tracking of podcast topics, stories, and segments
+  - Tag conversations as "podcast content" for better recall
+  - Story completion tracking to avoid repeating same tales
+
+#### Discord Bot Improvements
+- **Proactive Messaging**: 2-3 automated messages per day maximum
+- **Configurable Triggers**: User-defined keywords and phrases for bot responses
+- **Smart Timing**: Avoid spamming, respect conversation flow
+- **Direct Mention Support**: Always respond when directly tagged
+
+#### Podcast Content Management
+- **Pre-Roll Ad Generator**: Dedicated section for Nicky's comedic ad content
+  - Fake sponsor integration with Italian-American twist
+  - Rotating ad templates with personality facets
+- **Content Organization Dashboard**: New podcast content section alongside Project Workspace and Brain Management
+  - Segment planning and tracking
+  - Content calendar integration
+  - Story bank with usage tracking
+
+### 🔧 Technical Optimizations
+
+#### Performance & Resource Management
+- **Smart Voice Generation**: Only auto-generate voice in streaming mode
+  - Manual voice generation in podcast mode to conserve credits
+  - Toggle-based voice synthesis control
+- **Response Optimization**: Maintain ~2500 character responses (current sweet spot)
+- **Memory Efficiency**: Optimize RAG retrieval for faster context loading
+
+#### User Experience Enhancements
+- **Mode-Specific Behaviors**: Enhanced streaming vs podcast mode differentiation
+  - Different personality intensity levels
+  - Tailored content suggestions per mode
+- **Live Reaction Support**: Optimized for real-time podcast interaction
+  - Faster response prioritization during live sessions
+  - Context-aware interruption handling
+
+### 📋 Future Considerations
+- **Content Scheduling**: Automated content preparation for upcoming episodes
+- **Audience Integration**: Community feedback incorporation into content streams
+- **Analytics Dashboard**: Track content performance and engagement
+- **Voice Modulation**: Dynamic voice characteristics based on personality facets
+- **Multi-Platform Integration**: Expand beyond Discord for broader reach
+
+### 🎯 Success Metrics
+- **Variety Score**: Reduced repetition in responses and story selection
+- **Content Quality**: Balance between entertainment value and authentic personality
+- **User Engagement**: Sustained conversation quality in both streaming and podcast modes
+- **Resource Efficiency**: Optimized API usage while maintaining response quality
