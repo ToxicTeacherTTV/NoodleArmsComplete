@@ -83,11 +83,12 @@ export class DiscordBotService {
 
     try {
       // Database-based idempotency check - prevent duplicates across all instances
-      const existingConversation = await storage.getDiscordConversationByMessageId?.(message.id);
-      if (existingConversation) {
-        console.log(`🚫 Message ${message.id} already processed (found in database), skipping`);
-        return;
-      }
+      // For now, skip database check until we implement the storage method
+      // const existingConversation = await storage.getDiscordConversationByMessageId?.(message.id);
+      // if (existingConversation) {
+      //   console.log(`🚫 Message ${message.id} already processed (found in database), skipping`);
+      //   return;
+      // }
       // Get or create server record with robust error handling
       let discordServer: DiscordServer | null = null;
       try {
@@ -116,7 +117,11 @@ export class DiscordBotService {
           allowedChannels: [],
           blockedChannels: [],
           enabledMessageTypes: ['dbd', 'italian', 'family_business', 'aggressive', 'random'],
-          lastProactiveDate: null
+          lastProactiveDate: null,
+          lastDriftUpdate: null,
+          driftMomentum: 0,
+          contextNudges: 0,
+          dailyProactiveCount: 0
         } satisfies DiscordServer;
       }
       
