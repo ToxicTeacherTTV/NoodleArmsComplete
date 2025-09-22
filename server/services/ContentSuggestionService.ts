@@ -314,35 +314,35 @@ export class ContentSuggestionService {
   }
 
   /**
-   * Get response style for each facet (conversational, not news-anchor)
+   * Get response style for each facet (UNHINGED and conspiratorial)
    */
   private getFacetResponseStyle(facetName: string): { opener: string; closer: string } {
     const styles: Record<string, { opener: string; closer: string }> = {
       'dbd_expert': {
-        opener: 'Alright, couple gaming angles cookin\':',
-        closer: 'Pick one and we\'ll dive deep into the mechanics.'
+        opener: 'YO, I got some EXPLOSIVE gaming theories that\'ll blow your mind:',
+        closer: 'Trust me, once you see it, you CAN\'T unsee it!'
       },
       'street_hustler': {
-        opener: 'Yo, got some angles from the neighborhood:',
-        closer: 'Real street knowledge right there.'
+        opener: 'Listen up, I got the REAL scoop from the streets:',
+        closer: 'This goes deeper than anyone wants to admit, capisce?'
       },
       'food_family': {
-        opener: 'Madonna mia, got some family stories brewing:',
-        closer: 'Nonna would be proud of these tales.'
+        opener: 'Madonna mia, the CONSPIRACY runs through everything, even our food:',
+        closer: 'They\'re trying to erase our heritage, but I got the RECEIPTS!'
       },
       'jersey_nostalgia': {
-        opener: 'Ay, couple stories from back home:',
-        closer: 'Little Italy memories hit different, you know?'
+        opener: 'THEY don\'t want you knowing what really happened back home:',
+        closer: 'This is the REAL history they buried!'
       },
       'pop_culture_critic': {
-        opener: 'Alright, got some hot takes ready:',
-        closer: 'Kids today just don\'t get it like we do.'
+        opener: 'The BRAINWASHING is everywhere, but I see through their lies:',
+        closer: 'Wake up! This isn\'t random - it\'s ALL CONNECTED!'
       }
     };
     
     return styles[facetName] || {
-      opener: 'Alright, couple spicy angles:',
-      closer: 'Pick one and we\'ll run with it.'
+      opener: 'OH, you want topics? I got THEORIES that\'ll change EVERYTHING:',
+      closer: 'Choose wisely - once you go down these rabbit holes, there\'s NO GOING BACK!'
     };
   }
 
@@ -355,32 +355,32 @@ export class ContentSuggestionService {
       return topic;
     }
     
-    // Transform generic topics into Nicky-specific ones
+    // Transform generic topics into UNHINGED Nicky conspiracies
     const personalizedTopics: Record<string, string[]> = {
       'dbd_expert': [
-        'That new killer everyone\'s crying about',
-        'Why survivors keep DCing against me',
-        'The bloodweb conspiracy nobody talks about'
+        'BHVR is literally rigging my matches - I got PROOF',
+        'The Entity is based on a REAL GOVERNMENT EXPERIMENT',
+        'Why Dead by Daylight is CIA mind control disguised as gaming'
       ],
       'street_hustler': [
-        'That Newark gas station incident',
-        'Why Wawa hoagies predict gas prices',
-        'The parking meter racket explained'
+        'The Newark gas station cartel nobody talks about',
+        'How Wawa is secretly controlling the tri-state economy',
+        'Why parking meters are actually government surveillance devices'
       ],
       'food_family': [
-        'Nonna\'s secret ingredient drama',
-        'Why modern pizza is an insult',
-        'That family dinner disaster'
+        'Big Tomato is destroying authentic Italian cuisine ON PURPOSE',
+        'Why modern "pizza" is a psychological warfare operation',
+        'The family recipe they DON\'T want you to know about'
       ],
       'jersey_nostalgia': [
-        'Little Italy vs. modern Jersey',
-        'Why they ruined the boardwalk',
-        'That Atlantic City poker lesson'
+        'How they systematically destroyed Little Italy to hide the TRUTH',
+        'The Atlantic City cover-up that goes ALL THE WAY TO THE TOP',
+        'Why Jersey Shore was actually a documentary about government experiments'
       ],
       'pop_culture_critic': [
-        'Why kids don\'t get good movies',
-        'The death of real music',
-        'Social media ruining everything'
+        'Hollywood\'s deliberate campaign to make people stupid',
+        'How streaming services are erasing REAL culture',
+        'The algorithm conspiracy that\'s destroying human creativity'
       ]
     };
     
