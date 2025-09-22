@@ -1,5 +1,6 @@
 import { storage } from '../storage.js';
 import { AdTemplate, PrerollAd, InsertAdTemplate, InsertPrerollAd } from '@shared/schema.js';
+import Anthropic from '@anthropic-ai/sdk';
 
 interface FakeSponsor {
   name: string;
@@ -14,6 +15,12 @@ interface AdGenerationRequest {
   personalityFacet?: string;
   forceNew?: boolean;
 }
+
+const DEFAULT_MODEL_STR = "claude-sonnet-4-20250514";
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || "",
+});
 
 export class AdGenerationService {
   
@@ -170,76 +177,132 @@ export class AdGenerationService {
     }
   }
 
-  // Generate a new pre-roll ad
+  // Generate a new pre-roll ad using AI
   async generateAd(request: AdGenerationRequest): Promise<PrerollAd> {
     const { profileId, category, personalityFacet } = request;
     
-    // Select random sponsor and template
-    const availableSponsors = category 
-      ? this.FAKE_SPONSORS.filter(s => s.category === category)
-      : this.FAKE_SPONSORS;
-    
-    if (availableSponsors.length === 0) {
-      throw new Error(`No sponsors available for category: ${category}`);
+    try {
+      // Generate completely original ad content using AI
+      const adContent = await this.generateOriginalAdContent(category, personalityFacet);
+      
+      // Estimate duration (rough calculation: ~150 words per minute speaking)
+      const wordCount = adContent.adScript.split(' ').length;
+      const estimatedDuration = Math.ceil((wordCount / 150) * 60); // seconds
+      
+      // Save the generated ad
+      const adData: InsertPrerollAd = {
+        profileId,
+        templateId: 'ai-generated', // No template used
+        sponsorName: adContent.sponsorName,
+        productName: adContent.productName,
+        category: adContent.category,
+        adScript: adContent.adScript,
+        personalityFacet: personalityFacet || 'general',
+        duration: estimatedDuration,
+        usageCount: 0,
+        rating: null,
+        isFavorite: false,
+        lastUsed: null
+      };
+      
+      const newAd = await storage.createPrerollAd(adData);
+      
+      console.log(`🎪 AI Generated pre-roll ad: "${adContent.sponsorName}" - ${estimatedDuration}s`);
+      return newAd;
+    } catch (error) {
+      console.error('❌ Failed to generate AI ad:', error);
+      throw new Error('Failed to generate ad');
     }
-    
-    const sponsor = availableSponsors[Math.floor(Math.random() * availableSponsors.length)];
-    const product = sponsor.products[Math.floor(Math.random() * sponsor.products.length)];
-    
-    // Get available templates
-    const templates = await storage.getAdTemplates();
-    const suitableTemplates = templates.filter(t => 
-      t.isActive && (
-        !category || 
-        t.category === category || 
-        t.category === 'general'
-      )
-    );
-    
-    if (suitableTemplates.length === 0) {
-      throw new Error('No suitable ad templates available');
-    }
-    
-    const template = suitableTemplates[Math.floor(Math.random() * suitableTemplates.length)];
-    
-    // Generate benefit based on category
-    const benefit = this.generateBenefit(sponsor.category, sponsor.italianTwist);
-    
-    // Fill in the template
-    const adScript = template.template
-      .replace(/\{SPONSOR\}/g, sponsor.name)
-      .replace(/\{PRODUCT\}/g, product)
-      .replace(/\{BENEFIT\}/g, benefit);
-    
-    // Estimate duration (rough calculation: ~150 words per minute speaking)
-    const wordCount = adScript.split(' ').length;
-    const estimatedDuration = Math.ceil((wordCount / 150) * 60); // seconds
-    
-    // Save the generated ad
-    const adData: InsertPrerollAd = {
-      profileId,
-      templateId: template.id,
-      sponsorName: sponsor.name,
-      productName: product,
-      category: sponsor.category,
-      adScript,
-      personalityFacet: personalityFacet || 'general',
-      duration: estimatedDuration,
-      usageCount: 0,
-      rating: null,
-      isFavorite: false,
-      lastUsed: null
+  }
+
+  // Generate completely original ad content using AI
+  private async generateOriginalAdContent(category?: string, personalityFacet?: string): Promise<{
+    sponsorName: string;
+    productName: string;
+    category: string;
+    adScript: string;
+  }> {
+    const categoryPrompts = {
+      food: "food & restaurants (Italian-American establishments, questionable ingredients, family recipes)",
+      health: "health & supplements (dubious medical products, miracle cures, suspicious treatments)",
+      home: "home & garden (questionable home improvement, weird household gadgets, suspect services)",
+      automotive: "automotive (sketchy car dealerships, no-questions-asked repairs, suspicious vehicles)",
+      finance: "finance & tax (creative accounting, offshore services, tax avoidance schemes)",
+      tech: "technology (untraceable devices, privacy tools, suspicious apps)",
+      alternative: "alternative services (psychic readings, memory recovery, chakra healing, conspiracy therapy)"
     };
-    
-    const newAd = await storage.createPrerollAd(adData);
-    
-    // Update template usage count
-    await storage.updateAdTemplate(template.id, {
-      usageCount: (template.usageCount || 0) + 1
+
+    const facetPrompts = {
+      grumpy_mentor: "Be grumpy and reluctant but ultimately helpful",
+      family_business: "Reference family members and Italian-American traditions",
+      italian_pride: "Heavy Italian-American accent and cultural references",
+      dbd_expert: "Include Dead by Daylight gaming references and metaphors",
+      reluctant_helper: "Act like you don't want to do this ad but have to",
+      conspiracy_theories: "Include paranoid theories about the government or corporations",
+      old_school_wisdom: "Grumpy old-fashioned wisdom mixed with modern problems",
+      unhinged_lunatic: "Go completely off the rails with manic energy and chaos"
+    };
+
+    const categoryDesc = category ? categoryPrompts[category as keyof typeof categoryPrompts] || "random business" : "random business";
+    const facetDesc = personalityFacet ? facetPrompts[personalityFacet as keyof typeof facetPrompts] || "" : "";
+
+    const prompt = `You are Nicky "Noodle Arms" A.I. Dente, a grumpy Italian-American from Little Italy (Newark) who now lives in Jersey "for tax purposes." You need to generate a completely original fake pre-roll advertisement.
+
+PERSONALITY: You're pissed off, reluctant, but oddly charismatic. You complain about everything but somehow still sell the product. You reference your crazy Italian family members constantly.
+
+${facetDesc ? `PERSONALITY FOCUS: ${facetDesc}` : ''}
+
+CATEGORY: Create a fake sponsor in the ${categoryDesc} category.
+
+INSTRUCTIONS:
+1. Generate a completely original fake sponsor company name (make it sound slightly suspicious or overly Italian-American)
+2. Create a specific product/service they offer 
+3. Write a 60-120 word ad script in Nicky's voice
+4. Make it sound like a real radio ad where the host just reads whatever copy they're given
+
+REQUIREMENTS:
+- Include Italian-American flavor but don't overdo it
+- Sound like you don't fully believe what you're saying (especially for alternative services)
+- Reference family members randomly
+- Make the sponsor name and product creative and original
+- Keep it appropriate but slightly sketchy-sounding
+- No explicit profanity but attitude is fine
+
+Return ONLY a JSON object with this exact structure:
+{
+  "sponsorName": "Original Fake Company Name",
+  "productName": "Specific Product/Service", 
+  "category": "${category || 'general'}",
+  "adScript": "Your complete ad script here in Nicky's voice"
+}`;
+
+    const response = await anthropic.messages.create({
+      model: DEFAULT_MODEL_STR,
+      max_tokens: 800,
+      temperature: 0.9, // High creativity for original content
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
     });
+
+    const content = Array.isArray(response.content) ? response.content[0] : response.content;
+    const textContent = content && 'text' in content ? content.text : '';
     
-    console.log(`🎪 Generated pre-roll ad: "${sponsor.name}" - ${estimatedDuration}s`);
-    return newAd;
+    try {
+      const adContent = JSON.parse(textContent);
+      return {
+        sponsorName: adContent.sponsorName || 'Unknown Sponsor',
+        productName: adContent.productName || 'Mystery Product',
+        category: adContent.category || category || 'general',
+        adScript: adContent.adScript || 'Something went wrong with the ad generation...'
+      };
+    } catch (parseError) {
+      console.error('Failed to parse AI ad response:', parseError);
+      throw new Error('Failed to parse AI-generated ad content');
+    }
   }
 
   // Generate contextual benefit based on category
