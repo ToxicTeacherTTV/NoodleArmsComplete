@@ -6,6 +6,7 @@ import { contentFilter } from './contentFilter.js';
 import { varietyController } from './VarietyController.js';
 import { ContentSuggestionService } from './ContentSuggestionService.js';
 import { storage } from '../storage.js';
+import { z } from 'zod';
 
 /*
 <important_code_snippet_instructions>
@@ -34,6 +35,13 @@ interface ConsolidatedMemory {
   content: string;
   importance: number;
 }
+
+// Zod schema for validating consolidated memories from AI
+const ConsolidatedMemorySchema = z.object({
+  type: z.enum(['FACT', 'PREFERENCE', 'LORE', 'CONTEXT']),
+  content: z.string().min(1, 'Content cannot be empty'),
+  importance: z.number().min(1).max(5)
+});
 
 class AnthropicService {
   private chaosEngine: ChaosEngine;
@@ -484,8 +492,24 @@ ${conversationHistory}`;
       const textContent = content && 'text' in content ? content.text : '';
       
       try {
-        const memories = JSON.parse(textContent);
-        return Array.isArray(memories) ? memories : [];
+        const rawMemories = JSON.parse(textContent);
+        if (!Array.isArray(rawMemories)) {
+          console.warn('Memory consolidation response is not an array:', rawMemories);
+          return [];
+        }
+        
+        const validMemories: ConsolidatedMemory[] = [];
+        for (const memory of rawMemories) {
+          const validation = ConsolidatedMemorySchema.safeParse(memory);
+          if (validation.success) {
+            validMemories.push(validation.data);
+          } else {
+            console.warn('Invalid memory structure from AI:', memory, 'Errors:', validation.error.errors);
+          }
+        }
+        
+        console.log(`✅ Validated ${validMemories.length}/${rawMemories.length} memories from AI consolidation`);
+        return validMemories;
       } catch (parseError) {
         console.error('Failed to parse memory consolidation response:', parseError);
         return [];
