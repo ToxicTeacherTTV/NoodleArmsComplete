@@ -241,7 +241,7 @@ export function IntelligenceDashboard() {
   const handleRunStoryReconstruction = async () => {
     setIsReconstructing(true);
     try {
-      const result = await apiRequest('/api/memory/reconstruct', 'POST', {}) as any;
+      const result = await apiRequest('POST', '/api/memory/reconstruct', {}) as any;
       setReconstructionResult(result);
       toast({
         title: "Story Reconstruction Complete",
@@ -260,7 +260,7 @@ export function IntelligenceDashboard() {
 
   const handleApproveStory = async (storyId: string) => {
     try {
-      await apiRequest(`/api/memory/stories/${storyId}/approve`, 'POST', {});
+      await apiRequest('POST', `/api/memory/stories/${storyId}/approve`, {});
       toast({
         title: "Story Approved",
         description: "Story cluster has been approved and integrated into the knowledge base",
@@ -283,7 +283,7 @@ export function IntelligenceDashboard() {
 
   const handleRejectStory = async (storyId: string) => {
     try {
-      await apiRequest(`/api/memory/stories/${storyId}/reject`, 'POST', {});
+      await apiRequest('POST', `/api/memory/stories/${storyId}/reject`, {});
       toast({
         title: "Story Rejected", 
         description: "Story cluster has been rejected and facts returned to orphan status",
