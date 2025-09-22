@@ -229,7 +229,15 @@ export class AdGenerationService {
       automotive: "automotive (sketchy car dealerships, no-questions-asked repairs, suspicious vehicles)",
       finance: "finance & tax (creative accounting, offshore services, tax avoidance schemes)",
       tech: "technology (untraceable devices, privacy tools, suspicious apps)",
-      alternative: "alternative services (psychic readings, memory recovery, chakra healing, conspiracy therapy)"
+      alternative: "alternative services (psychic readings, memory recovery, chakra healing, conspiracy therapy)",
+      retail: "retail & shopping (discount stores, clearance warehouses, bulk everything)",
+      professional: "professional services (consulting, legal advice, business solutions)",
+      entertainment: "entertainment & media (streaming services, content creation, event planning)",
+      education: "education & training (certification programs, skill development, tutoring)",
+      interdimensional: "interdimensional services (portal maintenance, multiverse consulting, reality adjustments)",
+      conspiracy: "conspiracy & paranormal (government coverup solutions, alien communication, Bigfoot tracking)",
+      timetravel: "time travel & futuristic (temporal mechanics, past life correction, future investment advice)",
+      existential: "existential crisis management (purpose finding, reality questioning, simulation escape services)"
     };
 
     const facetPrompts = {
