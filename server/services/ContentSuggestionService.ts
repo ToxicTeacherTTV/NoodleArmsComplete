@@ -126,7 +126,7 @@ export class ContentSuggestionService {
     
     return {
       topic: selectedTopic,
-      angle: selectedAngle,
+      angle: this.tightenAngle(selectedAngle, facet.name),
       personality_facet: facet.name,
       content_source: 'personality',
       reasoning: `From ${facet.description} - fits your current vibe`
@@ -221,17 +221,19 @@ export class ContentSuggestionService {
   private generateNickyResponse(facet: any, suggestions: ContentSuggestion[]): string {
     const facetStyle = this.getFacetResponseStyle(facet.name);
     const suggestionCount = suggestions.length;
+    const ideaWord = suggestionCount === 1 ? 'idea' : 'ideas';
     
     let response = `${facetStyle.opener} `;
     
     if (suggestionCount === 0) {
       response += "Ay, I'm drawin' a blank here! Maybe we just wing it and see what happens? Sometimes the best content comes from nowhere, you know what I'm sayin'?";
     } else {
-      response += `I got ${suggestionCount} ideas brewin' for ya:\n\n`;
+      response += `I got ${suggestionCount} ${ideaWord} brewin' for ya:\n\n`;
       
       suggestions.forEach((suggestion, index) => {
-        response += `${index + 1}. **${suggestion.topic}** - ${suggestion.angle}\n`;
-        response += `   (${suggestion.reasoning})\n\n`;
+        // Make topics more specific and personal
+        const specificTopic = this.personalizeTopic(suggestion.topic, facet.name, suggestionCount > 1);
+        response += `${index + 1}. **${specificTopic}** - ${suggestion.angle}\n\n`;
       });
       
       response += facetStyle.closer;
@@ -312,32 +314,134 @@ export class ContentSuggestionService {
   }
 
   /**
-   * Get response style for each facet
+   * Get response style for each facet (conversational, not news-anchor)
    */
   private getFacetResponseStyle(facetName: string): { opener: string; closer: string } {
     const styles: Record<string, { opener: string; closer: string }> = {
       'dbd_expert': {
-        opener: 'Alright, let me break down some content ideas from my gaming expertise:',
-        closer: 'Any of these sound good? We could really dive deep into the mechanics and psychology here.'
+        opener: 'Alright, couple gaming angles cookin\':',
+        closer: 'Pick one and we\'ll dive deep into the mechanics.'
       },
       'street_hustler': {
-        opener: 'Yo, I got some ideas based on what I\'ve been hearing around the neighborhood:',
-        closer: 'These are all backed by real street knowledge, you know what I\'m sayin\'?'
+        opener: 'Yo, got some angles from the neighborhood:',
+        closer: 'Real street knowledge right there.'
       },
       'food_family': {
-        opener: 'Madonna mia, I got some family-inspired topics that could be beautiful:',
-        closer: 'These stories come straight from the heart, just like nonna\'s cooking.'
+        opener: 'Madonna mia, got some family stories brewing:',
+        closer: 'Nonna would be proud of these tales.'
       },
-      'news_correspondent': {
-        opener: 'Breaking news from the Nicky News Network - I got some exclusive story ideas:',
-        closer: 'These are developing stories that deserve proper coverage, if you ask me.'
+      'jersey_nostalgia': {
+        opener: 'Ay, couple stories from back home:',
+        closer: 'Little Italy memories hit different, you know?'
+      },
+      'pop_culture_critic': {
+        opener: 'Alright, got some hot takes ready:',
+        closer: 'Kids today just don\'t get it like we do.'
       }
     };
     
     return styles[facetName] || {
-      opener: 'Ay, here\'s what\'s on my mind for content:',
-      closer: 'What do you think? Any of these spark something for ya?'
+      opener: 'Alright, couple spicy angles:',
+      closer: 'Pick one and we\'ll run with it.'
     };
+  }
+
+  /**
+   * Make topics more specific and personal using Nicky's lexicon
+   */
+  private personalizeTopic(topic: string, facetName: string, isMultiple: boolean): string {
+    // If topic is already specific enough, keep it
+    if (topic.length > 20 && !this.isGenericTopic(topic)) {
+      return topic;
+    }
+    
+    // Transform generic topics into Nicky-specific ones
+    const personalizedTopics: Record<string, string[]> = {
+      'dbd_expert': [
+        'That new killer everyone\'s crying about',
+        'Why survivors keep DCing against me',
+        'The bloodweb conspiracy nobody talks about'
+      ],
+      'street_hustler': [
+        'That Newark gas station incident',
+        'Why Wawa hoagies predict gas prices',
+        'The parking meter racket explained'
+      ],
+      'food_family': [
+        'Nonna\'s secret ingredient drama',
+        'Why modern pizza is an insult',
+        'That family dinner disaster'
+      ],
+      'jersey_nostalgia': [
+        'Little Italy vs. modern Jersey',
+        'Why they ruined the boardwalk',
+        'That Atlantic City poker lesson'
+      ],
+      'pop_culture_critic': [
+        'Why kids don\'t get good movies',
+        'The death of real music',
+        'Social media ruining everything'
+      ]
+    };
+    
+    const facetTopics = personalizedTopics[facetName] || [
+      'That thing nobody wants to admit',
+      'The real story behind the headlines',
+      'Why everything\'s backwards these days'
+    ];
+    
+    return facetTopics[Math.floor(Math.random() * facetTopics.length)];
+  }
+  
+  /**
+   * Tighten angles to be more specific and Nicky-like
+   */
+  private tightenAngle(angle: string, facetName: string): string {
+    // Keep it under 90 chars and inject personality
+    const tightenedAngles: Record<string, string[]> = {
+      'dbd_expert': [
+        'and why the devs got it wrong',
+        'the real reason nobody talks about',
+        'and how it breaks everything'
+      ],
+      'street_hustler': [
+        'the way we handled it in Newark',
+        'and why the city doesn\'t want you knowing',
+        'the inside story they won\'t tell ya'
+      ],
+      'food_family': [
+        'the way nonna would have done it',
+        'and why modern folks got it backwards',
+        'straight from the family recipe book'
+      ],
+      'jersey_nostalgia': [
+        'back when Jersey meant something',
+        'and why they don\'t make \'em like that anymore',
+        'the Little Italy way of handling it'
+      ]
+    };
+    
+    const facetEndings = tightenedAngles[facetName] || [
+      'and why nobody wants to admit it',
+      'the real story nobody tells',
+      'and how it all connects'
+    ];
+    
+    const ending = facetEndings[Math.floor(Math.random() * facetEndings.length)];
+    return `${angle.toLowerCase()}, ${ending}`;
+  }
+  
+  /**
+   * Check if a topic is too generic
+   */
+  private isGenericTopic(topic: string): boolean {
+    const genericTerms = [
+      'conspiracy theories', 'weird news', 'advice', 'general topic',
+      'current events', 'politics', 'technology', 'sports'
+    ];
+    
+    const lowerTopic = topic.toLowerCase();
+    return genericTerms.some(term => lowerTopic.includes(term)) || topic.split(' ').length <= 2;
   }
 
   /**
