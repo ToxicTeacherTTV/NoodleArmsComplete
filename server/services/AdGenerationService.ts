@@ -254,47 +254,35 @@ export class AdGenerationService {
     const categoryDesc = category ? categoryPrompts[category as keyof typeof categoryPrompts] || "random business" : "random business";
     const facetDesc = personalityFacet ? facetPrompts[personalityFacet as keyof typeof facetPrompts] || "" : "";
 
-    const prompt = `Write an ad script for Nicky "Noodle Arms" A.I. Dente. You MUST start with emotion tags and use them throughout.
+    const prompt = `STOP BEING REPETITIVE! Create a completely unique ad for Nicky.
 
-START YOUR SCRIPT LIKE THIS: "[sighs] Alright, alright, so [reluctant] I gotta tell ya about..."
+FORBIDDEN NAMES (DO NOT USE):
+- Salvatore, Salvatore's (already used 6 times)
+- Any "NAME and OTHER THING" format
+- Any "NAME & OTHER THING" format
 
-EMOTION TAGS TO USE (MANDATORY):
-[sighs] [grumpy] [reluctant] [tired] [annoyed] [sarcastic] [deadpan] [confused] [clears throat] [hesitant]
+REQUIRED: Use ONE of these exact formats:
+1. "The [Weird Thing]" - Example: "The Sock Conspiracy", "The Pickle Situation"
+2. "[Name]'s [Single Service]" - Example: "Gary's Regret Counseling", "Linda's Potato Solutions"  
+3. "[Adjective] [Service]" - Example: "Suspicious Lawn Care", "Questionable Life Choices Inc"
+4. "[City/Location] [Weird Thing]" - Example: "Newark Banana Emergency", "Downtown Confusion Services"
+5. Random company: "Banana Republic Thoughts", "Microsoft My Life", "Amazon My Problems"
 
-CREATE:
-1. Creative business name - can be Italian-American, completely random, absurd, or anything that would confuse Nicky
-2. Weird/funny product or service that matches the business
-3. ~2500 character script with emotion tags every few words (longer, detailed ad copy)
+EMOTION TAGS (MANDATORY): [sighs] [grumpy] [reluctant] [confused] [deadpan] [clears throat]
 
-NICKY'S PERSONALITY: Grumpy, reluctant, references family members, doesn't believe what he's reading.
+CREATE: ~2500 character script with emotion tags throughout
 
-AVOID REPETITIVE PHRASES - Mix up your reactions:
-- Instead of always "I don't know what the hell this is about" try:
-- "What am I even looking at here?"
-- "This makes no sense to me"  
-- "Someone explain this to me"
-- "Why is this a thing?"
-- "Who comes up with this stuff?"
-- "My brain hurts reading this"
-
-${facetDesc ? `PERSONALITY FOCUS: ${facetDesc}` : ''}
 CATEGORY: ${categoryDesc}
+${facetDesc ? `PERSONALITY: ${facetDesc}` : ''}
 
-BUSINESS NAME FORMATS (pick any style, NOT just "X and Y"):
-- Single weird service: "Mystical Pet Readings", "Uncle Tony's Questionable Investments"  
-- Company with weird focus: "Accurate-ish Accounting Solutions", "Maybe Legal Law Firm"
-- Normal name, weird service: "Smith & Associates Portal Maintenance", "Downtown Bigfoot Consulting"
-- Dating/family services: "Dads 4 Real", "Lonely Grandmas Network"
-- Completely random: "The Sauce Situation", "Interdimensional Steve's"
-
-EXAMPLE: "[sighs] Alright, alright, so [reluctant] I gotta tell ya about [deadpan] Mystical Pet Readings. [confused] I don't know what the hell this is about, but [grumpy] my cousin says..."
+START LIKE: "[sighs] Alright, so [reluctant] I gotta tell ya about [deadpan] The Sock Conspiracy..."
 
 Return JSON:
 {
-  "sponsorName": "Business Name",
+  "sponsorName": "UNIQUE business name using required formats above",
   "productName": "Product/Service", 
   "category": "${category || 'general'}",
-  "adScript": "Script with [emotion] tags throughout"
+  "adScript": "Script with [emotion] tags"
 }`;
 
     const response = await anthropic.messages.create({
