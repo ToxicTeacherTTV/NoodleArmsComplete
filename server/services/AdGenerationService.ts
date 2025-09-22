@@ -36,6 +36,10 @@ export class AdGenerationService {
   private recentOpenings: string[] = [];
   private maxRecentOpenings = 6;
 
+  // Track recent sponsor name format patterns to prevent repetitive title structures
+  private recentNameFormats: string[] = [];
+  private maxRecentFormats = 4;
+
   // Map personality facets to emotion profiles for voice synthesis
   private readonly PERSONALITY_TO_EMOTION_MAP: Record<string, string> = {
     grumpy_mentor: 'grumpy',
@@ -175,6 +179,82 @@ export class AdGenerationService {
     
     console.log(`🎬 Selected opening: "${selectedOpening}" (avoided: ${this.recentOpenings.slice(1).join(', ')})`);
     return selectedOpening;
+  }
+
+  // Check if naming format was recently used
+  private isNameFormatRecentlyUsed(format: string): boolean {
+    return this.recentNameFormats.includes(format);
+  }
+
+  // Add naming format to recent list
+  private addToRecentNameFormats(format: string): void {
+    this.recentNameFormats.unshift(format);
+    if (this.recentNameFormats.length > this.maxRecentFormats) {
+      this.recentNameFormats.pop();
+    }
+  }
+
+  // Select a varied naming format with anti-repetition
+  private selectVariedNamingFormat(): { format: string; instruction: string; examples: string[] } {
+    const availableFormats = [
+      {
+        format: "the_weird_thing",
+        instruction: "Use format: The [Weird Thing]",
+        examples: [
+          "The Meatball Crisis", "The Laundry Uprising", "The Parking Nightmare", 
+          "The WiFi Rebellion", "The Monday Emergency", "The Sauce Incident"
+        ]
+      },
+      {
+        format: "names_service", 
+        instruction: "Use format: [Name]'s [Single Service]",
+        examples: [
+          "Gary's Regret Counseling", "Linda's Potato Solutions", "Frank's Confusion Management",
+          "Donna's Reality Checks", "Tony's Problem Elimination", "Maria's Chaos Control"
+        ]
+      },
+      {
+        format: "adjective_service",
+        instruction: "Use format: [Adjective] [Service]",
+        examples: [
+          "Suspicious Lawn Care", "Questionable Life Choices Inc", "Dubious Financial Planning",
+          "Sketchy Home Repairs", "Unreliable Transportation", "Mysterious Computer Support"
+        ]
+      },
+      {
+        format: "location_thing",
+        instruction: "Use format: [City/Location] [Weird Thing]", 
+        examples: [
+          "Newark Banana Emergency", "Downtown Confusion Services", "Jersey Shore Dignity Recovery",
+          "Little Italy Anxiety Solutions", "Bronx Reality Management", "Queens Chaos Prevention"
+        ]
+      },
+      {
+        format: "random_company",
+        instruction: "Use format: [Random Company] [Life Problem]",
+        examples: [
+          "Amazon My Problems", "Microsoft My Life", "Netflix My Regrets",
+          "Uber My Emotions", "Spotify My Decisions", "Google My Mistakes"
+        ]
+      }
+    ];
+    
+    // Filter out recently used formats
+    const unusedFormats = availableFormats.filter(format => 
+      !this.isNameFormatRecentlyUsed(format.format)
+    );
+    
+    // If all formats were used recently, reset and use all
+    const candidates = unusedFormats.length > 0 ? unusedFormats : availableFormats;
+    
+    // Select random format
+    const selectedFormat = candidates[Math.floor(Math.random() * candidates.length)];
+    
+    // Track this format
+    this.addToRecentNameFormats(selectedFormat.format);
+    
+    console.log(`🏷️ Selected naming format: ${selectedFormat.format} (avoided: ${this.recentNameFormats.slice(1).join(', ')})`);
+    return selectedFormat;
   }
   
   // 🇮🇹 Fake Italian-American Sponsors
@@ -436,6 +516,9 @@ export class AdGenerationService {
     
     // Select a varied opening to prevent repetition
     const selectedOpening = this.selectVariedOpening();
+    
+    // Select a varied naming format to prevent title repetition
+    const selectedNamingFormat = this.selectVariedNamingFormat();
 
     const prompt = `STOP BEING REPETITIVE! Create a completely unique ad for Nicky.
 
@@ -443,13 +526,13 @@ FORBIDDEN NAMES (DO NOT USE):
 - Salvatore, Salvatore's (already used 6 times)
 - Any "NAME and OTHER THING" format
 - Any "NAME & OTHER THING" format
+- "Situation", "Conspiracy", "Problem" (overused endings)
 
-REQUIRED: Use ONE of these exact formats:
-1. "The [Weird Thing]" - Example: "The Sock Conspiracy", "The Pickle Situation"
-2. "[Name]'s [Single Service]" - Example: "Gary's Regret Counseling", "Linda's Potato Solutions"  
-3. "[Adjective] [Service]" - Example: "Suspicious Lawn Care", "Questionable Life Choices Inc"
-4. "[City/Location] [Weird Thing]" - Example: "Newark Banana Emergency", "Downtown Confusion Services"
-5. Random company: "Banana Republic Thoughts", "Microsoft My Life", "Amazon My Problems"
+REQUIRED NAMING FORMAT: ${selectedNamingFormat.instruction}
+Examples for this format: ${selectedNamingFormat.examples.join(', ')}
+- Use this EXACT format only
+- Pick a completely different name that follows this pattern
+- Avoid repeating the example words
 
 EMOTION TAGS (AVAILABLE): [grumpy] [reluctant] [confused] [deadpan] [clears throat] [annoyed] [matter-of-fact] [under-the-breath] [exasperated] [sighs] [UNHINGED] [screaming] [manic] [talking to voices] [breaking character]
 
