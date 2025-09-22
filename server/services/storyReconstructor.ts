@@ -180,7 +180,17 @@ export class StoryReconstructor {
     const stories: StoryCluster[] = [];
     for (const cluster of clusters) {
       if (cluster.facts.length >= 2) { // Only create stories for multi-fact clusters
-        const storyOutline = await this.generateStoryOutline(cluster.facts);
+        // Temporarily disable AI outline generation to avoid hanging
+        // const storyOutline = await this.generateStoryOutline(cluster.facts);
+        const storyOutline = {
+          title: `Story Cluster ${stories.length + 1}`,
+          synopsis: `A story reconstructed from ${cluster.facts.length} related facts.`,
+          events: cluster.facts.map((fact, index) => ({
+            factId: fact.id,
+            order: index + 1,
+            description: `Event ${index + 1} in the story`
+          }))
+        };
         stories.push({
           id: `story_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           factIds: cluster.factIds,
@@ -302,15 +312,25 @@ export class StoryReconstructor {
   private buildSimilarityGraph(orphans: MemoryEntry[]): Map<string, { targetId: string; score: number }[]> {
     const graph = new Map<string, { targetId: string; score: number }[]>();
     
+    console.log(`🔬 Pre-computing signals for ${orphans.length} orphans...`);
+    // Pre-compute all signals to avoid repeated extraction (O(n) instead of O(n²))
+    const signalCache = new Map<string, ContentSignals>();
+    for (const orphan of orphans) {
+      signalCache.set(orphan.id, this.extractContentSignals(orphan.content));
+    }
+    
+    console.log('🕸️ Building similarity graph...');
+    let comparisons = 0;
     for (let i = 0; i < orphans.length; i++) {
       const orphan1 = orphans[i];
-      const signals1 = this.extractContentSignals(orphan1.content);
+      const signals1 = signalCache.get(orphan1.id)!;
       const connections: { targetId: string; score: number }[] = [];
       
       for (let j = i + 1; j < orphans.length; j++) {
         const orphan2 = orphans[j];
-        const signals2 = this.extractContentSignals(orphan2.content);
+        const signals2 = signalCache.get(orphan2.id)!;
         const score = this.calculateSimilarityScore(signals1, signals2);
+        comparisons++;
         
         if (score >= 0.3) { // Lower threshold for orphan-to-orphan clustering
           connections.push({ targetId: orphan2.id, score });
@@ -326,6 +346,7 @@ export class StoryReconstructor {
       graph.set(orphan1.id, connections);
     }
     
+    console.log(`✅ Completed ${comparisons} comparisons, found connections for ${graph.size} nodes`);
     return graph;
   }
 
@@ -407,10 +428,17 @@ Create a JSON response with:
 Order the events chronologically and provide context for how they connect. Keep it concise.`;
 
     try {
-      const response = await this.anthropic.generateResponse(prompt, []);
+      const response = await this.anthropic.generateResponse(
+        prompt,
+        "You are a helpful AI assistant that analyzes facts and creates story outlines.",
+        [], // relevantMemories
+        [], // relevantDocs
+        undefined, // loreContext
+        undefined // mode
+      );
       
-      // Try to extract JSON from the response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      // Try to extract JSON from the response content
+      const jsonMatch = response.content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         
