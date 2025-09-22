@@ -192,7 +192,7 @@ export class AdGenerationService {
       // Save the generated ad
       const adData: InsertPrerollAd = {
         profileId,
-        templateId: 'ai-generated', // No template used
+        templateId: 'ai-generated-template', // Special template for AI generation
         sponsorName: adContent.sponsorName,
         productName: adContent.productName,
         category: adContent.category,
@@ -289,7 +289,10 @@ Return ONLY a JSON object with this exact structure:
     });
 
     const content = Array.isArray(response.content) ? response.content[0] : response.content;
-    const textContent = content && 'text' in content ? content.text : '';
+    let textContent = content && 'text' in content ? content.text : '';
+    
+    // Clean up code blocks if AI returns them
+    textContent = textContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     
     try {
       const adContent = JSON.parse(textContent);
