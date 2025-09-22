@@ -65,7 +65,60 @@ export default function ProjectWorkspace() {
   
   // Mock data for now - would be connected to API later
   const [ideas, setIdeas] = useState<ProjectIdea[]>([
-    // ✅ COMPLETED FEATURES
+    // ✅ COMPLETED FEATURES - RECENTLY COMPLETED
+    {
+      id: 'completed-recent-1',
+      title: 'Dynamic Personality System - Anti-Repetition Engine',
+      description: '10 personality facets (DbD Expert, Street Hustler, Food & Family, etc.) with cooldown tracking, N-gram detection, catchphrase limits, and automatic regeneration to eliminate repetitive responses.',
+      priority: 'HIGH',
+      status: 'COMPLETED',
+      category: 'FEATURE',
+      createdAt: '2025-09-22',
+      updatedAt: new Date().toISOString(),
+      tags: ['personality', 'anti-repetition', 'variety', 'facets', 'conversation-quality'],
+      estimatedHours: 45,
+      actualHours: 50
+    },
+    {
+      id: 'completed-recent-2',
+      title: 'Enhanced Reddit Collection System',
+      description: '9 subreddits across 3 content streams: Nicky News Network (weird news), Word from Don (advice content), and DbD gaming content. Automated Reddit tracking for podcast segments.',
+      priority: 'HIGH',
+      status: 'COMPLETED',
+      category: 'FEATURE',
+      createdAt: '2025-09-22',
+      updatedAt: new Date().toISOString(),
+      tags: ['reddit', 'content-collection', 'podcast', 'automated', 'multi-stream'],
+      estimatedHours: 35,
+      actualHours: 40
+    },
+    {
+      id: 'completed-recent-3',
+      title: 'Character Accuracy & Little Italy Origins',
+      description: 'Fixed Nicky\'s backstory - from Little Italy (Newark), lives in Jersey for "tax purposes". Motivational coach facet provides terrible advice, not genuine coaching.',
+      priority: 'HIGH',
+      status: 'COMPLETED',
+      category: 'IMPROVEMENT',
+      createdAt: '2025-09-22',
+      updatedAt: new Date().toISOString(),
+      tags: ['character', 'backstory', 'little-italy', 'accuracy', 'terrible-motivation'],
+      estimatedHours: 2,
+      actualHours: 2
+    },
+    {
+      id: 'completed-recent-4',
+      title: 'Discord Bot System - Complete',
+      description: 'Proactive messaging (2-3 daily max), configurable triggers, smart timing, direct mention support, conversation continuation, channel restrictions.',
+      priority: 'HIGH',
+      status: 'COMPLETED',
+      category: 'FEATURE',
+      createdAt: '2025-09-15',
+      updatedAt: new Date().toISOString(),
+      tags: ['discord', 'bot', 'proactive', 'triggers', 'mentions'],
+      estimatedHours: 60,
+      actualHours: 65
+    },
+    // ✅ COMPLETED FEATURES - EARLIER WORK
     {
       id: 'completed-1',
       title: 'Enhanced Memory System - Narrative Fragmentation Fix',
@@ -118,18 +171,42 @@ export default function ProjectWorkspace() {
       estimatedHours: 100,
       actualHours: 120
     },
-    // 🚧 IN PROGRESS FEATURES
+    // 🚧 HIGH PRIORITY - NEXT EASY WINS
     {
-      id: 'progress-1',
-      title: 'AI-Assisted Flagging System',
-      description: 'Automate content categorization for character development tracking, relationship dynamics, emotional patterns. Includes new_backstory, personality_anomaly, new_character flags.',
+      id: 'priority-1',
+      title: 'Content Suggestion System - "What should we talk about?"',
+      description: 'When user asks "What should we talk about today?", Nicky suggests podcast topics based on personality facets, recent Reddit content, and unused memories. Interactive content planning.',
       priority: 'HIGH',
       status: 'PLANNING',
       category: 'FEATURE',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      tags: ['ai', 'flagging', 'automation', 'character-tracking'],
-      estimatedHours: 60
+      tags: ['content-suggestions', 'podcast', 'topics', 'interactive', 'planning'],
+      estimatedHours: 8
+    },
+    {
+      id: 'priority-2',
+      title: 'Pre-Roll Ad Generator',
+      description: 'Comedic fake sponsor ads with Italian-American twist. Rotating ad templates using personality facets. New podcast content section alongside Brain Management.',
+      priority: 'HIGH',
+      status: 'IDEA',
+      category: 'FEATURE',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['pre-roll', 'ads', 'comedy', 'italian-american', 'sponsors'],
+      estimatedHours: 12
+    },
+    {
+      id: 'priority-3',
+      title: 'Enhanced Memory Persistence for Podcast Content',
+      description: 'Tag conversations as "podcast content", track story usage to avoid repeats, remember podcast topics and segments discussed.',
+      priority: 'HIGH',
+      status: 'IDEA',
+      category: 'IMPROVEMENT',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: ['memory', 'podcast', 'tracking', 'content-tagging', 'persistence'],
+      estimatedHours: 10
     },
     // 💡 PODCAST SEGMENT ENHANCEMENTS
     {
@@ -307,61 +384,67 @@ export default function ProjectWorkspace() {
     },
     {
       id: '2',
-      title: 'Enhanced Memory System',
-      description: 'Advanced memory management with narrative coherence',
-      targetDate: '2024-02-01',
+      title: 'Enhanced Memory & Personality System',
+      description: 'Advanced memory management with anti-repetition personality system',
+      targetDate: '2025-09-30',
+      completedDate: '2025-09-22',
+      status: 'COMPLETED',
+      progress: 100,
+      tasks: ['Story context preservation', 'Dynamic personality facets', 'Anti-repetition engine', 'Discord bot system']
+    },
+    {
+      id: '3',
+      title: 'Podcast Content Management System',
+      description: 'Content suggestions, pre-roll ads, and enhanced podcast workflow',
+      targetDate: '2025-10-15',
       status: 'IN_PROGRESS',
-      progress: 85,
-      tasks: ['Story context preservation', 'Contradiction detection', 'Document reprocessing']
+      progress: 20,
+      tasks: ['Content suggestion system', 'Pre-roll ad generator', 'Memory persistence for podcast content', 'New podcast content dashboard']
     }
   ]);
 
   const [notes, setNotes] = useState<ProjectNote[]>([
     {
       id: '1',
-      title: 'MASTER PLAN: Nicky AI System Documentation',
-      content: `COMPREHENSIVE DEVELOPMENT ROADMAP
+      title: 'CURRENT STATUS: Nicky AI System - September 2025',
+      content: `COMPREHENSIVE DEVELOPMENT STATUS
 
 CORE PHILOSOPHY:
 Nicky's lies and contradictions are FEATURES, not bugs. The system treats unreliability as a canonical character trait.
 
-COMPLETED FOUNDATIONS:
+RECENTLY COMPLETED BREAKTHROUGH FEATURES (Sept 2025):
+✅ Dynamic Personality System - 10 personality facets with anti-repetition
+✅ Enhanced Reddit Collection - 9 subreddits across 3 content streams
+✅ Character Accuracy - Little Italy origins, tax purposes Jersey residence
+✅ Discord Bot System - Complete with proactive messaging and triggers
+✅ Voice Generation Mode Control - Auto in streaming, manual in podcast
+
+SOLID FOUNDATIONS:
 ✅ PostgreSQL + Drizzle ORM architecture
-✅ React + TypeScript frontend  
+✅ React + TypeScript frontend with shadcn/ui
 ✅ Node.js + Express backend
 ✅ ElevenLabs voice synthesis (v3 API)
 ✅ Anthropic Claude API integration
 ✅ Enhanced memory retrieval with story context preservation
-✅ Document reprocessing system (individual & batch)
-✅ Contradiction detection with manual curation UI
 ✅ Revolutionary lie taxonomy system
 
-NEXT PHASE PRIORITIES:
-🚧 AI-Assisted Flagging System (automate content categorization)
-🚧 Podcast Segment Enhancements (Beef Tracker, Backstory Generator)
-🚧 Interactive Chaos Features (Mood Swings, Romance Failures)
-🚧 Stream Integration Features (Chat commands, Memory Voting)
+HIGH PRIORITY NEXT WINS:
+🎯 Content Suggestion System ("What should we talk about today?")
+🎯 Pre-Roll Ad Generator (comedic Italian-American fake sponsors)
+🎯 Enhanced Memory Persistence for podcast content tracking
+🎯 New Podcast Content Dashboard section
 
-SEGMENT-SPECIFIC FEATURES:
-• "Survivors Saying Stupid Sh*t" → Beef Tracker Integration
-• "Where the F*ck Are Viewers From?" → Instant Backstory Generator  
-• "Tales from the Fog" → Emotional Spiral System
-• "Word from the Don" → Multi-Phase Terrible Advice Generator
-• NEW: "Nicky's Power Rankings" → Absurd weekly rankings
-• NEW: "Nicky News Network" → Unhinged news with correspondents
-• NEW: "Nicky & Nicky At Movies" → Dual personality reviews
+KEY SUCCESS METRICS:
+• Eliminated repetitive AI responses through personality facets
+• 60-70% DbD content, 30-40% other stories (target achieved)
+• Credit optimization through smart voice generation
+• 2-3 proactive Discord messages daily (no spam)
 
-CRITICAL SYSTEMS:
-• Character Naming: All new characters need ridiculous names
-• Romance Failures: ALL romantic escapades must end terribly
-• Memory Management: Flagging, decay, confidence scoring
-• Canon Protection: Core traits must remain stable
-
-This is the master reference document for all development decisions.`,
+This represents the current state as of September 2025 with major personality improvements completed.`,
       category: 'GENERAL',
-      createdAt: '2025-09-15',
+      createdAt: '2025-09-22',
       updatedAt: new Date().toISOString(),
-      tags: ['master-plan', 'roadmap', 'comprehensive']
+      tags: ['current-status', 'roadmap', 'september-2025', 'breakthrough']
     },
     {
       id: '2',
