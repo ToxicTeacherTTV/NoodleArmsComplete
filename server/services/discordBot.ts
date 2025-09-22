@@ -8,6 +8,7 @@ export class DiscordBotService {
   private isConnected: boolean = false;
   private activeProfile: any = null;
   private recentResponses?: Set<string>;
+  private handlersAttached: boolean = false;
 
   constructor() {
     this.client = new Client({
@@ -17,8 +18,6 @@ export class DiscordBotService {
         GatewayIntentBits.MessageContent,
       ],
     });
-
-    this.setupEventHandlers();
   }
 
   private setupEventHandlers() {
@@ -41,6 +40,18 @@ export class DiscordBotService {
 
   public async start(token: string) {
     try {
+      // Prevent duplicate startup
+      if (this.isConnected || this.client.readyAt) {
+        console.log(`⚠️ Discord bot already started, skipping duplicate startup`);
+        return;
+      }
+
+      // Setup event handlers only once
+      if (!this.handlersAttached) {
+        this.setupEventHandlers();
+        this.handlersAttached = true;
+      }
+
       // Get active profile
       this.activeProfile = await storage.getActiveProfile();
       if (!this.activeProfile) {
@@ -71,6 +82,12 @@ export class DiscordBotService {
     if (!message.guild) return;
 
     try {
+      // Database-based idempotency check - prevent duplicates across all instances
+      const existingConversation = await storage.getDiscordConversationByMessageId?.(message.id);
+      if (existingConversation) {
+        console.log(`🚫 Message ${message.id} already processed (found in database), skipping`);
+        return;
+      }
       // Get or create server record with robust error handling
       let discordServer: DiscordServer | null = null;
       try {
@@ -204,15 +221,21 @@ export class DiscordBotService {
         if (response && response.trim()) {
           // Ensure only one response per message - add deduplication
           const messageKey = `${message.id}-${message.author.id}`;
+          console.log(`🔍 Processing message ${message.id} from ${message.author.username}, key: ${messageKey}`);
+          
           if (this.recentResponses?.has(messageKey)) {
-            console.log(`🚫 Duplicate response prevented for message ${message.id}`);
+            console.log(`🚫 Duplicate response prevented for message ${message.id} - already processed`);
             return;
           }
           
           // Track this response to prevent duplicates
           if (!this.recentResponses) this.recentResponses = new Set();
           this.recentResponses.add(messageKey);
-          setTimeout(() => this.recentResponses?.delete(messageKey), 5000); // Clean up after 5 seconds
+          console.log(`✅ Added message ${messageKey} to recent responses. Set size: ${this.recentResponses.size}`);
+          setTimeout(() => {
+            this.recentResponses?.delete(messageKey);
+            console.log(`🗑️ Cleaned up message ${messageKey} from recent responses`);
+          }, 5000); // Clean up after 5 seconds
           
           // Send response to Discord with single send method
           try {
