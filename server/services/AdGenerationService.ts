@@ -55,6 +55,24 @@ export class AdGenerationService {
       products: ["Untraceable Phones", "Encrypted Messages", "Privacy Protection"],
       category: "tech",
       italianTwist: "Technology that keeps your business... private"
+    },
+    {
+      name: "Dr. Francesca's Alternative Therapy",
+      products: ["Suppressed Memory Recovery", "Parental Alienation Counseling", "Past Life Regression"],
+      category: "alternative",
+      italianTwist: "She helped my cousin remember where he buried his... uh... time capsule"
+    },
+    {
+      name: "Mysterious Mike's Services",
+      products: ["Aura Cleansing", "Chakra Realignment", "Energy Field Optimization"],
+      category: "alternative", 
+      italianTwist: "This guy's more mystical than my nonna's superstitions"
+    },
+    {
+      name: "The Institute for Questionable Research",
+      products: ["Experimental Treatments", "Unconventional Therapy", "Reality Adjustment Sessions"],
+      category: "alternative",
+      italianTwist: "They fixed my nephew's attitude problem... somehow"
     }
   ];
 
@@ -230,6 +248,14 @@ export class AdGenerationService {
         "even my ancient fingers can figure it out", 
         "you won't wanna throw it out the window",
         "it's more secure than Fort Knox"
+      ],
+      alternative: [
+        "you'll remember things you forgot you forgot",
+        "your inner child will finally shut up",
+        "you'll understand why your family's so weird",
+        "your chakras will be more aligned than a parking lot",
+        "you'll feel enlightened or your money back... maybe",
+        "your aura will be cleaner than my kitchen floor"
       ]
     };
     

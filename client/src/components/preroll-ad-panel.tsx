@@ -57,7 +57,8 @@ const AD_CATEGORIES = [
   { value: 'home', label: '🏠 Home & Garden' },
   { value: 'automotive', label: '🚗 Automotive' },
   { value: 'finance', label: '💰 Finance & Tax' },
-  { value: 'tech', label: '📱 Technology' }
+  { value: 'tech', label: '📱 Technology' },
+  { value: 'alternative', label: '🔮 Alternative Services' }
 ];
 
 const PERSONALITY_FACETS = [
@@ -200,7 +201,8 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
       home: '🏠',
       automotive: '🚗',
       finance: '💰',
-      tech: '📱'
+      tech: '📱',
+      alternative: '🔮'
     };
     return categoryMap[category] || '📢';
   };
