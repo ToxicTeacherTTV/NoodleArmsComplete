@@ -32,6 +32,10 @@ export class AdGenerationService {
   private recentPersonalityFacets: string[] = [];
   private maxRecentFacets = 5;
 
+  // Track recent opening patterns to prevent repetitive starts
+  private recentOpenings: string[] = [];
+  private maxRecentOpenings = 6;
+
   // Map personality facets to emotion profiles for voice synthesis
   private readonly PERSONALITY_TO_EMOTION_MAP: Record<string, string> = {
     grumpy_mentor: 'grumpy',
@@ -125,6 +129,52 @@ export class AdGenerationService {
     
     console.log(`🎭 Selected personality facet: ${selectedFacet} (avoided: ${this.recentPersonalityFacets.slice(1).join(', ')})`);
     return selectedFacet;
+  }
+
+  // Check if opening pattern was recently used
+  private isOpeningRecentlyUsed(opening: string): boolean {
+    return this.recentOpenings.includes(opening);
+  }
+
+  // Add opening to recent list
+  private addToRecentOpenings(opening: string): void {
+    this.recentOpenings.unshift(opening);
+    if (this.recentOpenings.length > this.maxRecentOpenings) {
+      this.recentOpenings.pop();
+    }
+  }
+
+  // Select a varied opening pattern with anti-repetition
+  private selectVariedOpening(): string {
+    const availableOpenings = [
+      "[annoyed] Listen up, mooks!",
+      "[deadpan] So apparently I gotta tell ya about...",
+      "[grumpy] Ya know what's been pissin' me off?",
+      "[matter-of-fact] Alright, here's the deal with...",
+      "[under-the-breath] Can't believe I'm doin' this...",
+      "[reluctant] They're makin' me talk about...",
+      "[clears throat] Ey, you beautiful disasters!",
+      "Look, I don't usually do this, but...",
+      "[exasperated] My cousin Sal told me to mention...",
+      "This is gonna sound crazy, but..."
+    ];
+    
+    // Filter out recently used openings
+    const unusedOpenings = availableOpenings.filter(opening => 
+      !this.isOpeningRecentlyUsed(opening)
+    );
+    
+    // If all openings were used recently, reset and use all
+    const candidates = unusedOpenings.length > 0 ? unusedOpenings : availableOpenings;
+    
+    // Select random opening
+    const selectedOpening = candidates[Math.floor(Math.random() * candidates.length)];
+    
+    // Track this opening
+    this.addToRecentOpenings(selectedOpening);
+    
+    console.log(`🎬 Selected opening: "${selectedOpening}" (avoided: ${this.recentOpenings.slice(1).join(', ')})`);
+    return selectedOpening;
   }
   
   // 🇮🇹 Fake Italian-American Sponsors
@@ -354,11 +404,38 @@ export class AdGenerationService {
       reluctant_helper: "Act like you don't want to do this ad but have to",
       conspiracy_theories: "Include paranoid theories about the government or corporations",
       old_school_wisdom: "Grumpy old-fashioned wisdom mixed with modern problems",
-      unhinged_lunatic: "Go completely off the rails with manic energy and chaos"
+      unhinged_lunatic: "Go completely off the rails with manic energy and chaos",
+      authentic_recommendation: "Give genuine warm recommendations like talking to family",
+      family_approval: "Reference family opinions and Italian-American approval",
+      anti_establishment: "Question authority and mainstream narratives",
+      urgent_warning: "Treat this like an urgent public service announcement",
+      family_values: "Emphasize traditional family importance and loyalty",
+      nostalgia: "Reference the good old days and how things used to be",
+      personal_connection: "Share personal stories and emotional connections",
+      gaming_metaphors: "Use Dead by Daylight and gaming terminology throughout",
+      no_nonsense: "Completely flat, matter-of-fact delivery with zero emotion",
+      quality_over_flash: "Grumpy focus on substance over style and marketing",
+      skeptical: "Questioning and suspicious of everything being advertised",
+      family_endorsement: "Reluctantly mentioning because family made you",
+      confused_endorsement: "Not entirely sure why you're recommending this",
+      reluctant_reader: "Reading this against your will, making it obvious",
+      family_pressure: "Clearly being forced to do this by family members",
+      overly_excited: "Manic, over-the-top enthusiasm that's clearly unhinged",
+      conspiracy_adjacent: "Paranoid undertones without going full conspiracy",
+      manic_energy: "Chaotic, rapid-fire energy that's barely contained",
+      family_chaos: "Manic energy specifically about family drama and chaos",
+      complete_psycho: "ABSOLUTELY UNHINGED - talking to voices, breaking character, completely insane",
+      unhinged_madman: "Totally mental breakdown style delivery with psychotic breaks",
+      absolutely_insane: "Complete detachment from reality, bizarre tangents, talking to imaginary people",
+      totally_mental: "Full psychiatric episode delivery with random screaming and confusion",
+      psychotic_break: "Having a complete mental breakdown while trying to do the ad"
     };
 
     const categoryDesc = category ? categoryPrompts[category as keyof typeof categoryPrompts] || "random business" : "random business";
     const facetDesc = personalityFacet ? facetPrompts[personalityFacet as keyof typeof facetPrompts] || "" : "";
+    
+    // Select a varied opening to prevent repetition
+    const selectedOpening = this.selectVariedOpening();
 
     const prompt = `STOP BEING REPETITIVE! Create a completely unique ad for Nicky.
 
@@ -374,26 +451,19 @@ REQUIRED: Use ONE of these exact formats:
 4. "[City/Location] [Weird Thing]" - Example: "Newark Banana Emergency", "Downtown Confusion Services"
 5. Random company: "Banana Republic Thoughts", "Microsoft My Life", "Amazon My Problems"
 
-EMOTION TAGS (AVAILABLE): [grumpy] [reluctant] [confused] [deadpan] [clears throat] [annoyed] [matter-of-fact] [under-the-breath] [exasperated]
+EMOTION TAGS (AVAILABLE): [grumpy] [reluctant] [confused] [deadpan] [clears throat] [annoyed] [matter-of-fact] [under-the-breath] [exasperated] [sighs] [UNHINGED] [screaming] [manic] [talking to voices] [breaking character]
 
 CREATE: ~2500 character script with emotion tags throughout
 
 CATEGORY: ${categoryDesc}
 ${facetDesc ? `PERSONALITY: ${facetDesc}` : ''}
 
-OPENING VARIETY (Choose ONE, vary each time):
-1. "[annoyed] Listen up, mooks!"
-2. "[deadpan] So apparently I gotta tell ya about..."
-3. "[grumpy] Ya know what's been pissin' me off?"
-4. "[matter-of-fact] Alright, here's the deal with..."
-5. "[under-the-breath] Can't believe I'm doin' this..."
-6. "[reluctant] They're makin' me talk about..."
-7. "[clears throat] Ey, you beautiful disasters!"
-8. "Look, I don't usually do this, but..."
-9. "[exasperated] My cousin Sal told me to mention..."
-10. "This is gonna sound crazy, but..."
+REQUIRED OPENING: Start the ad with exactly this opening pattern: "${selectedOpening}"
+- Do NOT modify this opening
+- Use it exactly as provided
+- Then continue naturally from there
 
-NO SIGHING at the start - save [sighs] for MIDDLE of ads only, max 20% usage.
+NO SIGHING at the start - [sighs] only allowed in MIDDLE of ads, max 20% usage.
 
 Return JSON:
 {
