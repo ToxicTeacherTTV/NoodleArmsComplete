@@ -765,7 +765,7 @@ If no drift detected, return: []`;
    * Identify facts that are missing story context or parent relationships
    */
   private async identifyOrphanedFacts(profileId: string): Promise<any[]> {
-    const allMemories = await this.storage.getMemoryEntries(profileId, { limit: 1000 });
+    const allMemories = await this.storage.getMemoryEntries(profileId, 1000);
     
     const orphaned = allMemories.filter((memory: any) => {
       return (
