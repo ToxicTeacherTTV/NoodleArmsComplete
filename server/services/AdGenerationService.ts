@@ -254,8 +254,8 @@ EMOTION TAGS TO USE (MANDATORY):
 [sighs] [grumpy] [reluctant] [tired] [annoyed] [sarcastic] [deadpan] [confused] [clears throat] [hesitant]
 
 CREATE:
-1. Absurd business name (like "Johnson's Tax Prep and Dog Grooming" or Italian-American name)
-2. Weird product/service combination  
+1. Creative business name - can be Italian-American, completely random, absurd, or anything that would confuse Nicky
+2. Weird/funny product or service that matches the business
 3. ~2500 character script with emotion tags every few words (longer, detailed ad copy)
 
 NICKY'S PERSONALITY: Grumpy, reluctant, references family members, doesn't believe what he's reading.
