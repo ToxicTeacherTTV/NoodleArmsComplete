@@ -246,54 +246,31 @@ export class AdGenerationService {
     const categoryDesc = category ? categoryPrompts[category as keyof typeof categoryPrompts] || "random business" : "random business";
     const facetDesc = personalityFacet ? facetPrompts[personalityFacet as keyof typeof facetPrompts] || "" : "";
 
-    const prompt = `You are Nicky "Noodle Arms" A.I. Dente, a grumpy Italian-American from Little Italy (Newark) who now lives in Jersey "for tax purposes." You need to generate a completely original fake pre-roll advertisement.
+    const prompt = `Write an ad script for Nicky "Noodle Arms" A.I. Dente. You MUST start with emotion tags and use them throughout.
 
-CRITICAL: The ad script MUST include ElevenLabs emotion tags in brackets throughout for voice synthesis. This is MANDATORY.
+START YOUR SCRIPT LIKE THIS: "[sighs] Alright, alright, so [reluctant] I gotta tell ya about..."
 
-PERSONALITY: You're pissed off, reluctant, but oddly charismatic. You complain about everything but somehow still sell the product. You reference your crazy Italian family members constantly.
+EMOTION TAGS TO USE (MANDATORY):
+[sighs] [grumpy] [reluctant] [tired] [annoyed] [sarcastic] [deadpan] [confused] [clears throat] [hesitant]
+
+CREATE:
+1. Absurd business name (like "Johnson's Tax Prep and Dog Grooming" or Italian-American name)
+2. Weird product/service combination  
+3. 60-120 word script with emotion tags every few words
+
+NICKY'S PERSONALITY: Grumpy, reluctant, references family members, doesn't believe what he's reading.
 
 ${facetDesc ? `PERSONALITY FOCUS: ${facetDesc}` : ''}
+CATEGORY: ${categoryDesc}
 
-CATEGORY: Create a fake sponsor in the ${categoryDesc} category.
+EXAMPLE: "[sighs] Alright, alright, so [reluctant] I gotta tell ya about [deadpan] Johnson's Tax Prep and Dog Grooming. [confused] I don't know what the hell this is about, but [grumpy] my cousin says..."
 
-MANDATORY EMOTION TAGS - USE THESE IN YOUR SCRIPT:
-- [grumpy] [reluctant] [tired] [annoyed] [sarcastic] 
-- [sighs] [clears throat] [deadpan] [matter-of-fact]
-- [hesitant] [resigned tone] [quietly] [flatly]
-- For alternative services: [skeptical] [disbelieving] [sarcastically]
-- For unhinged personality: [excited] [manic] [laughs] [dramatic]
-
-EXAMPLE FORMAT: "[sighs] Alright, alright, so [reluctant] I gotta tell ya about..."
-
-INSTRUCTIONS:
-1. Generate a completely original fake sponsor company name - can be Italian-American OR absurdly random business combinations
-2. Create a specific product/service they offer 
-3. Write a 60-120 word ad script in Nicky's voice with EMOTION TAGS throughout
-4. Make it sound like a real radio ad where the host just reads whatever copy they're given
-5. CRITICAL: Every few words must have emotion tags in brackets for voice synthesis
-
-BUSINESS NAME INSPIRATION (make Nicky go "WTF am I reading?"):
-- Mix unrelated services: "Johnson's Tax Prep and Dog Grooming"
-- Weird combinations: "Elite Plumbing and Life Coaching" 
-- Dating/family services: "Single Dads 4 Real", "Grandmas Who Game"
-- Random mashups: "Betty's Tire Rotation and Spiritual Healing"
-- Suspicious but innocent: "No Questions Asked Storage and Daycare"
-
-REQUIREMENTS:
-- Can be Italian-American OR completely random business combinations
-- Sound like you don't fully believe what you're reading
-- Make Nicky confused about what these businesses actually do
-- Reference family members randomly ("My cousin tried this place...")
-- Keep it appropriate but completely absurd
-- No explicit profanity but attitude is fine
-- MUST include emotion tags like [sighs], [grumpy], [confused], [deadpan] throughout the script
-
-Return ONLY a JSON object with this exact structure:
+Return JSON:
 {
-  "sponsorName": "Original Fake Company Name",
-  "productName": "Specific Product/Service", 
+  "sponsorName": "Business Name",
+  "productName": "Product/Service", 
   "category": "${category || 'general'}",
-  "adScript": "Your complete ad script here in Nicky's voice WITH EMOTION TAGS"
+  "adScript": "Script with [emotion] tags throughout"
 }`;
 
     const response = await anthropic.messages.create({
