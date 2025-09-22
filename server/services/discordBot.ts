@@ -80,11 +80,19 @@ export class DiscordBotService {
   }
 
   private async handleMessage(message: Message) {
+    console.log(`🚨 HANDLEME SSAGE ENTRY: ${message.id} from ${message.author.username} - Start processing`);
+    
     // Ignore bot messages to prevent loops
-    if (message.author.bot) return;
+    if (message.author.bot) {
+      console.log(`🚫 Ignoring bot message ${message.id} from ${message.author.username}`);
+      return;
+    }
     
     // Ignore DMs for now - only respond in servers
-    if (!message.guild) return;
+    if (!message.guild) {
+      console.log(`🚫 Ignoring DM ${message.id} from ${message.author.username}`);
+      return;
+    }
 
     try {
       // Database-based idempotency check - prevent duplicates across all instances
