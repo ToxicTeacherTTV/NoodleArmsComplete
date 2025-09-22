@@ -257,7 +257,9 @@ export class DiscordBotService {
           
           // Send response to Discord with single send method
           try {
-            await message.reply(response);
+            console.log(`📤 SENDING Discord reply for message ${message.id} with content: "${response.substring(0, 100)}..."`);
+            const sentMessage = await message.reply(response);
+            console.log(`✅ SENT Discord reply successfully! Message ID: ${sentMessage.id}`);
           } catch (discordError) {
             console.error(`❌ Discord API error sending message:`, discordError);
             // Don't try fallback to prevent duplicate messages
