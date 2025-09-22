@@ -334,13 +334,14 @@ export default function JazzDashboard() {
         </div>
       </div>
 
-      {/* Main Content - Full width chat */}
-      <div className="max-w-7xl mx-auto p-4 md:p-6 h-[calc(100vh-120px)] pb-40 md:pb-32">
+      {/* Main Content - Organized Window Layout */}
+      <div className="flex flex-col h-[calc(100vh-80px)]">
         
-        {/* Chat Panel - Scrollable Window */}
-        <Card className="border-primary/20 shadow-xl">
-          {/* Chat window with responsive height and scrolling */}
-          <div className="h-[calc(100vh-20rem)] sm:h-[calc(100vh-22rem)] md:h-[calc(100vh-20rem)] flex flex-col">
+        {/* Top Window: Chat Panel */}
+        <div className="flex-1 min-h-0 p-4">
+          <Card className="border-primary/20 shadow-xl h-full">
+            {/* Chat window fills available space */}
+            <div className="h-full flex flex-col">
             <ChatPanel
               messages={messages}
               sessionDuration={getSessionDuration()}
@@ -378,51 +379,72 @@ export default function JazzDashboard() {
               onTextSelection={handleTextSelection}
             />
           </div>
-        </Card>
+          </Card>
+        </div>
 
-      </div>
+        {/* Bottom Window: Control Panel */}
+        <div className="flex-shrink-0 bg-background/95 backdrop-blur border-t">
+          {/* Input Bar Window */}
+          <div className="p-4">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target as HTMLFormElement);
+              const message = formData.get('message') as string;
+              if (message.trim()) {
+                const userMessage: Message = {
+                  id: nanoid(),
+                  conversationId: currentConversationId,
+                  type: 'USER',
+                  content: message,
+                  createdAt: new Date().toISOString(),
+                };
+                setMessages(prev => [...prev, userMessage]);
+                setAiStatus('PROCESSING');
+                sendMessageMutation.mutate({
+                  conversationId: currentConversationId,
+                  type: 'USER',
+                  content: message,
+                });
+                (e.target as HTMLFormElement).reset();
+              }
+            }} className="flex gap-2">
+              <Textarea
+                name="message"
+                className="flex-1 bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                placeholder={isListening ? "🎤 Listening... speak now!" : "Type a message to Nicky..."}
+                rows={2}
+                data-testid="textarea-message-input"
+                readOnly={isListening}
+              />
+              <Button 
+                type="submit" 
+                className="bg-accent hover:bg-accent/90 text-accent-foreground px-4 rounded-lg flex items-center justify-center transition-all duration-200"
+                data-testid="button-send-message"
+              >
+                <i className="fas fa-paper-plane"></i>
+              </Button>
+            </form>
+          </div>
 
-      {/* Fixed Bottom Input Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur border-t pb-[env(safe-area-inset-bottom)]">
-        <div className="max-w-7xl mx-auto p-4">
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target as HTMLFormElement);
-            const message = formData.get('message') as string;
-            if (message.trim()) {
-              const userMessage: Message = {
-                id: nanoid(),
-                conversationId: currentConversationId,
-                type: 'USER',
-                content: message,
-                createdAt: new Date().toISOString(),
-              };
-              setMessages(prev => [...prev, userMessage]);
-              setAiStatus('PROCESSING');
-              sendMessageMutation.mutate({
-                conversationId: currentConversationId,
-                type: 'USER',
-                content: message,
-              });
-              (e.target as HTMLFormElement).reset();
-            }
-          }} className="flex gap-2">
-            <Textarea
-              name="message"
-              className="flex-1 bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-ring focus:border-transparent"
-              placeholder={isListening ? "🎤 Listening... speak now!" : "Type a message to Nicky..."}
-              rows={2}
-              data-testid="textarea-message-input"
-              readOnly={isListening}
-            />
-            <Button 
-              type="submit" 
-              className="bg-accent hover:bg-accent/90 text-accent-foreground px-4 rounded-lg flex items-center justify-center transition-all duration-200"
-              data-testid="button-send-message"
-            >
-              <i className="fas fa-paper-plane"></i>
-            </Button>
-          </form>
+          {/* Status Bar Window */}
+          <div className="bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 p-2">
+            <div className="flex items-center justify-between text-xs text-black">
+              <div className="flex items-center space-x-4">
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+                  Claude API
+                </span>
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+                  ElevenLabs
+                </span>
+              </div>
+              <div className="flex items-center space-x-4">
+                <span>💬 {messages.length} messages</span>
+                <span>🧠 {memoryStats?.totalFacts || 0} facts</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -671,34 +693,6 @@ export default function JazzDashboard() {
         onClose={() => setIsNotesModalOpen(false)}
       />
 
-      {/* Jazz Cup Status Bar */}
-      <div className="fixed bottom-20 left-0 right-0 bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 p-2 z-30">
-        <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-black">
-          <div className="flex items-center space-x-4">
-            <span className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
-              Claude API
-            </span>
-            <span className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
-              ElevenLabs
-            </span>
-          </div>
-          <div className="flex items-center space-x-4">
-            <span>💬 {messages.length} messages</span>
-            <span>🧠 {memoryStats?.totalFacts || 0} facts</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsNotesModalOpen(true)}
-              className="text-black hover:bg-black/10 h-6 px-2 text-xs"
-              data-testid="button-open-notes"
-            >
-              📝 Notes
-            </Button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
