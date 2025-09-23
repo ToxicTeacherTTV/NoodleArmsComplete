@@ -701,20 +701,27 @@ export class DiscordBotService {
       );
       console.log(`✅ Got Discord response using facet '${facet.name}', processing...`);
       
-      // Track phrases for anti-repetition
-      if (typeof aiResponse === 'string') {
-        this.trackResponsePhrases(server.serverId, member.username, aiResponse);
+      // CRITICAL: Apply response guard to filter banned phrases and enforce length
+      const guardedResponse = this.applyResponseGuard(aiResponse, server.serverId, member.username, enhancedPrompt);
+      if (!guardedResponse) {
+        console.log('❌ Response failed guard checks, not sending');
+        return null;
+      }
+      
+      // Track phrases for anti-repetition AFTER guard approval
+      if (typeof guardedResponse === 'string') {
+        this.trackResponsePhrases(server.serverId, member.username, guardedResponse);
         console.log(`📝 Tracked response phrases for anti-repetition: ${member.username}`);
       }
 
-      // Extract response content from AI response object
-      if (!aiResponse) {
-        console.log('❌ No AI response received');
+      // Extract response content from GUARDED response object
+      if (!guardedResponse) {
+        console.log('❌ No guarded response received');
         return null;
       }
-      console.log(`🔍 AI Response type: ${typeof aiResponse}, structure:`, JSON.stringify(aiResponse, null, 2));
-      const content = typeof aiResponse === 'string' ? aiResponse : aiResponse || String(aiResponse);
-      console.log(`🔍 Extracted content: "${content}"`);
+      console.log(`🔍 Guarded Response type: ${typeof guardedResponse}, structure:`, JSON.stringify(guardedResponse, null, 2));
+      const content = typeof guardedResponse === 'string' ? guardedResponse : guardedResponse || String(guardedResponse);
+      console.log(`🔍 Extracted guarded content: "${content}"`);
 
       // Emotion tags are now stripped centrally in generateShortDiscordResponse()
       let discordContent = content;
@@ -1319,6 +1326,194 @@ Respond naturally in Discord chat style. Keep it short and conversational.`;
       phrases: repeatedPhrases,
       structures: repeatedStructures
     };
+  }
+
+  /**
+   * DETERMINISTIC RESPONSE GUARD - Enforces anti-repetition and length rules
+   * This is the critical fix that actually BLOCKS bad responses instead of just suggesting
+   */
+  private async applyResponseGuard(
+    aiResponse: string | null, 
+    serverId: string, 
+    username: string, 
+    originalPrompt: string
+  ): Promise<string | null> {
+    if (!aiResponse || typeof aiResponse !== 'string') {
+      console.log('🛡️ Guard: Invalid response type, rejecting');
+      return null;
+    }
+
+    console.log(`🛡️ Applying response guard for ${username}...`);
+    
+    // PHASE 1: BANNED PHRASE DETECTION
+    const bannedPhrases = [
+      'beautiful bald disaster',
+      'gorgeous bald disaster', 
+      'magnificent bald disaster',
+      'oklahoma ass',
+      'pathetic oklahoma'
+    ];
+    
+    const foundBannedPhrase = bannedPhrases.find(phrase => 
+      aiResponse.toLowerCase().includes(phrase.toLowerCase())
+    );
+    
+    if (foundBannedPhrase) {
+      console.log(`🚫 BLOCKED banned phrase: "${foundBannedPhrase}"`);
+      
+      // Try ONE regeneration with explicit ban
+      const regeneratedResponse = await this.regenerateWithBans(originalPrompt, bannedPhrases);
+      if (regeneratedResponse && !this.containsBannedPhrases(regeneratedResponse, bannedPhrases)) {
+        console.log(`✅ Regeneration successful, using clean response`);
+        return this.enforceLength(regeneratedResponse);
+      } else {
+        console.log(`❌ Regeneration failed or still contains banned phrases`);
+        return this.getFallbackResponse(username);
+      }
+    }
+    
+    // PHASE 2: REPETITION DETECTION  
+    const userKey = `${serverId}-${username}`;
+    const recentPhrases = this.getRecentPhrasesForUser(userKey);
+    
+    if (recentPhrases.length >= 3) {
+      // Check for 2-4 word n-grams that appear too frequently
+      const nGrams = this.extractNGrams(aiResponse, 2, 4);
+      const overusedNGrams = nGrams.filter(ngram => {
+        const count = recentPhrases.filter(phrase => 
+          phrase.toLowerCase().includes(ngram.toLowerCase())
+        ).length;
+        return count >= 2; // Used in 2+ recent responses = overused
+      });
+      
+      if (overusedNGrams.length > 0) {
+        console.log(`🔄 DETECTED overused n-grams: ${overusedNGrams.join(', ')}`);
+        
+        // Try regeneration with variety enforcement
+        const varietyResponse = await this.regenerateWithVariety(originalPrompt, overusedNGrams);
+        if (varietyResponse) {
+          console.log(`✅ Variety regeneration successful`);
+          return this.enforceLength(varietyResponse);
+        }
+      }
+    }
+    
+    // PHASE 3: LENGTH ENFORCEMENT
+    return this.enforceLength(aiResponse);
+  }
+
+  private async regenerateWithBans(originalPrompt: string, bannedPhrases: string[]): Promise<string | null> {
+    try {
+      console.log(`🔄 Regenerating with banned phrases: ${bannedPhrases.join(', ')}`);
+      
+      const banPrompt = `${originalPrompt}
+
+CRITICAL ENFORCEMENT RULES:
+- NEVER use these BANNED phrases: ${bannedPhrases.map(p => `"${p}"`).join(', ')}
+- If you normally use these phrases, replace with completely different insults
+- Use fresh vocabulary and new metaphors
+- 2-3 sentences maximum for Discord
+- Stay in character but avoid repetitive catchphrases`;
+
+      const response = await this.generateShortDiscordResponse(banPrompt, this.activeProfile.coreIdentity);
+      return typeof response === 'string' ? response : null;
+    } catch (error) {
+      console.error('❌ Regeneration with bans failed:', error);
+      return null;
+    }
+  }
+
+  private async regenerateWithVariety(originalPrompt: string, overusedNGrams: string[]): Promise<string | null> {
+    try {
+      console.log(`🎲 Regenerating for variety, avoiding: ${overusedNGrams.join(', ')}`);
+      
+      const varietyPrompt = `${originalPrompt}
+
+VARIETY ENFORCEMENT:
+- AVOID these overused phrases: ${overusedNGrams.map(p => `"${p}"`).join(', ')}
+- Use completely different vocabulary and sentence structures
+- Reference different aspects of your personality or interests
+- 2-3 sentences maximum for Discord
+- Be creative with new insults and metaphors`;
+
+      const response = await this.generateShortDiscordResponse(varietyPrompt, this.activeProfile.coreIdentity);
+      return typeof response === 'string' ? response : null;
+    } catch (error) {
+      console.error('❌ Variety regeneration failed:', error);
+      return null;
+    }
+  }
+
+  private containsBannedPhrases(text: string, bannedPhrases: string[]): boolean {
+    return bannedPhrases.some(phrase => text.toLowerCase().includes(phrase.toLowerCase()));
+  }
+
+  private extractNGrams(text: string, minLength: number, maxLength: number): string[] {
+    const words = text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/);
+    const nGrams: string[] = [];
+    
+    for (let n = minLength; n <= maxLength; n++) {
+      for (let i = 0; i <= words.length - n; i++) {
+        const nGram = words.slice(i, i + n).join(' ');
+        if (nGram.length > 3) { // Ignore very short n-grams
+          nGrams.push(nGram);
+        }
+      }
+    }
+    
+    return [...new Set(nGrams)]; // Remove duplicates
+  }
+
+  private enforceLength(response: string): string {
+    const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    
+    // Randomly choose length bucket (weighted toward shorter for Discord)
+    const lengthTargets = [
+      { name: 'short', min: 1, max: 2, weight: 50 },
+      { name: 'medium', min: 2, max: 3, weight: 35 },
+      { name: 'long', min: 3, max: 4, weight: 15 }
+    ];
+    
+    const random = Math.random() * 100;
+    let cumulative = 0;
+    let target = lengthTargets[0];
+    
+    for (const lt of lengthTargets) {
+      cumulative += lt.weight;
+      if (random <= cumulative) {
+        target = lt;
+        break;
+      }
+    }
+    
+    console.log(`📏 Enforcing ${target.name} length (${target.min}-${target.max} sentences), current: ${sentences.length}`);
+    
+    if (sentences.length > target.max) {
+      // Truncate to target length
+      const truncated = sentences.slice(0, target.max).join('. ') + '.';
+      console.log(`✂️ Truncated from ${sentences.length} to ${target.max} sentences`);
+      return truncated;
+    } else if (sentences.length < target.min) {
+      // If too short, keep as-is (better than artificial padding)
+      console.log(`📝 Response is shorter than target but keeping natural length`);
+      return response;
+    }
+    
+    return response;
+  }
+
+  private getFallbackResponse(username: string): string {
+    const fallbacks = [
+      `@${username} What's good?`,
+      `@${username} Ey yo!`,
+      `@${username} Sup?`,
+      `@${username} Madonna mia...`,
+      `@${username} *chef's kiss* 🤌`
+    ];
+    
+    const selected = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    console.log(`🛟 Using fallback response: "${selected}"`);
+    return selected;
   }
 }
 
