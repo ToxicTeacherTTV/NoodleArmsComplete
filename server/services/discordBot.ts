@@ -702,7 +702,7 @@ export class DiscordBotService {
       console.log(`✅ Got Discord response using facet '${facet.name}', processing...`);
       
       // CRITICAL: Apply response guard to filter banned phrases and enforce length
-      const guardedResponse = this.applyResponseGuard(aiResponse, server.serverId, member.username, enhancedPrompt);
+      const guardedResponse = await this.applyResponseGuard(aiResponse, server.serverId, member.username, enhancedPrompt);
       if (!guardedResponse) {
         console.log('❌ Response failed guard checks, not sending');
         return null;
@@ -1461,7 +1461,7 @@ VARIETY ENFORCEMENT:
       }
     }
     
-    return [...new Set(nGrams)]; // Remove duplicates
+    return Array.from(new Set(nGrams)); // Remove duplicates
   }
 
   private enforceLength(response: string): string {
