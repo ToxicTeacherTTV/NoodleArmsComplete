@@ -73,7 +73,22 @@ export class AdGenerationService {
     unhinged_madman: 'psycho',
     absolutely_insane: 'psycho',
     totally_mental: 'psycho',
-    psychotic_break: 'psycho'
+    psychotic_break: 'psycho',
+    reality_meltdown: 'psycho',
+    multiple_personalities: 'psycho',
+    demon_possessed: 'psycho',
+    interdimensional_chaos: 'psycho',
+    cosmic_breakdown: 'psycho',
+    feral_animal: 'psycho',
+    sentient_pasta: 'psycho',
+    time_traveling_madman: 'psycho',
+    alien_abductee: 'psycho',
+    cursed_italian: 'psycho',
+    rabid_gamer: 'psycho',
+    mafia_ghost: 'psycho',
+    caffeinated_lunatic: 'psycho',
+    jersey_cryptid: 'psycho',
+    pasta_overdose: 'psycho'
   };
 
   // Validate sponsor name against banned patterns
@@ -556,7 +571,22 @@ export class AdGenerationService {
       unhinged_madman: "Totally mental breakdown style delivery with psychotic breaks",
       absolutely_insane: "Complete detachment from reality, bizarre tangents, talking to imaginary people",
       totally_mental: "Full psychiatric episode delivery with random screaming and confusion",
-      psychotic_break: "Having a complete mental breakdown while trying to do the ad"
+      psychotic_break: "Having a complete mental breakdown while trying to do the ad",
+      reality_meltdown: "Reality is collapsing around him, confusing ad copy with existential crisis",
+      multiple_personalities: "Switching between different personalities mid-sentence, arguing with himself",
+      demon_possessed: "Clearly possessed by Italian pasta demons, speaking in tongues about marinara",
+      interdimensional_chaos: "Slipping between dimensions, seeing ads from parallel universes",
+      cosmic_breakdown: "Having an existential meltdown about the universe while selling products",
+      feral_animal: "Completely reverted to primal state, growling and howling while doing ad",
+      sentient_pasta: "Believes he IS the pasta, speaking as a living noodle entity",
+      time_traveling_madman: "Unstuck in time, mixing past/future/present while completely confused",
+      alien_abductee: "Recently returned from alien abduction, everything reminds him of the probe",
+      cursed_italian: "Under ancient Sicilian curse, every product mention triggers supernatural events",
+      rabid_gamer: "Gaming addiction has reached psychotic levels, everything is Dead by Daylight",
+      mafia_ghost: "Dead mobster's spirit possessing him, trying to sell from beyond the grave",
+      caffeinated_lunatic: "Consumed 47 espressos, vibrating through dimensions while speaking",
+      jersey_cryptid: "Transformed into mythical Jersey creature, part human part meatball",
+      pasta_overdose: "Eaten so much pasta he's become one with the carbohydrates, transcendent madness"
     };
 
     const categoryDesc = category ? categoryPrompts[category as keyof typeof categoryPrompts] || "random business" : "random business";
