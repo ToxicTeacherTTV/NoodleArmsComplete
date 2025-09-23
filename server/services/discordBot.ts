@@ -624,13 +624,32 @@ export class DiscordBotService {
 - Chaos Mode Active: ${effectiveBehavior.driftFactors.chaosMultiplier > 1 ? 'Amplified' : effectiveBehavior.driftFactors.chaosMultiplier < 1 ? 'Suppressed' : 'Baseline'}`);
       }
 
-      // Use Discord-specific short response generator
-      console.log(`🤖 Calling Discord-specific response generator...`);
+      // ENHANCED: Use VarietyController for natural personality variation
+      console.log(`🎭 Integrating VarietyController for Discord response...`);
+      
+      // Get conversation ID (use server+channel as unique identifier)
+      const conversationId = `discord-${server.serverId}-${message.channel.id}`;
+      
+      // Import and use VarietyController for personality facet selection
+      const { VarietyController } = await import('./VarietyController');
+      const varietyController = new VarietyController();
+      
+      // Select personality facet based on user message and conversation history
+      const { facet, variety } = await varietyController.selectPersonaFacet(conversationId, message.content);
+      console.log(`🎭 Selected personality facet: ${facet.name} - ${facet.description}`);
+      
+      // Generate variety prompt with anti-repetition and personality guidance
+      const varietyPrompt = varietyController.generateVarietyPrompt(facet, variety);
+      
+      // Enhanced prompt with full personality system
+      const enhancedPrompt = `${fullContext}\n\n${personalityAdjustments}\n\n${varietyPrompt}\n\nDISCORD CONTEXT:\nUser "${member.username}" said: "${message.content}"\n\nRespond naturally in Discord chat style. Use your selected personality facet to create a varied, engaging response. 3-4 sentences max.`;
+      
+      console.log(`🤖 Calling enhanced Discord response generator with facet: ${facet.name}...`);
       const aiResponse = await this.generateShortDiscordResponse(
-        `${fullContext}\n\n${personalityAdjustments}\n\nDiscord user "${member.username}" said: "${message.content}"\n\nRespond naturally like in Discord chat. 3-4 sentences max, no essays.`,
+        enhancedPrompt,
         this.activeProfile.coreIdentity
       );
-      console.log(`✅ Got Discord response, processing...`);
+      console.log(`✅ Got Discord response using facet '${facet.name}', processing...`);
 
       // Extract response content from AI response object
       if (!aiResponse) {
