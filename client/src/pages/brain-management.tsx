@@ -314,7 +314,7 @@ export default function BrainManagement() {
   const updateProfileMutation = useMutation({
     mutationFn: async (profileData: { name: string; coreIdentity: string; knowledgeBase: string }) => {
       const response = await fetch(`/api/profiles/${activeProfile?.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profileData),
       });
