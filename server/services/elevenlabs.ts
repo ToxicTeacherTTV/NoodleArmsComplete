@@ -1,3 +1,5 @@
+import { emotionTagGenerator } from './emotionTagGenerator.js';
+
 interface ElevenLabsConfig {
   apiKey: string;
   voiceId: string;
@@ -163,32 +165,58 @@ class ElevenLabsService {
   async synthesizeSpeech(
     text: string, 
     emotionProfile?: string, 
-    voiceSettings?: any
+    voiceSettings?: any,
+    context?: {
+      contentType?: 'ad' | 'chat' | 'announcement' | 'voice_response';
+      personality?: string;
+      mood?: string;
+      useAI?: boolean;
+    }
   ): Promise<Buffer> {
     if (!this.config.apiKey) {
       throw new Error("ElevenLabs API key not configured");
     }
 
-    // Select emotion profile with anti-repetition
-    const profileKey = emotionProfile || this.selectRandomProfile();
-    const profile = EMOTION_PROFILES[profileKey];
-    
-    // Use profile settings or fallback
-    const settings = voiceSettings || (profile ? {
-      ...profile.settings,
-      // Add randomized seed to prevent identical prosody
-      seed: Math.floor(Math.random() * 1000000)
-    } : {
-      stability: 0.3,
-      similarity_boost: 0.75,
-      style: 0,
-      use_speaker_boost: true,
-    });
+    let enhancedText = text;
+    let settings = voiceSettings;
 
-    // Apply section-based performance cues
-    const enhancedText = profile ? this.applySectionedDelivery(text, profile) : text;
+    // Use AI emotion tags if enabled and context provided (default for ads)
+    if (context?.useAI !== false && context?.contentType) {
+      try {
+        console.log(`🎭 Generating AI emotion tags for ${context.contentType}`);
+        const aiTags = await emotionTagGenerator.generateEmotionTags({
+          content: text,
+          contentType: context.contentType,
+          personality: context.personality,
+          mood: context.mood
+        });
 
-    console.log(`ElevenLabs request: voice_id=${this.config.voiceId}, model=${this.config.model}, profile=${profileKey}, settings=${JSON.stringify(settings)}`);
+        // Apply AI-generated tags
+        enhancedText = this.applySectionedDeliveryWithAI(text, aiTags);
+        
+        // Use stable voice settings optimized for variety
+        settings = voiceSettings || {
+          stability: 0.3,
+          similarity_boost: 0.75,
+          style: 0.6,
+          use_speaker_boost: true,
+          seed: Math.floor(Math.random() * 1000000)
+        };
+        
+        console.log(`🎭 Applied AI emotion tags: ${JSON.stringify(aiTags)}`);
+      } catch (aiError) {
+        console.warn('🎭 AI emotion tag generation failed, using fallback:', aiError);
+        // Fall back to original hardcoded system
+        enhancedText = this.synthesizeWithHardcodedProfile(text, emotionProfile);
+        settings = this.getHardcodedSettings(emotionProfile, voiceSettings);
+      }
+    } else {
+      // Use hardcoded emotion profiles (backward compatibility)
+      enhancedText = this.synthesizeWithHardcodedProfile(text, emotionProfile);
+      settings = this.getHardcodedSettings(emotionProfile, voiceSettings);
+    }
+
+    console.log(`ElevenLabs request: voice_id=${this.config.voiceId}, model=${this.config.model}, settings=${JSON.stringify(settings)}`);
 
     try {
       const response = await fetch(
@@ -214,8 +242,8 @@ class ElevenLabsService {
         throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
       }
 
-      // Track used profile for anti-repetition
-      this.trackUsedProfile(profileKey);
+      // No profile tracking needed for AI-generated tags
+      // Tracking is handled by the AI emotion tag generator
 
       const arrayBuffer = await response.arrayBuffer();
       return Buffer.from(arrayBuffer);
@@ -251,7 +279,7 @@ class ElevenLabsService {
           );
           
           if (retryResponse.ok) {
-            this.trackUsedProfile(profileKey);
+            // No profile tracking needed for AI-generated tags
             const arrayBuffer = await retryResponse.arrayBuffer();
             return Buffer.from(arrayBuffer);
           }
@@ -332,6 +360,74 @@ class ElevenLabsService {
     if (this.lastUsedProfiles.length > 3) {
       this.lastUsedProfiles.shift();
     }
+  }
+
+  /**
+   * Apply AI-generated emotion tags to text
+   */
+  private applySectionedDeliveryWithAI(text: string, aiTags: {hook: string, body: string, cta: string}): string {
+    // Split text into sentences
+    const sentences = text.split('.').filter(s => s.trim());
+    
+    if (sentences.length === 0) return text;
+    
+    // Determine sections
+    const hook = sentences[0]?.trim();
+    const cta = sentences[sentences.length - 1]?.trim();
+    const body = sentences.slice(1, -1).join('. ').trim();
+    
+    let result = '';
+    
+    // Apply AI-generated hook cue
+    if (hook) {
+      result += `${aiTags.hook} ${hook}.`;
+    }
+    
+    // Apply AI-generated body cue (if there's a body)
+    if (body) {
+      result += ` ${aiTags.body} ${body}.`;
+    }
+    
+    // Apply AI-generated CTA cue (if different from hook)
+    if (cta && cta !== hook) {
+      result += ` ${aiTags.cta} ${cta}.`;
+    }
+    
+    return result.trim();
+  }
+
+  /**
+   * Synthesize with hardcoded profile (fallback/backward compatibility)
+   */
+  private synthesizeWithHardcodedProfile(text: string, emotionProfile?: string): string {
+    // Select emotion profile with anti-repetition
+    const profileKey = emotionProfile || this.selectRandomProfile();
+    const profile = EMOTION_PROFILES[profileKey];
+    
+    // Apply section-based performance cues
+    return profile ? this.applySectionedDelivery(text, profile) : text;
+  }
+
+  /**
+   * Get hardcoded settings (fallback/backward compatibility)
+   */
+  private getHardcodedSettings(emotionProfile?: string, voiceSettings?: any): any {
+    const profileKey = emotionProfile || this.selectRandomProfile();
+    const profile = EMOTION_PROFILES[profileKey];
+    
+    // Track the profile usage for anti-repetition
+    this.trackUsedProfile(profileKey);
+    
+    return voiceSettings || (profile ? {
+      ...profile.settings,
+      // Add randomized seed to prevent identical prosody
+      seed: Math.floor(Math.random() * 1000000)
+    } : {
+      stability: 0.3,
+      similarity_boost: 0.75,
+      style: 0,
+      use_speaker_boost: true,
+    });
   }
 
   /**
