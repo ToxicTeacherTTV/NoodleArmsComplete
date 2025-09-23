@@ -51,9 +51,18 @@ export default function PodcastManagementPanel() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateEpisodeOpen, setIsCreateEpisodeOpen] = useState(false);
+  const [isEditEpisodeOpen, setIsEditEpisodeOpen] = useState(false);
   const [isCreateSegmentOpen, setIsCreateSegmentOpen] = useState(false);
   const [selectedEpisode, setSelectedEpisode] = useState<PodcastEpisode | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<PodcastSegment | null>(null);
+  const [editEpisode, setEditEpisode] = useState({
+    title: "",
+    description: "",
+    episodeNumber: 1,
+    guestInfo: "",
+    transcript: "",
+    notes: ""
+  });
   const [newEpisode, setNewEpisode] = useState({
     title: "",
     description: "",
@@ -108,6 +117,7 @@ export default function PodcastManagementPanel() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/podcast/episodes'] });
+      setIsEditEpisodeOpen(false);
       toast({ title: "Episode updated successfully!" });
     },
     onError: () => {
@@ -146,6 +156,38 @@ export default function PodcastManagementPanel() {
       topics: [],
       keyMoments: []
     });
+  };
+
+  const handleEditEpisode = () => {
+    if (!editEpisode.title.trim()) {
+      toast({ title: "Please enter an episode title", variant: "destructive" });
+      return;
+    }
+
+    if (!selectedEpisode || updateEpisodeMutation.isPending) {
+      return; // Prevent double submission
+    }
+
+    updateEpisodeMutation.mutate({
+      id: selectedEpisode.id,
+      updates: {
+        ...editEpisode,
+        topics: [],
+        keyMoments: []
+      }
+    });
+  };
+
+  const openEditDialog = (episode: PodcastEpisode) => {
+    setEditEpisode({
+      title: episode.title,
+      description: episode.description || "",
+      episodeNumber: episode.episodeNumber,
+      guestInfo: (episode as any).guestInfo || "",
+      transcript: episode.transcript || "",
+      notes: episode.notes || ""
+    });
+    setIsEditEpisodeOpen(true);
   };
 
   const filteredEpisodes = episodes.filter((episode: PodcastEpisode) =>
@@ -253,6 +295,95 @@ export default function PodcastManagementPanel() {
                 data-testid="button-submit-episode"
               >
                 {createEpisodeMutation.isPending ? "Creating..." : "Create Episode"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Episode Dialog */}
+        <Dialog open={isEditEpisodeOpen} onOpenChange={setIsEditEpisodeOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Edit Episode</DialogTitle>
+              <DialogDescription>
+                Update episode information and content
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">Episode Number</label>
+                <Input
+                  type="number"
+                  value={editEpisode.episodeNumber}
+                  onChange={(e) => setEditEpisode({ ...editEpisode, episodeNumber: parseInt(e.target.value) })}
+                  className="mt-1"
+                  data-testid="input-edit-episode-number"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Title *</label>
+                <Input
+                  value={editEpisode.title}
+                  onChange={(e) => setEditEpisode({ ...editEpisode, title: e.target.value })}
+                  placeholder="Episode title..."
+                  className="mt-1"
+                  data-testid="input-edit-episode-title"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Description</label>
+                <Textarea
+                  value={editEpisode.description}
+                  onChange={(e) => setEditEpisode({ ...editEpisode, description: e.target.value })}
+                  placeholder="What's this episode about?"
+                  className="mt-1"
+                  rows={3}
+                  data-testid="textarea-edit-episode-description"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Guest Info</label>
+                <Input
+                  value={editEpisode.guestInfo}
+                  onChange={(e) => setEditEpisode({ ...editEpisode, guestInfo: e.target.value })}
+                  placeholder="Guest names or info..."
+                  className="mt-1"
+                  data-testid="input-edit-guest-info"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Transcript</label>
+                <Textarea
+                  value={editEpisode.transcript}
+                  onChange={(e) => setEditEpisode({ ...editEpisode, transcript: e.target.value })}
+                  placeholder="Paste the episode transcript here..."
+                  className="mt-1"
+                  rows={4}
+                  data-testid="textarea-edit-episode-transcript"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Notes</label>
+                <Textarea
+                  value={editEpisode.notes}
+                  onChange={(e) => setEditEpisode({ ...editEpisode, notes: e.target.value })}
+                  placeholder="Additional notes about this episode..."
+                  className="mt-1"
+                  rows={2}
+                  data-testid="textarea-edit-episode-notes"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditEpisodeOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleEditEpisode}
+                disabled={updateEpisodeMutation.isPending}
+                data-testid="button-submit-edit-episode"
+              >
+                {updateEpisodeMutation.isPending ? "Updating..." : "Update Episode"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -411,7 +542,12 @@ export default function PodcastManagementPanel() {
                   )}
                   
                   <div className="flex gap-2 mb-4">
-                    <Button size="sm" variant="outline" data-testid="button-edit-episode">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => openEditDialog(selectedEpisode)}
+                      data-testid="button-edit-episode"
+                    >
                       <Edit className="h-4 w-4 mr-1" />
                       Edit
                     </Button>
