@@ -3437,6 +3437,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Parse show segments from episode transcript using AI
+  app.post('/api/podcast/episodes/:id/parse-segments', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get the episode and its transcript
+      const episode = await storage.getPodcastEpisode(id);
+      if (!episode) {
+        return res.status(404).json({ error: 'Episode not found' });
+      }
+
+      if (!episode.transcript || episode.transcript.trim() === '') {
+        return res.status(400).json({ error: 'Episode must have a transcript to parse segments' });
+      }
+
+      console.log(`🎙️ Parsing segments for episode: "${episode.title}"`);
+
+      // Use AI to parse segments from transcript
+      const { geminiService } = await import('./services/gemini.js');
+      const parsedSegments = await geminiService.parseShowSegments(episode.transcript, episode.title);
+
+      if (parsedSegments.length === 0) {
+        return res.json({ 
+          message: 'No recurring show segments found in transcript',
+          segments: []
+        });
+      }
+
+      // Create segment records in database
+      const createdSegments = [];
+      for (const segment of parsedSegments) {
+        const segmentData = {
+          episodeId: episode.id,
+          title: segment.title,
+          description: segment.description,
+          segmentType: segment.segmentType,
+          transcript: segment.content, // Store the AI-extracted content as transcript
+          startTime: 0, // No timestamp needed for Nicky's brain
+          endTime: null,
+          keyQuotes: [],
+          topics: [],
+          notes: null
+        };
+
+        const createdSegment = await storage.createPodcastSegment(segmentData);
+        createdSegments.push(createdSegment);
+      }
+
+      console.log(`✅ Created ${createdSegments.length} segments for "${episode.title}"`);
+
+      res.json({
+        message: `Successfully parsed ${createdSegments.length} show segments`,
+        segments: createdSegments
+      });
+
+    } catch (error) {
+      console.error('Error parsing episode segments:', error);
+      res.status(500).json({ error: 'Failed to parse episode segments' });
+    }
+  });
+
   // Search podcast content
   app.get('/api/podcast/search', async (req, res) => {
     try {
