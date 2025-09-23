@@ -1260,54 +1260,54 @@ export class DatabaseStorage implements IStorage {
       return { episodes: [], segments: [] };
     }
 
-    // Create search terms for SQL LIKE queries
-    const searchTerms = keywords.map(keyword => `%${keyword.toLowerCase()}%`);
+    // Create a simple search pattern for each keyword
+    const searchPattern = keywords.join(' | ');
     
-    // Search episodes by title, description, notes, topics, and transcript
-    const episodes = await db
-      .select()
-      .from(podcastEpisodes)
-      .where(
-        and(
-          eq(podcastEpisodes.profileId, profileId),
-          or(
-            ...searchTerms.flatMap(term => [
-              like(podcastEpisodes.title, term),
-              like(podcastEpisodes.description, term),
-              like(podcastEpisodes.notes, term),
-              like(podcastEpisodes.transcript, term)
-            ])
+    try {
+      // Search episodes using a simpler approach
+      const episodes = await db
+        .select()
+        .from(podcastEpisodes)
+        .where(
+          and(
+            eq(podcastEpisodes.profileId, profileId),
+            or(
+              like(podcastEpisodes.title, `%${searchPattern}%`),
+              like(podcastEpisodes.description, `%${searchPattern}%`),
+              like(podcastEpisodes.transcript, `%${searchPattern}%`)
+            )
           )
         )
-      )
-      .orderBy(desc(podcastEpisodes.episodeNumber))
-      .limit(5); // Limit for context window
+        .orderBy(desc(podcastEpisodes.episodeNumber))
+        .limit(5);
 
-    // Search segments by title, description, transcript, and notes
-    const segments = await db
-      .select()
-      .from(podcastSegments)
-      .innerJoin(podcastEpisodes, eq(podcastSegments.episodeId, podcastEpisodes.id))
-      .where(
-        and(
-          eq(podcastEpisodes.profileId, profileId),
-          or(
-            ...searchTerms.flatMap(term => [
-              like(podcastSegments.title, term),
-              like(podcastSegments.description, term),
-              like(podcastSegments.transcript, term),
-              like(podcastSegments.notes, term)
-            ])
+      // Search segments using a simpler approach
+      const segments = await db
+        .select()
+        .from(podcastSegments)
+        .innerJoin(podcastEpisodes, eq(podcastSegments.episodeId, podcastEpisodes.id))
+        .where(
+          and(
+            eq(podcastEpisodes.profileId, profileId),
+            or(
+              like(podcastSegments.title, `%${searchPattern}%`),
+              like(podcastSegments.description, `%${searchPattern}%`),
+              like(podcastSegments.transcript, `%${searchPattern}%`)
+            )
           )
         )
-      )
-      .orderBy(podcastSegments.startTime)
-      .limit(10); // Limit for context window
+        .orderBy(podcastSegments.startTime)
+        .limit(10);
 
-    return { 
-      episodes, 
-      segments: segments.map(s => s.podcast_segments) 
-    };
+      return { 
+        episodes, 
+        segments: segments.map(s => s.podcast_segments) 
+      };
+    } catch (error) {
+      console.error('Error retrieving podcast content:', error);
+      // Return empty results on error to prevent chat failures
+      return { episodes: [], segments: [] };
+    }
   }
 }
 
