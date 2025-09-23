@@ -2665,8 +2665,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const server = await storage.updateDiscordServer(id, filteredUpdates);
+      
+      if (!server) {
+        return res.status(404).json({ error: 'Discord server not found' });
+      }
+      
       res.json(server);
     } catch (error) {
+      console.error('Error updating Discord server behavior:', error);
       res.status(500).json({ error: 'Failed to update Discord server behavior' });
     }
   });
