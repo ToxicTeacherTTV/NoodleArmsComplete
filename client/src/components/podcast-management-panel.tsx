@@ -59,8 +59,7 @@ export default function PodcastManagementPanel() {
     description: "",
     episodeNumber: 1,
     guestInfo: "",
-    mood: "",
-    energy: 50,
+    transcript: "",
     notes: ""
   });
 
@@ -91,8 +90,7 @@ export default function PodcastManagementPanel() {
         description: "",
         episodeNumber: episodes.length + 1,
         guestInfo: "",
-        mood: "",
-        energy: 50,
+        transcript: "",
         notes: ""
       });
       toast({ title: "Episode created successfully!" });
@@ -137,6 +135,10 @@ export default function PodcastManagementPanel() {
     if (!newEpisode.title.trim()) {
       toast({ title: "Please enter an episode title", variant: "destructive" });
       return;
+    }
+
+    if (createEpisodeMutation.isPending) {
+      return; // Prevent double submission
     }
 
     createEpisodeMutation.mutate({
@@ -219,13 +221,25 @@ export default function PodcastManagementPanel() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium">Mood/Vibe</label>
-                <Input
-                  value={newEpisode.mood}
-                  onChange={(e) => setNewEpisode({ ...newEpisode, mood: e.target.value })}
-                  placeholder="Chill, chaotic, focused..."
+                <label className="text-sm font-medium">Transcript</label>
+                <Textarea
+                  value={newEpisode.transcript}
+                  onChange={(e) => setNewEpisode({ ...newEpisode, transcript: e.target.value })}
+                  placeholder="Paste the episode transcript here..."
                   className="mt-1"
-                  data-testid="input-episode-mood"
+                  rows={4}
+                  data-testid="textarea-episode-transcript"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Notes</label>
+                <Textarea
+                  value={newEpisode.notes}
+                  onChange={(e) => setNewEpisode({ ...newEpisode, notes: e.target.value })}
+                  placeholder="Additional notes about this episode..."
+                  className="mt-1"
+                  rows={2}
+                  data-testid="textarea-episode-notes"
                 />
               </div>
             </div>
@@ -343,11 +357,6 @@ export default function PodcastManagementPanel() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <Badge variant="outline">#{episode.episodeNumber}</Badge>
-                              {episode.mood && (
-                                <Badge variant="secondary" className="text-xs">
-                                  {episode.mood}
-                                </Badge>
-                              )}
                             </div>
                             <h4 className="font-medium line-clamp-1" data-testid={`episode-title-${episode.id}`}>
                               {episode.title}
