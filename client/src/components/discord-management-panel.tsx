@@ -813,12 +813,21 @@ function DynamicBehaviorPanel({ serverId }: { serverId: string }) {
   // Update baseline settings
   const updateBehaviorMutation = useMutation({
     mutationFn: async (newSettings: BehaviorSettings) => {
+      console.log(`🎯 Frontend: Updating behavior for server ${serverId}`);
+      console.log(`🎯 Frontend: Sending data:`, newSettings);
+      
       const response = await fetch(`/api/discord/servers/${serverId}/behavior`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSettings),
       });
-      if (!response.ok) throw new Error('Failed to update');
+      
+      console.log(`🎯 Frontend: Response status:`, response.status);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log(`🎯 Frontend: Error response:`, errorText);
+        throw new Error(`Failed to update: ${response.status}`);
+      }
       return response.json();
     },
     onSuccess: () => {
