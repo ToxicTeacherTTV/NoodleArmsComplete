@@ -1397,7 +1397,7 @@ Respond naturally in Discord chat style. Keep it short and conversational.`;
       // Import chaos engine to get current level
       const ChaosEngineModule = await import('./chaosEngine');
       const chaosEngine = ChaosEngineModule.default.getInstance();
-      return chaosEngine.getCurrentLevel();
+      return chaosEngine.getEffectiveChaosLevel();
     } catch (error) {
       console.warn('⚠️ Could not get chaos level, defaulting to 50');
       return 50; // Default fallback
