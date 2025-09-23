@@ -20,7 +20,6 @@ import { ProtectedFactsManager } from "@/components/protected-facts-manager";
 import MemoryPanel from "@/components/memory-panel";
 import DocumentPanel from "@/components/document-panel";
 import PersonalityPanel from "@/components/personality-panel";
-import DiscordControlPanel from "@/components/discord-control-panel";
 import DiscordManagementPanel from "@/components/discord-management-panel";
 import ContentIngestionPanel from "@/components/content-ingestion-panel";
 import { IntelligenceDashboard } from "@/components/intelligence-dashboard";
@@ -1130,8 +1129,6 @@ export default function BrainManagement() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-6">
-                <DiscordControlPanel />
-                <Separator />
                 <DiscordManagementPanel />
               </CardContent>
             </Card>
