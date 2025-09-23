@@ -92,9 +92,10 @@ export default function DiscordManagementPanel() {
   // Auto-select if only one server - always use it
   const effectiveServerId = servers.length === 1 ? servers[0]?.serverId : selectedServerId;
   
-  // Auto-set selected server immediately when only one server exists
+  // Auto-set selected server immediately when servers load
   useEffect(() => {
-    if (servers.length === 1 && servers[0] && !selectedServerId) {
+    if (servers.length > 0 && !selectedServerId) {
+      // Always auto-select the first server when none is selected
       setSelectedServerId(servers[0].serverId);
     }
   }, [servers, selectedServerId]);
