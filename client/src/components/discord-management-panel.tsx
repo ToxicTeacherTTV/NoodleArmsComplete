@@ -212,9 +212,21 @@ export default function DiscordManagementPanel() {
     
     const channelId = newChannelId.trim();
     if (channelMode === 'allowed') {
+      // Prevent duplicates within allowed channels
+      if (proactiveSettings.allowedChannels.includes(channelId)) {
+        toast({ title: "Channel already in allowed list", variant: "default" });
+        setNewChannelId("");
+        return;
+      }
       const updatedChannels = [...proactiveSettings.allowedChannels, channelId];
       updateProactiveSettingsMutation.mutate({ allowedChannels: updatedChannels });
     } else {
+      // Prevent duplicates within blocked channels
+      if (proactiveSettings.blockedChannels.includes(channelId)) {
+        toast({ title: "Channel already in blocked list", variant: "default" });
+        setNewChannelId("");
+        return;
+      }
       const updatedChannels = [...proactiveSettings.blockedChannels, channelId];
       updateProactiveSettingsMutation.mutate({ blockedChannels: updatedChannels });
     }
@@ -376,8 +388,8 @@ export default function DiscordManagementPanel() {
                             </p>
                             
                             <div className="space-y-2">
-                              {proactiveSettings.allowedChannels.map((channelId) => (
-                                <div key={channelId} className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
+                              {[...new Set(proactiveSettings.allowedChannels)].map((channelId) => (
+                                <div key={`allowed-${channelId}`} className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
                                   <div className="flex items-center gap-2">
                                     <Hash className="h-3 w-3 text-green-600" />
                                     <span className="text-sm font-mono" data-testid={`text-allowed-channel-${channelId}`}>
@@ -419,8 +431,8 @@ export default function DiscordManagementPanel() {
                             </p>
                             
                             <div className="space-y-2">
-                              {proactiveSettings.blockedChannels.map((channelId) => (
-                                <div key={channelId} className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
+                              {[...new Set(proactiveSettings.blockedChannels)].map((channelId) => (
+                                <div key={`blocked-${channelId}`} className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
                                   <div className="flex items-center gap-2">
                                     <Hash className="h-3 w-3 text-red-600" />
                                     <span className="text-sm font-mono" data-testid={`text-blocked-channel-${channelId}`}>
