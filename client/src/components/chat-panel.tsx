@@ -94,7 +94,7 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
       </div>
 
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 chat-scroll scroll-smooth" data-testid="chat-messages">
+      <div className="flex-1 overflow-y-auto p-4 pb-16 space-y-4 chat-scroll scroll-smooth" data-testid="chat-messages">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-muted-foreground">
