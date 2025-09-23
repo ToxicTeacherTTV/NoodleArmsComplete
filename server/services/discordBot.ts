@@ -9,6 +9,7 @@ export class DiscordBotService {
   private activeProfile: any = null;
   private recentResponses?: Set<string>;
   private handlersAttached: boolean = false;
+  private recentPhrasesMap: Map<string, { phrases: string[], timestamps: number[] }> = new Map();
 
   constructor() {
     this.client = new Client({
@@ -601,11 +602,14 @@ export class DiscordBotService {
       
       // Get relevant memories about this user for context
       try {
-        const relevantMemories = await storage.searchMemory(
-          this.activeProfile.id, 
-          `${member.username} Discord conversation facts personality preferences`, 
-          5
-        );
+        // Get memories related to this user (using proper storage method)
+        const allMemories = await storage.getMemoryEntries(this.activeProfile.id);
+        const relevantMemories = allMemories
+          .filter(mem => 
+            mem.content.toLowerCase().includes(member.username.toLowerCase()) ||
+            mem.keywords?.some(k => k.toLowerCase().includes(member.username.toLowerCase()))
+          )
+          .slice(0, 5);
         
         if (relevantMemories.length > 0) {
           const memoryContext = relevantMemories
@@ -637,7 +641,7 @@ export class DiscordBotService {
           .reverse() // Show oldest first
           .slice(-6) // Last 6 exchanges for manageable context
           .map(conv => {
-            const timeAgo = Math.floor((Date.now() - new Date(conv.createdAt).getTime()) / (1000 * 60));
+            const timeAgo = conv.createdAt ? Math.floor((Date.now() - new Date(conv.createdAt).getTime()) / (1000 * 60)) : 0;
             const triggerInfo = conv.triggerType === 'MENTION' ? '[MENTION]' : 
                                conv.triggerType === 'TOPIC_TRIGGER' ? '[TOPIC]' : '[AUTO]';
             return `${timeAgo}min ago ${triggerInfo} ${conv.username}: "${conv.triggerMessage}" → Nicky: "${conv.nickyResponse}"`;
@@ -684,8 +688,11 @@ export class DiscordBotService {
       // Generate variety prompt with anti-repetition and personality guidance
       const varietyPrompt = varietyController.generateVarietyPrompt(facet, variety);
       
-      // Enhanced prompt with full personality system
-      const enhancedPrompt = `${fullContext}\n\n${personalityAdjustments}\n\n${varietyPrompt}\n\nDISCORD CONTEXT:\nUser "${member.username}" said: "${message.content}"\n\nRespond naturally in Discord chat style. Use your selected personality facet to create a varied, engaging response. 3-4 sentences max.`;
+      // Anti-repetition analysis for this user
+      const antiRepetitionGuidance = this.generateAntiRepetitionGuidance(server.serverId, member.username);
+      
+      // Enhanced prompt with full personality system + anti-repetition
+      const enhancedPrompt = `${fullContext}\n\n${personalityAdjustments}\n\n${varietyPrompt}\n\n${antiRepetitionGuidance}\n\nDISCORD CONTEXT:\nUser "${member.username}" said: "${message.content}"\n\nRespond naturally in Discord chat style. Use your selected personality facet to create a varied, engaging response. 3-4 sentences max. AVOID repeating the same phrases, insults, or patterns from recent responses.`;
       
       console.log(`🤖 Calling enhanced Discord response generator with facet: ${facet.name}...`);
       const aiResponse = await this.generateShortDiscordResponse(
@@ -693,6 +700,12 @@ export class DiscordBotService {
         this.activeProfile.coreIdentity
       );
       console.log(`✅ Got Discord response using facet '${facet.name}', processing...`);
+      
+      // Track phrases for anti-repetition
+      if (typeof aiResponse === 'string') {
+        this.trackResponsePhrases(server.serverId, member.username, aiResponse);
+        console.log(`📝 Tracked response phrases for anti-repetition: ${member.username}`);
+      }
 
       // Extract response content from AI response object
       if (!aiResponse) {
@@ -1194,6 +1207,118 @@ Respond naturally in Discord chat style. Keep it short and conversational.`;
   // Start proactive messaging when a server is added
   private initializeProactiveMessaging(): void {
     this.startProactiveMessaging();
+  }
+
+  /**
+   * Anti-repetition system to track and avoid repeated phrases
+   */
+  private generateAntiRepetitionGuidance(serverId: string, username: string): string {
+    const userKey = `${serverId}-${username}`;
+    const recentPhrases = this.getRecentPhrasesForUser(userKey);
+    
+    if (recentPhrases.length === 0) {
+      return "ANTI-REPETITION: First interaction, be natural and varied.";
+    }
+    
+    // Extract common repeated elements
+    const repeatedPatterns = this.findRepeatedPatterns(recentPhrases);
+    
+    let guidance = "ANTI-REPETITION WARNINGS:\n";
+    
+    if (repeatedPatterns.insults.length > 0) {
+      guidance += `- AVOID these overused insults: ${repeatedPatterns.insults.join(', ')}\n`;
+    }
+    
+    if (repeatedPatterns.phrases.length > 0) {
+      guidance += `- AVOID these repeated phrases: ${repeatedPatterns.phrases.join(', ')}\n`;
+    }
+    
+    if (repeatedPatterns.structures.length > 0) {
+      guidance += `- VARY your response structure, you've used these patterns: ${repeatedPatterns.structures.join(', ')}\n`;
+    }
+    
+    guidance += "- Use fresh vocabulary, new metaphors, and different conversation angles\n";
+    guidance += "- Reference different aspects of Dead by Daylight or Italian culture\n";
+    guidance += "- Change your greeting/opening style from recent responses";
+    
+    return guidance;
+  }
+
+  private trackResponsePhrases(serverId: string, username: string, response: string): void {
+    const userKey = `${serverId}-${username}`;
+    const now = Date.now();
+    
+    if (!this.recentPhrasesMap) {
+      this.recentPhrasesMap = new Map();
+    }
+    
+    if (!this.recentPhrasesMap.has(userKey)) {
+      this.recentPhrasesMap.set(userKey, { phrases: [], timestamps: [] });
+    }
+    
+    const userData = this.recentPhrasesMap.get(userKey)!;
+    
+    // Add this response
+    userData.phrases.push(response);
+    userData.timestamps.push(now);
+    
+    // Keep only last 8 responses (sliding window)
+    if (userData.phrases.length > 8) {
+      userData.phrases.shift();
+      userData.timestamps.shift();
+    }
+    
+    // Clean up old data (older than 2 hours)
+    const twoHoursAgo = now - (2 * 60 * 60 * 1000);
+    while (userData.timestamps.length > 0 && userData.timestamps[0] < twoHoursAgo) {
+      userData.phrases.shift();
+      userData.timestamps.shift();
+    }
+  }
+
+  private getRecentPhrasesForUser(userKey: string): string[] {
+    if (!this.recentPhrasesMap?.has(userKey)) {
+      return [];
+    }
+    return this.recentPhrasesMap.get(userKey)!.phrases;
+  }
+
+  private findRepeatedPatterns(phrases: string[]): { insults: string[], phrases: string[], structures: string[] } {
+    const insultPatterns = [
+      'beautiful bald disaster', 'oklahoma', 'cafone', 'magnificent', 'bald', 'disaster',
+      'pathetic', 'gorgeous', 'disaster', 'meatball'
+    ];
+    
+    const commonPhrases = [
+      'madonna mia', 'cazzo', 'vaffanculo', '🤌', 'dead by daylight', 'dbd',
+      'you think', 'listen here', 'next podcast'
+    ];
+    
+    const structurePatterns = [
+      /^[A-Z ]+,/, // All caps opening
+      /@\d+/, // Mention patterns
+      /\?![^!]*!/, // Question exclamation patterns
+      /🤌$/ // Ending with hand gesture
+    ];
+    
+    const repeatedInsults = insultPatterns.filter(insult => 
+      phrases.filter(p => p.toLowerCase().includes(insult.toLowerCase())).length > 2
+    );
+    
+    const repeatedPhrases = commonPhrases.filter(phrase =>
+      phrases.filter(p => p.toLowerCase().includes(phrase.toLowerCase())).length > 3
+    );
+    
+    const repeatedStructures = structurePatterns
+      .map((pattern, idx) => ({ pattern, idx, count: phrases.filter(p => pattern.test(p)).length }))
+      .filter(s => s.count > 2)
+      .map(s => `Structure ${s.idx + 1}`);
+    
+    return {
+      insults: repeatedInsults,
+      phrases: repeatedPhrases,
+      structures: repeatedStructures
+    };
   }
 }
 
