@@ -594,9 +594,27 @@ export class DiscordBotService {
 - DBD Obsession: ${effectiveBehavior.dbdObsession}/100
 - Family Business Mode: ${effectiveBehavior.familyBusinessMode}/100`);
 
-      // Add member facts if available
+      // Enhanced user-specific context
       if (member.facts && member.facts.length > 0) {
         contextParts.push(`Facts about ${member.username}: ${member.facts.join(', ')}`);
+      }
+      
+      // Get relevant memories about this user for context
+      try {
+        const relevantMemories = await storage.searchMemory(
+          this.activeProfile.id, 
+          `${member.username} Discord conversation facts personality preferences`, 
+          5
+        );
+        
+        if (relevantMemories.length > 0) {
+          const memoryContext = relevantMemories
+            .map(mem => `${mem.content} (${mem.type}, importance: ${mem.importance})`)
+            .join('; ');
+          contextParts.push(`Relevant memories about conversations: ${memoryContext}`);
+        }
+      } catch (memoryError) {
+        console.log(`⚠️ Could not retrieve memories for context: ${memoryError}`);
       }
 
       // Add trigger context
@@ -604,14 +622,39 @@ export class DiscordBotService {
         contextParts.push(`Triggered by topics: ${responseContext.triggerData.topics.join(', ')}`);
       }
 
-      // Recent Discord conversations for context
-      const recentConversations = await storage.getDiscordConversations(server.id, 5);
+      // Enhanced conversation context with more detail
+      const recentConversations = await storage.getDiscordConversations(server.id, 8);
       if (recentConversations.length > 0) {
+        // Group conversations by user for better context
+        const conversationsByUser = recentConversations.reduce((acc, conv) => {
+          if (!acc[conv.username]) acc[conv.username] = [];
+          acc[conv.username].push(conv);
+          return acc;
+        }, {} as Record<string, typeof recentConversations>);
+        
+        // Build rich conversation context
         const contextMessages = recentConversations
           .reverse() // Show oldest first
-          .map(conv => `${conv.username}: "${conv.triggerMessage}" | Nicky: "${conv.nickyResponse}"`)
+          .slice(-6) // Last 6 exchanges for manageable context
+          .map(conv => {
+            const timeAgo = Math.floor((Date.now() - new Date(conv.createdAt).getTime()) / (1000 * 60));
+            const triggerInfo = conv.triggerType === 'MENTION' ? '[MENTION]' : 
+                               conv.triggerType === 'TOPIC_TRIGGER' ? '[TOPIC]' : '[AUTO]';
+            return `${timeAgo}min ago ${triggerInfo} ${conv.username}: "${conv.triggerMessage}" → Nicky: "${conv.nickyResponse}"`;
+          })
           .join('\n');
-        contextParts.push(`Recent Discord conversation context:\n${contextMessages}`);
+        
+        contextParts.push(`Recent Discord conversation flow:\n${contextMessages}`);
+        
+        // Add user-specific conversation patterns
+        const userConversations = conversationsByUser[member.username] || [];
+        if (userConversations.length > 1) {
+          const userTopics = userConversations
+            .map(conv => conv.triggerMessage.toLowerCase())
+            .slice(-3)
+            .join(', ');
+          contextParts.push(`${member.username}'s recent topics: ${userTopics}`);
+        }
       }
 
       const fullContext = contextParts.join('\n\n');
