@@ -744,9 +744,32 @@ export class DiscordBotService {
 
       console.log(`🎭 AGGRESSIVE Emotion filter: "${content.substring(0, 100)}..." → "${discordContent.substring(0, 100)}..."`);
 
-      // Enforce Discord's 2000 character limit
-      if (discordContent.length > 1900) {
-        discordContent = discordContent.substring(0, 1900) + "...";
+      // Enforce Discord's 2000 character limit with smart truncation
+      if (discordContent.length > 1980) {
+        // Find the last complete sentence that fits
+        const sentences = discordContent.split(/(?<=[.!?])\s+/);
+        let truncated = "";
+        
+        for (const sentence of sentences) {
+          if ((truncated + sentence).length <= 1980) {
+            truncated += (truncated ? " " : "") + sentence;
+          } else {
+            break;
+          }
+        }
+        
+        // If we got at least one complete sentence, use it
+        if (truncated.length > 100) {
+          discordContent = truncated;
+          console.log(`✂️ Smart truncated message from ${discordContent.length} to ${truncated.length} characters at sentence boundary`);
+        } else {
+          // Fallback: truncate at 1980 characters but end with proper punctuation
+          discordContent = discordContent.substring(0, 1980).replace(/[^.!?]*$/, '');
+          if (!discordContent.match(/[.!?]$/)) {
+            discordContent += "...";
+          }
+          console.log(`✂️ Fallback truncated message to ${discordContent.length} characters`);
+        }
       }
 
       // Filter is working - debug signature removed
