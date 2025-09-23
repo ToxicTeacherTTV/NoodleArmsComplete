@@ -351,6 +351,45 @@ export type InsertLoreHistoricalEvent = z.infer<typeof insertLoreHistoricalEvent
 export type LoreRelationship = typeof loreRelationships.$inferSelect;
 export type InsertLoreRelationship = z.infer<typeof insertLoreRelationshipSchema>;
 
+// Podcast Management System
+export const podcastEpisodes = pgTable("podcast_episodes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  episodeNumber: integer("episode_number").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  airDate: timestamp("air_date"),
+  duration: integer("duration"), // Duration in minutes
+  guestNames: text("guest_names").array(), // Array of guest names
+  topics: text("topics").array(), // Main topics covered
+  transcript: text("transcript"), // Full episode transcript
+  highlights: text("highlights").array(), // Key moments or quotes
+  status: text("status").$type<'DRAFT' | 'PUBLISHED' | 'ARCHIVED'>().default('DRAFT'),
+  viewCount: integer("view_count").default(0),
+  notes: text("notes"), // Private production notes
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+export const podcastSegments = pgTable("podcast_segments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  episodeId: varchar("episode_id").references(() => podcastEpisodes.id).notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  startTime: integer("start_time"), // Start time in seconds
+  endTime: integer("end_time"), // End time in seconds
+  segmentType: text("segment_type").$type<'INTRO' | 'MAIN_TOPIC' | 'GUEST_INTERVIEW' | 'CALLER_SEGMENT' | 'GAME' | 'AD_READ' | 'OUTRO'>().default('MAIN_TOPIC'),
+  participants: text("participants").array(), // Who was involved in this segment
+  keyQuotes: text("key_quotes").array(), // Notable quotes from this segment
+  gameResults: json("game_results").$type<{ 
+    winner?: string; 
+    score?: number; 
+    details?: string; 
+  }>(), // For gaming segments
+  transcript: text("transcript"), // Segment-specific transcript
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
 // AI-Assisted Flagging System
 export const contentFlags = pgTable("content_flags", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -750,3 +789,21 @@ export type ContextNudge = {
   strength: number; // -20 to +20
   expiresAt: string;
 };
+
+// Podcast system schemas
+export const insertPodcastEpisodeSchema = createInsertSchema(podcastEpisodes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPodcastSegmentSchema = createInsertSchema(podcastSegments).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Podcast system types
+export type PodcastEpisode = typeof podcastEpisodes.$inferSelect;
+export type InsertPodcastEpisode = z.infer<typeof insertPodcastEpisodeSchema>;
+export type PodcastSegment = typeof podcastSegments.$inferSelect;
+export type InsertPodcastSegment = z.infer<typeof insertPodcastSegmentSchema>;
