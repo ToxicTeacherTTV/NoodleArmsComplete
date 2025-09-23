@@ -2636,7 +2636,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const baseline = {
         aggressiveness: server.aggressiveness || 80,
         responsiveness: server.responsiveness || 60,
-        italianIntensity: server.italianIntensity || 100,
+        unpredictability: server.unpredictability || 75,
         dbdObsession: server.dbdObsession || 80,
         familyBusinessMode: server.familyBusinessMode || 40,
       };
@@ -2655,7 +2655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updates = req.body;
       
       // Validate behavior settings
-      const validKeys = ['aggressiveness', 'responsiveness', 'italianIntensity', 'dbdObsession', 'familyBusinessMode'];
+      const validKeys = ['aggressiveness', 'responsiveness', 'unpredictability', 'dbdObsession', 'familyBusinessMode'];
       const filteredUpdates: any = {};
       
       for (const key of validKeys) {
