@@ -51,9 +51,9 @@ export default function PersonalityPanel({
             
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">Core Identity:</div>
-              <div className="text-xs text-foreground bg-muted/30 p-2 rounded font-mono max-h-20 overflow-y-auto chat-scroll">
+              <div className="text-xs text-foreground bg-muted/30 p-2 rounded font-mono max-h-40 overflow-y-auto chat-scroll whitespace-pre-wrap">
                 {profile?.coreIdentity 
-                  ? truncateText(profile.coreIdentity, 200)
+                  ? profile.coreIdentity
                   : "No personality configured"
                 }
               </div>

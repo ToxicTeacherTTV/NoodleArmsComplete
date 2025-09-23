@@ -302,6 +302,58 @@ export default function BrainManagement() {
   const [isLoadingDuplicates, setIsLoadingDuplicates] = useState(false);
   const [autoMergeInProgress, setAutoMergeInProgress] = useState(false);
 
+  // Profile editing state
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    name: "",
+    coreIdentity: "",
+    knowledgeBase: ""
+  });
+
+  // Profile update mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async (profileData: { name: string; coreIdentity: string; knowledgeBase: string }) => {
+      const response = await fetch(`/api/profiles/${activeProfile?.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileData),
+      });
+      if (!response.ok) throw new Error('Failed to update profile');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/profiles/active'] });
+      setIsProfileModalOpen(false);
+      toast({
+        title: "Profile Updated",
+        description: "Core identity and personality have been saved successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update profile",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Profile modal handlers
+  const openProfileManager = () => {
+    if (activeProfile) {
+      setProfileForm({
+        name: activeProfile.name || "",
+        coreIdentity: activeProfile.coreIdentity || "",
+        knowledgeBase: activeProfile.knowledgeBase || ""
+      });
+      setIsProfileModalOpen(true);
+    }
+  };
+
+  const handleProfileSave = () => {
+    updateProfileMutation.mutate(profileForm);
+  };
+
   // Find duplicates mutation
   const findDuplicatesMutation = useMutation({
     mutationFn: async (threshold: number) => {
@@ -1061,7 +1113,7 @@ export default function BrainManagement() {
               <CardContent>
                 <PersonalityPanel
                   profile={activeProfile}
-                  onOpenProfileManager={() => {/* Navigate to profile management or show modal */}}
+                  onOpenProfileManager={openProfileManager}
                   onResetChat={() => {/* This could be moved or handled differently in brain management */}}
                 />
               </CardContent>
@@ -2076,6 +2128,91 @@ export default function BrainManagement() {
                 </>
               ) : (
                 `Apply Changes (${selectedPreviewIds.size})`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Profile Editing Modal */}
+      <Dialog open={isProfileModalOpen} onOpenChange={setIsProfileModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit AI Personality Profile</DialogTitle>
+            <DialogDescription>
+              Modify the core identity, personality traits, and knowledge base for your AI assistant.
+              This is the authoritative source that controls all AI responses.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Profile Name */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Profile Name</label>
+              <input
+                type="text"
+                value={profileForm.name}
+                onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full p-2 border rounded-md bg-background"
+                placeholder="Enter profile name..."
+              />
+            </div>
+
+            {/* Core Identity - THE IMPORTANT ONE */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-primary">
+                Core Identity & Personality ⭐
+              </label>
+              <p className="text-xs text-muted-foreground">
+                This is the most important field - it defines the AI's personality, speaking style, 
+                background, and behavior patterns. Changes here will directly affect Discord responses.
+              </p>
+              <Textarea
+                value={profileForm.coreIdentity}
+                onChange={(e) => setProfileForm(prev => ({ ...prev, coreIdentity: e.target.value }))}
+                className="w-full h-64 p-3 border rounded-md bg-background font-mono text-sm"
+                placeholder="Enter the AI's core identity, personality, background, speaking patterns..."
+              />
+              <div className="text-xs text-muted-foreground">
+                Character count: {profileForm.coreIdentity.length}
+              </div>
+            </div>
+
+            {/* Knowledge Base */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Knowledge Base</label>
+              <p className="text-xs text-muted-foreground">
+                Additional context and knowledge that supplements the core identity.
+              </p>
+              <Textarea
+                value={profileForm.knowledgeBase}
+                onChange={(e) => setProfileForm(prev => ({ ...prev, knowledgeBase: e.target.value }))}
+                className="w-full h-32 p-3 border rounded-md bg-background font-mono text-sm"
+                placeholder="Additional knowledge, facts, references..."
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex justify-between">
+            <Button
+              variant="outline"
+              onClick={() => setIsProfileModalOpen(false)}
+              disabled={updateProfileMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleProfileSave}
+              disabled={updateProfileMutation.isPending}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {updateProfileMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Changes'
               )}
             </Button>
           </DialogFooter>
