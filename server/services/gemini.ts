@@ -580,6 +580,100 @@ Response format:
 
     return JSON.parse(rawJson);
   }
+
+  // NEW: Parse podcast segments from transcript for Nicky's memory system
+  async parseShowSegments(transcript: string, episodeTitle: string): Promise<Array<{
+    title: string;
+    description: string;
+    segmentType: string;
+    content: string;
+  }>> {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Gemini API key not configured");
+    }
+
+    const prompt = `You are analyzing a transcript from Nicky "Noodle Arms" A.I. Dente's podcast episode: "${episodeTitle}"
+
+CRITICAL INSTRUCTIONS:
+- This is for Nicky's memory system, not production editing
+- Identify RECURRING SHOW SEGMENTS by their actual names/phrases
+- Extract what content was covered in each segment
+- Focus on content summaries, not timestamps
+
+TRANSCRIPT:
+${transcript}
+
+Look for these RECURRING SHOW SEGMENTS and extract what was covered:
+
+1. **"Toxic Fucking News"** (or similar toxic news segment)
+   - What news stories, events, or current affairs were discussed
+   - Any specific incidents, people, or topics covered
+
+2. **"Word from the Don"** (or advice/wisdom segment) 
+   - What advice, wisdom, or guidance was shared
+   - Life lessons, business tips, or philosophical insights
+
+3. **"Where the F are the Viewers From"** (or geographic/viewer interaction)
+   - Geographic locations mentioned
+   - Viewer interactions or call-outs by location
+   - Any regional topics or references
+
+4. **Other Recurring Segments** (if you identify any other recurring segment patterns)
+   - Gaming discussions, family stories, mafia references, etc.
+
+For each segment found, provide:
+- title: The actual segment name (e.g., "Toxic Fucking News")
+- description: Brief summary of what was covered (1-2 sentences)
+- segmentType: Category (NEWS, ADVICE, VIEWERS, GAMING, STORY, etc.)
+- content: Detailed summary of topics, stories, or points discussed (2-3 sentences)
+
+Return as JSON array. If no clear segments are found, return empty array.
+
+Example format:
+[
+  {
+    "title": "Toxic Fucking News",
+    "description": "Discussion of recent news events and current affairs",
+    "segmentType": "NEWS", 
+    "content": "Covered the subway incident in NYC, talked about the political situation with the mayor's response, and discussed how the media is handling the coverage differently than last year's similar events."
+  }
+]`;
+
+    try {
+      const response = await this.ai.models.generateContent({
+        model: "gemini-2.5-pro",
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                description: { type: "string" },
+                segmentType: { type: "string" },
+                content: { type: "string" }
+              },
+              required: ["title", "description", "segmentType", "content"]
+            }
+          }
+        },
+        contents: prompt,
+      });
+
+      const rawJson = response.text;
+      if (rawJson) {
+        const segments = JSON.parse(rawJson);
+        console.log(`🎙️ Parsed ${segments.length} show segments from "${episodeTitle}"`);
+        return segments;
+      } else {
+        throw new Error("Empty response from Gemini");
+      }
+    } catch (error) {
+      console.error("Gemini segment parsing error:", error);
+      return []; // Return empty array if parsing fails
+    }
+  }
 }
 
 // Generate lore content for emergent storytelling
