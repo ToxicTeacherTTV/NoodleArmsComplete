@@ -62,11 +62,11 @@ class ChaosEngine {
     try {
       const { storage } = await import('../storage.js');
       const stateData: InsertChaosState = {
-        level: this.chaosState.level,
+        level: Math.round(this.chaosState.level), // Ensure integer for database
         mode: this.chaosState.mode,
         lastModeChange: this.chaosState.lastModeChange,
         responseCount: this.chaosState.responseCount,
-        manualOverride: this.chaosState.manualOverride,
+        manualOverride: this.chaosState.manualOverride ? Math.round(this.chaosState.manualOverride) : undefined,
         overrideExpiry: this.chaosState.overrideExpiry
       };
       

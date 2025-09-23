@@ -44,7 +44,7 @@ type DiscordMember = {
 type BehaviorSettings = {
   aggressiveness: number;
   responsiveness: number;
-  italianIntensity: number;
+  unpredictability: number;
   dbdObsession: number;
   familyBusinessMode: number;
 };
@@ -52,7 +52,7 @@ type BehaviorSettings = {
 type EffectiveBehavior = {
   aggressiveness: number;
   responsiveness: number;
-  italianIntensity: number;
+  unpredictability: number;
   dbdObsession: number;
   familyBusinessMode: number;
   lastUpdated: string;
@@ -917,31 +917,31 @@ function DynamicBehaviorPanel({ serverId }: { serverId: string }) {
       key: 'aggressiveness' as keyof BehaviorSettings, 
       label: 'Aggressiveness', 
       icon: '🔥', 
-      description: 'How confrontational and hostile Nicky gets' 
+      description: 'How confrontational and hostile Nicky gets (0-100)' 
     },
     { 
       key: 'responsiveness' as keyof BehaviorSettings, 
       label: 'Responsiveness', 
       icon: '⚡', 
-      description: 'How often he responds to messages' 
+      description: 'How often he responds to messages (0-100)' 
     },
     { 
-      key: 'italianIntensity' as keyof BehaviorSettings, 
-      label: 'Italian Intensity', 
-      icon: '🇮🇹', 
-      description: 'How much Italian language and expressions he uses' 
+      key: 'unpredictability' as keyof BehaviorSettings, 
+      label: 'Unpredictability', 
+      icon: '🎲', 
+      description: 'How chaotic and random his responses become (0-100)' 
     },
     { 
       key: 'dbdObsession' as keyof BehaviorSettings, 
-      label: 'DBD Obsession', 
+      label: 'DBD Focus', 
       icon: '💀', 
-      description: 'How often he relates everything to Dead by Daylight' 
+      description: 'How often he relates things to Dead by Daylight (0-100)' 
     },
     { 
       key: 'familyBusinessMode' as keyof BehaviorSettings, 
-      label: 'Family Business Mode', 
+      label: 'Family Business', 
       icon: '👔', 
-      description: 'How often he uses mafia/family business terminology' 
+      description: 'How often he uses mafia/family business references (0-100)' 
     },
   ];
 
@@ -1002,24 +1002,40 @@ function DynamicBehaviorPanel({ serverId }: { serverId: string }) {
                   </div>
                 </div>
                 
-                <div className="relative">
-                  <Slider
-                    value={[baselineValue]}
-                    onValueChange={(value) => handleSliderChange(item.key, value)}
-                    max={100}
-                    step={5}
-                    className="w-full"
-                    disabled={updateBehaviorMutation.isPending}
-                  />
-                  
-                  {/* Show effective value indicator if different */}
-                  {isDifferent && (
-                    <div 
-                      className="absolute top-1 w-2 h-2 bg-green-500 rounded-full transform -translate-x-1"
-                      style={{ left: `${effectiveValue}%` }}
-                      title={`Live effective value: ${effectiveValue}%`}
+                <div className="space-y-3">
+                  {/* Number Input with Visual Bar */}
+                  <div className="flex items-center gap-3">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={baselineValue}
+                      onChange={(e) => {
+                        const newValue = parseInt(e.target.value) || 0;
+                        const clampedValue = Math.max(0, Math.min(100, newValue));
+                        handleSliderChange(item.key, [clampedValue]);
+                      }}
+                      className="w-20 text-center"
+                      disabled={updateBehaviorMutation.isPending}
+                      data-testid={`input-${item.key}`}
                     />
-                  )}
+                    <div className="flex-1 relative h-3 bg-muted rounded-full overflow-hidden">
+                      {/* Baseline value bar */}
+                      <div 
+                        className="h-full bg-primary transition-all duration-300"
+                        style={{ width: `${baselineValue}%` }}
+                      />
+                      {/* Show effective value indicator if different */}
+                      {isDifferent && (
+                        <div 
+                          className="absolute top-0 w-1 h-full bg-green-500"
+                          style={{ left: `${effectiveValue}%` }}
+                          title={`Live effective value: ${effectiveValue}%`}
+                        />
+                      )}
+                    </div>
+                    <span className="text-sm text-muted-foreground w-8">%</span>
+                  </div>
                 </div>
                 
                 <p className="text-xs text-muted-foreground">{item.description}</p>
