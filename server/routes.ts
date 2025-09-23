@@ -355,7 +355,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Speech synthesis route
   app.post('/api/speech/synthesize', async (req, res) => {
     try {
-      const { text, emotionProfile } = req.body;
+      const { 
+        text, 
+        emotionProfile, 
+        contentType, 
+        personality, 
+        mood, 
+        useAI 
+      } = req.body;
       
       if (!text) {
         return res.status(400).json({ error: 'Text is required' });
@@ -373,8 +380,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Use emotion profile if provided, otherwise use default voice settings
-      const audioBuffer = await elevenlabsService.synthesizeSpeech(text, emotionProfile, voiceSettings);
+      // Prepare AI context for emotion tag generation
+      const context = contentType ? {
+        contentType: contentType as 'ad' | 'chat' | 'announcement' | 'voice_response',
+        personality: personality || (activeProfile?.name || 'neutral'),
+        mood: mood || 'balanced',
+        useAI: useAI !== false  // Default to true unless explicitly disabled
+      } : undefined;
+
+      // Use AI emotion tags for ads, hardcoded for other content types
+      const audioBuffer = await elevenlabsService.synthesizeSpeech(
+        text, 
+        emotionProfile, 
+        voiceSettings,
+        context
+      );
       
       res.setHeader('Content-Type', 'audio/mpeg');
       res.setHeader('Content-Length', audioBuffer.length);
