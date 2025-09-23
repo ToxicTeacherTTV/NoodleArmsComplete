@@ -3309,6 +3309,155 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Podcast Management API Routes
+  
+  // Get all podcast episodes for active profile
+  app.get('/api/podcast/episodes', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+      
+      const episodes = await storage.listPodcastEpisodes(activeProfile.id);
+      res.json(episodes);
+    } catch (error) {
+      console.error('Error fetching podcast episodes:', error);
+      res.status(500).json({ error: 'Failed to fetch podcast episodes' });
+    }
+  });
+
+  // Get specific podcast episode
+  app.get('/api/podcast/episodes/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const episode = await storage.getPodcastEpisode(id);
+      
+      if (!episode) {
+        return res.status(404).json({ error: 'Episode not found' });
+      }
+      
+      res.json(episode);
+    } catch (error) {
+      console.error('Error fetching podcast episode:', error);
+      res.status(500).json({ error: 'Failed to fetch podcast episode' });
+    }
+  });
+
+  // Create new podcast episode
+  app.post('/api/podcast/episodes', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const episodeData = { ...req.body, profileId: activeProfile.id };
+      const episode = await storage.createPodcastEpisode(episodeData);
+      res.status(201).json(episode);
+    } catch (error) {
+      console.error('Error creating podcast episode:', error);
+      res.status(500).json({ error: 'Failed to create podcast episode' });
+    }
+  });
+
+  // Update podcast episode
+  app.put('/api/podcast/episodes/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const updatedEpisode = await storage.updatePodcastEpisode(id, updates);
+      res.json(updatedEpisode);
+    } catch (error) {
+      console.error('Error updating podcast episode:', error);
+      res.status(500).json({ error: 'Failed to update podcast episode' });
+    }
+  });
+
+  // Delete podcast episode
+  app.delete('/api/podcast/episodes/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deletePodcastEpisode(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting podcast episode:', error);
+      res.status(500).json({ error: 'Failed to delete podcast episode' });
+    }
+  });
+
+  // Get segments for a specific episode
+  app.get('/api/podcast/episodes/:episodeId/segments', async (req, res) => {
+    try {
+      const { episodeId } = req.params;
+      const segments = await storage.getEpisodeSegments(episodeId);
+      res.json(segments);
+    } catch (error) {
+      console.error('Error fetching episode segments:', error);
+      res.status(500).json({ error: 'Failed to fetch episode segments' });
+    }
+  });
+
+  // Create new podcast segment
+  app.post('/api/podcast/segments', async (req, res) => {
+    try {
+      const segmentData = req.body;
+      const segment = await storage.createPodcastSegment(segmentData);
+      res.status(201).json(segment);
+    } catch (error) {
+      console.error('Error creating podcast segment:', error);
+      res.status(500).json({ error: 'Failed to create podcast segment' });
+    }
+  });
+
+  // Update podcast segment
+  app.put('/api/podcast/segments/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const updatedSegment = await storage.updatePodcastSegment(id, updates);
+      res.json(updatedSegment);
+    } catch (error) {
+      console.error('Error updating podcast segment:', error);
+      res.status(500).json({ error: 'Failed to update podcast segment' });
+    }
+  });
+
+  // Delete podcast segment
+  app.delete('/api/podcast/segments/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deletePodcastSegment(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting podcast segment:', error);
+      res.status(500).json({ error: 'Failed to delete podcast segment' });
+    }
+  });
+
+  // Search podcast content
+  app.get('/api/podcast/search', async (req, res) => {
+    try {
+      const { q: query } = req.query;
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: 'Search query is required' });
+      }
+
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const results = await storage.searchPodcastContent(activeProfile.id, query);
+      res.json(results);
+    } catch (error) {
+      console.error('Error searching podcast content:', error);
+      res.status(500).json({ error: 'Failed to search podcast content' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
