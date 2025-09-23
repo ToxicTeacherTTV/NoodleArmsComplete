@@ -388,7 +388,7 @@ export default function DiscordManagementPanel() {
                             </p>
                             
                             <div className="space-y-2">
-                              {[...new Set(proactiveSettings.allowedChannels)].map((channelId) => (
+                              {Array.from(new Set(proactiveSettings.allowedChannels)).map((channelId) => (
                                 <div key={`allowed-${channelId}`} className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
                                   <div className="flex items-center gap-2">
                                     <Hash className="h-3 w-3 text-green-600" />
@@ -431,7 +431,7 @@ export default function DiscordManagementPanel() {
                             </p>
                             
                             <div className="space-y-2">
-                              {[...new Set(proactiveSettings.blockedChannels)].map((channelId) => (
+                              {Array.from(new Set(proactiveSettings.blockedChannels)).map((channelId) => (
                                 <div key={`blocked-${channelId}`} className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
                                   <div className="flex items-center gap-2">
                                     <Hash className="h-3 w-3 text-red-600" />
