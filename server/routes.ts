@@ -2654,12 +2654,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params; // This is the Discord server ID
       const updates = req.body;
       
-      console.log(`🔧 PUT behavior update for server ID: ${id}`);
-      console.log(`🔧 Updates received:`, updates);
-      
       // First get the server by Discord server ID to get the database ID
       const server = await storage.getDiscordServer(id);
-      console.log(`🔧 Found server:`, server ? `${server.id} (${server.serverName})` : 'NOT FOUND');
       
       if (!server) {
         return res.status(404).json({ error: 'Discord server not found' });
