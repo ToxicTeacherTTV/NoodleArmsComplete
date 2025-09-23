@@ -352,9 +352,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // TTS request validation schema
+  const ttsRequestSchema = z.object({
+    text: z.string().min(1, 'Text is required').max(5000, 'Text too long (max 5000 characters)'),
+    emotionProfile: z.string().optional(),
+    contentType: z.enum(['ad', 'chat', 'announcement', 'voice_response']).optional(),
+    personality: z.string().min(1).max(100).optional(),
+    mood: z.string().min(1).max(50).optional(),
+    useAI: z.boolean().optional()
+  });
+
   // Speech synthesis route
   app.post('/api/speech/synthesize', async (req, res) => {
     try {
+      // Validate request body
+      const validationResult = ttsRequestSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: 'Invalid request parameters',
+          details: validationResult.error.format()
+        });
+      }
+
       const { 
         text, 
         emotionProfile, 
@@ -362,11 +381,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         personality, 
         mood, 
         useAI 
-      } = req.body;
-      
-      if (!text) {
-        return res.status(400).json({ error: 'Text is required' });
-      }
+      } = validationResult.data;
 
       // Get active profile and use its voice settings
       const activeProfile = await storage.getActiveProfile();

@@ -77,17 +77,51 @@ class EmotionTagGenerator {
     );
     
     try {
-      // Parse AI response - expecting JSON format
-      const parsed = JSON.parse(response.content);
+      // Extract JSON from response content (handles wrapper text)
+      const jsonContent = this.extractJSON(response.content);
+      const parsed = JSON.parse(jsonContent);
       
-      return {
-        hook: this.sanitizeTag(parsed.hook || ''),
-        body: this.sanitizeTag(parsed.body || ''),
-        cta: this.sanitizeTag(parsed.cta || '')
+      // Validate structure
+      if (!parsed.hook || !parsed.body || !parsed.cta) {
+        throw new Error('Missing required emotion tag fields');
+      }
+      
+      const tags = {
+        hook: this.sanitizeTag(parsed.hook),
+        body: this.sanitizeTag(parsed.body),
+        cta: this.sanitizeTag(parsed.cta)
       };
-    } catch (parseError) {
-      throw new Error('Failed to parse AI emotion tag response');
+      
+      // Final validation
+      if (!this.validateTags(tags)) {
+        throw new Error('Generated emotion tags failed validation');
+      }
+      
+      return tags;
+    } catch (parseError: any) {
+      console.warn('🎭 AI response parsing failed:', parseError);
+      throw new Error(`Failed to parse AI emotion tag response: ${parseError?.message || 'Unknown parsing error'}`);
     }
+  }
+
+  /**
+   * Extract JSON from potentially wrapped text
+   */
+  private extractJSON(text: string): string {
+    // Try to find JSON object in the text
+    const jsonMatch = text.match(/\{[^{}]*\}/);
+    if (jsonMatch) {
+      return jsonMatch[0];
+    }
+    
+    // If no JSON object found, try the whole text
+    const trimmed = text.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      return trimmed;
+    }
+    
+    // Last resort - throw error
+    throw new Error('No valid JSON object found in AI response');
   }
 
   /**

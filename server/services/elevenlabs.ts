@@ -158,7 +158,7 @@ class ElevenLabsService {
     this.config = {
       apiKey: process.env.ELEVENLABS_API_KEY || "",
       voiceId: process.env.ELEVENLABS_VOICE_ID || "pNInz6obpgDQGcFmaJgB", // Default Adam voice
-      model: "eleven_v3", // Only v3 supports emotion tags
+      model: "eleven_v3", // Prefer v3 for emotion tags, fallback to v2
     };
   }
 
@@ -216,81 +216,77 @@ class ElevenLabsService {
       settings = this.getHardcodedSettings(emotionProfile, voiceSettings);
     }
 
-    console.log(`ElevenLabs request: voice_id=${this.config.voiceId}, model=${this.config.model}, settings=${JSON.stringify(settings)}`);
+    return this.synthesizeWithModelFallback(enhancedText, settings);
+  }
 
-    try {
-      const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${this.config.voiceId}`,
-        {
-          method: "POST",
-          headers: {
-            Accept: "audio/mpeg",
-            "Content-Type": "application/json",
-            "xi-api-key": this.config.apiKey,
-          },
-          body: JSON.stringify({
-            text: enhancedText,
-            model_id: this.config.model,
-            voice_settings: settings,
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`ElevenLabs API error ${response.status}:`, errorText);
-        throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
-      }
-
-      // No profile tracking needed for AI-generated tags
-      // Tracking is handled by the AI emotion tag generator
-
-      const arrayBuffer = await response.arrayBuffer();
-      return Buffer.from(arrayBuffer);
-    } catch (error) {
-      console.error("❌ ElevenLabs synthesis error:", error);
-      
-      // Classify error for appropriate handling
-      const errorInfo = this.classifyElevenLabsError(error);
-      console.log(`🔄 ElevenLabs error classified as: ${errorInfo.type}`);
-      
-      if (errorInfo.retryable && errorInfo.retryCount < 2) {
-        const delay = 2000 * (errorInfo.retryCount + 1); // 2s, 4s
-        console.log(`⏳ Retrying ElevenLabs synthesis in ${delay}ms...`);
+  /**
+   * Synthesize with model fallback (v3 -> v2)
+   */
+  private async synthesizeWithModelFallback(text: string, settings: any): Promise<Buffer> {
+    const models = ["eleven_v3", "eleven_v2"]; // Try v3 first, fallback to v2
+    let lastError: any;
+    
+    for (const model of models) {
+      try {
+        console.log(`🎵 ElevenLabs request: voice_id=${this.config.voiceId}, model=${model}, settings=${JSON.stringify(settings)}`);
         
-        await new Promise(resolve => setTimeout(resolve, delay));
-        
-        try {
-          const retryResponse = await fetch(
-            `https://api.elevenlabs.io/v1/text-to-speech/${this.config.voiceId}`,
-            {
-              method: "POST",
-              headers: {
-                Accept: "audio/mpeg",
-                "Content-Type": "application/json",
-                "xi-api-key": this.config.apiKey,
-              },
-              body: JSON.stringify({
-                text: enhancedText,
-                model_id: this.config.model,
-                voice_settings: settings,
-              }),
+        const response = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/${this.config.voiceId}`,
+          {
+            method: "POST",
+            headers: {
+              Accept: "audio/mpeg",
+              "Content-Type": "application/json",
+              "xi-api-key": this.config.apiKey,
             },
-          );
-          
-          if (retryResponse.ok) {
-            // No profile tracking needed for AI-generated tags
-            const arrayBuffer = await retryResponse.arrayBuffer();
-            return Buffer.from(arrayBuffer);
-          }
-        } catch (retryError) {
-          console.error(`❌ ElevenLabs retry failed:`, retryError);
+            body: JSON.stringify({
+              text: text,
+              model_id: model,
+              voice_settings: settings,
+            }),
+          },
+        );
+
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          console.log(`✅ ElevenLabs synthesis successful with model: ${model}`);
+          return Buffer.from(arrayBuffer);
         }
+
+        // Handle error response
+        const errorText = await response.text();
+        console.error(`❌ ElevenLabs API error ${response.status} with model ${model}:`, errorText);
+        lastError = new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
+        
+        // If 400 error (likely model incompatibility), try next model
+        if (response.status === 400) {
+          console.log(`🔄 Model ${model} incompatible, trying next model...`);
+          continue;
+        }
+        
+        // For other errors, don't try other models
+        throw lastError;
+        
+      } catch (error) {
+        console.error(`❌ ElevenLabs synthesis error with model ${model}:`, error);
+        lastError = error;
+        
+        // Classify error for appropriate handling
+        const errorInfo = this.classifyElevenLabsError(error);
+        console.log(`🔄 ElevenLabs error classified as: ${errorInfo.type}`);
+        
+        // If it's a network or rate limit error, don't try other models
+        if (errorInfo.type === 'RATE_LIMIT' || errorInfo.type === 'NETWORK_ERROR') {
+          throw error;
+        }
+        
+        // For other errors, try next model
+        continue;
       }
-      
-      // For consistent API, throw error so calling code can handle gracefully
-      throw new Error(`ElevenLabs synthesis failed: ${errorInfo.type}`);
     }
+    
+    // If we get here, all models failed
+    throw lastError || new Error('All ElevenLabs models failed');
   }
 
   async getVoices(): Promise<any[]> {
