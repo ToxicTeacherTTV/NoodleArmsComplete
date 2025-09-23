@@ -141,6 +141,28 @@ export default function PodcastManagementPanel() {
     },
   });
 
+  // Parse segments mutation
+  const parseSegmentsMutation = useMutation({
+    mutationFn: async (episodeId: string) => {
+      const response = await apiRequest('POST', `/api/podcast/episodes/${episodeId}/parse-segments`, {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/podcast/episodes', selectedEpisode?.id, 'segments'] });
+      toast({ 
+        title: "Segments parsed successfully!", 
+        description: `Found ${data.segments?.length || 0} show segments`
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to parse segments", 
+        description: error?.message || "Make sure the episode has a transcript",
+        variant: "destructive" 
+      });
+    },
+  });
+
   const handleCreateEpisode = () => {
     if (!newEpisode.title.trim()) {
       toast({ title: "Please enter an episode title", variant: "destructive" });
@@ -551,6 +573,23 @@ export default function PodcastManagementPanel() {
                       <Edit className="h-4 w-4 mr-1" />
                       Edit
                     </Button>
+                    {selectedEpisode.transcript && selectedEpisode.transcript.trim() !== '' && (
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => parseSegmentsMutation.mutate(selectedEpisode.id)}
+                        disabled={parseSegmentsMutation.isPending}
+                        data-testid="button-parse-segments"
+                        className="bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700"
+                      >
+                        {parseSegmentsMutation.isPending ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-1"></div>
+                        ) : (
+                          <FileText className="h-4 w-4 mr-1" />
+                        )}
+                        {parseSegmentsMutation.isPending ? "Parsing..." : "Parse Segments"}
+                      </Button>
+                    )}
                     <Button 
                       size="sm" 
                       variant="destructive" 
