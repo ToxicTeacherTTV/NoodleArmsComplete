@@ -620,7 +620,7 @@ export default function DiscordManagementPanel() {
                                     <Label className="text-sm font-medium">Facts about {member.username}</Label>
                                     <div className="space-y-2">
                                       {editFacts.map((fact, index) => (
-                                        <div key={index} className="flex items-center gap-2">
+                                        <div key={`fact-${fact}-${index}`} className="flex items-center gap-2">
                                           <span className="text-sm flex-1 p-2 bg-background rounded border">
                                             {fact}
                                           </span>
@@ -655,7 +655,7 @@ export default function DiscordManagementPanel() {
                                     <div className="space-y-2">
                                       <div className="flex flex-wrap gap-1">
                                         {editKeywords.map((keyword, index) => (
-                                          <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                                          <Badge key={`${keyword}-${index}`} variant="secondary" className="flex items-center gap-1">
                                             {keyword}
                                             <X 
                                               className="h-3 w-3 cursor-pointer" 
@@ -704,7 +704,7 @@ export default function DiscordManagementPanel() {
                                       <Label className="text-xs font-medium text-muted-foreground">Facts:</Label>
                                       <div className="space-y-1">
                                         {member.facts.map((fact, index) => (
-                                          <div key={index} className="text-sm bg-muted p-2 rounded" data-testid={`text-fact-${index}`}>
+                                          <div key={`${member.id}-fact-${index}`} className="text-sm bg-muted p-2 rounded" data-testid={`text-fact-${index}`}>
                                             • {fact}
                                           </div>
                                         ))}
@@ -720,7 +720,7 @@ export default function DiscordManagementPanel() {
                                       <Label className="text-xs font-medium text-muted-foreground">Keywords:</Label>
                                       <div className="flex flex-wrap gap-1 mt-1">
                                         {member.keywords.map((keyword, index) => (
-                                          <Badge key={index} variant="outline" className="text-xs" data-testid={`badge-keyword-${index}`}>
+                                          <Badge key={`${member.id}-keyword-${index}`} variant="outline" className="text-xs" data-testid={`badge-keyword-${index}`}>
                                             {keyword}
                                           </Badge>
                                         ))}
@@ -813,9 +813,11 @@ function DynamicBehaviorPanel({ serverId }: { serverId: string }) {
       queryClient.invalidateQueries({ queryKey: [`/api/discord/servers/${serverId}/effective-behavior`] });
       toast({ title: "✅ Behavior settings updated!" });
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error('Discord behavior update failed:', error);
       toast({ 
         title: "❌ Failed to update settings", 
+        description: error?.message || 'Please try again', 
         variant: "destructive" 
       });
     },
