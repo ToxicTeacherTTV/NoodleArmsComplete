@@ -45,9 +45,9 @@ export class BehaviorModulator {
         ((server.responsiveness || 60) + drift.responsiveness) * chaosMultiplier.responsiveness + 
         timeOfDayFactor.responsiveness + activeNudges.responsiveness
       ),
-      italianIntensity: this.clamp(
-        ((server.italianIntensity || 100) + drift.italianIntensity) * chaosMultiplier.italianIntensity + 
-        timeOfDayFactor.italianIntensity + activeNudges.italianIntensity
+      unpredictability: this.clamp(
+        ((server.unpredictability || 75) + drift.unpredictability) * chaosMultiplier.unpredictability + 
+        timeOfDayFactor.unpredictability + activeNudges.unpredictability
       ),
       dbdObsession: this.clamp(
         ((server.dbdObsession || 80) + drift.dbdObsession) * chaosMultiplier.dbdObsession + 
@@ -88,7 +88,7 @@ export class BehaviorModulator {
     const newDrift = {
       aggressiveness: this.boundedWalk(currentDrift.aggressiveness, steps, 15), // ±15 max drift
       responsiveness: this.boundedWalk(currentDrift.responsiveness, steps, 20), // ±20 max drift  
-      italianIntensity: this.boundedWalk(currentDrift.italianIntensity, steps, 10), // ±10 max drift
+      unpredictability: this.boundedWalk(currentDrift.unpredictability, steps, 10), // ±10 max drift
       dbdObsession: this.boundedWalk(currentDrift.dbdObsession, steps, 15), // ±15 max drift
       familyBusinessMode: this.boundedWalk(currentDrift.familyBusinessMode, steps, 25), // ±25 max drift
     };
@@ -136,7 +136,7 @@ export class BehaviorModulator {
           return {
             aggressiveness: 1.2, // +20% aggression
             responsiveness: 1.1, // +10% responsiveness
-            italianIntensity: 1.15, // +15% Italian
+            unpredictability: 1.15, // +15% chaos
             dbdObsession: 1.1, // +10% DBD
             familyBusinessMode: 1.0, // No change
           };
@@ -144,7 +144,7 @@ export class BehaviorModulator {
           return {
             aggressiveness: 0.7, // -30% aggression
             responsiveness: 0.7, // -30% responsiveness  
-            italianIntensity: 0.7, // -30% Italian
+            unpredictability: 0.7, // -30% chaos
             dbdObsession: 0.8, // -20% DBD
             familyBusinessMode: 1.2, // +20% business mode
           };
@@ -152,7 +152,7 @@ export class BehaviorModulator {
           return {
             aggressiveness: 1.0,
             responsiveness: 1.3, // +30% when mentioned
-            italianIntensity: 0.9,
+            unpredictability: 0.9,
             dbdObsession: 1.2, // +20% focus on DBD
             familyBusinessMode: 0.8,
           };
@@ -160,7 +160,7 @@ export class BehaviorModulator {
           return {
             aggressiveness: 1.1,
             responsiveness: 0.9,
-            italianIntensity: 1.0,
+            unpredictability: 1.0,
             dbdObsession: 0.7, // -30% DBD, more conspiracy
             familyBusinessMode: 1.3, // +30% family business paranoia
           };
@@ -168,14 +168,14 @@ export class BehaviorModulator {
           return {
             aggressiveness: 1.0,
             responsiveness: 1.0,
-            italianIntensity: 1.0,
+            unpredictability: 1.0,
             dbdObsession: 1.0,
             familyBusinessMode: 1.0,
           };
       }
     } catch (error) {
       console.error('Failed to get chaos state:', error);
-      return { aggressiveness: 1.0, responsiveness: 1.0, italianIntensity: 1.0, dbdObsession: 1.0, familyBusinessMode: 1.0 };
+      return { aggressiveness: 1.0, responsiveness: 1.0, unpredictability: 1.0, dbdObsession: 1.0, familyBusinessMode: 1.0 };
     }
   }
 
@@ -190,7 +190,7 @@ export class BehaviorModulator {
       return {
         aggressiveness: 5, // +5 points in evening
         responsiveness: 10, // +10 points in evening
-        italianIntensity: 3,
+        unpredictability: 3,
         dbdObsession: 5,
         familyBusinessMode: 2,
       };
@@ -201,7 +201,7 @@ export class BehaviorModulator {
       return {
         aggressiveness: -3,
         responsiveness: -8, // -8 points late night
-        italianIntensity: -2,
+        unpredictability: -2,
         dbdObsession: -3,
         familyBusinessMode: 1, // Family never sleeps
       };
@@ -211,7 +211,7 @@ export class BehaviorModulator {
     return {
       aggressiveness: 0,
       responsiveness: 0,
-      italianIntensity: 0,
+      unpredictability: 0,
       dbdObsession: 0,
       familyBusinessMode: 0,
     };
@@ -272,12 +272,12 @@ export class BehaviorModulator {
       return {
         aggressiveness: driftData.aggressiveness || 0,
         responsiveness: driftData.responsiveness || 0,
-        italianIntensity: driftData.italianIntensity || 0,
+        unpredictability: driftData.unpredictability || 0,
         dbdObsession: driftData.dbdObsession || 0,
         familyBusinessMode: driftData.familyBusinessMode || 0,
       };
     }
-    return { aggressiveness: 0, responsiveness: 0, italianIntensity: 0, dbdObsession: 0, familyBusinessMode: 0 };
+    return { aggressiveness: 0, responsiveness: 0, unpredictability: 0, dbdObsession: 0, familyBusinessMode: 0 };
   }
 
   private parseContextNudges(nudgeData: any): ContextNudge[] {
@@ -294,10 +294,10 @@ export class BehaviorModulator {
     return activeNudges.reduce((sum, nudge) => ({
       aggressiveness: sum.aggressiveness + (nudge.type === 'mention_burst' ? nudge.strength : 0),
       responsiveness: sum.responsiveness + (nudge.type === 'mention_burst' ? nudge.strength * 1.5 : 0),
-      italianIntensity: sum.italianIntensity + (nudge.type === 'keyword_trigger' ? nudge.strength : 0),
+      unpredictability: sum.unpredictability + (nudge.type === 'keyword_trigger' ? nudge.strength : 0),
       dbdObsession: sum.dbdObsession + (nudge.type === 'keyword_trigger' ? nudge.strength : 0),
       familyBusinessMode: sum.familyBusinessMode + (nudge.type === 'moderation_flag' ? -nudge.strength : 0),
-    }), { aggressiveness: 0, responsiveness: 0, italianIntensity: 0, dbdObsession: 0, familyBusinessMode: 0 });
+    }), { aggressiveness: 0, responsiveness: 0, unpredictability: 0, dbdObsession: 0, familyBusinessMode: 0 });
   }
 }
 

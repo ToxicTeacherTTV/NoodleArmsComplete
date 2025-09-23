@@ -442,7 +442,7 @@ export const discordServers = pgTable("discord_servers", {
   // Baseline behavior settings (user-configurable)
   aggressiveness: integer("aggressiveness").default(80), // 0-100
   responsiveness: integer("responsiveness").default(60), // 0-100 
-  italianIntensity: integer("italian_intensity").default(100), // 0-100
+  unpredictability: integer("unpredictability").default(75), // 0-100 (replaces italianIntensity)
   dbdObsession: integer("dbd_obsession").default(80), // 0-100
   familyBusinessMode: integer("family_business_mode").default(40), // 0-100
   // Dynamic drift state (auto-calculated)
@@ -726,7 +726,7 @@ export type InsertPrerollAd = z.infer<typeof insertPrerollAdSchema>;
 export type EffectiveBehavior = {
   aggressiveness: number;
   responsiveness: number;
-  italianIntensity: number;
+  unpredictability: number;
   dbdObsession: number;
   familyBusinessMode: number;
   lastUpdated: string;
@@ -740,7 +740,7 @@ export type EffectiveBehavior = {
 export type BehaviorDrift = {
   aggressiveness: number;
   responsiveness: number;
-  italianIntensity: number;
+  unpredictability: number;
   dbdObsession: number;
   familyBusinessMode: number;
 };
