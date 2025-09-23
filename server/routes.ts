@@ -2651,8 +2651,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update Discord server behavior settings
   app.put('/api/discord/servers/:id/behavior', requireAuth, async (req, res) => {
     try {
-      const { id } = req.params;
+      const { id } = req.params; // This is the Discord server ID
       const updates = req.body;
+      
+      // First get the server by Discord server ID to get the database ID
+      const server = await storage.getDiscordServer(id);
+      if (!server) {
+        return res.status(404).json({ error: 'Discord server not found' });
+      }
       
       // Validate behavior settings
       const validKeys = ['aggressiveness', 'responsiveness', 'unpredictability', 'dbdObsession', 'familyBusinessMode'];
@@ -2664,13 +2670,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const server = await storage.updateDiscordServer(id, filteredUpdates);
+      // Use the database ID for the update
+      const updatedServer = await storage.updateDiscordServer(server.id, filteredUpdates);
       
-      if (!server) {
-        return res.status(404).json({ error: 'Discord server not found' });
-      }
-      
-      res.json(server);
+      res.json(updatedServer);
     } catch (error) {
       console.error('Error updating Discord server behavior:', error);
       res.status(500).json({ error: 'Failed to update Discord server behavior' });
