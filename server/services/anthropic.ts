@@ -52,6 +52,19 @@ class AnthropicService {
     this.contentSuggestionService = new ContentSuggestionService();
   }
 
+  // Extract keywords from user message for context retrieval
+  private extractKeywords(message: string): string[] {
+    // Remove common stop words and extract meaningful terms
+    const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them']);
+    
+    return message
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+      .split(/\s+/)
+      .filter(word => word.length > 2 && !stopWords.has(word))
+      .slice(0, 8); // Limit to 8 most relevant keywords
+  }
+
   async generateResponse(
     userMessage: string,
     coreIdentity: string,
@@ -106,6 +119,51 @@ class AnthropicService {
             contextPrompt += `- ${memory.content}\n`;
           }
         });
+      }
+
+      // 🎙️ NEW: Add relevant podcast content to context
+      if (profileId) {
+        const keywords = this.extractKeywords(userMessage);
+        const podcastContent = await storage.getRelevantPodcastContent(profileId, keywords);
+        
+        if (podcastContent.episodes.length > 0) {
+          contextPrompt += "\n\nRELEVANT PODCAST EPISODES:\n";
+          podcastContent.episodes.forEach(episode => {
+            contextPrompt += `- Episode #${episode.episodeNumber}: "${episode.title}"`;
+            if (episode.description) {
+              contextPrompt += ` - ${episode.description}`;
+            }
+            if ((episode as any).guestInfo) {
+              contextPrompt += ` (Guest: ${(episode as any).guestInfo})`;
+            }
+            if ((episode as any).mood) {
+              contextPrompt += ` [Mood: ${(episode as any).mood}]`;
+            }
+            contextPrompt += `\n`;
+            if (episode.notes) {
+              contextPrompt += `  ↳ Notes: ${episode.notes.substring(0, 200)}${episode.notes.length > 200 ? '...' : ''}\n`;
+            }
+          });
+        }
+
+        if (podcastContent.segments.length > 0) {
+          contextPrompt += "\n\nRELEVANT PODCAST SEGMENTS:\n";
+          podcastContent.segments.forEach(segment => {
+            const startTime = segment.startTime || 0;
+            const timestamp = Math.floor(startTime / 60) + ':' + (startTime % 60).toString().padStart(2, '0');
+            contextPrompt += `- [${timestamp}] "${segment.title}"`;
+            if (segment.description) {
+              contextPrompt += ` - ${segment.description}`;
+            }
+            if (segment.segmentType) {
+              contextPrompt += ` (${segment.segmentType})`;
+            }
+            contextPrompt += `\n`;
+            if (segment.transcript) {
+              contextPrompt += `  ↳ Transcript: ${segment.transcript.substring(0, 300)}${segment.transcript.length > 300 ? '...' : ''}\n`;
+            }
+          });
+        }
       }
 
       if (relevantDocs.length > 0) {

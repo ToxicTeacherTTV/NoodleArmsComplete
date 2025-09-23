@@ -1250,6 +1250,65 @@ export class DatabaseStorage implements IStorage {
 
     return { episodes, segments: segments.map(s => s.podcast_segments) };
   }
+
+  // Memory/RAG Integration for Podcast Content
+  async getRelevantPodcastContent(profileId: string, keywords: string[]): Promise<{
+    episodes: PodcastEpisode[];
+    segments: PodcastSegment[];
+  }> {
+    if (keywords.length === 0) {
+      return { episodes: [], segments: [] };
+    }
+
+    // Create search terms for SQL LIKE queries
+    const searchTerms = keywords.map(keyword => `%${keyword.toLowerCase()}%`);
+    
+    // Search episodes by title, description, notes, topics, and transcript
+    const episodes = await db
+      .select()
+      .from(podcastEpisodes)
+      .where(
+        and(
+          eq(podcastEpisodes.profileId, profileId),
+          or(
+            ...searchTerms.flatMap(term => [
+              like(podcastEpisodes.title, term),
+              like(podcastEpisodes.description, term),
+              like(podcastEpisodes.notes, term),
+              like(podcastEpisodes.transcript, term)
+            ])
+          )
+        )
+      )
+      .orderBy(desc(podcastEpisodes.episodeNumber))
+      .limit(5); // Limit for context window
+
+    // Search segments by title, description, transcript, and notes
+    const segments = await db
+      .select()
+      .from(podcastSegments)
+      .innerJoin(podcastEpisodes, eq(podcastSegments.episodeId, podcastEpisodes.id))
+      .where(
+        and(
+          eq(podcastEpisodes.profileId, profileId),
+          or(
+            ...searchTerms.flatMap(term => [
+              like(podcastSegments.title, term),
+              like(podcastSegments.description, term),
+              like(podcastSegments.transcript, term),
+              like(podcastSegments.notes, term)
+            ])
+          )
+        )
+      )
+      .orderBy(podcastSegments.startTime)
+      .limit(10); // Limit for context window
+
+    return { 
+      episodes, 
+      segments: segments.map(s => s.podcast_segments) 
+    };
+  }
 }
 
 export const storage = new DatabaseStorage();
