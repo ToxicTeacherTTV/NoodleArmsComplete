@@ -587,6 +587,8 @@ Response format:
     description: string;
     segmentType: string;
     content: string;
+    startTime?: number;
+    endTime?: number;
   }>> {
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("Gemini API key not configured");
@@ -598,10 +600,14 @@ CRITICAL INSTRUCTIONS:
 - This is for Nicky's memory system, not production editing
 - Identify RECURRING SHOW SEGMENTS by their actual names/phrases
 - Extract what content was covered in each segment
-- Focus on content summaries, not timestamps
+- Pay attention to timestamps in format [HH:MM:SS:FF] to identify segment boundaries
 
 TRANSCRIPT:
 ${transcript}
+
+The transcript contains timestamps in format [HH:MM:SS:FF - HH:MM:SS:FF] where:
+- HH = hours, MM = minutes, SS = seconds, FF = frames (ignore frames)
+- Use these to identify when segments start and end
 
 Look for these RECURRING SHOW SEGMENTS and extract what was covered:
 
@@ -626,6 +632,8 @@ For each segment found, provide:
 - description: Brief summary of what was covered (1-2 sentences)
 - segmentType: Category (NEWS, ADVICE, VIEWERS, GAMING, STORY, etc.)
 - content: Detailed summary of topics, stories, or points discussed (2-3 sentences)
+- startTime: Start time in seconds (convert from HH:MM:SS, ignore frames)
+- endTime: End time in seconds (convert from HH:MM:SS, ignore frames)
 
 Return as JSON array. If no clear segments are found, return empty array.
 
@@ -635,7 +643,9 @@ Example format:
     "title": "Toxic Fucking News",
     "description": "Discussion of recent news events and current affairs",
     "segmentType": "NEWS", 
-    "content": "Covered the subway incident in NYC, talked about the political situation with the mayor's response, and discussed how the media is handling the coverage differently than last year's similar events."
+    "content": "Covered the subway incident in NYC, talked about the political situation with the mayor's response, and discussed how the media is handling the coverage differently than last year's similar events.",
+    "startTime": 120,
+    "endTime": 480
   }
 ]`;
 
@@ -652,9 +662,11 @@ Example format:
                 title: { type: "string" },
                 description: { type: "string" },
                 segmentType: { type: "string" },
-                content: { type: "string" }
+                content: { type: "string" },
+                startTime: { type: "number" },
+                endTime: { type: "number" }
               },
-              required: ["title", "description", "segmentType", "content"]
+              required: ["title", "description", "segmentType", "content", "startTime"]
             }
           }
         },
