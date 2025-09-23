@@ -15,6 +15,8 @@ import {
   pendingContent,
   adTemplates,
   prerollAds,
+  podcastEpisodes,
+  podcastSegments,
   type Profile, 
   type InsertProfile,
   type Conversation,
@@ -46,7 +48,11 @@ import {
   type AdTemplate,
   type InsertAdTemplate,
   type PrerollAd,
-  type InsertPrerollAd
+  type InsertPrerollAd,
+  type PodcastEpisode,
+  type InsertPodcastEpisode,
+  type PodcastSegment,
+  type InsertPodcastSegment
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, sql } from "drizzle-orm";
@@ -141,6 +147,21 @@ export interface IStorage {
   approvePendingContent(id: string): Promise<void>;
   rejectPendingContent(id: string, reason: string): Promise<void>;
   getPendingContentById(id: string): Promise<PendingContent | null>;
+
+  // Podcast Management methods
+  createPodcastEpisode(episode: InsertPodcastEpisode): Promise<PodcastEpisode>;
+  getPodcastEpisode(id: string): Promise<PodcastEpisode | undefined>;
+  getPodcastEpisodeByNumber(profileId: string, episodeNumber: number): Promise<PodcastEpisode | undefined>;
+  listPodcastEpisodes(profileId: string): Promise<PodcastEpisode[]>;
+  updatePodcastEpisode(id: string, updates: Partial<PodcastEpisode>): Promise<PodcastEpisode>;
+  deletePodcastEpisode(id: string): Promise<void>;
+  
+  createPodcastSegment(segment: InsertPodcastSegment): Promise<PodcastSegment>;
+  getPodcastSegment(id: string): Promise<PodcastSegment | undefined>;
+  getEpisodeSegments(episodeId: string): Promise<PodcastSegment[]>;
+  updatePodcastSegment(id: string, updates: Partial<PodcastSegment>): Promise<PodcastSegment>;
+  deletePodcastSegment(id: string): Promise<void>;
+  searchPodcastContent(profileId: string, query: string): Promise<{ episodes: PodcastEpisode[]; segments: PodcastSegment[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1077,6 +1098,157 @@ export class DatabaseStorage implements IStorage {
       .from(prerollAds)
       .where(eq(prerollAds.id, id));
     return ad || null;
+  }
+
+  async listPrerollAds(profileId: string): Promise<PrerollAd[]> {
+    return await db
+      .select()
+      .from(prerollAds)
+      .where(eq(prerollAds.profileId, profileId))
+      .orderBy(desc(prerollAds.generatedAt));
+  }
+
+  async updatePrerollAd(id: string, updates: Partial<PrerollAd>): Promise<PrerollAd> {
+    const updateData = { ...updates, updatedAt: sql`now()` };
+    const [updatedAd] = await db
+      .update(prerollAds)
+      .set(updateData as any)
+      .where(eq(prerollAds.id, id))
+      .returning();
+    return updatedAd;
+  }
+
+  async deletePrerollAd(id: string): Promise<void> {
+    await db.delete(prerollAds).where(eq(prerollAds.id, id));
+  }
+
+  // Podcast Management Implementation
+  async createPodcastEpisode(episode: InsertPodcastEpisode): Promise<PodcastEpisode> {
+    const [newEpisode] = await db
+      .insert(podcastEpisodes)
+      .values([episode as any])
+      .returning();
+    return newEpisode;
+  }
+
+  async getPodcastEpisode(id: string): Promise<PodcastEpisode | undefined> {
+    const [episode] = await db
+      .select()
+      .from(podcastEpisodes)
+      .where(eq(podcastEpisodes.id, id));
+    return episode || undefined;
+  }
+
+  async getPodcastEpisodeByNumber(profileId: string, episodeNumber: number): Promise<PodcastEpisode | undefined> {
+    const [episode] = await db
+      .select()
+      .from(podcastEpisodes)
+      .where(
+        and(
+          eq(podcastEpisodes.profileId, profileId),
+          eq(podcastEpisodes.episodeNumber, episodeNumber)
+        )
+      );
+    return episode || undefined;
+  }
+
+  async listPodcastEpisodes(profileId: string): Promise<PodcastEpisode[]> {
+    return await db
+      .select()
+      .from(podcastEpisodes)
+      .where(eq(podcastEpisodes.profileId, profileId))
+      .orderBy(desc(podcastEpisodes.episodeNumber));
+  }
+
+  async updatePodcastEpisode(id: string, updates: Partial<PodcastEpisode>): Promise<PodcastEpisode> {
+    const updateData = { ...updates, updatedAt: sql`now()` };
+    const [updatedEpisode] = await db
+      .update(podcastEpisodes)
+      .set(updateData as any)
+      .where(eq(podcastEpisodes.id, id))
+      .returning();
+    return updatedEpisode;
+  }
+
+  async deletePodcastEpisode(id: string): Promise<void> {
+    // Delete associated segments first
+    await db.delete(podcastSegments).where(eq(podcastSegments.episodeId, id));
+    // Then delete the episode
+    await db.delete(podcastEpisodes).where(eq(podcastEpisodes.id, id));
+  }
+
+  async createPodcastSegment(segment: InsertPodcastSegment): Promise<PodcastSegment> {
+    const [newSegment] = await db
+      .insert(podcastSegments)
+      .values([segment as any])
+      .returning();
+    return newSegment;
+  }
+
+  async getPodcastSegment(id: string): Promise<PodcastSegment | undefined> {
+    const [segment] = await db
+      .select()
+      .from(podcastSegments)
+      .where(eq(podcastSegments.id, id));
+    return segment || undefined;
+  }
+
+  async getEpisodeSegments(episodeId: string): Promise<PodcastSegment[]> {
+    return await db
+      .select()
+      .from(podcastSegments)
+      .where(eq(podcastSegments.episodeId, episodeId))
+      .orderBy(podcastSegments.startTime);
+  }
+
+  async updatePodcastSegment(id: string, updates: Partial<PodcastSegment>): Promise<PodcastSegment> {
+    const [updatedSegment] = await db
+      .update(podcastSegments)
+      .set(updates as any)
+      .where(eq(podcastSegments.id, id))
+      .returning();
+    return updatedSegment;
+  }
+
+  async deletePodcastSegment(id: string): Promise<void> {
+    await db.delete(podcastSegments).where(eq(podcastSegments.id, id));
+  }
+
+  async searchPodcastContent(profileId: string, query: string): Promise<{ episodes: PodcastEpisode[]; segments: PodcastSegment[] }> {
+    // Search episodes by title, description, topics, highlights, or transcript
+    const episodes = await db
+      .select()
+      .from(podcastEpisodes)
+      .where(
+        and(
+          eq(podcastEpisodes.profileId, profileId),
+          or(
+            like(podcastEpisodes.title, `%${query}%`),
+            like(podcastEpisodes.description, `%${query}%`),
+            like(podcastEpisodes.transcript, `%${query}%`)
+          )
+        )
+      )
+      .orderBy(desc(podcastEpisodes.episodeNumber));
+
+    // Search segments by title, description, transcript, or key quotes
+    const segments = await db
+      .select()
+      .from(podcastSegments)
+      .innerJoin(podcastEpisodes, eq(podcastSegments.episodeId, podcastEpisodes.id))
+      .where(
+        and(
+          eq(podcastEpisodes.profileId, profileId),
+          or(
+            like(podcastSegments.title, `%${query}%`),
+            like(podcastSegments.description, `%${query}%`),
+            like(podcastSegments.transcript, `%${query}%`)
+          )
+        )
+      )
+      .orderBy(podcastSegments.startTime);
+
+    return { episodes, segments: segments.map(s => s.podcast_segments) };
   }
 }
 
