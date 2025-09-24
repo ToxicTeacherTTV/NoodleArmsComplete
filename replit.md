@@ -42,6 +42,10 @@ Preferred communication style: Simple, everyday language.
 - **Text-to-Speech**: Browser-native Speech Synthesis API with queuing system
 - **Voice Activity Detection**: Real-time audio monitoring using Web Audio API
 - **Audio Visualization**: Custom voice activity visualization components
+- **Smart Voice Credit Management**: 
+  - **PODCAST Mode**: `voiceOutput: false` (default) - Manual voice generation only to conserve credits
+  - **STREAMING Mode**: `voiceOutput: true` - Auto-voice enabled for real-time interaction
+  - ElevenLabs integration with pause/resume/replay/save functionality
 
 ### AI Integration Architecture
 - **Primary AI Service**: Anthropic's Claude API (claude-sonnet-4-20250514 model)
