@@ -204,6 +204,7 @@ export class DiscordBotService {
 
       // Determine if Nicky should respond
       const shouldRespond = await this.shouldRespondToMessage(message, discordServer);
+      console.log(`🎯 Response decision for "${message.content}": ${shouldRespond.respond ? 'YES' : 'NO'} (${shouldRespond.triggerType})`);
       
       if (shouldRespond.respond) {
         console.log(`💬 Responding to message from ${message.author.username}: "${message.content}"`);
@@ -374,6 +375,7 @@ export class DiscordBotService {
     // Check topic triggers
     const topicTriggers = await storage.getDiscordTopicTriggers(server.id);
     const messageContent = message.content.toLowerCase();
+    console.log(`🔍 Checking ${topicTriggers.length} topic triggers for: "${messageContent}"`);
     
     for (const trigger of topicTriggers) {
       const triggerWords = [trigger.topic.toLowerCase(), ...(trigger.keywords || [])];
