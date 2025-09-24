@@ -61,7 +61,14 @@ class AnthropicService {
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, '') // Remove special characters
       .split(/\s+/)
-      .filter(word => word.length > 2 && !stopWords.has(word))
+      .filter(word => {
+        // Keep numbers (even if short) and words longer than 2 characters
+        const isNumber = /^\d+$/.test(word);
+        const isLongEnough = word.length > 2;
+        const isNotStopWord = !stopWords.has(word);
+        
+        return (isNumber || isLongEnough) && isNotStopWord;
+      })
       .slice(0, 8); // Limit to 8 most relevant keywords
   }
 
