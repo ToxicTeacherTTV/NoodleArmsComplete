@@ -631,7 +631,6 @@ export default function JazzDashboard() {
             </div>
           </div>
         </div>
-      </div>
 
       {/* Legacy controls section - now hidden */}
       <div className="hidden">
