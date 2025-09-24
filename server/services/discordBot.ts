@@ -1133,7 +1133,9 @@ DISCORD MODE: You are chatting on Discord. Your responses MUST be:
       // Remove any debug headers that might appear in Discord responses
       cleanContent = cleanContent
         .replace(/\[NICKY STATE\][^\n]*/gi, '') // Remove debug state header
+        .replace(/preset=[^\s]+ \| intensity=[^\s]+ \| dbd_lens=[^\s]+ \| spice=[^\s]+/gi, '') // Remove bare preset info
         .replace(/<!--\s*METRICS[^>]*-->/gi, '') // Remove metrics footer
+        .replace(/<-\s*METRICS[^>]*->/gi, '') // Remove alternative metrics format
         .trim();
 
       // Ensure it stays reasonable length
@@ -1179,7 +1181,9 @@ Respond naturally in Discord chat style. Keep it short and conversational.`;
         // Remove any debug headers from Gemini response
         content = content
           .replace(/\[NICKY STATE\][^\n]*/gi, '') // Remove debug state header
+          .replace(/preset=[^\s]+ \| intensity=[^\s]+ \| dbd_lens=[^\s]+ \| spice=[^\s]+/gi, '') // Remove bare preset info
           .replace(/<!--\s*METRICS[^>]*-->/gi, '') // Remove metrics footer
+          .replace(/<-\s*METRICS[^>]*->/gi, '') // Remove alternative metrics format
           .trim();
         
         // Aggressively limit length for Discord
