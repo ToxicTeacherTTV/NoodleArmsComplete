@@ -448,9 +448,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
         });
         
-        // Apply emotion tags to content (simple implementation for chat)
-        processedContent = `${emotionTags.hook} ${processedContent}`;
-        console.log(`🎭 Applied emotion tags: hook="${emotionTags.hook}"`);
+        // Apply emotion tags to content, respecting [bronx] tag order for podcast mode
+        console.log(`🎭 Original content starts with: "${processedContent.substring(0, 20)}..."`);
+        
+        if (processedContent.trim().startsWith('[bronx]')) {
+          // If response starts with [bronx], place emotion tag after it
+          processedContent = processedContent.replace(/^\s*\[bronx\]\s*/, `[bronx] ${emotionTags.hook} `);
+          console.log(`🎭 Applied emotion tags AFTER [bronx]: hook="${emotionTags.hook}"`);
+        } else {
+          // Check if [bronx] appears somewhere else and move it to front
+          if (processedContent.includes('[bronx]')) {
+            // Remove [bronx] from wherever it is and put it at the front with emotion tag
+            processedContent = processedContent.replace(/\s*\[bronx\]\s*/g, '').trim();
+            processedContent = `[bronx] ${emotionTags.hook} ${processedContent}`;
+            console.log(`🎭 Moved [bronx] to front with emotion tag: hook="${emotionTags.hook}"`);
+          } else {
+            // No [bronx] tag, prepend emotion tag normally
+            processedContent = `${emotionTags.hook} ${processedContent}`;
+            console.log(`🎭 Applied emotion tags normally: hook="${emotionTags.hook}"`);
+          }
+        }
         
       } catch (error) {
         console.warn('⚠️ Failed to generate emotion tags:', error);
