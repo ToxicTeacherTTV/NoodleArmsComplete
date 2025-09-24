@@ -485,6 +485,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/documents/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const document = await storage.getDocument(id);
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      res.json({ 
+        ...document, 
+        content: document.extractedContent || 'No content available' 
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch document' });
+    }
+  });
+
   app.delete('/api/documents/:id', async (req, res) => {
     try {
       const { id } = req.params;
