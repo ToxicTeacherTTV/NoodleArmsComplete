@@ -20,6 +20,7 @@ import { intelligenceEngine } from './services/intelligenceEngine';
 import { storyReconstructor } from './services/storyReconstructor';
 import { ContentCollectionManager } from './services/ingestion/ContentCollectionManager';
 import { adGenerationService } from './services/AdGenerationService';
+import { podcastFactExtractor } from './services/podcastFactExtractor';
 import { insertAutomatedSourceSchema, insertPendingContentSchema, insertAdTemplateSchema, insertPrerollAdSchema } from '@shared/schema';
 import multer from "multer";
 import { z } from "zod";
@@ -3515,6 +3516,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error parsing episode segments:', error);
       res.status(500).json({ error: 'Failed to parse episode segments' });
+    }
+  });
+
+  // Extract facts from podcast episode transcript and store in memory
+  app.post('/api/podcast/episodes/:id/extract-facts', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get the episode and its transcript
+      const episode = await storage.getPodcastEpisode(id);
+      if (!episode) {
+        return res.status(404).json({ error: 'Episode not found' });
+      }
+
+      if (!episode.transcript || episode.transcript.trim() === '') {
+        return res.status(400).json({ error: 'Episode must have a transcript to extract facts' });
+      }
+
+      console.log(`🧠 Extracting facts from Episode ${episode.episodeNumber}: "${episode.title}"`);
+
+      // Extract facts and store them in Nicky's memory
+      const result = await podcastFactExtractor.extractAndStoreFacts(
+        storage,
+        episode.profileId,
+        episode.id,
+        episode.episodeNumber,
+        episode.title,
+        episode.transcript,
+        episode.guestNames || [],
+        episode.topics || []
+      );
+
+      if (!result.success) {
+        return res.status(400).json({ 
+          error: result.error || 'Failed to extract facts',
+          factsCreated: 0
+        });
+      }
+
+      console.log(`✅ Successfully extracted ${result.factsCreated} facts from Episode ${episode.episodeNumber}`);
+
+      res.json({
+        message: `Successfully extracted ${result.factsCreated} facts and stored them in Nicky's memory`,
+        factsCreated: result.factsCreated,
+        episodeNumber: episode.episodeNumber,
+        episodeTitle: episode.title
+      });
+
+    } catch (error) {
+      console.error('Error extracting podcast facts:', error);
+      res.status(500).json({ error: 'Failed to extract podcast facts' });
     }
   });
 
