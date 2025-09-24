@@ -58,13 +58,20 @@
 ?limit=50&offset=0&sortBy=createdAt&sortOrder=desc
 ```
 
-### Memory System Architecture
+### Advanced Memory & Intelligence Systems
 
-#### Atomic Facts → Story Context → Confidence Scoring
+#### Multi-Layer Intelligence Architecture
+1. **IntelligenceEngine**: Comprehensive analysis including fact clustering, personality drift detection, and source reliability scoring
+2. **MemoryDeduplicator**: Identifies and merges similar memories using Jaccard similarity, Levenshtein distance, and containment analysis
+3. **StoryReconstructor**: Groups related facts into coherent narratives with coherence scoring and event ordering
+4. **SmartContradictionDetector**: AI-powered resolution of conflicting information with importance weighting
+
+#### Atomic Facts → Story Context → Intelligence Analysis
 1. **Fact Extraction**: AI processes conversations and documents to extract discrete facts
 2. **Story Context Preservation**: Facts retain narrative context to avoid disconnected knowledge
 3. **Confidence Scoring**: Importance ratings (1-999) with 999 reserved for protected facts
-4. **Retrieval System**: Keyword-based search with relevance weighting
+4. **Intelligence Analysis**: Automatic clustering, reliability scoring, and contradiction detection
+5. **Retrieval System**: Keyword-based search with relevance weighting and semantic similarity
 
 #### Memory Categories
 - **FACT**: Concrete information about users, preferences, events
@@ -89,17 +96,26 @@ const consolidatedFacts = await memoryService.consolidateMemories(profileId, {
 });
 ```
 
+### Advanced Content Generation Systems
+
+#### Automated Content Creation Pipeline
+- **AdGenerationService**: Generates comedic fake sponsor content with Italian-American twist and rotating templates
+- **PodcastFactExtractor**: Extracts structured facts (TOPIC, QUOTE, FACT, STORY, MOMENT) from episode transcripts
+- **ContentCollectionManager**: Automated collection from Reddit, Steam News, and YouTube with active source management
+- **VarietyController**: 10-facet personality system ensuring varied responses with anti-repetition mechanisms
+
 ### Integration Points
 
 #### Frontend ↔ Backend
 - **TanStack Query**: Automatic caching, background updates, optimistic updates
-- **WebSocket Integration**: Real-time message streaming (future enhancement)
+- **Unified Personality Controls**: PersonalitySurgePanel and Discord management use same API endpoints
 - **Session Management**: Express sessions with PostgreSQL storage
 
 #### Backend ↔ External APIs
 - **Anthropic Service**: Centralized AI request handling with fallback to Gemini
-- **ElevenLabs Integration**: Voice synthesis with queue management
-- **Discord Bot Service**: Event-driven message processing with behavior modulation
+- **ElevenLabs Integration**: Voice synthesis with queue management and credit conservation modes
+- **Discord Bot Service**: Event-driven message processing with advanced behavior modulation and proactive messaging
+- **Content Ingestion**: Automated collection from multiple external sources with rate limiting
 
 #### Browser APIs
 - **Web Speech API**: Speech recognition with automatic restart and error handling
@@ -262,20 +278,69 @@ if (!elevenLabsAvailable) {
 }
 ```
 
+### Advanced Discord Bot Integration
+
+#### Proactive Messaging System
+```typescript
+// Smart proactive messaging with daily limits and server-specific behavior
+class ProactiveMessaging {
+  private async considerProactiveMessage(): Promise<void> {
+    // Global daily limit: 2-3 messages across all servers
+    const dailyLimit = await this.checkGlobalDailyLimit();
+    if (dailyLimit.exceeded) return;
+    
+    // Server-specific behavior modulation
+    const effectiveBehavior = await behaviorModulator.getEffectiveBehavior(serverId);
+    const shouldSendMessage = Math.random() < (effectiveBehavior.responsiveness / 100);
+    
+    if (shouldSendMessage) {
+      await this.generateContextualMessage(server, channel);
+    }
+  }
+}
+```
+
+#### Dynamic Behavior Modulation
+```typescript
+// Real-time personality adjustment based on multiple factors
+class BehaviorModulator {
+  async getEffectiveBehavior(serverId: string): Promise<EffectiveBehavior> {
+    const server = await storage.getDiscordServer(serverId);
+    const drift = await this.calculateDrift(server); // Bounded random walk
+    const chaosMultiplier = await this.getChaosMultiplier(); // Global chaos state
+    const timeOfDayFactor = this.getTimeOfDayModulation(); // Circadian rhythm
+    
+    return this.combineFactors(server.baseValues, drift, chaosMultiplier, timeOfDayFactor);
+  }
+}
+```
+
 ### Mode Switching (Podcast vs Stream vs Chat)
 
-#### Mode-Specific Behaviors
-- **Podcast Mode**: Longer-form responses, storytelling emphasis
-- **Stream Mode**: Quick reactions, entertainment focus
-- **Chat Mode**: Conversational, memory-building interactions
+#### Mode-Specific Behaviors & Voice Management
+- **Podcast Mode**: `voiceOutput: false` (manual generation to conserve credits), longer-form responses
+- **Stream Mode**: `voiceOutput: true` (auto-voice for real-time), quick reactions
+- **Chat Mode**: Conversational, memory-building interactions with optional voice
 
 #### Implementation
 ```typescript
-// Mode affects AI prompt construction and response length
+// Mode affects AI prompt construction, response length, and voice synthesis
 const modeConfig = {
-  PODCAST: { maxTokens: 1024, temperature: 0.8, style: 'storytelling' },
-  STREAM: { maxTokens: 256, temperature: 1.0, style: 'reactive' },
-  CHAT: { maxTokens: 512, temperature: 0.9, style: 'conversational' }
+  PODCAST: { 
+    maxTokens: 1024, temperature: 0.8, style: 'storytelling',
+    voiceOutput: false, // Manual voice generation
+    personalityIntensity: 'moderate' 
+  },
+  STREAM: { 
+    maxTokens: 256, temperature: 1.0, style: 'reactive',
+    voiceOutput: true, // Auto-voice enabled
+    personalityIntensity: 'high'
+  },
+  CHAT: { 
+    maxTokens: 512, temperature: 0.9, style: 'conversational',
+    voiceOutput: 'optional', // User preference
+    personalityIntensity: 'adaptive'
+  }
 };
 ```
 

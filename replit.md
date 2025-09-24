@@ -130,6 +130,23 @@ Preferred communication style: Simple, everyday language.
   - Implemented automatic migration system for existing Discord server configurations
   - Created advisory-only chaos engine that provides suggestions without mutating controller state
 - **Enhanced Memory Management**: Fixed critical protected facts deletion bug by adding missing DELETE endpoint
+- **Advanced AI Intelligence Systems**: Comprehensive memory evolution and optimization
+  - IntelligenceEngine with fact clustering, personality drift detection, and source reliability analysis
+  - MemoryDeduplicator for identifying and merging similar memories
+  - StoryReconstructor for grouping related facts into coherent narratives
+  - SmartContradictionDetector for resolving conflicting information
+- **Automated Content Generation**: Multiple content creation systems
+  - AdGenerationService with comedic fake sponsor content and Italian-American twist
+  - PodcastFactExtractor for structured fact extraction from episode transcripts
+  - ContentCollectionManager pulling from Reddit, Steam, and YouTube automatically
+- **Discord Bot Advanced Features**: Comprehensive server integration
+  - Proactive messaging system (2-3 automated messages per day maximum)
+  - BehaviorModulator with dynamic personality based on time, server settings, and drift
+  - Server-specific personality controls and trigger systems
+- **Smart Voice Credit Management**: Resource-efficient voice synthesis
+  - PODCAST Mode with manual voice generation to conserve credits
+  - STREAMING Mode with auto-voice enabled for real-time interaction
+  - ElevenLabs integration with pause/resume/replay/save functionality
 - **Dynamic Personality System**: 10-facet personality rotation with anti-repetition guards
 - **Enhanced Reddit Collection**: 9 subreddits across 3 content streams (NNN, Word from Don, DbD)
 - **Anti-Repetition Engine**: N-gram detection, catchphrase limits, automatic regeneration
@@ -150,28 +167,23 @@ Preferred communication style: Simple, everyday language.
   - Story completion tracking to avoid repeating same tales
 
 #### Discord Bot Improvements
-- **Proactive Messaging**: 2-3 automated messages per day maximum
-- **Configurable Triggers**: User-defined keywords and phrases for bot responses
-- **Smart Timing**: Avoid spamming, respect conversation flow
-- **Direct Mention Support**: Always respond when directly tagged
+- **Configurable Triggers**: Enhanced user-defined keywords and phrases for bot responses
+- **Smart Timing**: Improved conversation flow detection to avoid interrupting active discussions
+- **Direct Mention Support**: Always respond when directly tagged (currently partially implemented)
 
 #### Podcast Content Management
-- **Pre-Roll Ad Generator**: Dedicated section for Nicky's comedic ad content
-  - Fake sponsor integration with Italian-American twist
-  - Rotating ad templates with personality facets
 - **Content Organization Dashboard**: New podcast content section alongside Project Workspace and Brain Management
   - Segment planning and tracking
   - Content calendar integration
   - Story bank with usage tracking
+- **Enhanced Episode Planning**: Integration of existing fact extraction with planning tools
 
 ### 🔧 Technical Optimizations
 
 #### Performance & Resource Management
-- **Smart Voice Generation**: Only auto-generate voice in streaming mode
-  - Manual voice generation in podcast mode to conserve credits
-  - Toggle-based voice synthesis control
 - **Response Optimization**: Maintain ~2500 character responses (current sweet spot)
 - **Memory Efficiency**: Optimize RAG retrieval for faster context loading
+- **Intelligence System Optimization**: Further tune fact clustering and story reconstruction algorithms
 
 #### User Experience Enhancements
 - **Mode-Specific Behaviors**: Enhanced streaming vs podcast mode differentiation
