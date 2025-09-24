@@ -81,7 +81,8 @@ class AnthropicService {
     mode?: string,
     conversationId?: string,
     profileId?: string,
-    webSearchResults: any[] = []
+    webSearchResults: any[] = [],
+    personalityPrompt?: string
   ): Promise<AIResponse> {
     const startTime = Date.now();
 
@@ -241,8 +242,16 @@ class AnthropicService {
       
       const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}${modeContext}${sceneCard}`;
 
-      // Enhanced system prompt with chaos personality AND variety control
-      const enhancedCoreIdentity = `${coreIdentity}\n\n${chaosModifier}\n\n${varietyPrompt}`;
+      // Enhanced system prompt with personality controls, chaos personality AND variety control
+      let enhancedCoreIdentity = `${coreIdentity}`;
+      
+      // 🎭 NEW: Add personality control prompt if provided
+      if (personalityPrompt) {
+        enhancedCoreIdentity += `\n\n${personalityPrompt}`;
+        console.log(`🎭 Applied personality controls to AI prompt`);
+      }
+      
+      enhancedCoreIdentity += `\n\n${chaosModifier}\n\n${varietyPrompt}`;
 
       const response = await anthropic.messages.create({
         // "claude-sonnet-4-20250514"
@@ -276,6 +285,13 @@ class AnthropicService {
       if (conversationId) {
         const repetitionCheck = await this.checkForRepetition(conversationId, filteredContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
         finalContent = repetitionCheck.content;
+      }
+
+      // 🎭 NEW: Add metrics footer if personality controls were used
+      if (personalityPrompt) {
+        const { generateMetricsFooter } = await import('../types/personalityControl');
+        const metricsFooter = generateMetricsFooter(finalContent);
+        finalContent += `\n\n${metricsFooter}`;
       }
 
       return {

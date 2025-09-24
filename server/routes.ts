@@ -267,7 +267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Chat routes
   app.post('/api/chat', async (req, res) => {
     try {
-      const { message, conversationId, mode } = req.body;
+      const { message, conversationId, mode, personalityControl } = req.body;
       
       if (!message || !conversationId) {
         return res.status(400).json({ error: 'Message and conversation ID required' });
@@ -277,6 +277,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!activeProfile) {
         return res.status(400).json({ error: 'No active profile found' });
       }
+
+      // 🎭 NEW: Personality Control v2.0 System
+      const { DEFAULT_PERSONALITY_CONTROL, generatePersonalityPrompt } = await import('./types/personalityControl');
+      const controls = personalityControl || DEFAULT_PERSONALITY_CONTROL;
+      console.log(`🎭 Using personality controls:`, JSON.stringify(controls));
 
       // 🚀 REVOLUTIONARY: Semantic search with embeddings - finds relevant memories even without exact keyword matches
       console.log(`🔍 Performing hybrid semantic + keyword search for: "${message}"`);
@@ -399,7 +404,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get enhanced lore context (includes extracted knowledge from memories)
       const loreContext = await MemoryAnalyzer.getEnhancedLoreContext(activeProfile.id);
 
-      // Generate AI response with lore context, mode awareness, and web search results
+      // 🎭 Generate personality control prompt
+      const personalityPrompt = generatePersonalityPrompt(controls);
+      
+      // Generate AI response with personality controls, lore context, mode awareness, and web search results
       const response = await anthropicService.generateResponse(
         message,
         activeProfile.coreIdentity,
@@ -409,7 +417,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mode,
         conversationId,
         activeProfile.id,
-        webSearchResults
+        webSearchResults,
+        personalityPrompt
       );
 
       // Store the AI response
