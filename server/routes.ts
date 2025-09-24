@@ -3454,6 +3454,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`🎙️ Parsing segments for episode: "${episode.title}"`);
 
+      // Clear existing segments for this episode first
+      await storage.clearPodcastSegments(episode.id);
+      console.log(`🧹 Cleared existing segments for episode: "${episode.title}"`);
+
       // Use AI to parse segments from transcript
       const { geminiService } = await import('./services/gemini.js');
       const parsedSegments = await geminiService.parseShowSegments(episode.transcript, episode.title);
@@ -3474,8 +3478,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           description: segment.description,
           segmentType: segment.segmentType,
           transcript: segment.content, // Store the AI-extracted content as transcript
-          startTime: 0, // No timestamp needed for Nicky's brain
-          endTime: null,
+          startTime: segment.startTime || 0, // Use AI-parsed timestamp or default to 0
+          endTime: segment.endTime || null, // Use AI-parsed end time if available
           keyQuotes: [],
           topics: [],
           notes: null

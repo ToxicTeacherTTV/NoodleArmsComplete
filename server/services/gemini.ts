@@ -508,8 +508,7 @@ Response format:
       console.error('❌ Gemini chat API error:', error);
       
       // Classify error for appropriate handling
-      const errorInfo = this.classifyGeminiError(error);
-      console.log(`🔄 Gemini error classified as: ${errorInfo.type}`);
+      console.log(`🔄 Gemini error occurred: ${error}`);
       
       // Provide graceful degradation instead of throwing
       console.warn("⚠️ Gemini API failed, providing fallback response");
