@@ -4196,8 +4196,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           description: segment.description,
           segmentType: segment.segmentType,
           transcript: segment.content, // Store the AI-extracted content as transcript
-          startTime: segment.startTime || 0, // Use AI-parsed timestamp or default to 0
-          endTime: segment.endTime || null, // Use AI-parsed end time if available
+          startTime: segment.startTime ? Math.floor(segment.startTime) : 0, // Convert float to integer seconds
+          endTime: segment.endTime ? Math.floor(segment.endTime) : null, // Convert float to integer seconds
           keyQuotes: [],
           topics: [],
           notes: null
