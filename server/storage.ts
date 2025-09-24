@@ -506,6 +506,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(memoryEntries.id, id))
       .returning();
     
+    if (!updatedMemory) {
+      throw new Error(`Memory entry with ID ${id} not found`);
+    }
+    
     return updatedMemory;
   }
 
