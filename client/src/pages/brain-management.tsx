@@ -21,6 +21,7 @@ import MemoryPanel from "@/components/memory-panel";
 import DocumentPanel from "@/components/document-panel";
 import PersonalityPanel from "@/components/personality-panel";
 import DiscordManagementPanel from "@/components/discord-management-panel";
+import ContentLibraryPanel from "@/components/content-library-panel";
 import ContentIngestionPanel from "@/components/content-ingestion-panel";
 import { IntelligenceDashboard } from "@/components/intelligence-dashboard";
 import PodcastManagementPanel from "@/components/podcast-management-panel";
@@ -1066,6 +1067,9 @@ export default function BrainManagement() {
             <TabsTrigger value="content-sources" data-testid="tab-content-sources" className="text-xs">
               📡 Content Sources
             </TabsTrigger>
+            <TabsTrigger value="content-library" data-testid="tab-content-library" className="text-xs">
+              📚 Content Library
+            </TabsTrigger>
           </TabsList>
 
           {/* Recent Memories */}
@@ -1876,6 +1880,11 @@ export default function BrainManagement() {
           {/* Content Sources */}
           <TabsContent value="content-sources" className="mt-6">
             <ContentIngestionPanel profileId={activeProfile?.id} />
+          </TabsContent>
+
+          {/* Content Library */}
+          <TabsContent value="content-library" className="mt-6">
+            <ContentLibraryPanel profileId={activeProfile?.id} />
           </TabsContent>
         </Tabs>
       </div>

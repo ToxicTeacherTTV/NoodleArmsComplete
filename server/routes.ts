@@ -615,6 +615,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Content Library routes
+  app.get('/api/content-library', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const contentEntries = await storage.getContentLibraryEntries(activeProfile.id);
+      res.json(contentEntries);
+    } catch (error) {
+      console.error('Content library fetch error:', error);
+      res.status(500).json({ error: 'Failed to fetch content library' });
+    }
+  });
+
+  app.get('/api/content-library/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const contentEntry = await storage.getContentLibraryEntry(id);
+      if (!contentEntry) {
+        return res.status(404).json({ error: 'Content not found' });
+      }
+      res.json(contentEntry);
+    } catch (error) {
+      console.error('Content library get error:', error);
+      res.status(500).json({ error: 'Failed to fetch content' });
+    }
+  });
+
+  app.patch('/api/content-library/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { title, content, category, mood, tags } = req.body;
+      
+      const updates: any = {};
+      if (title) updates.title = title;
+      if (content) updates.content = content;
+      if (category) updates.category = category;
+      if (mood) updates.mood = mood;
+      if (tags) updates.tags = tags;
+
+      const updatedEntry = await storage.updateContentLibraryEntry(id, updates);
+      if (!updatedEntry) {
+        return res.status(404).json({ error: 'Content not found' });
+      }
+      
+      res.json(updatedEntry);
+    } catch (error) {
+      console.error('Content library update error:', error);
+      res.status(500).json({ error: 'Failed to update content' });
+    }
+  });
+
+  app.delete('/api/content-library/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteContentLibraryEntry(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Content library delete error:', error);
+      res.status(500).json({ error: 'Failed to delete content' });
+    }
+  });
+
   // Notes management routes
   app.get('/api/notes', async (req, res) => {
     try {
