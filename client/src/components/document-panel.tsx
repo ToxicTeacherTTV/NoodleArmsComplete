@@ -112,6 +112,50 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
     },
   });
 
+  const extractAsFactsMutation = useMutation({
+    mutationFn: async (documentId: string) => {
+      const response = await apiRequest('POST', `/api/documents/${documentId}/extract-facts`);
+      return response.json();
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Facts Extracted Successfully",
+        description: `${result.factsCreated} facts added to Nicky's memory`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Extraction Failed",
+        description: error.message || "Failed to extract facts",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const saveToContentLibraryMutation = useMutation({
+    mutationFn: async (documentId: string) => {
+      const response = await apiRequest('POST', `/api/documents/${documentId}/save-to-content-library`);
+      return response.json();
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Saved to Content Library",
+        description: `Content saved as "${result.title}" in the library`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/content-library'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Save Failed",
+        description: error.message || "Failed to save to content library",
+        variant: "destructive",
+      });
+    },
+  });
+
   const viewDocument = async (document: Document) => {
     try {
       // WORKAROUND: Direct access to document content since API is intercepted by Vite
@@ -385,6 +429,58 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                       </Button>
                     </div>
                   </div>
+                  
+                  {/* Processing Choice Buttons - Only show for completed documents */}
+                  {doc.processingStatus === 'COMPLETED' && (
+                    <div className="mt-3 pt-3 border-t border-border">
+                      <div className="text-xs text-muted-foreground mb-2">Choose how to process this content:</div>
+                      <div className="flex gap-2 flex-wrap">
+                        <Button
+                          onClick={() => extractAsFactsMutation.mutate(doc.id)}
+                          disabled={extractAsFactsMutation.isPending}
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5"
+                          data-testid={`button-extract-facts-${doc.id}`}
+                        >
+                          {extractAsFactsMutation.isPending ? (
+                            <>
+                              <i className="fas fa-spinner fa-spin mr-1"></i>
+                              Extracting...
+                            </>
+                          ) : (
+                            <>
+                              <i className="fas fa-brain mr-1"></i>
+                              Extract as Facts
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          onClick={() => saveToContentLibraryMutation.mutate(doc.id)}
+                          disabled={saveToContentLibraryMutation.isPending}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs px-3 py-1.5 border-green-600 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
+                          data-testid={`button-save-content-${doc.id}`}
+                        >
+                          {saveToContentLibraryMutation.isPending ? (
+                            <>
+                              <i className="fas fa-spinner fa-spin mr-1"></i>
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <i className="fas fa-book mr-1"></i>
+                              Save as Content
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                        <div><strong>Facts:</strong> Patch notes, game info, technical data (goes into Nicky's memory for RAG)</div>
+                        <div><strong>Content:</strong> AITA posts, stories, entertainment (saved to content library)</div>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="text-xs text-muted-foreground flex items-center justify-between">
                     <div className="flex items-center space-x-3">
