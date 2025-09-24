@@ -1,0 +1,99 @@
+Hell yes. Ship v2.0 now, then expand in tight, low-risk layers. Here’s a clean growth path that won’t collapse under its own cleverness.
+
+Phase 1 (0–30 days): Harden + Measure
+
+Golden set & scorer: Save 20 “truth” prompts (patch roast, caller war, storytime, etc.). After each change, run them and eyeball a tiny metrics footer. Track preset accuracy (did it feel right?).
+
+Static previews: Two-line, hand-written samples per preset × intensity (UI strings). Zero extra AI calls.
+
+Export knobs: One JSON → two outputs: (a) TTS-ready Nicky, (b) clean text sans tags for captions.
+
+OBS/Streamer.bot hooks: Map presets to hotkeys so you can flip “Roast Mode / high” live.
+
+KPIs: preset pick rate, “felt right” thumbs-up %, average edits per reply.
+
+Phase 2 (30–90 days): Smarter control without sliders
+
+Flavor Tilt (single nudge): italian|roast|conspiracy|neutral (optional field). Stops feature creep while unlocking variety.
+
+Beat templates: Add 3 skeletal shapes you can call in the JSON:
+
+clip_blast (hook→insult→button)
+
+patch_take (claim→evidence→recommendation)
+
+story_boomerang (brag→absurd turn→moral)
+
+Platform profiles: Per-platform safety and length defaults.
+
+"platform": "tiktok" // sets spice=platform_safe, beat_budget=6
+
+
+CTA tags: Tiny, swappable closers (follow, new_ep, twitch_live) with preset-appropriate tone.
+
+KPIs: time to publish per clip, platform rejection rate, watch-through on short beats.
+
+Phase 3 (90–180 days): Learning loop (no black box)
+
+User feedback → preset tuning: When you thumbs-down “felt wrong,” store the JSON + reply. Build a tiny rule table (no ML): e.g., “Caller War + low intensity got downvoted → bump default to med next time.”
+
+Micro-A/B titles/descriptions: For Patch Roast preset, generate 2 title lines; log CTR; prefer the winner next time.
+
+Lore memory (RAG-lite): A small, curated facts file (Victor nicknames, running gags) the prompt can pull from—no auto-ingest. Keeps references consistent without hallucinations.
+
+KPIs: % of presets that auto-nudge correctly after feedback, CTR delta on A/B tries.
+
+Phase 4 (180+ days): Extensibility without chaos
+
+Moment types: Call for an inline “moment” mid-reply.
+
+"moment": "victor_cutaway" // inserts one-liner in character
+
+
+Event triggers: Simple flags the UI can fire: respect_trigger, clip_button, crowd_boo → deterministic text shifts for 2–3 lines.
+
+Creator macros: Bundle your favorite config:
+
+"macro": "PatchRoast_High_Spicy_DBD"
+
+
+Conformance checker (offline): Tiny script that scans output for qualitative goals (e.g., catchphrase ≤2, no back-to-back roasts at ultra) and warns, not blocks.
+
+KPIs: reduction in manual rewrites, # of reusable macros created, conformance pass rate.
+
+Schema evolution (additive, still tiny)
+
+Current:
+
+{"preset":"Roast Mode","intensity":"med","dbd_lens":false,"spice":"spicy"}
+
+
+Later (Phase 2–3):
+
+{
+  "preset":"Patch Roast",
+  "intensity":"high",
+  "dbd_lens":true,
+  "spice":"normal",
+  "flavor_tilt":"roast",
+  "beat_template":"patch_take",
+  "platform":"youtube"
+}
+
+Guardrails to keep you honest
+
+No auto-topic detection. The dbd_lens toggle is explicit forever. Autodetect is how systems go feral.
+
+One optional nudge at a time. If you add Flavor Tilt, don’t add Energy Curve in the same sprint.
+
+Always print state. Keep [NICKY STATE …] visible (or dev-strip later). Debugging stays trivial.
+
+Presets are king. If 95% of outputs use them untouched—that’s success, not underuse.
+
+What this buys you
+
+Daily reliability now.
+
+Clear, testable steps to add variety (Flavor Tilt, beats, moments) without re-introducing the slider hydra.
+
+A feedback loop that learns your taste without turning into a mysterious “AI that thinks it knows you.”
