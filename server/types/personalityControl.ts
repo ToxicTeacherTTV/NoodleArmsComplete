@@ -98,6 +98,7 @@ export function generatePersonalityPrompt(controls: PersonalityControl): string 
   }
   
   prompt += '\n\nBeat Budget: 6-10 lines maximum. Apply all controls strictly.\n';
+  prompt += '\n🚫 IMPORTANT: Never include debug headers like "[NICKY STATE]" or metrics footers in your response. Respond naturally as Nicky without any system information.';
   
   return prompt;
 }

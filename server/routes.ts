@@ -426,8 +426,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         personalityPrompt
       );
 
-      // 🎭 Process response with ElevenLabs emotion tags
+      // 🎭 Process response: strip debug patterns and add emotion tags
       let processedContent = aiResponse.content;
+      
+      // Remove any debug headers that Claude might generate despite instructions
+      processedContent = processedContent
+        .replace(/\[NICKY STATE\][^\n]*/gi, '') // Remove debug state header
+        .replace(/<!--\s*METRICS[^>]*-->/gi, '') // Remove metrics footer
+        .trim();
       try {
         const { emotionTagGenerator } = await import('./services/emotionTagGenerator');
         
@@ -464,8 +470,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           processingTime: response.processingTime,
           retrieved_context: response.retrievedContext,
-          web_search_used: webSearchUsed,
-          web_results_count: webSearchResults.length,
+          webSearchUsed: webSearchUsed,
+          webResultsCount: webSearchResults.length,
         },
       });
 
