@@ -954,6 +954,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete individual memory entry
+  app.delete('/api/memory/entries/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Verify the memory entry exists and belongs to the active profile
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      // Check if memory entry exists and belongs to this profile
+      const entry = await storage.getMemoryEntry(id);
+      if (!entry) {
+        return res.status(404).json({ error: 'Memory entry not found' });
+      }
+      
+      if (entry.profileId !== activeProfile.id) {
+        return res.status(403).json({ error: 'Memory entry does not belong to active profile' });
+      }
+
+      // Delete the memory entry
+      await storage.deleteMemoryEntry(id);
+      
+      console.log(`🗑️ Deleted memory entry: ${entry.content}`);
+      res.json({ 
+        success: true, 
+        message: 'Memory entry deleted successfully',
+        deletedEntry: { id, content: entry.content }
+      });
+      
+    } catch (error) {
+      console.error('Failed to delete memory entry:', error);
+      res.status(500).json({ error: 'Failed to delete memory entry' });
+    }
+  });
+
   // Clean up incorrectly attributed memories
   app.post('/api/memory/cleanup-attribution', async (req, res) => {
     try {
