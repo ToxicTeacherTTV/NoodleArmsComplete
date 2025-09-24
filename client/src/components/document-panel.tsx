@@ -114,17 +114,30 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
 
   const viewDocument = async (document: Document) => {
     try {
-      const response = await fetch(`/api/documents/${document.id}`);
+      console.log('Fetching document:', document.id);
+      const response = await fetch(`/api/documents/${document.id}`, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch document content');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
       const data = await response.json();
+      console.log('Document data:', data);
+      
       setDocumentContent(data.content || 'No content available');
       setViewingDocument(document);
     } catch (error) {
+      console.error('Document fetch error:', error);
       toast({
         title: "Error",
-        description: "Failed to load document content",
+        description: `Failed to load document content: ${error.message}`,
         variant: "destructive",
       });
     }
