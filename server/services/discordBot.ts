@@ -435,8 +435,8 @@ export class DiscordBotService {
       const effectiveBehavior = await behaviorModulator.getEffectiveBehavior(server.serverId);
       
       const randomChance = Math.random() * 100;
-      // Much lower response rate - aim for ~10% at max responsiveness (100)
-      const responseRate = Math.min(10, effectiveBehavior.responsiveness * 0.1);
+      // Balanced response rate - aim for ~25% at max responsiveness (100)
+      const responseRate = Math.min(25, effectiveBehavior.responsiveness * 0.25);
       if (randomChance <= responseRate) {
         return {
           respond: true,
@@ -455,7 +455,7 @@ export class DiscordBotService {
       console.error('Error getting effective behavior for random response:', error);
       // Fallback to baseline values
       const randomChance = Math.random() * 100;
-      const fallbackResponseRate = Math.min(10, (server.responsiveness || 60) * 0.1);
+      const fallbackResponseRate = Math.min(25, (server.responsiveness || 30) * 0.25);
       if (randomChance <= fallbackResponseRate) {
         return {
           respond: true,
