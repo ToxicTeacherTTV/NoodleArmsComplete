@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import type { Document } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
@@ -18,6 +19,8 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
   const [dragOver, setDragOver] = useState(false);
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
+  const [viewingDocument, setViewingDocument] = useState<Document | null>(null);
+  const [documentContent, setDocumentContent] = useState<string>('');
 
   const uploadDocumentMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -108,6 +111,24 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
       });
     },
   });
+
+  const viewDocument = async (document: Document) => {
+    try {
+      const response = await fetch(`/api/documents/${document.id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch document content');
+      }
+      const data = await response.json();
+      setDocumentContent(data.content || 'No content available');
+      setViewingDocument(document);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load document content",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -346,6 +367,16 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                         )}
                       </div>
                       <Button
+                        onClick={() => viewDocument(doc)}
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-muted-foreground hover:text-primary p-1"
+                        disabled={doc.processingStatus !== 'COMPLETED'}
+                        data-testid={`button-view-document-${doc.id}`}
+                      >
+                        <i className="fas fa-eye"></i>
+                      </Button>
+                      <Button
                         onClick={() => deleteDocumentMutation.mutate(doc.id)}
                         variant="ghost"
                         size="sm"
@@ -384,6 +415,37 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
           )}
         </div>
       </div>
+
+      {/* Document View Dialog */}
+      <Dialog open={!!viewingDocument} onOpenChange={() => setViewingDocument(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <i className={viewingDocument ? getFileIcon(viewingDocument.contentType) : 'fas fa-file'}></i>
+              {viewingDocument?.filename}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            <div className="text-sm text-muted-foreground mb-4">
+              {viewingDocument && (
+                <div className="flex items-center gap-4">
+                  <span>Size: {formatFileSize(viewingDocument.size)}</span>
+                  <span>Added: {new Date(viewingDocument.createdAt).toLocaleDateString()}</span>
+                  {viewingDocument.chunks && <span>Chunks: {viewingDocument.chunks.length}</span>}
+                  {viewingDocument.retrievalCount > 0 && (
+                    <span className="text-accent">Retrieved {viewingDocument.retrievalCount} times</span>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="border border-border rounded-lg p-4 bg-muted/20">
+              <pre className="whitespace-pre-wrap text-sm text-foreground font-mono leading-relaxed">
+                {documentContent || 'Loading...'}
+              </pre>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
