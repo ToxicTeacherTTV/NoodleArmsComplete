@@ -1127,8 +1127,14 @@ DISCORD MODE: You are chatting on Discord. Your responses MUST be:
 
       if (!content) return null;
 
-      // Strip emotion tags from Anthropic response
+      // Strip emotion tags AND debug state from Anthropic response
       let cleanContent = this.stripEmotionTags(content);
+      
+      // Remove any debug headers that might appear in Discord responses
+      cleanContent = cleanContent
+        .replace(/\[NICKY STATE\][^\n]*/gi, '') // Remove debug state header
+        .replace(/<!--\s*METRICS[^>]*-->/gi, '') // Remove metrics footer
+        .trim();
 
       // Ensure it stays reasonable length
       if (cleanContent.length > 500) {
@@ -1167,8 +1173,14 @@ Respond naturally in Discord chat style. Keep it short and conversational.`;
         
         let content = geminiResponse.content;
         
-        // Strip emotion tags from Gemini response too
+        // Strip emotion tags AND debug state from Gemini response too
         content = this.stripEmotionTags(content);
+        
+        // Remove any debug headers from Gemini response
+        content = content
+          .replace(/\[NICKY STATE\][^\n]*/gi, '') // Remove debug state header
+          .replace(/<!--\s*METRICS[^>]*-->/gi, '') // Remove metrics footer
+          .trim();
         
         // Aggressively limit length for Discord
         if (content.length > 300) {
