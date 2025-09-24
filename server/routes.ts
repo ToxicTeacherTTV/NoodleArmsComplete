@@ -278,14 +278,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      // 🚀 ENHANCED: Get relevant memories with story context for narrative coherence
-      const allSearchResults = await storage.searchEnrichedMemoryEntries(activeProfile.id, message);
-      const highConfidenceMemories = await storage.getEnrichedMemoriesForAI(activeProfile.id, 20);
+      // 🚀 REVOLUTIONARY: Semantic search with embeddings - finds relevant memories even without exact keyword matches
+      console.log(`🔍 Performing hybrid semantic + keyword search for: "${message}"`);
       
-      // Filter search results to only include high-confidence facts (≥60%)
-      const searchBasedMemories = allSearchResults.filter(m => (m.confidence || 50) >= 60);
+      let searchBasedMemories: any[] = [];
+      let semanticSearchUsed = false;
       
-      // Combine and deduplicate memories, prioritizing search relevance
+      try {
+        const { embeddingService } = await import('./services/embeddingService');
+        const hybridResults = await embeddingService.hybridSearch(message, activeProfile.id, 15);
+        
+        // Extract memories from hybrid search results (semantic + keyword combined)
+        const semanticMemories = hybridResults.semantic.map(result => ({
+          ...result,
+          relevanceScore: result.similarity * 100,
+          searchMethod: 'semantic'
+        }));
+        
+        const keywordMemories = hybridResults.keyword.map(result => ({
+          ...result, 
+          relevanceScore: 70, // Default relevance for keyword matches
+          searchMethod: 'keyword'
+        }));
+        
+        // Combine and deduplicate hybrid results
+        const seenIds = new Set();
+        const combinedResults = [];
+        
+        // Prioritize semantic results (they're usually better)
+        for (const result of semanticMemories) {
+          if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
+            seenIds.add(result.id);
+            combinedResults.push(result);
+          }
+        }
+        
+        // Add keyword results that weren't found semantically
+        for (const result of keywordMemories) {
+          if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
+            seenIds.add(result.id);
+            combinedResults.push(result);
+          }
+        }
+        
+        searchBasedMemories = combinedResults;
+        semanticSearchUsed = true;
+        
+        console.log(`🧠 Hybrid search: ${semanticMemories.length} semantic + ${keywordMemories.length} keyword = ${searchBasedMemories.length} unique results`);
+      } catch (error) {
+        console.warn('⚠️ Semantic search failed, falling back to keyword search:', error);
+        const fallbackResults = await storage.searchEnrichedMemoryEntries(activeProfile.id, message);
+        searchBasedMemories = fallbackResults.filter(m => (m.confidence || 50) >= 60);
+        semanticSearchUsed = false;
+      }
+      
+      // Get additional high-confidence memories as backup context
+      const highConfidenceMemories = await storage.getEnrichedMemoriesForAI(activeProfile.id, 10);
       const seenIds = new Set(searchBasedMemories.map(m => m.id));
       const additionalMemories = highConfidenceMemories.filter(m => !seenIds.has(m.id));
       const relevantMemories = [...searchBasedMemories, ...additionalMemories.slice(0, 10)];
