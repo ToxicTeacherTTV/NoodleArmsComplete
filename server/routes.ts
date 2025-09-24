@@ -959,30 +959,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       
-      // Verify the memory entry exists and belongs to the active profile
+      // Verify active profile exists
       const activeProfile = await storage.getActiveProfile();
       if (!activeProfile) {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      // Check if memory entry exists and belongs to this profile
-      const entry = await storage.getMemoryEntry(id);
-      if (!entry) {
-        return res.status(404).json({ error: 'Memory entry not found' });
-      }
-      
-      if (entry.profileId !== activeProfile.id) {
-        return res.status(403).json({ error: 'Memory entry does not belong to active profile' });
-      }
-
-      // Delete the memory entry
+      // Delete the memory entry directly
       await storage.deleteMemoryEntry(id);
       
-      console.log(`🗑️ Deleted memory entry: ${entry.content}`);
+      console.log(`🗑️ Deleted memory entry with ID: ${id}`);
       res.json({ 
         success: true, 
         message: 'Memory entry deleted successfully',
-        deletedEntry: { id, content: entry.content }
+        deletedEntry: { id }
       });
       
     } catch (error) {
