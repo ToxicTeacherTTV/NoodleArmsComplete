@@ -114,43 +114,15 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
 
   const viewDocument = async (document: Document) => {
     try {
-      console.log('Fetching document:', document.id);
-      const response = await fetch(`/api/documents/${document.id}`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        credentials: 'same-origin',
-      });
-      
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers.get('content-type'));
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      // Check what we're actually getting
-      const textResponse = await response.text();
-      console.log('Raw response:', textResponse.substring(0, 200));
-      
-      let data;
-      try {
-        data = JSON.parse(textResponse);
-        console.log('Parsed JSON data:', data);
-      } catch (parseError) {
-        console.error('JSON parse error:', parseError);
-        throw new Error('Response is not valid JSON');
-      }
-      
-      setDocumentContent(data.content || 'No content available');
+      // WORKAROUND: Direct access to document content since API is intercepted by Vite
+      const content = (document as any).extractedContent || 'No content available';
+      setDocumentContent(content);
       setViewingDocument(document);
     } catch (error) {
-      console.error('Document fetch error:', error);
+      console.error('Document view error:', error);
       toast({
         title: "Error",
-        description: `Failed to load document content: ${error.message}`,
+        description: `Failed to view document: ${error.message}`,
         variant: "destructive",
       });
     }
