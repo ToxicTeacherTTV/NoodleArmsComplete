@@ -335,7 +335,7 @@ export default function JazzDashboard() {
       </div>
 
       {/* Main Content - Organized Window Layout */}
-      <div className="flex flex-col h-[calc(100vh-80px)]">
+      <div className="flex flex-col h-[calc(100vh-200px)]">
         
         {/* Top Window: Chat Panel */}
         <div className="flex-1 min-h-0 p-4">
