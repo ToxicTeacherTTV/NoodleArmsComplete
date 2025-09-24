@@ -420,8 +420,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           processingTime: response.processingTime,
           retrieved_context: response.retrievedContext,
+          web_search_used: webSearchUsed,
+          web_results_count: webSearchResults.length,
         },
       });
+
+      // 🌐 ENHANCED: Post-response memory consolidation for web search results
+      if (webSearchUsed && webSearchResults.length > 0) {
+        try {
+          const { webMemoryConsolidator } = await import('./services/webMemoryConsolidator');
+          
+          // Evaluate and store valuable web search results in background
+          setTimeout(async () => {
+            try {
+              const candidates = await webMemoryConsolidator.evaluateResultsForStorage(
+                webSearchResults,
+                message,
+                activeProfile.id
+              );
+              
+              if (candidates.length > 0) {
+                const storedCount = await webMemoryConsolidator.storeWebMemories(
+                  candidates,
+                  activeProfile.id,
+                  conversationId
+                );
+                
+                if (storedCount > 0) {
+                  console.log(`💾 Background consolidation: Stored ${storedCount} web search results as memories`);
+                }
+              }
+            } catch (error) {
+              console.warn('⚠️ Background web memory consolidation failed:', error);
+            }
+          }, 100); // Small delay to not block response
+
+        } catch (error) {
+          console.warn('⚠️ Failed to initiate web memory consolidation:', error);
+        }
+      }
 
       // 🎲 ENHANCED: Trigger response-based chaos evolution after successful AI response
       chaosEngine.onResponseGenerated();
