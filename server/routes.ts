@@ -278,10 +278,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      // 🎭 NEW: Personality Control v2.0 System
-      const { DEFAULT_PERSONALITY_CONTROL, generatePersonalityPrompt } = await import('./types/personalityControl');
-      const controls = personalityControl || DEFAULT_PERSONALITY_CONTROL;
-      console.log(`🎭 Using personality controls:`, JSON.stringify(controls));
+      // 🎭 UNIFIED: Get personality with advisory chaos influence (non-mutating)
+      const { personalityController } = await import('./services/personalityController');
+      
+      // Get base personality from unified controller
+      let basePersonality = await personalityController.getEffectivePersonality();
+      
+      // Apply manual personality control override if provided
+      if (personalityControl) {
+        basePersonality = await personalityController.createTemporaryOverride(personalityControl);
+        console.log(`🎭 Manual personality override applied:`, JSON.stringify(personalityControl));
+      }
+      
+      // Get current chaos state for advisory influence (logged, not applied)
+      const chaosState = await chaosEngine.getCurrentState();
+      const chaosAdvice = {
+        level: chaosState.level,
+        mode: chaosState.mode,
+        suggestedIntensityDelta: chaosState.level >= 80 ? 1 : chaosState.level <= 20 ? -1 : 0,
+        suggestedSpiceCap: chaosState.mode === 'FAKE_PROFESSIONAL' ? 'platform_safe' : 
+                          chaosState.mode === 'FULL_PSYCHO' ? 'spicy' : undefined,
+        suggestedPreset: chaosState.mode === 'FULL_PSYCHO' ? 'Unhinged' :
+                        chaosState.mode === 'FAKE_PROFESSIONAL' ? 'Chill Nicky' :
+                        chaosState.mode === 'HYPER_FOCUSED' ? 'Patch Roast' : 
+                        chaosState.mode === 'CONSPIRACY' ? 'Storytime' : undefined
+      };
+      
+      // Log chaos advice for transparency (but use base personality as-is)
+      console.log(`🎲 Chaos advice: ${chaosAdvice.level}% ${chaosAdvice.mode} suggests ${chaosAdvice.suggestedPreset || 'no preset change'} with ${chaosAdvice.suggestedIntensityDelta > 0 ? 'higher' : chaosAdvice.suggestedIntensityDelta < 0 ? 'lower' : 'same'} intensity`);
+      
+      const controls = basePersonality;
+      console.log(`🎭 Using personality:`, JSON.stringify(controls));
+      
+      // Generate personality prompt with unified controls
+      const { generatePersonalityPrompt } = await import('./types/personalityControl');
 
       // 🚀 REVOLUTIONARY: Semantic search with embeddings - finds relevant memories even without exact keyword matches
       console.log(`🔍 Performing hybrid semantic + keyword search for: "${message}"`);
@@ -487,8 +517,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           processingTime: response.processingTime,
           retrieved_context: response.retrievedContext,
-          webSearchUsed: webSearchUsed,
-          webResultsCount: webSearchResults.length,
+          // Note: webSearch info stored separately (not in message metadata schema)
         },
       });
 
@@ -1246,6 +1275,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ error: 'Failed to set chaos level' });
+    }
+  });
+
+  // 🎭 UNIFIED PERSONALITY CONTROLLER ROUTES - Single source of truth for Nicky's personality
+  app.get('/api/personality/state', async (req, res) => {
+    try {
+      const { personalityController } = await import('./services/personalityController');
+      const state = await personalityController.getState();
+      res.json(state);
+    } catch (error) {
+      console.error('Failed to get personality state:', error);
+      res.status(500).json({ error: 'Failed to get personality state' });
+    }
+  });
+
+  app.post('/api/personality/update', async (req, res) => {
+    try {
+      const { personalityController } = await import('./services/personalityController');
+      const { preset, intensity, dbdLens, spice } = req.body;
+      
+      // Validate input
+      const validPresets = ['Chill Nicky', 'Roast Mode', 'Unhinged', 'Patch Roast', 'Storytime', 'Caller War'];
+      const validIntensities = ['low', 'med', 'high', 'ultra'];
+      const validSpices = ['platform_safe', 'normal', 'spicy'];
+      
+      const updates: any = {};
+      if (preset && validPresets.includes(preset)) updates.preset = preset;
+      if (intensity && validIntensities.includes(intensity)) updates.intensity = intensity;
+      if (typeof dbdLens === 'boolean') updates.dbd_lens = dbdLens;
+      if (spice && validSpices.includes(spice)) updates.spice = spice;
+      
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: 'No valid personality updates provided' });
+      }
+      
+      const newState = await personalityController.updatePersonality(updates, 'manual');
+      res.json({
+        ...newState,
+        message: 'Personality updated successfully'
+      });
+    } catch (error) {
+      console.error('Failed to update personality:', error);
+      res.status(500).json({ error: 'Failed to update personality' });
+    }
+  });
+
+  app.post('/api/personality/override', async (req, res) => {
+    try {
+      const { personalityController } = await import('./services/personalityController');
+      const { preset, intensity, dbdLens, spice } = req.body;
+      
+      // Create temporary override for one response
+      const overrides: any = {};
+      if (preset) overrides.preset = preset;
+      if (intensity) overrides.intensity = intensity;
+      if (typeof dbdLens === 'boolean') overrides.dbd_lens = dbdLens;
+      if (spice) overrides.spice = spice;
+      
+      const temporaryPersonality = await personalityController.createTemporaryOverride(overrides);
+      res.json({
+        temporaryPersonality,
+        message: 'Temporary personality override created for next response'
+      });
+    } catch (error) {
+      console.error('Failed to create personality override:', error);
+      res.status(500).json({ error: 'Failed to create personality override' });
+    }
+  });
+
+  app.post('/api/personality/chaos-influence', async (req, res) => {
+    try {
+      const { personalityController } = await import('./services/personalityController');
+      const { intensityDelta, spiceCap, presetSuggestion, reason } = req.body;
+      
+      if (!reason) {
+        return res.status(400).json({ error: 'Reason required for chaos influence' });
+      }
+      
+      const influence = {
+        intensityDelta: intensityDelta || 0,
+        spiceCap,
+        presetSuggestion,
+        reason
+      };
+      
+      const newState = await personalityController.applyChaosInfluence(influence);
+      res.json({
+        ...newState,
+        message: 'Chaos influence applied'
+      });
+    } catch (error) {
+      console.error('Failed to apply chaos influence:', error);
+      res.status(500).json({ error: 'Failed to apply chaos influence' });
+    }
+  });
+
+  app.post('/api/personality/clear-chaos', async (req, res) => {
+    try {
+      const { personalityController } = await import('./services/personalityController');
+      const newState = await personalityController.clearChaosInfluence();
+      res.json({
+        ...newState,
+        message: 'Chaos influence cleared'
+      });
+    } catch (error) {
+      console.error('Failed to clear chaos influence:', error);
+      res.status(500).json({ error: 'Failed to clear chaos influence' });
     }
   });
 
