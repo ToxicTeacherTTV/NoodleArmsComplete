@@ -256,6 +256,201 @@ class PersonalityController {
       console.error('Failed to save personality state to database:', error);
     }
   }
+
+  // Discord Migration Functions
+  
+  /**
+   * Check if a Discord server needs migration from legacy behavior system to unified personality
+   */
+  async doesDiscordServerNeedMigration(serverId: string): Promise<boolean> {
+    try {
+      const { storage } = await import('../storage.js');
+      const server = await storage.getDiscordServer(serverId);
+      
+      if (!server) return false;
+      
+      // Check if server has legacy behavior settings but no unified personality marker
+      const hasLegacySettings = (
+        server.aggressiveness !== undefined ||
+        server.responsiveness !== undefined ||
+        server.unpredictability !== undefined ||
+        server.dbdObsession !== undefined ||
+        server.familyBusinessMode !== undefined
+      );
+      
+      // Check if server already has unified personality flag (we'll add this field)
+      const hasUnifiedPersonality = server.unifiedPersonalityMigrated === true;
+      
+      return hasLegacySettings && !hasUnifiedPersonality;
+      
+    } catch (error) {
+      console.error(`Error checking Discord migration status for ${serverId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Convert legacy Discord behavior settings to unified personality preset + modifiers
+   */
+  migrateDiscordBehaviorToPersonality(legacyBehavior: {
+    aggressiveness?: number;
+    responsiveness?: number;
+    unpredictability?: number;
+    dbdObsession?: number;
+    familyBusinessMode?: number;
+  }): {
+    preset: PersonalityControl['preset'];
+    intensity: number; // 0-100
+    spice: number; // 0-100
+    dbdLensActive: boolean;
+  } {
+    // Extract values with fallbacks to defaults
+    const aggro = legacyBehavior.aggressiveness ?? 80;
+    const resp = legacyBehavior.responsiveness ?? 60;
+    const chaos = legacyBehavior.unpredictability ?? 75;
+    const dbd = legacyBehavior.dbdObsession ?? 80;
+    const family = legacyBehavior.familyBusinessMode ?? 40;
+
+    // Determine best-fit preset based on dominant characteristics
+    let preset: PersonalityControl['preset'] = 'Roast Mode'; // default
+
+    if (dbd >= 70 && dbd > Math.max(aggro, family, chaos)) {
+      preset = 'DBD Obsessed';
+    } else if (family >= 70 && family > Math.max(aggro, dbd, chaos)) {
+      preset = 'Family Business';
+    } else if (chaos >= 80 && chaos > Math.max(aggro, dbd, family)) {
+      preset = 'Chaos Gremlin';
+    } else if (aggro >= 75 && aggro > Math.max(dbd, family)) {
+      preset = 'Roast Mode';
+    } else if (aggro <= 50 && resp <= 50 && chaos <= 50) {
+      preset = 'Chill Vibes';
+    }
+
+    // Calculate intensity as weighted average of engagement metrics
+    const intensity = Math.round((aggro * 0.4 + resp * 0.4 + Math.min(chaos, 80) * 0.2));
+    
+    // Map unpredictability directly to spice
+    const spice = Math.round(chaos);
+    
+    // DBD lens active if obsession was high
+    const dbdLensActive = dbd >= 60;
+
+    return {
+      preset,
+      intensity: Math.max(0, Math.min(100, intensity)),
+      spice: Math.max(0, Math.min(100, spice)),
+      dbdLensActive
+    };
+  }
+
+  /**
+   * Perform migration for a specific Discord server
+   */
+  async migrateDiscordServer(serverId: string): Promise<boolean> {
+    try {
+      const { storage } = await import('../storage.js');
+      const server = await storage.getDiscordServer(serverId);
+      
+      if (!server || !(await this.doesDiscordServerNeedMigration(serverId))) {
+        return false; // No migration needed
+      }
+
+      // Extract legacy behavior
+      const legacyBehavior = {
+        aggressiveness: server.aggressiveness,
+        responsiveness: server.responsiveness,
+        unpredictability: server.unpredictability,
+        dbdObsession: server.dbdObsession,
+        familyBusinessMode: server.familyBusinessMode
+      };
+
+      // Convert to unified personality settings
+      const migratedPersonality = this.migrateDiscordBehaviorToPersonality(legacyBehavior);
+
+      // Update unified personality controller with Discord-specific settings
+      await this.updatePersonality({
+        preset: migratedPersonality.preset,
+        intensity: this.mapIntensityToLevel(migratedPersonality.intensity),
+        spice: this.mapSpiceToLevel(migratedPersonality.spice),
+        dbdLensActive: migratedPersonality.dbdLensActive
+      }, 'discord_override');
+
+      // Mark server as migrated to prevent re-migration
+      await storage.updateDiscordServer(server.id, {
+        unifiedPersonalityMigrated: true
+      });
+
+      console.log(`🔄 Migrated Discord server ${serverId}: ${legacyBehavior.aggressiveness}/${legacyBehavior.responsiveness}/${legacyBehavior.unpredictability}/${legacyBehavior.dbdObsession}/${legacyBehavior.familyBusinessMode} → ${migratedPersonality.preset} @ ${migratedPersonality.intensity}% intensity, ${migratedPersonality.spice}% spice, DBD: ${migratedPersonality.dbdLensActive}`);
+      
+      return true;
+
+    } catch (error) {
+      console.error(`Failed to migrate Discord server ${serverId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Check and migrate all Discord servers that need it
+   */
+  async migrateAllDiscordServers(): Promise<{ migrated: number; errors: number }> {
+    let migrated = 0;
+    let errors = 0;
+    
+    try {
+      const { storage } = await import('../storage.js');
+      
+      // Get active profile to access its Discord servers
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        console.log('⚠️ No active profile found for Discord migration');
+        return { migrated, errors };
+      }
+
+      const servers = await storage.getProfileDiscordServers(activeProfile.id);
+      
+      console.log(`🔍 Checking ${servers.length} Discord servers for migration...`);
+      
+      for (const server of servers) {
+        try {
+          const needsMigration = await this.doesDiscordServerNeedMigration(server.serverId);
+          if (needsMigration) {
+            const success = await this.migrateDiscordServer(server.serverId);
+            if (success) {
+              migrated++;
+            } else {
+              errors++;
+            }
+          }
+        } catch (error) {
+          console.error(`Error migrating server ${server.serverId}:`, error);
+          errors++;
+        }
+      }
+
+      console.log(`✅ Discord migration complete: ${migrated} migrated, ${errors} errors`);
+      
+    } catch (error) {
+      console.error('Failed to migrate Discord servers:', error);
+      errors++;
+    }
+
+    return { migrated, errors };
+  }
+
+  // Helper functions to convert numeric values to enum levels
+  private mapIntensityToLevel(numericValue: number): PersonalityControl['intensity'] {
+    if (numericValue >= 85) return 'ultra';
+    if (numericValue >= 70) return 'high'; 
+    if (numericValue >= 40) return 'med';
+    return 'low';
+  }
+
+  private mapSpiceToLevel(numericValue: number): PersonalityControl['spice'] {
+    if (numericValue >= 80) return 'spicy';
+    if (numericValue >= 40) return 'normal';
+    return 'platform_safe';
+  }
 }
 
 // Export singleton instance

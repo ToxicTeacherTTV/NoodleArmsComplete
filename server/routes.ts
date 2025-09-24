@@ -3253,62 +3253,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get Discord server baseline behavior settings
+  // Get Discord server baseline behavior settings (with auto-migration)
   app.get('/api/discord/servers/:id/behavior', requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      const server = await storage.getDiscordServer(id);
       
-      if (!server) {
-        return res.status(404).json({ error: 'Discord server not found' });
+      // Import personality controller for migration
+      const { personalityController } = await import('./services/personalityController');
+      
+      // Check if server needs migration and perform it
+      const needsMigration = await personalityController.doesDiscordServerNeedMigration(id);
+      if (needsMigration) {
+        console.log(`🔄 Auto-migrating Discord server ${id} to unified personality system...`);
+        await personalityController.migrateDiscordServer(id);
       }
-
-      // Return baseline behavior settings
-      const baseline = {
-        aggressiveness: server.aggressiveness || 80,
-        responsiveness: server.responsiveness || 60,
-        unpredictability: server.unpredictability || 75,
-        dbdObsession: server.dbdObsession || 80,
-        familyBusinessMode: server.familyBusinessMode || 40,
+      
+      // Now get the unified personality state instead of legacy behavior
+      const personalityState = await personalityController.getState();
+      
+      // For backward compatibility, convert unified personality back to legacy format
+      const legacyFormat = {
+        aggressiveness: personalityState.effectivePersonality.intensity === 'ultra' ? 90 : 
+                       personalityState.effectivePersonality.intensity === 'high' ? 75 :
+                       personalityState.effectivePersonality.intensity === 'med' ? 60 : 40,
+        responsiveness: personalityState.effectivePersonality.intensity === 'ultra' ? 85 :
+                       personalityState.effectivePersonality.intensity === 'high' ? 70 :
+                       personalityState.effectivePersonality.intensity === 'med' ? 55 : 35,
+        unpredictability: personalityState.effectivePersonality.spice === 'spicy' ? 85 :
+                         personalityState.effectivePersonality.spice === 'normal' ? 50 : 15,
+        dbdObsession: personalityState.effectivePersonality.dbdLensActive ? 80 : 40,
+        familyBusinessMode: personalityState.effectivePersonality.preset === 'Family Business' ? 80 : 35,
       };
 
-      res.json(baseline);
+      res.json(legacyFormat);
     } catch (error) {
       console.error('Error getting Discord server behavior:', error);
       res.status(500).json({ error: 'Failed to get behavior settings' });
     }
   });
 
-  // Update Discord server behavior settings
+  // Update Discord server behavior settings (redirects to unified personality)
   app.put('/api/discord/servers/:id/behavior', requireAuth, async (req, res) => {
     try {
       const { id } = req.params; // This is the Discord server ID
       const updates = req.body;
       
-      // First get the server by Discord server ID to get the database ID
+      // Import personality controller
+      const { personalityController } = await import('./services/personalityController');
+      
+      // Convert legacy behavior updates to unified personality updates
+      const legacyBehavior = {
+        aggressiveness: updates.aggressiveness,
+        responsiveness: updates.responsiveness,
+        unpredictability: updates.unpredictability,
+        dbdObsession: updates.dbdObsession,
+        familyBusinessMode: updates.familyBusinessMode
+      };
+      
+      // Convert to personality settings
+      const migratedPersonality = personalityController.migrateDiscordBehaviorToPersonality(legacyBehavior);
+      
+      // Update unified personality controller
+      await personalityController.updatePersonality({
+        preset: migratedPersonality.preset,
+        intensity: personalityController['mapIntensityToLevel'](migratedPersonality.intensity),
+        spice: personalityController['mapSpiceToLevel'](migratedPersonality.spice),
+        dbdLensActive: migratedPersonality.dbdLensActive
+      }, 'discord_override');
+      
+      // Mark the server as migrated
       const server = await storage.getDiscordServer(id);
-      
-      if (!server) {
-        return res.status(404).json({ error: 'Discord server not found' });
+      if (server) {
+        await storage.updateDiscordServer(server.id, {
+          unifiedPersonalityMigrated: true
+        });
       }
       
-      // Validate behavior settings
-      const validKeys = ['aggressiveness', 'responsiveness', 'unpredictability', 'dbdObsession', 'familyBusinessMode'];
-      const filteredUpdates: any = {};
+      console.log(`🔄 Updated Discord behavior via legacy API: ${JSON.stringify(legacyBehavior)} → ${migratedPersonality.preset}`);
       
-      for (const key of validKeys) {
-        if (key in updates && typeof updates[key] === 'number' && updates[key] >= 0 && updates[key] <= 100) {
-          filteredUpdates[key] = updates[key];
-        }
-      }
-
-      // Use the database ID for the update
-      const updatedServer = await storage.updateDiscordServer(server.id, filteredUpdates);
+      // Return the updated personality state in legacy format for compatibility
+      const personalityState = await personalityController.getState();
+      const legacyFormat = {
+        aggressiveness: migratedPersonality.intensity,
+        responsiveness: Math.max(30, migratedPersonality.intensity - 10),
+        unpredictability: migratedPersonality.spice,
+        dbdObsession: migratedPersonality.dbdLensActive ? 80 : 40,
+        familyBusinessMode: migratedPersonality.preset === 'Family Business' ? 80 : 35,
+      };
       
-      res.json(updatedServer);
+      res.json(legacyFormat);
     } catch (error) {
       console.error('Error updating Discord server behavior:', error);
       res.status(500).json({ error: 'Failed to update Discord server behavior' });
+    }
+  });
+
+  // Manual Discord migration endpoint
+  app.post('/api/discord/migrate-servers', requireAuth, async (req, res) => {
+    try {
+      const { personalityController } = await import('./services/personalityController');
+      
+      console.log('🚀 Manual Discord server migration triggered...');
+      const results = await personalityController.migrateAllDiscordServers();
+      
+      res.json({
+        success: true,
+        migrated: results.migrated,
+        errors: results.errors,
+        message: `Discord migration complete: ${results.migrated} servers migrated, ${results.errors} errors`
+      });
+    } catch (error) {
+      console.error('Error during manual Discord migration:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to migrate Discord servers',
+        message: error.message 
+      });
     }
   });
 
