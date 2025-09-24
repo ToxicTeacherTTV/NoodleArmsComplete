@@ -741,6 +741,11 @@ export class DiscordBotService {
         console.log(`🚫 Removed self-mentions for bot ID: ${botUser.id}`);
       }
 
+      // If content is empty after filtering, provide a fallback
+      if (!discordContent || discordContent.length < 3) {
+        discordContent = "Hey there! What's up?";
+      }
+
       // Add proper @mention for the user being responded to
       const userMention = `<@${message.author.id}>`;
       if (!discordContent.includes(userMention)) {
@@ -748,14 +753,9 @@ export class DiscordBotService {
         console.log(`👤 Added user mention for: ${member.username} (${message.author.id})`);
       }
 
-      // If content is empty after filtering, provide a fallback
-      if (!discordContent || discordContent.length < 3) {
-        discordContent = "Hey there! What's up?";
-      }
-
       console.log(`🎭 AGGRESSIVE Emotion filter: "${content.substring(0, 100)}..." → "${discordContent.substring(0, 100)}..."`);
 
-      // Enforce Discord's 2000 character limit with smart truncation
+      // Enforce Discord's 2000 character limit with smart truncation (check AFTER adding mention)
       if (discordContent.length > 1980) {
         // Find the last complete sentence that fits
         const sentences = discordContent.split(/(?<=[.!?])\s+/);
@@ -771,8 +771,9 @@ export class DiscordBotService {
         
         // If we got at least one complete sentence, use it
         if (truncated.length > 100) {
+          const originalLength = discordContent.length;
           discordContent = truncated;
-          console.log(`✂️ Smart truncated message from ${discordContent.length} to ${truncated.length} characters at sentence boundary`);
+          console.log(`✂️ Smart truncated message from ${originalLength} to ${discordContent.length} characters at sentence boundary`);
         } else {
           // Fallback: truncate at 1980 characters but end with proper punctuation
           discordContent = discordContent.substring(0, 1980).replace(/[^.!?]*$/, '');
