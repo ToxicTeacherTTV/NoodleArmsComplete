@@ -80,7 +80,8 @@ class AnthropicService {
     loreContext?: string,
     mode?: string,
     conversationId?: string,
-    profileId?: string
+    profileId?: string,
+    webSearchResults: any[] = []
   ): Promise<AIResponse> {
     const startTime = Date.now();
 
@@ -178,6 +179,22 @@ class AnthropicService {
         relevantDocs.forEach(doc => {
           contextPrompt += `- ${doc.content}\n`;
         });
+      }
+
+      // 🌐 NEW: Add web search results for current information
+      if (webSearchResults.length > 0) {
+        contextPrompt += "\n\nCURRENT WEB INFORMATION:\n";
+        webSearchResults.forEach((result, index) => {
+          contextPrompt += `- ${result.title}\n`;
+          contextPrompt += `  ↳ ${result.snippet}`;
+          if (result.url) {
+            // Show domain name for source attribution
+            const domain = new URL(result.url).hostname.replace('www.', '');
+            contextPrompt += ` (Source: ${domain})`;
+          }
+          contextPrompt += `\n`;
+        });
+        contextPrompt += "\nNOTE: Use this current web information to supplement your knowledge. Cite sources naturally when referencing web information (e.g., 'I just read that...' or 'According to recent info...').\n";
       }
 
       // Add lore context for emergent personality

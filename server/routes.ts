@@ -354,10 +354,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`🧠 AI Context: ${searchBasedMemories.length} search-based + ${additionalMemories.slice(0, 10).length} high-confidence facts (${relevantMemories.length} total). Confidence: ${confidenceStats.min}-${confidenceStats.max}% (avg: ${confidenceStats.avg}%)`);
       
+      // 🌐 ENHANCED: Web search integration for current information
+      let webSearchResults: any[] = [];
+      let webSearchUsed = false;
+      
+      try {
+        const { webSearchService } = await import('./services/webSearchService');
+        
+        // Intelligent decision: Should we search the web?
+        const shouldSearch = webSearchService.shouldTriggerSearch(
+          relevantMemories,
+          message,
+          confidenceStats.avg
+        );
+        
+        if (shouldSearch) {
+          console.log(`🔍 Triggering web search for: "${message}"`);
+          console.log(`📊 Decision factors: ${relevantMemories.length} memories, ${confidenceStats.avg}% avg confidence`);
+          
+          const searchResponse = await webSearchService.search(message);
+          
+          if (searchResponse.results.length > 0) {
+            webSearchResults = searchResponse.results.map(result => ({
+              title: result.title,
+              snippet: result.snippet,
+              url: result.url,
+              score: result.score,
+              source: 'web_search'
+            }));
+            webSearchUsed = true;
+            
+            console.log(`🌐 Web search: Found ${webSearchResults.length} results in ${searchResponse.searchTime}ms`);
+          } else {
+            console.log(`🌐 Web search: No results found for "${message}"`);
+          }
+        } else {
+          console.log(`🚫 Web search skipped: sufficient context available (${relevantMemories.length} memories, ${confidenceStats.avg}% confidence)`);
+        }
+      } catch (error) {
+        console.warn('⚠️ Web search failed:', error);
+        webSearchUsed = false;
+      }
+      
       // Get enhanced lore context (includes extracted knowledge from memories)
       const loreContext = await MemoryAnalyzer.getEnhancedLoreContext(activeProfile.id);
 
-      // Generate AI response with lore context and mode awareness
+      // Generate AI response with lore context, mode awareness, and web search results
       const response = await anthropicService.generateResponse(
         message,
         activeProfile.coreIdentity,
@@ -366,7 +408,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         loreContext,
         mode,
         conversationId,
-        activeProfile.id
+        activeProfile.id,
+        webSearchResults
       );
 
       // Store the AI response
