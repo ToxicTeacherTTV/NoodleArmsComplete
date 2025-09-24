@@ -59,10 +59,17 @@ Respond with a JSON array of facts like this:
 Extract 8-15 of the most important and memorable facts from this episode.`;
 
       console.log(`🤖 Sending transcript to AI for fact extraction...`);
-      const response = await anthropicService.generateResponse([{
-        role: 'user',
-        content: prompt
-      }], []);
+      
+      // Get the active profile for core identity
+      const profile = await storage.getProfile(profileId);
+      const coreIdentity = profile?.coreIdentity || "AI assistant";
+      
+      const response = await anthropicService.generateResponse(
+        prompt,
+        coreIdentity,
+        [],  // relevantMemories
+        []   // relevantDocs
+      );
       
       // Parse the AI response
       let extractedFacts: Array<{
@@ -74,7 +81,7 @@ Extract 8-15 of the most important and memorable facts from this episode.`;
 
       try {
         // Try to extract JSON from the response
-        const jsonMatch = response.match(/\[[\s\S]*\]/);
+        const jsonMatch = response.content.match(/\[[\s\S]*\]/);
         if (!jsonMatch) {
           throw new Error('No JSON array found in AI response');
         }
