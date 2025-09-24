@@ -10,7 +10,7 @@ import DiscordManagementPanel from "@/components/discord-management-panel";
 import StatusIndicator from "@/components/status-indicator";
 import VoiceVisualizer from "@/components/voice-visualizer";
 import ProfileModal from "@/components/profile-modal";
-import ChaosMeter from "@/components/chaos-meter";
+import PersonalitySurgePanel from "@/components/personality-surge-panel";
 import { MemoryChecker } from "@/components/memory-checker";
 import NotesModal from "@/components/notes-modal";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import type { Message, Profile, AIStatus, StreamSettings, VoiceActivity, AppMode, ChatResponse, ConversationResponse, ChaosState, MemoryStats } from "@/types";
+import type { Message, Profile, AIStatus, StreamSettings, VoiceActivity, AppMode, ChatResponse, ConversationResponse, MemoryStats } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
 import { nanoid } from "nanoid";
 
@@ -114,13 +114,7 @@ export default function JazzDashboard() {
     },
   });
 
-  const { data: chaosState, isLoading: chaosLoading, isError: chaosError } = useQuery<ChaosState>({
-    queryKey: ['/api/chaos/state'],
-    refetchInterval: 15000, // Reduced from 5s to 15s to reduce flickering
-    onError: (error) => {
-      console.error('Failed to fetch chaos state:', error);
-    },
-  });
+  // Note: chaosState no longer needed - PersonalitySurgePanel manages its own state
 
   // Mutations
   const sendMessageMutation = useMutation({
@@ -440,49 +434,6 @@ export default function JazzDashboard() {
             >
               <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'}`}></i>
             </Button>
-            
-            {/* Chaos Controls */}
-            {chaosState && (
-              <div className="bg-accent/20 rounded-lg p-2 min-w-[120px] space-y-1">
-                <div className="text-xs text-center text-foreground">
-                  Chaos: {Math.round(chaosState.effectiveLevel || chaosState.level)}%
-                </div>
-                <div className="flex gap-1 justify-center">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={async () => {
-                      try {
-                        await apiRequest('POST', '/api/chaos/trigger-mutation');
-                        queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
-                      } catch (error) {
-                        console.error('Failed to trigger chaos mutation:', error);
-                      }
-                    }}
-                    className="text-xs px-2 py-1 h-6"
-                    data-testid="button-chaos-trigger"
-                  >
-                    🎲
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={async () => {
-                      try {
-                        await apiRequest('POST', '/api/chaos/reset');
-                        queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
-                      } catch (error) {
-                        console.error('Failed to reset chaos:', error);
-                      }
-                    }}
-                    className="text-xs px-2 py-1 h-6"
-                    data-testid="button-chaos-reset"
-                  >
-                    🔄
-                  </Button>
-                </div>
-              </div>
-            )}
 
             {/* Action Buttons */}
             <Button
@@ -641,19 +592,12 @@ export default function JazzDashboard() {
             </CardContent>
           </Card>
 
-          {/* Chaos meter only - personality moved to brain management */}
-          {chaosState && (
-            <Card className="border-accent/20 hidden md:block">
-              <CardContent className="p-4">
-                <ChaosMeter 
-                  chaosLevel={chaosState.level} 
-                  chaosMode={chaosState.mode}
-                  manualOverride={chaosState.manualOverride}
-                  effectiveLevel={chaosState.effectiveLevel}
-                />
-              </CardContent>
-            </Card>
-          )}
+          {/* Unified personality control panel */}
+          <Card className="border-accent/20 hidden md:block">
+            <CardContent className="p-4">
+              <PersonalitySurgePanel />
+            </CardContent>
+          </Card>
         </div>
       </div>
 
