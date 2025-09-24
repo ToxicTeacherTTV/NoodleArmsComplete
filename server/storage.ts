@@ -95,6 +95,12 @@ export interface IStorage {
   incrementMemoryRetrieval(id: string): Promise<void>;
   getMemoryStats(profileId: string): Promise<{ totalFacts: number; conversations: number }>;
   
+  // Embedding support for memory entries
+  getMemoryEntriesWithEmbeddings(profileId: string): Promise<MemoryEntry[]>;
+  getMemoryEntriesWithoutEmbeddings(profileId: string): Promise<MemoryEntry[]>;
+  updateMemoryEmbedding(id: string, embedding: {embedding: string, embeddingModel: string, embeddingUpdatedAt: Date}): Promise<void>;
+  searchMemoriesByKeywords(profileId: string, keywords: string[], limit?: number): Promise<MemoryEntry[]>;
+  
   // Confidence tracking methods
   findMemoryByCanonicalKey(profileId: string, canonicalKey: string): Promise<MemoryEntry | undefined>;
   updateMemoryConfidence(id: string, confidence: number, supportCount?: number): Promise<MemoryEntry>;
@@ -175,6 +181,12 @@ export interface IStorage {
   deleteContentLibraryEntry(id: string): Promise<void>;
   searchContentLibrary(profileId: string, query: string): Promise<ContentLibraryEntry[]>;
   updateContentLibraryAccess(id: string): Promise<void>;
+  
+  // Embedding support for content library
+  getContentLibraryWithEmbeddings(profileId: string): Promise<ContentLibraryEntry[]>;
+  getContentLibraryWithoutEmbeddings(profileId: string): Promise<ContentLibraryEntry[]>;
+  updateContentLibraryEmbedding(id: string, embedding: {embedding: string, embeddingModel: string, embeddingUpdatedAt: Date}): Promise<void>;
+  getContentLibraryEntries(profileId: string): Promise<ContentLibraryEntry[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1394,6 +1406,113 @@ export class DatabaseStorage implements IStorage {
         accessCount: sql`${contentLibrary.accessCount} + 1`
       })
       .where(eq(contentLibrary.id, id));
+  }
+
+  // Embedding support implementations
+  async getMemoryEntriesWithEmbeddings(profileId: string): Promise<MemoryEntry[]> {
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          sql`${memoryEntries.embedding} IS NOT NULL`,
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.confidence));
+  }
+
+  async getMemoryEntriesWithoutEmbeddings(profileId: string): Promise<MemoryEntry[]> {
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          sql`${memoryEntries.embedding} IS NULL`,
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.importance));
+  }
+
+  async updateMemoryEmbedding(id: string, embedding: {embedding: string, embeddingModel: string, embeddingUpdatedAt: Date}): Promise<void> {
+    await db
+      .update(memoryEntries)
+      .set({
+        embedding: embedding.embedding,
+        embeddingModel: embedding.embeddingModel,
+        embeddingUpdatedAt: embedding.embeddingUpdatedAt
+      })
+      .where(eq(memoryEntries.id, id));
+  }
+
+  async searchMemoriesByKeywords(profileId: string, keywords: string[], limit = 20): Promise<MemoryEntry[]> {
+    if (keywords.length === 0) return [];
+    
+    // Build OR conditions for content search
+    const contentConditions = keywords.map(keyword => 
+      like(memoryEntries.content, `%${keyword}%`)
+    );
+    
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE'),
+          or(...contentConditions)
+        )
+      )
+      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.confidence))
+      .limit(limit);
+  }
+
+  async getContentLibraryWithEmbeddings(profileId: string): Promise<ContentLibraryEntry[]> {
+    return await db
+      .select()
+      .from(contentLibrary)
+      .where(
+        and(
+          eq(contentLibrary.profileId, profileId),
+          sql`${contentLibrary.embedding} IS NOT NULL`
+        )
+      )
+      .orderBy(desc(contentLibrary.updatedAt));
+  }
+
+  async getContentLibraryWithoutEmbeddings(profileId: string): Promise<ContentLibraryEntry[]> {
+    return await db
+      .select()
+      .from(contentLibrary)
+      .where(
+        and(
+          eq(contentLibrary.profileId, profileId),
+          sql`${contentLibrary.embedding} IS NULL`
+        )
+      )
+      .orderBy(desc(contentLibrary.updatedAt));
+  }
+
+  async updateContentLibraryEmbedding(id: string, embedding: {embedding: string, embeddingModel: string, embeddingUpdatedAt: Date}): Promise<void> {
+    await db
+      .update(contentLibrary)
+      .set({
+        embedding: embedding.embedding,
+        embeddingModel: embedding.embeddingModel,
+        embeddingUpdatedAt: embedding.embeddingUpdatedAt
+      })
+      .where(eq(contentLibrary.id, id));
+  }
+
+  async getContentLibraryEntries(profileId: string): Promise<ContentLibraryEntry[]> {
+    return await db
+      .select()
+      .from(contentLibrary)
+      .where(eq(contentLibrary.profileId, profileId))
+      .orderBy(desc(contentLibrary.updatedAt));
   }
 }
 
