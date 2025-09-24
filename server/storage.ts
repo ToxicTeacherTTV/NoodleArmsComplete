@@ -613,8 +613,15 @@ export class DatabaseStorage implements IStorage {
     const keywords = cleanQuery
       .replace(/[^\w\s]/g, ' ') // Remove punctuation
       .split(/\s+/)
-      .filter(word => word.length > 2) // Only words longer than 2 chars
-      .filter(word => !['who', 'what', 'when', 'where', 'why', 'how', 'tell', 'about', 'the', 'and', 'but', 'are', 'you', 'can', 'did', 'know'].includes(word)); // Remove common words
+      .filter(word => {
+        // Keep numbers (even if short) and words longer than 2 characters
+        const isNumber = /^\d+$/.test(word);
+        const isLongEnough = word.length > 2;
+        const commonWords = ['who', 'what', 'when', 'where', 'why', 'how', 'tell', 'about', 'the', 'and', 'but', 'are', 'you', 'can', 'did', 'know'];
+        const isNotCommonWord = !commonWords.includes(word);
+        
+        return (isNumber || isLongEnough) && isNotCommonWord;
+      }); // Preserve episode numbers like "68"!
 
     console.log(`🔍 Smart search for "${query}" -> Keywords: [${keywords.join(', ')}]`);
 
