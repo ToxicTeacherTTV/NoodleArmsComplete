@@ -288,9 +288,9 @@ export default function JazzDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      {/* Jazz Cup Header */}
-      <div className="bg-gradient-to-r from-primary via-accent to-secondary p-4 shadow-lg">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
+      {/* Header - Fixed Height */}
+      <header className="bg-gradient-to-r from-primary via-accent to-secondary p-4 shadow-lg">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
@@ -332,14 +332,12 @@ export default function JazzDashboard() {
             </button>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Main Content - Chat Panel Only */}
-      <div className="flex flex-col h-[calc(100vh-200px)]">
-        <div className="flex-1 min-h-0 p-4">
-          <Card className="border-primary/20 shadow-xl h-full">
-            {/* Chat window fills available space */}
-            <div className="h-full flex flex-col">
+      {/* Main Content - Flexible Height with Bottom Padding */}
+      <main className="flex-1 overflow-hidden pb-32 p-4">
+        <Card className="border-primary/20 shadow-xl h-full">
+          <div className="h-full flex flex-col">
             <ChatPanel
               messages={messages}
               sessionDuration={getSessionDuration()}
@@ -383,12 +381,11 @@ export default function JazzDashboard() {
               onTextSelection={handleTextSelection}
             />
           </div>
-          </Card>
-        </div>
-      </div>
+        </Card>
+      </main>
 
-      {/* Bottom Dock: Fixed at Bottom of Screen */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border/20 shadow-lg z-50">
+      {/* Footer - Fixed Input Controls */}
+      <footer className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border/20 shadow-lg z-40 h-32">
           {/* Main Control Row */}
           <div className="p-3 flex gap-3 items-center">
             {/* Chat Input - Takes most space */}
@@ -530,107 +527,7 @@ export default function JazzDashboard() {
               </div>
             </div>
           </div>
-        </div>
-      
-      {/* Bottom Dock: Fixed at Bottom of Screen */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border/20 shadow-lg z-50">
-          {/* Main Control Row */}
-          <div className="p-3 flex gap-3 items-center">
-            {/* Chat Input - Takes most space */}
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.target as HTMLFormElement);
-              const message = formData.get('message') as string;
-              if (message.trim()) {
-                const userMessage: Message = {
-                  id: nanoid(),
-                  conversationId: currentConversationId,
-                  type: 'USER',
-                  content: message,
-                  createdAt: new Date().toISOString(),
-                  metadata: null,
-                };
-                setMessages(prev => [...prev, userMessage]);
-                setAiStatus('PROCESSING');
-                sendMessageMutation.mutate({
-                  conversationId: currentConversationId,
-                  type: 'USER',
-                  content: message,
-                });
-                (e.target as HTMLFormElement).reset();
-              }
-            }} className="flex-1 flex gap-2">
-              <Textarea
-                name="message"
-                className="flex-1 bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                placeholder={isListening ? "🎤 Listening... speak now!" : "Type a message to Nicky..."}
-                rows={2}
-                data-testid="textarea-message-input"
-                readOnly={isListening}
-              />
-              <Button 
-                type="submit" 
-                className="bg-accent hover:bg-accent/90 text-accent-foreground px-4 rounded-lg flex items-center justify-center transition-all duration-200"
-                data-testid="button-send-message"
-              >
-                <i className="fas fa-paper-plane"></i>
-              </Button>
-            </form>
-
-            {/* Voice Control */}
-            <Button
-              onClick={toggleListening}
-              className={`p-3 rounded-lg transition-all duration-200 ${
-                isListening 
-                  ? 'bg-red-500 hover:bg-red-600 text-white' 
-                  : 'bg-primary hover:bg-primary/90 text-primary-foreground'
-              }`}
-              data-testid="button-toggle-voice"
-            >
-              <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'}`}></i>
-            </Button>
-            
-            {/* Store Conversation */}
-            <Button
-              onClick={async () => {
-                if (messages.length > 0) {
-                  consolidateMemoryMutation.mutate(currentConversationId);
-                } else {
-                  toast({
-                    title: "No messages to store",
-                    description: "Start a conversation first before storing memories.",
-                    variant: "default"
-                  });
-                }
-              }}
-              className="p-3 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 border border-blue-500/30"
-              data-testid="button-store-conversation"
-              title="Store Conversation to Memory"
-            >
-              💾
-            </Button>
-          </div>
-
-          {/* Status Bar */}
-          <div className="bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 px-3 py-2">
-            <div className="flex items-center justify-between text-xs text-black">
-              <div className="flex items-center space-x-4">
-                <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
-                  Claude API
-                </span>
-                <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
-                  ElevenLabs
-                </span>
-              </div>
-              <div className="flex items-center space-x-4">
-                <span>💬 {messages.length} messages</span>
-                <span>🧠 {memoryStats?.totalFacts || 0} facts</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        </footer>
 
       {/* Legacy controls section - now hidden */}
       <div className="hidden">
