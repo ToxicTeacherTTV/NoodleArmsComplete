@@ -91,6 +91,28 @@ export const memoryEntries = pgTable("memory_entries", {
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
 
+// Content Library - For stories, AITA posts, entertainment content (separate from facts)
+export const contentLibrary = pgTable("content_library", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  category: text("category").$type<'AITA' | 'REDDIT_STORY' | 'ENTERTAINMENT' | 'PERSONAL_STORY' | 'RANT' | 'OTHER'>().default('OTHER'),
+  source: text("source"), // Where this came from (document name, URL, etc.)
+  sourceId: varchar("source_id"), // ID of the document/source that created this
+  tags: text("tags").array(), // Keywords for organization
+  difficulty: text("difficulty").$type<'EASY' | 'MODERATE' | 'HARD' | 'EXPERT'>(), // Reading difficulty
+  mood: text("mood").$type<'FUNNY' | 'DRAMATIC' | 'WHOLESOME' | 'DARK' | 'NEUTRAL'>(), // Content mood
+  length: text("length").$type<'SHORT' | 'MEDIUM' | 'LONG'>(), // Content length
+  rating: integer("rating").default(0), // User rating (0-5 stars)
+  notes: text("notes"), // Private notes about this content
+  isFavorite: boolean("is_favorite").default(false),
+  lastAccessed: timestamp("last_accessed"),
+  accessCount: integer("access_count").default(0),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
 // Chaos Engine State - Global persistent state for Nicky's chaos system
 export const chaosState = pgTable("chaos_state", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -308,6 +330,13 @@ export const loreRelationshipsRelations = relations(loreRelationships, ({ one })
   }),
 }));
 
+export const contentLibraryRelations = relations(contentLibrary, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [contentLibrary.profileId],
+    references: [profiles.id],
+  }),
+}));
+
 // Insert schemas for lore system
 export const insertLoreEventSchema = createInsertSchema(loreEvents).omit({
   id: true,
@@ -339,6 +368,12 @@ export const insertLoreRelationshipSchema = createInsertSchema(loreRelationships
   updatedAt: true,
 });
 
+export const insertContentLibrarySchema = createInsertSchema(contentLibrary).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types for lore system
 export type LoreEvent = typeof loreEvents.$inferSelect;
 export type InsertLoreEvent = z.infer<typeof insertLoreEventSchema>;
@@ -350,6 +385,10 @@ export type LoreHistoricalEvent = typeof loreHistoricalEvents.$inferSelect;
 export type InsertLoreHistoricalEvent = z.infer<typeof insertLoreHistoricalEventSchema>;
 export type LoreRelationship = typeof loreRelationships.$inferSelect;
 export type InsertLoreRelationship = z.infer<typeof insertLoreRelationshipSchema>;
+
+// Types for content library
+export type ContentLibraryEntry = typeof contentLibrary.$inferSelect;
+export type InsertContentLibraryEntry = z.infer<typeof insertContentLibrarySchema>;
 
 // Podcast Management System
 export const podcastEpisodes = pgTable("podcast_episodes", {
