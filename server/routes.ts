@@ -2050,6 +2050,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Embedding Management Routes
+  app.post('/api/memory/embeddings/generate', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      console.log('🚀 Starting embedding generation for memory entries...');
+      
+      // Get entries without embeddings
+      const entriesWithoutEmbeddings = await storage.getMemoryEntriesWithoutEmbeddings(profile.id);
+      console.log(`📊 Found ${entriesWithoutEmbeddings.length} memory entries without embeddings`);
+
+      if (entriesWithoutEmbeddings.length === 0) {
+        return res.json({
+          message: 'All memory entries already have embeddings',
+          processed: 0,
+          total: 0
+        });
+      }
+
+      let processed = 0;
+      let errors = 0;
+      
+      // Generate embeddings for all memories at once
+      const { embeddingService } = await import('./services/embeddingService');
+      const result = await embeddingService.generateEmbeddingsForAllMemories(profile.id);
+      processed = result.successful;
+      errors = result.processed - result.successful;
+
+      res.json({
+        message: 'Embedding generation completed',
+        processed,
+        errors,
+        total: entriesWithoutEmbeddings.length
+      });
+    } catch (error) {
+      console.error('Embedding generation error:', error);
+      res.status(500).json({ error: 'Failed to generate embeddings' });
+    }
+  });
+
+  app.post('/api/memory/embeddings/search', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { query, limit = 10, threshold = 0.7 } = req.body;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: 'Query string is required' });
+      }
+
+      console.log(`🔍 Semantic search query: "${query}"`);
+
+      const { embeddingService } = await import('./services/embeddingService');
+      const results = await embeddingService.searchSimilarMemories(
+        query,
+        profile.id,
+        limit,
+        threshold
+      );
+
+      res.json({
+        query,
+        results,
+        total: results.length,
+        threshold
+      });
+    } catch (error) {
+      console.error('Semantic search error:', error);
+      res.status(500).json({ error: 'Failed to perform semantic search' });
+    }
+  });
+
+  app.get('/api/memory/embeddings/status', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const [withEmbeddings, withoutEmbeddings, totalEntries] = await Promise.all([
+        storage.getMemoryEntriesWithEmbeddings(profile.id),
+        storage.getMemoryEntriesWithoutEmbeddings(profile.id),
+        storage.getMemoryEntries(profile.id, 10000)
+      ]);
+
+      const contentWithEmbeddings = await storage.getContentLibraryWithEmbeddings(profile.id);
+      const contentWithoutEmbeddings = await storage.getContentLibraryWithoutEmbeddings(profile.id);
+      const totalContent = await storage.getContentLibraryEntries(profile.id);
+
+      res.json({
+        memory: {
+          withEmbeddings: withEmbeddings.length,
+          withoutEmbeddings: withoutEmbeddings.length,
+          total: totalEntries.length,
+          percentage: totalEntries.length > 0 ? Math.round((withEmbeddings.length / totalEntries.length) * 100) : 0
+        },
+        contentLibrary: {
+          withEmbeddings: contentWithEmbeddings.length,
+          withoutEmbeddings: contentWithoutEmbeddings.length,
+          total: totalContent.length,
+          percentage: totalContent.length > 0 ? Math.round((contentWithEmbeddings.length / totalContent.length) * 100) : 0
+        }
+      });
+    } catch (error) {
+      console.error('Embedding status error:', error);
+      res.status(500).json({ error: 'Failed to get embedding status' });
+    }
+  });
+
   // Protected Facts Management
   app.post('/api/memory/protected', async (req, res) => {
     try {
