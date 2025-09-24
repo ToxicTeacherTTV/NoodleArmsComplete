@@ -1,4 +1,3 @@
-import { anthropicService } from './anthropic.js';
 import { InsertMemoryEntry } from '@shared/schema';
 import { IStorage } from '../storage.js';
 
@@ -25,70 +24,17 @@ export class PodcastFactExtractor {
         return { success: false, factsCreated: 0, error: 'Transcript too short or empty' };
       }
 
-      // Use AI to extract key facts, quotes, and moments from the episode
-      const prompt = `You are extracting key facts, memorable moments, topics discussed, and quotes from Episode ${episodeNumber} of a podcast titled "${title}".
-
-Extract specific, factual information that would be useful to remember about this episode. Focus on:
-
-1. KEY TOPICS discussed in detail
-2. SPECIFIC QUOTES or memorable lines  
-3. IMPORTANT POINTS or arguments made
-4. GUEST insights or expertise shared
-5. NOTABLE MOMENTS or events mentioned
-6. FACTS or statistics mentioned
-7. STORIES told during the episode
-
-For each fact, provide:
-- A clear, factual statement (1-2 sentences max)
-- The type: TOPIC, QUOTE, FACT, STORY, or MOMENT
-- Keywords that would help find this information
-
-Transcript:
-${transcript}
-
-Respond with a JSON array of facts like this:
-[
-  {
-    "content": "The specific fact or quote from the episode",
-    "type": "TOPIC|QUOTE|FACT|STORY|MOMENT", 
-    "keywords": ["relevant", "search", "terms"],
-    "importance": 1-5
-  }
-]
-
-Extract 8-15 of the most important and memorable facts from this episode.`;
+      // NOTE: AI extraction is now handled by Gemini service
 
       console.log(`🤖 Sending transcript to AI for fact extraction...`);
       
-      // Get the active profile for core identity
-      const profile = await storage.getProfile(profileId);
-      const coreIdentity = profile?.coreIdentity || "AI assistant";
-      
-      const response = await anthropicService.generateResponse(
-        prompt,
-        coreIdentity,
-        [],  // relevantMemories
-        []   // relevantDocs
-      );
-      
-      // Parse the AI response
-      let extractedFacts: Array<{
-        content: string;
-        type: 'TOPIC' | 'QUOTE' | 'FACT' | 'STORY' | 'MOMENT';
-        keywords: string[];
-        importance: number;
-      }>;
+      // Use Gemini for fact extraction (no personality interference)
+      const { geminiService } = await import('./gemini.js');
+      let extractedFacts = await geminiService.extractPodcastFacts(transcript, episodeNumber, title);
 
-      try {
-        // Try to extract JSON from the response
-        const jsonMatch = response.content.match(/\[[\s\S]*\]/);
-        if (!jsonMatch) {
-          throw new Error('No JSON array found in AI response');
-        }
-        extractedFacts = JSON.parse(jsonMatch[0]);
-      } catch (parseError) {
-        console.warn(`⚠️ Failed to parse AI response as JSON, falling back to manual extraction`);
-        console.log('AI Response content for debugging:', response?.content?.substring(0, 500));
+      // If Gemini extraction fails or returns no facts, create fallback facts
+      if (!extractedFacts || extractedFacts.length === 0) {
+        console.warn(`⚠️ Gemini extraction failed or returned no facts, creating fallback facts`);
         
         // Fallback: create basic facts from title, topics and guests  
         extractedFacts = [];

@@ -685,6 +685,88 @@ Example format:
       return []; // Return empty array if parsing fails
     }
   }
+
+  // NEW: Extract facts from podcast episodes without personality interference
+  async extractPodcastFacts(transcript: string, episodeNumber: number, episodeTitle: string): Promise<Array<{
+    content: string;
+    type: 'TOPIC' | 'QUOTE' | 'FACT' | 'STORY' | 'MOMENT';
+    keywords: string[];
+    importance: number;
+  }>> {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Gemini API key not configured");
+    }
+
+    const prompt = `Extract key facts, memorable moments, topics discussed, and quotes from Episode ${episodeNumber} of the podcast "${episodeTitle}".
+
+Focus on extracting 15-25 specific, factual pieces of information that would be useful to remember:
+
+1. KEY TOPICS discussed in detail
+2. SPECIFIC QUOTES or memorable lines  
+3. IMPORTANT POINTS or arguments made
+4. GUEST insights or expertise shared
+5. NOTABLE MOMENTS or events mentioned
+6. FACTS or statistics mentioned
+7. STORIES told during the episode
+8. GAMEPLAY moments or results
+9. AUDIENCE interactions or questions
+10. CONTROVERSIAL opinions or takes
+
+For each fact, provide:
+- A clear, factual statement (1-2 sentences max)
+- The type: TOPIC, QUOTE, FACT, STORY, or MOMENT
+- Keywords that would help find this information
+- Importance rating 1-5 (5 being most memorable/important)
+
+TRANSCRIPT:
+${transcript}
+
+Respond with ONLY a JSON array - no other text:
+[
+  {
+    "content": "The specific fact or quote from the episode",
+    "type": "TOPIC",
+    "keywords": ["relevant", "search", "terms"],
+    "importance": 4
+  }
+]`;
+
+    try {
+      const response = await this.ai.models.generateContent({
+        model: "gemini-1.5-pro",
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                content: { type: "string" },
+                type: { type: "string", enum: ["TOPIC", "QUOTE", "FACT", "STORY", "MOMENT"] },
+                keywords: { type: "array", items: { type: "string" } },
+                importance: { type: "number", minimum: 1, maximum: 5 }
+              },
+              required: ["content", "type", "keywords", "importance"]
+            }
+          },
+          temperature: 0.3 // Higher creativity for fact extraction
+        },
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      });
+
+      const rawJson = response.text;
+      if (rawJson) {
+        const facts = JSON.parse(rawJson);
+        console.log(`🧠 Extracted ${facts.length} facts from Episode ${episodeNumber}`);
+        return facts;
+      } else {
+        throw new Error("Empty response from Gemini");
+      }
+    } catch (error) {
+      console.error("Gemini fact extraction error:", error);
+      return []; // Return empty array if extraction fails
+    }
+  }
 }
 
 // Generate lore content for emergent storytelling
