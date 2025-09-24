@@ -51,6 +51,10 @@ Preferred communication style: Simple, everyday language.
 - **Primary AI Service**: Anthropic's Claude API (claude-sonnet-4-20250514 model)
 - **Alternative TTS**: ElevenLabs integration for enhanced voice synthesis
 - **Memory System**: Retrieval-Augmented Generation (RAG) with keyword-based knowledge retrieval
+- **Unified Personality System**: Preset-based PersonalityControl as single source of truth
+  - 11 personality presets (Chill, Roast Mode, Storyteller, Gaming Rage, etc.)
+  - Consistent controls across chat and Discord interfaces
+  - Automatic migration from legacy behavior metrics to preset configurations
 - **Personality Profiles**: Customizable AI personalities with core identity and knowledge base configuration
 
 ### Document Processing System
@@ -78,8 +82,10 @@ Preferred communication style: Simple, everyday language.
 - **Dashboard**: Main application container managing state and data flow
 - **Chat Panel**: Message display with real-time updates and formatting
 - **Control Panel**: Voice controls and text input interface
+- **PersonalitySurgePanel**: Unified personality controls with preset selection, intensity, and spice adjustments
+- **Discord Management Panel**: Server-specific personality settings using same unified controls as chat
 - **Profile Management**: AI personality configuration and switching
-- **Memory Panel**: Memory entry management and knowledge base optimization
+- **Memory Panel**: Memory entry management with fixed protected facts deletion functionality
 - **Document Panel**: File upload and processing interface
 - **Voice Visualizer**: Real-time audio activity display
 
@@ -118,6 +124,12 @@ Preferred communication style: Simple, everyday language.
 ## Development Roadmap
 
 ### ✅ Recently Completed
+- **Unified Personality Control System**: Complete consolidation of personality management through preset-based PersonalityController
+  - Replaced ChaosMeter with PersonalitySurgePanel for unified chat personality controls
+  - Migrated Discord behavior sliders to preset-aligned controls (preset picker, intensity, spice, DBD lens)
+  - Implemented automatic migration system for existing Discord server configurations
+  - Created advisory-only chaos engine that provides suggestions without mutating controller state
+- **Enhanced Memory Management**: Fixed critical protected facts deletion bug by adding missing DELETE endpoint
 - **Dynamic Personality System**: 10-facet personality rotation with anti-repetition guards
 - **Enhanced Reddit Collection**: 9 subreddits across 3 content streams (NNN, Word from Don, DbD)
 - **Anti-Repetition Engine**: N-gram detection, catchphrase limits, automatic regeneration

@@ -40,10 +40,11 @@
 - **Profiles**: `/api/profiles` - Character management and configuration
 - **Conversations**: `/api/conversations` - Chat session lifecycle
 - **Messages**: `/api/messages` - Individual message CRUD operations
-- **Memory**: `/api/memory` - Knowledge base management with retrieval
+- **Memory**: `/api/memory` - Knowledge base management with retrieval and deletion
 - **Documents**: `/api/documents` - File upload and processing pipeline
-- **Discord**: `/api/discord` - Bot configuration and server management
-- **Chaos**: `/api/chaos` - Dynamic personality state management
+- **Discord**: `/api/discord` - Bot configuration and server management with migration support
+- **Personality**: `/api/personality` - Unified personality control system (state, updates)
+- **Chaos**: `/api/chaos` - Advisory personality influence system
 
 #### Standard Response Patterns
 ```typescript
@@ -126,7 +127,27 @@ const enhancedPrompt = `${baseIdentity}\n\n${chaosModifier}`;
 const effectiveBehavior = behaviorModulator.getEffectiveBehavior(serverId);
 ```
 
-### Character Consistency Rules vs Acceptable Chaos
+### Unified Personality Control System
+
+#### PersonalityController Architecture
+The application now uses a unified preset-based personality system that serves as the single source of truth across all interfaces:
+
+```typescript
+// Core personality presets with consistent behavior
+const PERSONALITY_PRESETS = {
+  'chill': { intensity: 30, spice: 20, dbdLens: 30 },
+  'roast_mode': { intensity: 85, spice: 90, dbdLens: 40 },
+  'storyteller': { intensity: 70, spice: 50, dbdLens: 80 },
+  'gaming_rage': { intensity: 95, spice: 85, dbdLens: 95 }
+  // ... 11 total presets
+};
+```
+
+#### Migration from Legacy Systems
+- **Chat Interface**: ChaosMeter replaced with PersonalitySurgePanel
+- **Discord Interface**: Legacy behavior sliders (aggressiveness, responsiveness) converted to preset-aligned controls
+- **Automatic Migration**: Existing Discord server settings automatically mapped to equivalent presets
+- **Chaos Engine**: Converted from mutating controller to advisory influence layer
 
 #### Protected Core Traits (Always Consistent)
 - Italian heritage and pasta obsession
@@ -267,6 +288,9 @@ const modeConfig = {
 client/src/
 ├── components/          # Reusable UI components
 │   ├── ui/             # shadcn/ui components
+│   ├── personality-surge-panel.tsx  # Unified chat personality controls
+│   ├── discord-management-panel.tsx  # Discord server personality settings
+│   ├── jazz-dashboard.tsx  # Main application container
 │   └── [feature]/      # Feature-specific components
 ├── pages/              # Route-level components
 ├── lib/                # Utilities and configurations
@@ -277,7 +301,12 @@ client/src/
 ```
 server/
 ├── services/           # Business logic and external integrations
-├── routes.ts          # API endpoint definitions
+│   ├── personalityController.ts  # Unified personality management
+│   ├── chaosEngine.ts  # Advisory personality influence
+│   └── [other services]/
+├── types/
+│   └── personalityControl.ts  # Personality system type definitions
+├── routes.ts          # API endpoint definitions (includes personality & memory endpoints)
 ├── storage.ts         # Database abstraction layer
 └── index.ts           # Application entry point
 ```
@@ -294,8 +323,14 @@ shared/
 1. **Update Schema First**: Define data model in `shared/schema.ts`
 2. **Extend Storage Interface**: Add CRUD operations to `server/storage.ts`
 3. **Create API Endpoints**: Add routes following RESTful patterns
-4. **Build Frontend Components**: Follow existing UI patterns
-5. **Test Character Integration**: Ensure new features enhance rather than contradict personality
+4. **Integrate with PersonalityController**: Ensure new features work with unified personality system
+5. **Build Frontend Components**: Follow existing UI patterns and use unified personality controls
+6. **Test Character Integration**: Ensure new features enhance rather than contradict personality
+
+#### Recent Bug Fixes and System Improvements
+- **Protected Facts Deletion**: Fixed missing `DELETE /api/memory/entries/:id` endpoint
+- **Personality System Unification**: Consolidated all personality controls through single PersonalityController
+- **Discord Migration**: Automatic conversion of legacy behavior settings to preset-based system
 
 #### Example: Adding Beef Tracker Feature
 ```typescript
