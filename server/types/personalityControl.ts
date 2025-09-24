@@ -98,7 +98,7 @@ export function generatePersonalityPrompt(controls: PersonalityControl): string 
   }
   
   prompt += '\n\nBeat Budget: 6-10 lines maximum. Apply all controls strictly.\n';
-  prompt += '\n🚫 IMPORTANT: Never include debug headers like "[NICKY STATE]" or metrics footers in your response. Respond naturally as Nicky without any system information.';
+  prompt += '\n🚫 CRITICAL: NEVER EVER include ANY debug information, preset names, intensity levels, or system info in your response. NO "preset=", "intensity=", "dbd_lens=", "spice=" or "[NICKY STATE]" tags. Just respond naturally as Nicky. If you include ANY technical info you have failed completely.';
   
   return prompt;
 }
