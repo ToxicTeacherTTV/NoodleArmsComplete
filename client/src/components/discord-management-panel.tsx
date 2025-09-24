@@ -792,45 +792,30 @@ export default function DiscordManagementPanel() {
   );
 }
 
-// Dynamic Behavior Panel Component
+// Dynamic Behavior Panel Component - Updated to use Unified Personality System
 function DynamicBehaviorPanel({ serverId }: { serverId: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Get baseline behavior settings
-  const { data: baseline, isLoading: baselineLoading, refetch: refetchBaseline } = useQuery<BehaviorSettings>({
-    queryKey: [`/api/discord/servers/${serverId}/behavior`],
-    enabled: !!serverId,
+  // Get unified personality state
+  const { data: personalityState, isLoading: personalityLoading, isError: personalityError } = useQuery<any>({
+    queryKey: ['/api/personality/state'],
+    refetchInterval: 60000, // Refresh every minute
   });
 
-  // Get effective (live) behavior values 
-  const { data: effective, isLoading: effectiveLoading, refetch: refetchEffective } = useQuery<EffectiveBehavior>({
-    queryKey: [`/api/discord/servers/${serverId}/effective-behavior`],
-    enabled: !!serverId,
-    refetchInterval: 300000, // Refresh every 5 minutes (reduced from 1 minute for better performance)
-  });
-
-  // Update baseline settings
-  const updateBehaviorMutation = useMutation({
-    mutationFn: async (newSettings: BehaviorSettings) => {
-      const response = await fetch(`/api/discord/servers/${serverId}/behavior`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSettings),
-      });
-      
-      if (!response.ok) throw new Error('Failed to update');
-      return response.json();
+  // Update personality settings mutation
+  const updatePersonalityMutation = useMutation({
+    mutationFn: async (updates: any) => {
+      return await apiRequest('PUT', '/api/personality/update', updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/discord/servers/${serverId}/behavior`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/discord/servers/${serverId}/effective-behavior`] });
-      toast({ title: "✅ Behavior settings updated!" });
+      queryClient.invalidateQueries({ queryKey: ['/api/personality/state'] });
+      toast({ title: "✅ Discord personality updated!" });
     },
     onError: (error: any) => {
-      console.error('Discord behavior update failed:', error);
+      console.error('Discord personality update failed:', error);
       toast({ 
-        title: "❌ Failed to update settings", 
+        title: "❌ Failed to update Discord personality", 
         description: error?.message || 'Please try again', 
         variant: "destructive" 
       });
@@ -841,69 +826,94 @@ function DynamicBehaviorPanel({ serverId }: { serverId: string }) {
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Store pending settings to batch updates
-  const pendingSettingsRef = useRef<Partial<BehaviorSettings>>({});
+  const pendingUpdatesRef = useRef<any>({});
   
-  const handleSliderChange = useCallback((setting: keyof BehaviorSettings, value: number[]) => {
-    if (!baseline) return;
-    
+  const handlePresetChange = (newPreset: string) => {
+    updatePersonalityMutation.mutate({
+      basePersonality: { preset: newPreset }
+    });
+  };
+
+  const handleSliderChange = useCallback((setting: string, value: number) => {
     // Clear existing timer
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
     
     // Update pending settings
-    pendingSettingsRef.current = {
-      ...pendingSettingsRef.current,
-      [setting]: value[0],
+    pendingUpdatesRef.current = {
+      ...pendingUpdatesRef.current,
+      [setting]: value,
     };
     
     // Set new timer to send update after 500ms of no changes
     debounceTimerRef.current = setTimeout(() => {
-      const newSettings = {
-        ...baseline,
-        ...pendingSettingsRef.current,
-      };
+      const updates: any = {};
       
-      updateBehaviorMutation.mutate(newSettings);
-      pendingSettingsRef.current = {}; // Clear pending settings
+      if (pendingUpdatesRef.current.intensity !== undefined) {
+        updates.intensity = pendingUpdatesRef.current.intensity;
+      }
+      if (pendingUpdatesRef.current.spice !== undefined) {
+        updates.spice = pendingUpdatesRef.current.spice;
+      }
+      
+      if (Object.keys(updates).length > 0) {
+        updatePersonalityMutation.mutate(updates);
+      }
+      
+      pendingUpdatesRef.current = {}; // Clear pending settings
     }, 500);
-  }, [baseline, updateBehaviorMutation]);
+  }, [updatePersonalityMutation]);
 
-  if (baselineLoading || effectiveLoading) {
+  const handleDbdToggle = (enabled: boolean) => {
+    updatePersonalityMutation.mutate({
+      dbdLensActive: enabled
+    });
+  };
+
+  if (personalityLoading) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5" />
             Nicky's Discord Personality
+            <Badge variant="outline" className="ml-auto">
+              <TrendingUp className="h-3 w-3 mr-1" />
+              Unified
+            </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2 text-muted-foreground">
             <div className="w-4 h-4 border-2 border-primary border-t-transparent animate-spin rounded-full"></div>
-            Loading dynamic behavior settings...
+            Loading unified personality settings...
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  if (!baseline || !effective) {
+  if (personalityError || !personalityState) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5" />
             Nicky's Discord Personality
+            <Badge variant="outline" className="ml-auto">
+              <TrendingUp className="h-3 w-3 mr-1" />
+              Unified
+            </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-4">
-            <p className="text-muted-foreground">Unable to load behavior settings</p>
+            <p className="text-muted-foreground">Unable to load personality settings</p>
             <Button 
               size="sm" 
               variant="outline" 
-              onClick={() => { refetchBaseline(); refetchEffective(); }}
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/personality/state'] })}
               className="mt-2"
             >
               Retry
@@ -914,38 +924,19 @@ function DynamicBehaviorPanel({ serverId }: { serverId: string }) {
     );
   }
 
-  const behaviorItems = [
-    { 
-      key: 'aggressiveness' as keyof BehaviorSettings, 
-      label: 'Aggressiveness', 
-      icon: '🔥', 
-      description: 'How confrontational and hostile Nicky gets (0-100)' 
-    },
-    { 
-      key: 'responsiveness' as keyof BehaviorSettings, 
-      label: 'Responsiveness', 
-      icon: '⚡', 
-      description: 'How often he responds to messages (0-100)' 
-    },
-    { 
-      key: 'unpredictability' as keyof BehaviorSettings, 
-      label: 'Unpredictability', 
-      icon: '🎲', 
-      description: 'How chaotic and random his responses become (0-100)' 
-    },
-    { 
-      key: 'dbdObsession' as keyof BehaviorSettings, 
-      label: 'DBD Focus', 
-      icon: '💀', 
-      description: 'How often he relates things to Dead by Daylight (0-100)' 
-    },
-    { 
-      key: 'familyBusinessMode' as keyof BehaviorSettings, 
-      label: 'Family Business', 
-      icon: '👔', 
-      description: 'How often he uses mafia/family business references (0-100)' 
-    },
+  // Preset options for Discord
+  const presetOptions = [
+    { value: 'Roast Mode', label: 'Roast Mode', icon: '🔥', description: 'Maximum sass and confrontation' },
+    { value: 'Chill Vibes', label: 'Chill Vibes', icon: '😎', description: 'Relaxed and laid-back personality' },
+    { value: 'Chaos Gremlin', label: 'Chaos Gremlin', icon: '🎲', description: 'Unpredictable and chaotic energy' },
+    { value: 'Family Business', label: 'Family Business', icon: '👔', description: 'Mafia references and business talk' },
+    { value: 'DBD Obsessed', label: 'DBD Obsessed', icon: '💀', description: 'Everything relates to Dead by Daylight' }
   ];
+
+  const currentPreset = personalityState.basePersonality?.preset || 'Roast Mode';
+  const currentIntensity = personalityState.intensity || 50;
+  const currentSpice = personalityState.spice || 0;
+  const dbdLensActive = personalityState.dbdLensActive || false;
 
   return (
     <Card>
@@ -955,104 +946,174 @@ function DynamicBehaviorPanel({ serverId }: { serverId: string }) {
           Nicky's Discord Personality
           <Badge variant="outline" className="ml-auto">
             <TrendingUp className="h-3 w-3 mr-1" />
-            Dynamic
+            Unified
           </Badge>
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Adjust baseline settings - values change automatically based on time, activity, and chaos mode
+          Control Nicky's personality using the unified preset system - Discord behavior now synced with chat
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Dynamic Status */}
+        {/* Current State Status */}
         <div className="flex items-center gap-4 p-3 bg-muted rounded-md">
-          <Clock className="h-4 w-4 text-muted-foreground" />
+          <Settings className="h-4 w-4 text-muted-foreground" />
           <div className="text-sm">
-            <span className="font-medium">Live Status:</span>
-            <span className="ml-2">
-              Time influence: {effective.driftFactors.timeOfDay > 0 ? 'Boosted' : effective.driftFactors.timeOfDay < 0 ? 'Dampened' : 'Normal'}
-            </span>
+            <span className="font-medium">Active Preset:</span>
+            <span className="ml-2">{currentPreset}</span>
             <span className="mx-2">•</span>
-            <span>
-              Chaos mode: {effective.driftFactors.chaosMultiplier > 1 ? 'Amplified' : effective.driftFactors.chaosMultiplier < 1 ? 'Suppressed' : 'Baseline'}
-            </span>
+            <span>Intensity: {currentIntensity}%</span>
+            <span className="mx-2">•</span>
+            <span>Spice: {currentSpice}%</span>
+            {dbdLensActive && (
+              <>
+                <span className="mx-2">•</span>
+                <span className="text-purple-600 dark:text-purple-400">💀 DBD Lens Active</span>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Behavior Sliders */}
-        <div className="space-y-4">
-          {behaviorItems.map((item) => {
-            const baselineValue = baseline[item.key];
-            const effectiveValue = effective[item.key];
-            const isDifferent = Math.abs(baselineValue - effectiveValue) > 2;
-
-            return (
-              <div key={item.key} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-2">
-                    <span>{item.icon}</span>
-                    {item.label}
-                  </Label>
+        {/* Preset Selection */}
+        <div className="space-y-3">
+          <Label className="text-base font-medium flex items-center gap-2">
+            <span>🎭</span>
+            Personality Preset
+          </Label>
+          <Select value={currentPreset} onValueChange={handlePresetChange}>
+            <SelectTrigger data-testid="select-discord-preset">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {presetOptions.map((preset) => (
+                <SelectItem key={preset.value} value={preset.value}>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">
-                      Baseline: {baselineValue}%
-                    </Badge>
-                    {isDifferent && (
-                      <Badge variant="secondary" className="text-xs">
-                        Live: {effectiveValue}%
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="space-y-3">
-                  {/* Number Input with Visual Bar */}
-                  <div className="flex items-center gap-3">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={baselineValue}
-                      onChange={(e) => {
-                        const newValue = parseInt(e.target.value) || 0;
-                        const clampedValue = Math.max(0, Math.min(100, newValue));
-                        handleSliderChange(item.key, [clampedValue]);
-                      }}
-                      className="w-20 text-center"
-                      disabled={updateBehaviorMutation.isPending}
-                      data-testid={`input-${item.key}`}
-                    />
-                    <div className="flex-1 relative h-3 bg-muted rounded-full overflow-hidden">
-                      {/* Baseline value bar */}
-                      <div 
-                        className="h-full bg-primary transition-all duration-300"
-                        style={{ width: `${baselineValue}%` }}
-                      />
-                      {/* Show effective value indicator if different */}
-                      {isDifferent && (
-                        <div 
-                          className="absolute top-0 w-1 h-full bg-green-500"
-                          style={{ left: `${effectiveValue}%` }}
-                          title={`Live effective value: ${effectiveValue}%`}
-                        />
-                      )}
+                    <span>{preset.icon}</span>
+                    <div>
+                      <div className="font-medium">{preset.label}</div>
+                      <div className="text-xs text-muted-foreground">{preset.description}</div>
                     </div>
-                    <span className="text-sm text-muted-foreground w-8">%</span>
                   </div>
-                </div>
-                
-                <p className="text-xs text-muted-foreground">{item.description}</p>
-              </div>
-            );
-          })}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Choose Nicky's base personality style for Discord interactions
+          </p>
         </div>
 
         <Separator />
 
-        {/* Last Update Info */}
-        <div className="text-xs text-muted-foreground text-center">
-          Last updated: {format(new Date(effective.lastUpdated), 'MMM dd, h:mm a')}
-          <span className="mx-2">•</span>
-          Values refresh automatically every minute
+        {/* Intensity Control */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <span>⚡</span>
+              Intensity
+            </Label>
+            <Badge variant="outline" className="text-xs">
+              {currentIntensity}%
+            </Badge>
+          </div>
+          <div className="flex items-center gap-3">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={currentIntensity}
+              onChange={(e) => {
+                const newValue = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+                handleSliderChange('intensity', newValue);
+              }}
+              className="w-20 text-center"
+              disabled={updatePersonalityMutation.isPending}
+              data-testid="input-discord-intensity"
+            />
+            <div className="flex-1 relative h-3 bg-muted rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-blue-500 transition-all duration-300"
+                style={{ width: `${currentIntensity}%` }}
+              />
+            </div>
+            <span className="text-sm text-muted-foreground w-8">%</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Overall personality strength - higher values mean more pronounced characteristics
+          </p>
+        </div>
+
+        {/* Spice Control */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <span>🌶️</span>
+              Spice (Chaos)
+            </Label>
+            <Badge variant="outline" className="text-xs">
+              {currentSpice}%
+            </Badge>
+          </div>
+          <div className="flex items-center gap-3">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={currentSpice}
+              onChange={(e) => {
+                const newValue = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+                handleSliderChange('spice', newValue);
+              }}
+              className="w-20 text-center"
+              disabled={updatePersonalityMutation.isPending}
+              data-testid="input-discord-spice"
+            />
+            <div className="flex-1 relative h-3 bg-muted rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-orange-500 transition-all duration-300"
+                style={{ width: `${currentSpice}%` }}
+              />
+            </div>
+            <span className="text-sm text-muted-foreground w-8">%</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Adds unpredictability and chaos to responses - use sparingly for maximum effect
+          </p>
+        </div>
+
+        <Separator />
+
+        {/* DBD Lens Toggle */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label className="flex items-center gap-2">
+                <span>💀</span>
+                Dead by Daylight Lens
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Forces Nicky to relate everything back to DBD gameplay and mechanics
+              </p>
+            </div>
+            <Switch
+              checked={dbdLensActive}
+              onCheckedChange={handleDbdToggle}
+              data-testid="switch-discord-dbd-lens"
+              disabled={updatePersonalityMutation.isPending}
+            />
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Info Section */}
+        <div className="text-xs text-muted-foreground space-y-1">
+          <div className="flex items-center justify-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            <span>Unified with chat personality system</span>
+          </div>
+          <div className="text-center">
+            Changes here affect both Discord and chat interactions
+          </div>
         </div>
       </CardContent>
     </Card>
