@@ -287,11 +287,11 @@ class AnthropicService {
         finalContent = repetitionCheck.content;
       }
 
-      // 🎭 NEW: Add metrics footer if personality controls were used
+      // 🎭 NEW: Generate debug metrics for logging (not user-facing)
       if (personalityPrompt) {
         const { generateMetricsFooter } = await import('../types/personalityControl');
         const metricsFooter = generateMetricsFooter(finalContent);
-        finalContent += `\n\n${metricsFooter}`;
+        console.log(`📊 Response Metrics: ${metricsFooter.replace('<!-- METRICS ', '').replace(' -->', '')}`);
       }
 
       return {

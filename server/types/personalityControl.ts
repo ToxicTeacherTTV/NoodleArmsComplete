@@ -62,9 +62,8 @@ export const PRESET_DEFINITIONS = {
 export function generatePersonalityPrompt(controls: PersonalityControl): string {
   const preset = PRESET_DEFINITIONS[controls.preset];
   
-  let prompt = `[NICKY STATE] preset=${controls.preset} | intensity=${controls.intensity} | dbd_lens=${controls.dbd_lens ? 'ON' : 'OFF'} | spice=${controls.spice}\n\n`;
-  
-  prompt += `🎭 ACTIVE PRESET: ${controls.preset}\n`;
+  // Debug state header removed from system prompt - will be logged separately
+  let prompt = `🎭 ACTIVE PRESET: ${controls.preset}\n`;
   prompt += `Mode: ${preset.mode} - ${preset.description}\n`;
   prompt += `Intensity: ${controls.intensity} - `;
   
@@ -101,6 +100,10 @@ export function generatePersonalityPrompt(controls: PersonalityControl): string 
   prompt += '\n\nBeat Budget: 6-10 lines maximum. Apply all controls strictly.\n';
   
   return prompt;
+}
+
+export function generateDebugState(controls: PersonalityControl): string {
+  return `[NICKY STATE] preset=${controls.preset} | intensity=${controls.intensity} | dbd_lens=${controls.dbd_lens ? 'ON' : 'OFF'} | spice=${controls.spice}`;
 }
 
 export function generateMetricsFooter(response: string): string {

@@ -404,11 +404,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get enhanced lore context (includes extracted knowledge from memories)
       const loreContext = await MemoryAnalyzer.getEnhancedLoreContext(activeProfile.id);
 
-      // 🎭 Generate personality control prompt
+      // 🎭 Generate personality control prompt and log debug state
       const personalityPrompt = generatePersonalityPrompt(controls);
       
+      // Log debug state for transparency
+      const { generateDebugState } = await import('./types/personalityControl');
+      const debugState = generateDebugState(controls);
+      console.log(`🎭 ${debugState}`);
+      
       // Generate AI response with personality controls, lore context, mode awareness, and web search results
-      const response = await anthropicService.generateResponse(
+      const aiResponse = await anthropicService.generateResponse(
         message,
         activeProfile.coreIdentity,
         relevantMemories,
@@ -420,6 +425,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         webSearchResults,
         personalityPrompt
       );
+
+      // 🎭 Process response with ElevenLabs emotion tags
+      let processedContent = aiResponse.content;
+      try {
+        const { emotionTagGenerator } = await import('./services/emotionTagGenerator');
+        
+        const emotionTags = await emotionTagGenerator.generateEmotionTags({
+          content: processedContent,
+          personality: activeProfile.name,
+          contentType: 'voice_response',
+          mood: controls.preset === 'Chill Nicky' ? 'relaxed' : 
+                controls.preset === 'Roast Mode' ? 'aggressive' :
+                controls.preset === 'Unhinged' ? 'chaotic' : 'balanced',
+          intensity: controls.intensity === 'low' ? 'low' : 
+                    controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
+        });
+        
+        // Apply emotion tags to content (simple implementation for chat)
+        processedContent = `${emotionTags.hook} ${processedContent}`;
+        console.log(`🎭 Applied emotion tags: hook="${emotionTags.hook}"`);
+        
+      } catch (error) {
+        console.warn('⚠️ Failed to generate emotion tags:', error);
+        // Continue with original content if emotion tag generation fails
+      }
+
+      const response = {
+        ...aiResponse,
+        content: processedContent
+      };
 
       // Store the AI response
       await storage.addMessage({
