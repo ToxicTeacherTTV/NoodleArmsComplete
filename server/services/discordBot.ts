@@ -111,7 +111,7 @@ export class DiscordBotService {
           serverName: message.guild.name,
           aggressiveness: 80,
           responsiveness: 30,
-          italianIntensity: 100,
+          unpredictability: 100,
           dbdObsession: 70,
           familyBusinessMode: 60,
           proactiveEnabled: true,
@@ -390,7 +390,7 @@ export class DiscordBotService {
                 behaviorSettings: {
                   aggressiveness: server.aggressiveness || 80,
                   responsiveness: server.responsiveness || 60,
-                  italianIntensity: server.italianIntensity || 100,
+                  unpredictability: server.unpredictability || 100,
                 },
               },
               processingTime: Date.now() - startTime,
@@ -421,7 +421,7 @@ export class DiscordBotService {
             behaviorSettings: {
               aggressiveness: server.aggressiveness || 80,
               responsiveness: server.responsiveness || 60,
-              italianIntensity: server.italianIntensity || 100,
+              unpredictability: server.unpredictability || 100,
             },
           },
           processingTime: Date.now() - startTime,
@@ -445,7 +445,7 @@ export class DiscordBotService {
             behaviorSettings: {
               aggressiveness: effectiveBehavior.aggressiveness,
               responsiveness: effectiveBehavior.responsiveness,
-              italianIntensity: effectiveBehavior.italianIntensity,
+              unpredictability: effectiveBehavior.unpredictability,
             },
           },
           processingTime: Date.now() - startTime,
@@ -464,7 +464,7 @@ export class DiscordBotService {
             behaviorSettings: {
               aggressiveness: server.aggressiveness || 80,
               responsiveness: server.responsiveness || 60,
-              italianIntensity: server.italianIntensity || 100,
+              unpredictability: server.unpredictability || 100,
             },
           },
           processingTime: Date.now() - startTime,
@@ -501,7 +501,7 @@ export class DiscordBotService {
     if (effectiveBehavior.aggressiveness > 70) {
       messageTypes.push('aggressive');
     }
-    if (effectiveBehavior.italianIntensity > 80) {
+    if (effectiveBehavior.unpredictability > 80) {
       messageTypes.push('italian');
     }
     if (effectiveBehavior.dbdObsession > 70) {
@@ -574,7 +574,7 @@ export class DiscordBotService {
       if (messageTypes.includes('aggressive') && effectiveBehavior.aggressiveness > 70) {
         personalityAdjustments += 'Be more aggressive and confrontational. ';
       }
-      if (messageTypes.includes('italian') && effectiveBehavior.italianIntensity > 80) {
+      if (messageTypes.includes('italian') && effectiveBehavior.unpredictability > 80) {
         personalityAdjustments += 'Use more Italian expressions and dramatic gestures. ';
       }
       if (messageTypes.includes('dbd') && effectiveBehavior.dbdObsession > 70) {
@@ -591,7 +591,7 @@ export class DiscordBotService {
       contextParts.push(`Discord Server Behavior Settings:
 - Aggressiveness: ${effectiveBehavior.aggressiveness}/100
 - Responsiveness: ${effectiveBehavior.responsiveness}/100  
-- Italian Intensity: ${effectiveBehavior.italianIntensity}/100
+- Italian Intensity: ${effectiveBehavior.unpredictability}/100
 - DBD Obsession: ${effectiveBehavior.dbdObsession}/100
 - Family Business Mode: ${effectiveBehavior.familyBusinessMode}/100`);
 
@@ -805,7 +805,7 @@ export class DiscordBotService {
       // Default behavior settings
       aggressiveness: 80,
       responsiveness: 60,
-      italianIntensity: 100,
+      unpredictability: 100,
       dbdObsession: 80,
       familyBusinessMode: 40,
       // CRITICAL FIX: Include proactive messaging control fields with proper defaults
@@ -1042,7 +1042,7 @@ export class DiscordBotService {
         selectedPrompts = enabledTypes.includes('random') ? promptsByType.random.concat(promptsByType.aggressive) : [...promptsByType.random, ...promptsByType.aggressive];
       } else if (effectiveBehavior.dbdObsession > 70 && enabledTypes.includes('dbd')) {
         selectedPrompts = promptsByType.dbd;
-      } else if (effectiveBehavior.italianIntensity > 80 && enabledTypes.includes('italian')) {
+      } else if (effectiveBehavior.unpredictability > 80 && enabledTypes.includes('italian')) {
         selectedPrompts = promptsByType.italian;
       } else if (effectiveBehavior.familyBusinessMode > 60 && enabledTypes.includes('family_business')) {
         selectedPrompts = promptsByType.family_business;
@@ -1057,7 +1057,7 @@ export class DiscordBotService {
         `Prompt: ${randomPrompt}`,
         `Behavior Settings:
 - Aggressiveness: ${effectiveBehavior.aggressiveness}/100
-- Italian Intensity: ${effectiveBehavior.italianIntensity}/100
+- Italian Intensity: ${effectiveBehavior.unpredictability}/100
 - DBD Obsession: ${effectiveBehavior.dbdObsession}/100
 - Family Business Mode: ${effectiveBehavior.familyBusinessMode}/100`,
         `Make it feel natural and spontaneous, like he just thought of something random to say.`,
