@@ -4,6 +4,7 @@ import {
   messages, 
   documents, 
   memoryEntries,
+  contentLibrary,
   chaosState,
   loreEvents,
   loreCharacters,
@@ -27,6 +28,8 @@ import {
   type InsertDocument,
   type MemoryEntry,
   type InsertMemoryEntry,
+  type ContentLibraryEntry,
+  type InsertContentLibraryEntry,
   type ChaosState,
   type InsertChaosState,
   type LoreEvent,
@@ -163,6 +166,15 @@ export interface IStorage {
   deletePodcastSegment(id: string): Promise<void>;
   clearPodcastSegments(episodeId: string): Promise<void>;
   searchPodcastContent(profileId: string, query: string): Promise<{ episodes: PodcastEpisode[]; segments: PodcastSegment[] }>;
+  
+  // Content Library management
+  createContentLibraryEntry(entry: InsertContentLibraryEntry): Promise<ContentLibraryEntry>;
+  getContentLibraryEntry(id: string): Promise<ContentLibraryEntry | undefined>;
+  getProfileContentLibrary(profileId: string, category?: string): Promise<ContentLibraryEntry[]>;
+  updateContentLibraryEntry(id: string, updates: Partial<ContentLibraryEntry>): Promise<ContentLibraryEntry>;
+  deleteContentLibraryEntry(id: string): Promise<void>;
+  searchContentLibrary(profileId: string, query: string): Promise<ContentLibraryEntry[]>;
+  updateContentLibraryAccess(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1320,6 +1332,75 @@ export class DatabaseStorage implements IStorage {
       // Return empty results on error to prevent chat failures
       return { episodes: [], segments: [] };
     }
+  }
+
+  // Content Library implementation
+  async createContentLibraryEntry(entry: InsertContentLibraryEntry): Promise<ContentLibraryEntry> {
+    const [newEntry] = await db
+      .insert(contentLibrary)
+      .values([entry as any])
+      .returning();
+    return newEntry;
+  }
+
+  async getContentLibraryEntry(id: string): Promise<ContentLibraryEntry | undefined> {
+    const [entry] = await db.select().from(contentLibrary).where(eq(contentLibrary.id, id));
+    return entry || undefined;
+  }
+
+  async getProfileContentLibrary(profileId: string, category?: string): Promise<ContentLibraryEntry[]> {
+    const whereConditions = [eq(contentLibrary.profileId, profileId)];
+    if (category) {
+      whereConditions.push(eq(contentLibrary.category, category as any));
+    }
+    
+    return await db
+      .select()
+      .from(contentLibrary)
+      .where(and(...whereConditions))
+      .orderBy(desc(contentLibrary.createdAt));
+  }
+
+  async updateContentLibraryEntry(id: string, updates: Partial<ContentLibraryEntry>): Promise<ContentLibraryEntry> {
+    const updateData = { ...updates, updatedAt: sql`now()` };
+    const [updatedEntry] = await db
+      .update(contentLibrary)
+      .set(updateData as any)
+      .where(eq(contentLibrary.id, id))
+      .returning();
+    return updatedEntry;
+  }
+
+  async deleteContentLibraryEntry(id: string): Promise<void> {
+    await db.delete(contentLibrary).where(eq(contentLibrary.id, id));
+  }
+
+  async searchContentLibrary(profileId: string, query: string): Promise<ContentLibraryEntry[]> {
+    return await db
+      .select()
+      .from(contentLibrary)
+      .where(
+        and(
+          eq(contentLibrary.profileId, profileId),
+          or(
+            like(contentLibrary.title, `%${query}%`),
+            like(contentLibrary.content, `%${query}%`),
+            sql`${contentLibrary.tags} && ARRAY[${query}]` // PostgreSQL array overlap
+          )
+        )
+      )
+      .orderBy(desc(contentLibrary.lastAccessed), desc(contentLibrary.createdAt))
+      .limit(20);
+  }
+
+  async updateContentLibraryAccess(id: string): Promise<void> {
+    await db
+      .update(contentLibrary)
+      .set({ 
+        lastAccessed: sql`now()`,
+        accessCount: sql`${contentLibrary.accessCount} + 1`
+      })
+      .where(eq(contentLibrary.id, id));
   }
 }
 
