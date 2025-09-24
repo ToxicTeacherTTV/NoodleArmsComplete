@@ -87,6 +87,10 @@ export const memoryEntries = pgTable("memory_entries", {
   parentFactId: varchar("parent_fact_id"), // Links atomic facts to parent stories (self-reference removed to avoid circular dependency)
   isAtomicFact: boolean("is_atomic_fact").default(false), // True for granular facts extracted from stories
   storyContext: text("story_context"), // Brief context about which part of the story this relates to
+  // Semantic search support
+  embedding: text("embedding"), // JSON array of vector embeddings for semantic search
+  embeddingModel: text("embedding_model"), // Model used to generate embedding (e.g., 'gemini-embedding-001')
+  embeddingUpdatedAt: timestamp("embedding_updated_at"), // When embedding was last generated
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
@@ -109,6 +113,10 @@ export const contentLibrary = pgTable("content_library", {
   isFavorite: boolean("is_favorite").default(false),
   lastAccessed: timestamp("last_accessed"),
   accessCount: integer("access_count").default(0),
+  // Semantic search support
+  embedding: text("embedding"), // JSON array of vector embeddings for semantic search
+  embeddingModel: text("embedding_model"), // Model used to generate embedding (e.g., 'gemini-embedding-001')
+  embeddingUpdatedAt: timestamp("embedding_updated_at"), // When embedding was last generated
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
