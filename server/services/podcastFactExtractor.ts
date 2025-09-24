@@ -88,27 +88,50 @@ Extract 8-15 of the most important and memorable facts from this episode.`;
         extractedFacts = JSON.parse(jsonMatch[0]);
       } catch (parseError) {
         console.warn(`⚠️ Failed to parse AI response as JSON, falling back to manual extraction`);
-        // Fallback: create basic facts from topics and guests
+        console.log('AI Response content for debugging:', response?.content?.substring(0, 500));
+        
+        // Fallback: create basic facts from title, topics and guests  
         extractedFacts = [];
         
-        if (topics.length > 0) {
+        // Extract basic info from episode title
+        extractedFacts.push({
+          content: `Episode ${episodeNumber} is titled "${title}"`,
+          type: 'FACT',
+          keywords: ['episode', episodeNumber.toString(), title.toLowerCase().split(' ').slice(0, 3)].flat(),
+          importance: 4
+        });
+        
+        if (topics && topics.length > 0) {
           topics.forEach(topic => {
             extractedFacts.push({
               content: `Episode ${episodeNumber} discussed ${topic}`,
               type: 'TOPIC',
-              keywords: [topic, 'episode', episodeNumber.toString()],
+              keywords: [topic.toLowerCase(), 'episode', episodeNumber.toString()],
               importance: 3
             });
           });
         }
         
-        if (guestNames.length > 0) {
+        if (guestNames && guestNames.length > 0) {
           guestNames.forEach(guest => {
             extractedFacts.push({
               content: `Episode ${episodeNumber} featured guest ${guest}`,
               type: 'FACT', 
-              keywords: [guest, 'guest', 'episode', episodeNumber.toString()],
+              keywords: [guest.toLowerCase(), 'guest', 'episode', episodeNumber.toString()],
               importance: 4
+            });
+          });
+        }
+        
+        // If we have no topic/guest data, create facts from the episode title
+        if (extractedFacts.length === 1) { // Only the title fact
+          const titleWords = title.toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 3);
+          titleWords.slice(0, 3).forEach(word => {
+            extractedFacts.push({
+              content: `Episode ${episodeNumber} covers content related to ${word}`,
+              type: 'TOPIC',
+              keywords: [word, 'episode', episodeNumber.toString()],
+              importance: 2
             });
           });
         }
