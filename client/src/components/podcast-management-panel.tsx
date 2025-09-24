@@ -163,6 +163,27 @@ export default function PodcastManagementPanel() {
     },
   });
 
+  // Extract facts mutation
+  const extractFactsMutation = useMutation({
+    mutationFn: async (episodeId: string) => {
+      const response = await apiRequest('POST', `/api/podcast/episodes/${episodeId}/extract-facts`, {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({ 
+        title: "Facts extracted successfully!", 
+        description: `${data.factsCreated} facts added to Nicky's memory`
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to extract facts", 
+        description: error?.message || "Make sure the episode has a transcript",
+        variant: "destructive" 
+      });
+    },
+  });
+
   const handleCreateEpisode = () => {
     if (!newEpisode.title.trim()) {
       toast({ title: "Please enter an episode title", variant: "destructive" });
@@ -574,21 +595,38 @@ export default function PodcastManagementPanel() {
                       Edit
                     </Button>
                     {selectedEpisode.transcript && selectedEpisode.transcript.trim() !== '' && (
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={() => parseSegmentsMutation.mutate(selectedEpisode.id)}
-                        disabled={parseSegmentsMutation.isPending}
-                        data-testid="button-parse-segments"
-                        className="bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700"
-                      >
-                        {parseSegmentsMutation.isPending ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-1"></div>
-                        ) : (
-                          <FileText className="h-4 w-4 mr-1" />
-                        )}
-                        {parseSegmentsMutation.isPending ? "Parsing..." : "Parse Segments"}
-                      </Button>
+                      <>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => parseSegmentsMutation.mutate(selectedEpisode.id)}
+                          disabled={parseSegmentsMutation.isPending}
+                          data-testid="button-parse-segments"
+                          className="bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700"
+                        >
+                          {parseSegmentsMutation.isPending ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-1"></div>
+                          ) : (
+                            <FileText className="h-4 w-4 mr-1" />
+                          )}
+                          {parseSegmentsMutation.isPending ? "Parsing..." : "Parse Segments"}
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => extractFactsMutation.mutate(selectedEpisode.id)}
+                          disabled={extractFactsMutation.isPending}
+                          data-testid="button-extract-facts"
+                          className="bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                        >
+                          {extractFactsMutation.isPending ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-1"></div>
+                          ) : (
+                            <Hash className="h-4 w-4 mr-1" />
+                          )}
+                          {extractFactsMutation.isPending ? "Extracting..." : "Extract Facts"}
+                        </Button>
+                      </>
                     )}
                     <Button 
                       size="sm" 
