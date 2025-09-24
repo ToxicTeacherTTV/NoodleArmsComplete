@@ -125,10 +125,10 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
       queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
       queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Extraction Failed",
-        description: error.message || "Failed to extract facts",
+        description: error?.message || "Failed to extract facts",
         variant: "destructive",
       });
     },
@@ -490,7 +490,7 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                       )}
                       <span>Added {new Date(doc.createdAt).toLocaleDateString()}</span>
                     </div>
-                    {doc.retrievalCount > 0 && (
+                    {(doc.retrievalCount || 0) > 0 && (
                       <span className="text-accent">{doc.retrievalCount} retrievals</span>
                     )}
                   </div>

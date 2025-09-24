@@ -1091,26 +1091,19 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(prerollAds.lastUsed, sql`NULL`));
     }
     
-    let query = db
+    const query = db
       .select()
       .from(prerollAds)
       .where(and(...conditions))
       .orderBy(desc(prerollAds.generatedAt));
     
     if (options.limit) {
-      query = query.limit(options.limit);
+      return await query.limit(options.limit);
     }
     
     return await query;
   }
 
-  async updatePrerollAd(id: string, data: Partial<PrerollAd>): Promise<void> {
-    const updateData = { ...data, updatedAt: sql`now()` };
-    await db
-      .update(prerollAds)
-      .set(updateData as any)
-      .where(eq(prerollAds.id, id));
-  }
 
   async getPrerollAdById(id: string): Promise<PrerollAd | null> {
     const [ad] = await db

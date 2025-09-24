@@ -512,6 +512,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Extract facts from document to memory system
+  app.post('/api/documents/:id/extract-facts', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const document = await storage.getDocument(id);
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      if (document.processingStatus !== 'COMPLETED' || !document.extractedContent) {
+        return res.status(400).json({ error: 'Document must be processed before extracting facts' });
+      }
+
+      // Extract facts from the document using the document processor
+      await documentProcessor.extractAndStoreKnowledge(
+        activeProfile.id, 
+        document.extractedContent, 
+        document.filename, 
+        document.id
+      );
+
+      // Get a count of facts created (approximate)
+      const memoryStats = await storage.getMemoryStats(activeProfile.id);
+      
+      res.json({ 
+        success: true, 
+        factsCreated: 'Facts extracted successfully',
+        message: 'Document content has been processed into Nicky\'s memory for RAG retrieval'
+      });
+    } catch (error) {
+      console.error('Fact extraction error:', error);
+      res.status(500).json({ error: 'Failed to extract facts from document' });
+    }
+  });
+
+  // Save document content to content library
+  app.post('/api/documents/:id/save-to-content-library', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const document = await storage.getDocument(id);
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      if (document.processingStatus !== 'COMPLETED' || !document.extractedContent) {
+        return res.status(400).json({ error: 'Document must be processed before saving to content library' });
+      }
+
+      // Determine content category based on filename
+      let category: 'AITA' | 'REDDIT_STORY' | 'ENTERTAINMENT' | 'OTHER' = 'OTHER';
+      const filename = document.filename.toLowerCase();
+      if (filename.includes('aita')) {
+        category = 'AITA';
+      } else if (filename.includes('reddit')) {
+        category = 'REDDIT_STORY';
+      } else if (filename.includes('story') || filename.includes('entertainment')) {
+        category = 'ENTERTAINMENT';
+      }
+
+      // Determine content length
+      const contentLength = document.extractedContent.length;
+      let length: 'SHORT' | 'MEDIUM' | 'LONG' = 'MEDIUM';
+      if (contentLength < 1000) {
+        length = 'SHORT';
+      } else if (contentLength > 5000) {
+        length = 'LONG';
+      }
+
+      // Create content library entry
+      const contentEntry = await storage.createContentLibraryEntry({
+        profileId: activeProfile.id,
+        title: document.filename.replace(/\.[^/.]+$/, ''), // Remove extension
+        content: document.extractedContent,
+        category,
+        source: document.filename,
+        sourceId: document.id,
+        tags: [category.toLowerCase(), 'document', 'imported'],
+        length,
+        mood: 'NEUTRAL'
+      });
+
+      res.json({ 
+        success: true, 
+        title: contentEntry.title,
+        category: contentEntry.category,
+        message: 'Document content has been saved to content library'
+      });
+    } catch (error) {
+      console.error('Content library save error:', error);
+      res.status(500).json({ error: 'Failed to save document to content library' });
+    }
+  });
+
   // Notes management routes
   app.get('/api/notes', async (req, res) => {
     try {
