@@ -116,20 +116,33 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
     try {
       console.log('Fetching document:', document.id);
       const response = await fetch(`/api/documents/${document.id}`, {
+        method: 'GET',
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
         },
+        credentials: 'same-origin',
       });
       
       console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers.get('content-type'));
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      const data = await response.json();
-      console.log('Document data:', data);
+      // Check what we're actually getting
+      const textResponse = await response.text();
+      console.log('Raw response:', textResponse.substring(0, 200));
+      
+      let data;
+      try {
+        data = JSON.parse(textResponse);
+        console.log('Parsed JSON data:', data);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        throw new Error('Response is not valid JSON');
+      }
       
       setDocumentContent(data.content || 'No content available');
       setViewingDocument(document);
