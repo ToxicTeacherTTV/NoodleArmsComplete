@@ -523,13 +523,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Strip ALL existing emotion tags (including [bronx] temporarily) to prevent duplication
         processedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
         
-        // Apply sectioned emotion tags (hook/body/cta distributed throughout response)
-        console.log(`🎭 ABOUT TO CALL FUNCTION: input="${processedContent.substring(0, 50)}..."`);
-        
-        const result = applySectionedEmotionTags(processedContent, emotionTags);
-        console.log(`🎭 FUNCTION RETURNED: output="${result.substring(0, 50)}..."`);
-        
-        processedContent = result;
+        // DISABLED: Apply emotion tags via AI prompt instead of post-processing
+        // processedContent = applySectionedEmotionTags(processedContent, emotionTags);
+        console.log(`🎭 Using AI-generated emotion tags (no post-processing)`);
+        console.log(`🎭 Generated tags for reference: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
         
         // For podcast mode, prepend [bronx] tag to the whole response
         if (mode === 'PODCAST' || hasBronxTag) {
