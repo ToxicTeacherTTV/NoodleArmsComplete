@@ -5,6 +5,7 @@ import { geminiService } from './gemini.js';
 import { contentFilter } from './contentFilter.js';
 import { varietyController } from './VarietyController.js';
 import { ContentSuggestionService } from './ContentSuggestionService.js';
+import { storyCompletionTracker } from './storyCompletionTracker.js';
 import { storage } from '../storage.js';
 import { z } from 'zod';
 
@@ -285,6 +286,9 @@ class AnthropicService {
       if (conversationId) {
         const repetitionCheck = await this.checkForRepetition(conversationId, filteredContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
         finalContent = repetitionCheck.content;
+        
+        // 📖 NEW: Story completion tracking for enhanced memory persistence
+        await this.trackStoryCompletion(conversationId, finalContent, profileId, mode);
       }
 
       // 🎭 NEW: Generate debug metrics for logging (not user-facing)
@@ -779,6 +783,52 @@ Return the consolidated memories as a JSON array:`;
           source: memory.source || undefined
         };
       });
+    }
+  }
+
+  /**
+   * Track completed stories for enhanced memory persistence
+   */
+  private async trackStoryCompletion(
+    conversationId: string, 
+    content: string, 
+    profileId?: string,
+    mode?: string
+  ): Promise<void> {
+    try {
+      // Analyze content for completed stories
+      const storyAnalysis = storyCompletionTracker.analyzeForCompletedStory(content);
+      
+      if (storyAnalysis.isCompleteStory && storyAnalysis.confidence > 0.5) {
+        console.log(`📖 Detected completed ${storyAnalysis.storyType} story (confidence: ${Math.round(storyAnalysis.confidence * 100)}%)`);
+        
+        // Check for repetition before tracking
+        if (profileId) {
+          const repetitionCheck = await storyCompletionTracker.checkForStoryRepetition(
+            profileId,
+            storyAnalysis.storyHash,
+            storyAnalysis.storyType,
+            conversationId
+          );
+          
+          if (repetitionCheck.isRepetitive) {
+            console.warn(`🔄 Similar story detected - not tracking to avoid repetition: ${repetitionCheck.similarStories.join(', ')}`);
+            return;
+          }
+        }
+        
+        // Determine if this is podcast content based on mode
+        const podcastEpisodeId = mode === 'PODCAST' ? 'auto-detected' : undefined;
+        
+        // Track the completed story
+        await storyCompletionTracker.trackCompletedStory(
+          conversationId,
+          storyAnalysis,
+          podcastEpisodeId
+        );
+      }
+    } catch (error) {
+      console.error('❌ Error tracking story completion:', error);
     }
   }
 }
