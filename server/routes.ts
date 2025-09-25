@@ -485,22 +485,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Apply emotion tags to content, respecting [bronx] tag order for podcast mode
         console.log(`🎭 Original content starts with: "${processedContent.substring(0, 20)}..."`);
         
-        if (processedContent.trim().startsWith('[bronx]')) {
-          // If response starts with [bronx], place emotion tag after it
-          processedContent = processedContent.replace(/^\s*\[bronx\]\s*/, `[bronx] ${emotionTags.hook} `);
-          console.log(`🎭 Applied emotion tags AFTER [bronx]: hook="${emotionTags.hook}"`);
+        // First, preserve the [bronx] tag if present
+        const hasBronxTag = processedContent.includes('[bronx]');
+        
+        // Strip ALL existing emotion tags (including [bronx] temporarily) to prevent duplication
+        processedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
+        
+        // Apply emotion tags properly based on mode and [bronx] tag presence
+        if (mode === 'PODCAST' || hasBronxTag) {
+          // Podcast mode: always include [bronx] tag followed by emotion tag
+          processedContent = `[bronx] ${emotionTags.hook} ${processedContent}`;
+          console.log(`🎭 Applied [bronx] + emotion tags for podcast mode: hook="${emotionTags.hook}"`);
         } else {
-          // Check if [bronx] appears somewhere else and move it to front
-          if (processedContent.includes('[bronx]')) {
-            // Remove [bronx] from wherever it is and put it at the front with emotion tag
-            processedContent = processedContent.replace(/\s*\[bronx\]\s*/g, '').trim();
-            processedContent = `[bronx] ${emotionTags.hook} ${processedContent}`;
-            console.log(`🎭 Moved [bronx] to front with emotion tag: hook="${emotionTags.hook}"`);
-          } else {
-            // No [bronx] tag, prepend emotion tag normally
-            processedContent = `${emotionTags.hook} ${processedContent}`;
-            console.log(`🎭 Applied emotion tags normally: hook="${emotionTags.hook}"`);
-          }
+          // Other modes: just apply emotion tag
+          processedContent = `${emotionTags.hook} ${processedContent}`;
+          console.log(`🎭 Applied emotion tags normally: hook="${emotionTags.hook}"`);
         }
         
       } catch (error) {
