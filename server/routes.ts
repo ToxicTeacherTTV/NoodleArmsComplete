@@ -57,31 +57,35 @@ const upload = multer({
  * This distributes tags every 2-3 sentences for better voice synthesis
  */
 function applySectionedEmotionTags(text: string, aiTags: {hook: string, body: string, cta: string}): string {
-  // Split text into sentences
-  const sentences = text.split('.').filter(s => s.trim());
+  // Split text into sentences using multiple punctuation marks
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim()).map(s => s.trim());
   
   if (sentences.length === 0) return text;
   
-  // Determine sections
-  const hook = sentences[0]?.trim();
-  const cta = sentences[sentences.length - 1]?.trim();
-  const body = sentences.slice(1, -1).join('. ').trim();
-  
   let result = '';
   
-  // Apply AI-generated hook cue
-  if (hook) {
-    result += `${aiTags.hook} ${hook}.`;
-  }
-  
-  // Apply AI-generated body cue (if there's a body)
-  if (body) {
-    result += ` ${aiTags.body} ${body}.`;
-  }
-  
-  // Apply AI-generated CTA cue (if different from hook)
-  if (cta && cta !== hook) {
-    result += ` ${aiTags.cta} ${cta}.`;
+  if (sentences.length === 1) {
+    // Single sentence: Apply all tags in sequence
+    result = `${aiTags.hook} ${sentences[0]}. ${aiTags.body} ${aiTags.cta}`;
+  } else if (sentences.length === 2) {
+    // Two sentences: Hook + Body/CTA combo
+    result = `${aiTags.hook} ${sentences[0]}. ${aiTags.body} ${aiTags.cta} ${sentences[1]}.`;
+  } else {
+    // Multiple sentences: Distribute tags throughout
+    const firstSentence = sentences[0];
+    const lastSentence = sentences[sentences.length - 1];
+    const middleSentences = sentences.slice(1, -1);
+    
+    // Hook tag for first sentence
+    result += `${aiTags.hook} ${firstSentence}.`;
+    
+    // Body tag for middle sentences
+    if (middleSentences.length > 0) {
+      result += ` ${aiTags.body} ${middleSentences.join('. ')}.`;
+    }
+    
+    // CTA tag for last sentence
+    result += ` ${aiTags.cta} ${lastSentence}.`;
   }
   
   return result.trim();
