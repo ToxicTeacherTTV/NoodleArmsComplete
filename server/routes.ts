@@ -57,35 +57,48 @@ const upload = multer({
  * This distributes tags every 2-3 sentences for better voice synthesis
  */
 function applySectionedEmotionTags(text: string, aiTags: {hook: string, body: string, cta: string}): string {
-  // Split text into sentences using multiple punctuation marks
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim()).map(s => s.trim());
+  // Split text into sentences, but preserve original punctuation and handle ellipses
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim());
   
-  if (sentences.length === 0) return text;
-  
-  let result = '';
+  if (sentences.length === 0) {
+    // Fallback: treat whole text as one unit and apply all tags
+    return `${aiTags.hook} ${text} ${aiTags.body} ${aiTags.cta}`;
+  }
   
   if (sentences.length === 1) {
-    // Single sentence: Apply all tags in sequence
-    result = `${aiTags.hook} ${sentences[0]}. ${aiTags.body} ${aiTags.cta}`;
-  } else if (sentences.length === 2) {
-    // Two sentences: Hook + Body/CTA combo
-    result = `${aiTags.hook} ${sentences[0]}. ${aiTags.body} ${aiTags.cta} ${sentences[1]}.`;
-  } else {
-    // Multiple sentences: Distribute tags throughout
-    const firstSentence = sentences[0];
-    const lastSentence = sentences[sentences.length - 1];
-    const middleSentences = sentences.slice(1, -1);
+    // Single sentence/paragraph: distribute tags throughout
+    const words = text.split(' ');
+    const third = Math.floor(words.length / 3);
     
-    // Hook tag for first sentence
-    result += `${aiTags.hook} ${firstSentence}.`;
-    
-    // Body tag for middle sentences
-    if (middleSentences.length > 0) {
-      result += ` ${aiTags.body} ${middleSentences.join('. ')}.`;
+    if (words.length < 6) {
+      // Very short text: just apply hook tag
+      return `${aiTags.hook} ${text}`;
     }
     
-    // CTA tag for last sentence
-    result += ` ${aiTags.cta} ${lastSentence}.`;
+    // Split into three parts and apply tags
+    const part1 = words.slice(0, third).join(' ');
+    const part2 = words.slice(third, third * 2).join(' ');
+    const part3 = words.slice(third * 2).join(' ');
+    
+    return `${aiTags.hook} ${part1} ${aiTags.body} ${part2} ${aiTags.cta} ${part3}`;
+  }
+  
+  // Multiple sentences: distribute tags across sentences
+  let result = '';
+  
+  for (let i = 0; i < sentences.length; i++) {
+    const sentence = sentences[i].trim();
+    
+    if (i === 0) {
+      // First sentence gets hook tag
+      result += `${aiTags.hook} ${sentence}`;
+    } else if (i === sentences.length - 1) {
+      // Last sentence gets CTA tag
+      result += ` ${aiTags.cta} ${sentence}`;
+    } else {
+      // Middle sentences get body tag
+      result += ` ${aiTags.body} ${sentence}`;
+    }
   }
   
   return result.trim();
