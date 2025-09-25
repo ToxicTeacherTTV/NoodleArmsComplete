@@ -361,7 +361,7 @@ class ElevenLabsService {
   /**
    * Apply AI-generated emotion tags to text
    */
-  private applySectionedDeliveryWithAI(text: string, aiTags: {hook: string, body: string, cta: string}): string {
+  public applySectionedDeliveryWithAI(text: string, aiTags: {hook: string, body: string, cta: string}): string {
     // Split text into sentences
     const sentences = text.split('.').filter(s => s.trim());
     

@@ -236,11 +236,11 @@ class WebSearchService {
    * Check if we should trigger web search based on existing context quality
    * Now uses intelligent signal extraction rather than hardcoded keywords
    */
-  shouldTriggerSearch(
+  async shouldTriggerSearch(
     existingMemories: any[],
     query: string,
     averageConfidence: number
-  ): boolean {
+  ): Promise<boolean> {
     // Always search if no relevant memories found
     if (existingMemories.length === 0) {
       return true;
@@ -252,7 +252,7 @@ class WebSearchService {
     }
 
     // Import and use the query signal extractor for intelligent analysis
-    const { querySignalExtractor } = require('./querySignalExtractor');
+    const { querySignalExtractor } = await import('./querySignalExtractor.js');
     const signals = querySignalExtractor.extractSignals(query);
     
     // Log decision rationale for tuning

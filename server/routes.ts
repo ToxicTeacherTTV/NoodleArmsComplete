@@ -482,7 +482,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
         });
         
-        // Apply emotion tags to content, respecting [bronx] tag order for podcast mode
+        // Apply emotion tags to content using sectioned delivery for proper distribution
         console.log(`🎭 Original content starts with: "${processedContent.substring(0, 20)}..."`);
         
         // First, preserve the [bronx] tag if present
@@ -491,16 +491,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Strip ALL existing emotion tags (including [bronx] temporarily) to prevent duplication
         processedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
         
-        // Apply emotion tags properly based on mode and [bronx] tag presence
+        // Use the proper sectioned delivery system to apply hook/body/cta tags throughout the response
+        const { elevenLabsService } = await import('./services/elevenlabs.js');
+        
+        // Apply sectioned emotion tags (this distributes tags every 2-3 sentences like it should)
+        processedContent = elevenLabsService.applySectionedDeliveryWithAI(processedContent, emotionTags);
+        
+        // For podcast mode, prepend [bronx] tag to the whole response
         if (mode === 'PODCAST' || hasBronxTag) {
-          // Podcast mode: always include [bronx] tag followed by emotion tag
-          processedContent = `[bronx] ${emotionTags.hook} ${processedContent}`;
-          console.log(`🎭 Applied [bronx] + emotion tags for podcast mode: hook="${emotionTags.hook}"`);
+          processedContent = `[bronx] ${processedContent}`;
+          console.log(`🎭 Applied sectioned emotion tags with [bronx] prefix for podcast mode`);
         } else {
-          // Other modes: just apply emotion tag
-          processedContent = `${emotionTags.hook} ${processedContent}`;
-          console.log(`🎭 Applied emotion tags normally: hook="${emotionTags.hook}"`);
+          console.log(`🎭 Applied sectioned emotion tags for non-podcast mode`);
         }
+        
+        console.log(`🎭 Final tagged content: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
         
       } catch (error) {
         console.warn('⚠️ Failed to generate emotion tags:', error);
