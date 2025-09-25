@@ -57,47 +57,35 @@ const upload = multer({
  * This distributes tags every 2-3 sentences for better voice synthesis
  */
 function applySectionedEmotionTags(text: string, aiTags: {hook: string, body: string, cta: string}): string {
-  // Split text into sentences, but preserve original punctuation and handle ellipses
-  const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim());
+  // Simple approach: inject tags at regular intervals every 2-3 sentences
+  
+  // Split into sentences, being very careful to preserve all content
+  const sentences = text.match(/[^.!?]*[.!?]+/g) || [text];
   
   if (sentences.length === 0) {
-    // Fallback: treat whole text as one unit and apply all tags
-    return `${aiTags.hook} ${text} ${aiTags.body} ${aiTags.cta}`;
+    return `${aiTags.hook} ${text}`;
   }
   
-  if (sentences.length === 1) {
-    // Single sentence/paragraph: distribute tags throughout
-    const words = text.split(' ');
-    const third = Math.floor(words.length / 3);
-    
-    if (words.length < 6) {
-      // Very short text: just apply hook tag
-      return `${aiTags.hook} ${text}`;
-    }
-    
-    // Split into three parts and apply tags
-    const part1 = words.slice(0, third).join(' ');
-    const part2 = words.slice(third, third * 2).join(' ');
-    const part3 = words.slice(third * 2).join(' ');
-    
-    return `${aiTags.hook} ${part1} ${aiTags.body} ${part2} ${aiTags.cta} ${part3}`;
-  }
-  
-  // Multiple sentences: distribute tags across sentences
   let result = '';
+  const tags = [aiTags.hook, aiTags.body, aiTags.cta];
+  let tagIndex = 0;
   
   for (let i = 0; i < sentences.length; i++) {
     const sentence = sentences[i].trim();
     
     if (i === 0) {
-      // First sentence gets hook tag
+      // Always start with hook tag
       result += `${aiTags.hook} ${sentence}`;
+    } else if (i % 2 === 1) {
+      // Every other sentence gets body tag
+      result += ` ${aiTags.body} ${sentence}`;
     } else if (i === sentences.length - 1) {
       // Last sentence gets CTA tag
       result += ` ${aiTags.cta} ${sentence}`;
     } else {
-      // Middle sentences get body tag
-      result += ` ${aiTags.body} ${sentence}`;
+      // Alternate between body and CTA for middle sentences
+      const tag = (i % 4 === 2) ? aiTags.body : aiTags.cta;
+      result += ` ${tag} ${sentence}`;
     }
   }
   
