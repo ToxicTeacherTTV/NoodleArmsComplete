@@ -234,6 +234,7 @@ class WebSearchService {
 
   /**
    * Check if we should trigger web search based on existing context quality
+   * Now uses intelligent signal extraction rather than hardcoded keywords
    */
   shouldTriggerSearch(
     existingMemories: any[],
@@ -250,7 +251,25 @@ class WebSearchService {
       return true;
     }
 
-    // Search for time-sensitive queries
+    // Import and use the query signal extractor for intelligent analysis
+    const { querySignalExtractor } = require('./querySignalExtractor');
+    const signals = querySignalExtractor.extractSignals(query);
+    
+    // Log decision rationale for tuning
+    console.log(`🧠 Query analysis: freshness=${signals.freshnessPriority}% novelty=${signals.noveltyScore}% temporal=${signals.temporalScore}% domains=[${signals.volatileDomains.join(',')}] type=${signals.questionType}`);
+    
+    // Use the intelligent recommendation
+    if (signals.searchRecommendation === 'prioritize') {
+      console.log(`🌐 Prioritizing web search due to high freshness signals: ${signals.noveltyPhrases.concat(signals.temporalCues).join(', ')}`);
+      return true;
+    }
+    
+    if (signals.searchRecommendation === 'supplement') {
+      console.log(`🌐 Supplementing memory with web search (moderate freshness signals)`);
+      return true;
+    }
+    
+    // Legacy fallback for time-sensitive queries (in case signal extraction misses something)
     const timeSensitiveKeywords = [
       'today', 'current', 'latest', 'recent', 'now', 'this year', 
       'stock', 'price', 'news', 'weather', 'score'
@@ -259,41 +278,11 @@ class WebSearchService {
     if (timeSensitiveKeywords.some(keyword => 
       query.toLowerCase().includes(keyword.toLowerCase())
     )) {
+      console.log(`🌐 Legacy time-sensitive keyword match triggered search`);
       return true;
     }
 
-    // Search for factual questions that might need current info
-    const factualKeywords = [
-      'what is', 'who is', 'when did', 'where is', 'how many',
-      'definition', 'meaning', 'explain', 'about'
-    ];
-    
-    if (factualKeywords.some(keyword => 
-      query.toLowerCase().includes(keyword.toLowerCase())
-    ) && existingMemories.length < 3) {
-      return true;
-    }
-
-    // 🎮 NEW: Search for DbD content that could be new/updated
-    const dbdKeywords = ['dead by daylight', 'dbd', 'killer', 'survivor'];
-    const newContentKeywords = ['new', 'just', 'added', 'released', 'update', 'patch', 'ptb'];
-    
-    const queryLower = query.toLowerCase();
-    const hasDbdContent = dbdKeywords.some(keyword => queryLower.includes(keyword));
-    const hasNewContent = newContentKeywords.some(keyword => queryLower.includes(keyword));
-    
-    // Always search for DbD queries about new content, regardless of memory confidence
-    if (hasDbdContent && hasNewContent) {
-      console.log(`🎮 Triggering web search for potential new DbD content: "${query}"`);
-      return true;
-    }
-    
-    // Also search for specific DbD entities that might be new (like Krasue)
-    if (hasDbdContent && existingMemories.length < 5) {
-      console.log(`🎮 Triggering web search for DbD query with limited memories: "${query}"`);
-      return true;
-    }
-
+    console.log(`🚫 Skipping web search: freshness priority ${signals.freshnessPriority}% below threshold`);
     return false;
   }
 

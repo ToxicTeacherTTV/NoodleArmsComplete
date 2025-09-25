@@ -174,7 +174,7 @@ export class QuerySignalExtractor {
       }
     }
     
-    return [...new Set(entities)]; // Remove duplicates
+    return Array.from(new Set(entities)); // Remove duplicates
   }
 
   /**
