@@ -531,10 +531,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         processedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
         
         // Apply sectioned emotion tags (hook/body/cta distributed throughout response)
-        console.log(`🎭 DEBUG: Input text: "${processedContent}"`);
-        console.log(`🎭 DEBUG: Emotion tags:`, emotionTags);
-        processedContent = applySectionedEmotionTags(processedContent, emotionTags);
-        console.log(`🎭 DEBUG: Output text: "${processedContent}"`);
+        console.log(`🎭 ABOUT TO CALL FUNCTION: input="${processedContent.substring(0, 50)}..."`);
+        
+        const result = applySectionedEmotionTags(processedContent, emotionTags);
+        console.log(`🎭 FUNCTION RETURNED: output="${result.substring(0, 50)}..."`);
+        
+        processedContent = result;
         
         // For podcast mode, prepend [bronx] tag to the whole response
         if (mode === 'PODCAST' || hasBronxTag) {
