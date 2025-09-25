@@ -27,6 +27,12 @@ export const conversations = pgTable("conversations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   profileId: varchar("profile_id").references(() => profiles.id).notNull(),
   sessionId: varchar("session_id"),
+  // NEW: Enhanced memory persistence fields
+  contentType: text("content_type").$type<'PODCAST' | 'STREAMING' | 'DISCORD' | 'GENERAL'>().default('GENERAL'),
+  topicTags: text("topic_tags").array(), // Topics discussed in this conversation
+  completedStories: text("completed_stories").array(), // Story IDs that were completed
+  podcastEpisodeId: varchar("podcast_episode_id"), // Link to specific episode if relevant
+  storyContext: text("story_context"), // Brief context about stories told
   createdAt: timestamp("created_at").default(sql`now()`),
 });
 

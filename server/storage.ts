@@ -77,6 +77,19 @@ export interface IStorage {
   getConversationMessages(conversationId: string): Promise<Message[]>;
   addMessage(message: InsertMessage): Promise<Message>;
   getRecentMessages(conversationId: string, limit: number): Promise<Message[]>;
+  
+  // Enhanced memory persistence methods
+  updateConversationContent(id: string, updates: {
+    contentType?: 'PODCAST' | 'STREAMING' | 'DISCORD' | 'GENERAL';
+    topicTags?: string[];
+    completedStories?: string[];
+    podcastEpisodeId?: string;
+    storyContext?: string;
+  }): Promise<Conversation>;
+  getPodcastConversations(profileId: string, limit?: number): Promise<Conversation[]>;
+  getConversationsByContentType(profileId: string, contentType: 'PODCAST' | 'STREAMING' | 'DISCORD' | 'GENERAL', limit?: number): Promise<Conversation[]>;
+  searchConversationsByTopics(profileId: string, topics: string[], limit?: number): Promise<Conversation[]>;
+  getCompletedStories(profileId: string): Promise<{conversationId: string; stories: string[]}[]>;
 
   // Document management
   createDocument(document: InsertDocument): Promise<Document>;
@@ -236,7 +249,7 @@ export class DatabaseStorage implements IStorage {
   async createConversation(conversation: InsertConversation): Promise<Conversation> {
     const [newConversation] = await db
       .insert(conversations)
-      .values([conversation])
+      .values([conversation as any])
       .returning();
     return newConversation;
   }
@@ -269,6 +282,78 @@ export class DatabaseStorage implements IStorage {
       .where(eq(messages.conversationId, conversationId))
       .orderBy(desc(messages.createdAt))
       .limit(limit);
+  }
+
+  // Enhanced memory persistence method implementations
+  async updateConversationContent(id: string, updates: {
+    contentType?: 'PODCAST' | 'STREAMING' | 'DISCORD' | 'GENERAL';
+    topicTags?: string[];
+    completedStories?: string[];
+    podcastEpisodeId?: string;
+    storyContext?: string;
+  }): Promise<Conversation> {
+    const [updatedConversation] = await db
+      .update(conversations)
+      .set(updates)
+      .where(eq(conversations.id, id))
+      .returning();
+    return updatedConversation;
+  }
+
+  async getPodcastConversations(profileId: string, limit = 50): Promise<Conversation[]> {
+    return await db
+      .select()
+      .from(conversations)
+      .where(and(
+        eq(conversations.profileId, profileId),
+        eq(conversations.contentType, 'PODCAST')
+      ))
+      .orderBy(desc(conversations.createdAt))
+      .limit(limit);
+  }
+
+  async getConversationsByContentType(profileId: string, contentType: 'PODCAST' | 'STREAMING' | 'DISCORD' | 'GENERAL', limit = 50): Promise<Conversation[]> {
+    return await db
+      .select()
+      .from(conversations)
+      .where(and(
+        eq(conversations.profileId, profileId),
+        eq(conversations.contentType, contentType)
+      ))
+      .orderBy(desc(conversations.createdAt))
+      .limit(limit);
+  }
+
+  async searchConversationsByTopics(profileId: string, topics: string[], limit = 50): Promise<Conversation[]> {
+    // Use array overlap operator to find conversations with matching topics
+    return await db
+      .select()
+      .from(conversations)
+      .where(and(
+        eq(conversations.profileId, profileId),
+        sql`${conversations.topicTags} && ${topics}` // PostgreSQL array overlap operator
+      ))
+      .orderBy(desc(conversations.createdAt))
+      .limit(limit);
+  }
+
+  async getCompletedStories(profileId: string): Promise<{conversationId: string; stories: string[]}[]> {
+    const conversationsWithStories = await db
+      .select({
+        conversationId: conversations.id,
+        completedStories: conversations.completedStories
+      })
+      .from(conversations)
+      .where(and(
+        eq(conversations.profileId, profileId),
+        sql`array_length(${conversations.completedStories}, 1) > 0` // Only conversations with completed stories
+      ))
+      .orderBy(desc(conversations.createdAt));
+
+    return conversationsWithStories.map(row => ({
+      conversationId: row.conversationId,
+      stories: row.completedStories || []
+    }));
   }
 
   async createDocument(document: InsertDocument): Promise<Document> {
