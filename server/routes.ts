@@ -57,35 +57,27 @@ const upload = multer({
  * This distributes tags every 2-3 sentences for better voice synthesis
  */
 function applySectionedEmotionTags(text: string, aiTags: {hook: string, body: string, cta: string}): string {
-  // Simple approach: inject tags at regular intervals every 2-3 sentences
+  // Split text into chunks every ~40-50 characters to inject tags regularly
+  const words = text.split(' ');
+  const chunkSize = Math.ceil(words.length / 5); // Aim for 5 chunks with tags
   
-  // Split into sentences, being very careful to preserve all content
-  const sentences = text.match(/[^.!?]*[.!?]+/g) || [text];
-  
-  if (sentences.length === 0) {
+  if (words.length < 10) {
+    // Short text: just apply hook tag
     return `${aiTags.hook} ${text}`;
   }
   
   let result = '';
-  const tags = [aiTags.hook, aiTags.body, aiTags.cta];
-  let tagIndex = 0;
+  const tags = [aiTags.hook, aiTags.body, aiTags.cta, aiTags.body, aiTags.cta];
   
-  for (let i = 0; i < sentences.length; i++) {
-    const sentence = sentences[i].trim();
+  for (let i = 0; i < words.length; i += chunkSize) {
+    const chunk = words.slice(i, i + chunkSize).join(' ');
+    const tagIndex = Math.floor(i / chunkSize);
+    const tag = tags[tagIndex] || aiTags.body; // Default to body tag if we run out
     
     if (i === 0) {
-      // Always start with hook tag
-      result += `${aiTags.hook} ${sentence}`;
-    } else if (i % 2 === 1) {
-      // Every other sentence gets body tag
-      result += ` ${aiTags.body} ${sentence}`;
-    } else if (i === sentences.length - 1) {
-      // Last sentence gets CTA tag
-      result += ` ${aiTags.cta} ${sentence}`;
+      result += `${tag} ${chunk}`;
     } else {
-      // Alternate between body and CTA for middle sentences
-      const tag = (i % 4 === 2) ? aiTags.body : aiTags.cta;
-      result += ` ${tag} ${sentence}`;
+      result += ` ${tag} ${chunk}`;
     }
   }
   
