@@ -52,6 +52,41 @@ const upload = multer({
   }
 });
 
+/**
+ * Apply emotion tags to different sections of a response (hook/body/cta)
+ * This distributes tags every 2-3 sentences for better voice synthesis
+ */
+function applySectionedEmotionTags(text: string, aiTags: {hook: string, body: string, cta: string}): string {
+  // Split text into sentences
+  const sentences = text.split('.').filter(s => s.trim());
+  
+  if (sentences.length === 0) return text;
+  
+  // Determine sections
+  const hook = sentences[0]?.trim();
+  const cta = sentences[sentences.length - 1]?.trim();
+  const body = sentences.slice(1, -1).join('. ').trim();
+  
+  let result = '';
+  
+  // Apply AI-generated hook cue
+  if (hook) {
+    result += `${aiTags.hook} ${hook}.`;
+  }
+  
+  // Apply AI-generated body cue (if there's a body)
+  if (body) {
+    result += ` ${aiTags.body} ${body}.`;
+  }
+  
+  // Apply AI-generated CTA cue (if different from hook)
+  if (cta && cta !== hook) {
+    result += ` ${aiTags.cta} ${cta}.`;
+  }
+  
+  return result.trim();
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint with system status
   app.get('/api/health', async (req, res) => {
@@ -491,11 +526,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Strip ALL existing emotion tags (including [bronx] temporarily) to prevent duplication
         processedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
         
-        // Use the proper sectioned delivery system to apply hook/body/cta tags throughout the response
-        const { elevenLabsService } = await import('./services/elevenlabs.js');
-        
-        // Apply sectioned emotion tags (this distributes tags every 2-3 sentences like it should)
-        processedContent = elevenLabsService.applySectionedDeliveryWithAI(processedContent, emotionTags);
+        // Apply sectioned emotion tags (hook/body/cta distributed throughout response)
+        processedContent = applySectionedEmotionTags(processedContent, emotionTags);
         
         // For podcast mode, prepend [bronx] tag to the whole response
         if (mode === 'PODCAST' || hasBronxTag) {
