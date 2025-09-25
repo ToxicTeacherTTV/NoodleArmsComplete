@@ -274,6 +274,26 @@ class WebSearchService {
       return true;
     }
 
+    // 🎮 NEW: Search for DbD content that could be new/updated
+    const dbdKeywords = ['dead by daylight', 'dbd', 'killer', 'survivor'];
+    const newContentKeywords = ['new', 'just', 'added', 'released', 'update', 'patch', 'ptb'];
+    
+    const queryLower = query.toLowerCase();
+    const hasDbdContent = dbdKeywords.some(keyword => queryLower.includes(keyword));
+    const hasNewContent = newContentKeywords.some(keyword => queryLower.includes(keyword));
+    
+    // Always search for DbD queries about new content, regardless of memory confidence
+    if (hasDbdContent && hasNewContent) {
+      console.log(`🎮 Triggering web search for potential new DbD content: "${query}"`);
+      return true;
+    }
+    
+    // Also search for specific DbD entities that might be new (like Krasue)
+    if (hasDbdContent && existingMemories.length < 5) {
+      console.log(`🎮 Triggering web search for DbD query with limited memories: "${query}"`);
+      return true;
+    }
+
     return false;
   }
 
