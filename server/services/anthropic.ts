@@ -112,6 +112,24 @@ class AnthropicService {
     let contextPrompt = "";
     
     try {
+      // 💬 NEW: Add recent conversation history for context continuity
+      if (conversationId) {
+        try {
+          const recentMessages = await storage.getRecentMessages(conversationId, 8); // Last 8 messages for context
+          if (recentMessages.length > 0) {
+            contextPrompt += "\n\nRECENT CONVERSATION:\n";
+            recentMessages.forEach(msg => {
+              const role = msg.type === 'USER' ? 'USER' : 'NICKY';
+              const cleanContent = msg.content.replace(/\[bronx[^\]]*\]/g, '').trim(); // Remove voice tags for cleaner context
+              contextPrompt += `${role}: ${cleanContent}\n`;
+            });
+            contextPrompt += "\n";
+            console.log(`💬 Added ${recentMessages.length} recent messages to conversation context`);
+          }
+        } catch (contextError) {
+          console.warn('⚠️ Failed to retrieve conversation context:', contextError);
+        }
+      }
       
       if (relevantMemories.length > 0) {
         contextPrompt += "\n\nRELEVANT MEMORIES:\n";
