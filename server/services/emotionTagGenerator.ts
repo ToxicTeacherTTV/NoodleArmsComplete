@@ -142,7 +142,9 @@ Rules:
 3. Match the personality and content mood
 4. Hook = opening energy, Body = main content, CTA = closing energy
 5. Keep tags simple and TTS-friendly
-6. No explanation, just the JSON object
+6. Use ONLY pure emotions/attitudes - NO accents, locations, or character names
+7. Do NOT include words like "bronx", "italian", "jersey" or any geographic/accent descriptors
+8. No explanation, just the JSON object
 
 Examples:
 - Aggressive ad: {"hook": "[bold, confident]", "body": "[intense, persuasive]", "cta": "[urgent, demanding]"}
