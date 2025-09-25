@@ -57,22 +57,24 @@ const upload = multer({
  * This distributes tags every 2-3 sentences for better voice synthesis
  */
 function applySectionedEmotionTags(text: string, aiTags: {hook: string, body: string, cta: string}): string {
-  // Split text into chunks every ~40-50 characters to inject tags regularly
+  // FIXED: Simple approach that preserves ALL content
+  const sentences = text.split(/([.!?]+)/); // Split but keep the punctuation
   const words = text.split(' ');
-  const chunkSize = Math.ceil(words.length / 5); // Aim for 5 chunks with tags
   
-  if (words.length < 10) {
-    // Short text: just apply hook tag
+  if (words.length < 15) {
+    // Short text: hook + body + rest
     return `${aiTags.hook} ${text}`;
   }
   
+  // For longer content, inject tags every ~20-25 words to distribute throughout
+  const wordsPerSection = Math.ceil(words.length / 4); // 4 sections with tags
   let result = '';
-  const tags = [aiTags.hook, aiTags.body, aiTags.cta, aiTags.body, aiTags.cta];
+  const tags = [aiTags.hook, aiTags.body, aiTags.cta, aiTags.body];
   
-  for (let i = 0; i < words.length; i += chunkSize) {
-    const chunk = words.slice(i, i + chunkSize).join(' ');
-    const tagIndex = Math.floor(i / chunkSize);
-    const tag = tags[tagIndex] || aiTags.body; // Default to body tag if we run out
+  for (let i = 0; i < words.length; i += wordsPerSection) {
+    const chunk = words.slice(i, i + wordsPerSection).join(' ');
+    const tagIndex = Math.floor(i / wordsPerSection);
+    const tag = tags[tagIndex] || aiTags.body;
     
     if (i === 0) {
       result += `${tag} ${chunk}`;
@@ -523,10 +525,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Strip ALL existing emotion tags (including [bronx] temporarily) to prevent duplication
         processedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
         
-        // DISABLED: Apply emotion tags via AI prompt instead of post-processing
-        // processedContent = applySectionedEmotionTags(processedContent, emotionTags);
-        console.log(`🎭 Using AI-generated emotion tags (no post-processing)`);
-        console.log(`🎭 Generated tags for reference: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
+        // Apply AI-generated emotion tags with fixed sectioning (no truncation)
+        console.log(`🎭 BEFORE applying tags: "${processedContent.substring(0, 50)}..."`);
+        processedContent = applySectionedEmotionTags(processedContent, emotionTags);
+        console.log(`🎭 AFTER applying tags: "${processedContent.substring(0, 50)}..."`);
+        console.log(`🎭 Applied emotion tags: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
         
         // For podcast mode, prepend [bronx] tag to the whole response
         if (mode === 'PODCAST' || hasBronxTag) {
