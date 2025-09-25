@@ -120,6 +120,9 @@ export interface IStorage {
   updateMemoryEntry(id: string, updates: Partial<MemoryEntry>): Promise<MemoryEntry>;
   getHighConfidenceMemories(profileId: string, minConfidence: number, limit?: number): Promise<MemoryEntry[]>;
   getMemoriesByConfidenceRange(profileId: string, minConfidence: number, maxConfidence: number, limit?: number): Promise<MemoryEntry[]>;
+  
+  // 📖 NEW: Podcast-aware memory retrieval
+  getPodcastAwareMemories(profileId: string, mode?: string, limit?: number): Promise<Array<MemoryEntry & { parentStory?: MemoryEntry, isPodcastContent?: boolean }>>;
   markFactsAsContradicting(factIds: string[], groupId: string): Promise<void>;
   updateMemoryStatus(id: string, status: 'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'): Promise<MemoryEntry>;
   getReliableMemoriesForAI(profileId: string, limit?: number): Promise<MemoryEntry[]>;
@@ -628,6 +631,64 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(desc(memoryEntries.confidence), desc(memoryEntries.supportCount), desc(memoryEntries.importance))
       .limit(limit);
+  }
+
+  // 📖 NEW: Podcast-aware memory retrieval that prioritizes podcast content
+  async getPodcastAwareMemories(profileId: string, mode?: string, limit = 100): Promise<Array<MemoryEntry & { parentStory?: MemoryEntry, isPodcastContent?: boolean }>> {
+    const isPodcastMode = mode === 'PODCAST';
+    
+    // Get memories with enhanced context
+    const baseMemories = await this.getEnrichedMemoriesForAI(profileId, limit * 2);
+    
+    // If not in podcast mode, return regular enriched memories
+    if (!isPodcastMode) {
+      return baseMemories.map(memory => ({ ...memory, isPodcastContent: false }));
+    }
+    
+    // In podcast mode, prioritize podcast-related content
+    const podcastMemories: Array<MemoryEntry & { parentStory?: MemoryEntry, isPodcastContent?: boolean }> = [];
+    const generalMemories: Array<MemoryEntry & { parentStory?: MemoryEntry, isPodcastContent?: boolean }> = [];
+    
+    for (const memory of baseMemories) {
+      const isPodcastContent = this.isPodcastRelatedMemory(memory);
+      const enhancedMemory = { ...memory, isPodcastContent };
+      
+      if (isPodcastContent) {
+        podcastMemories.push(enhancedMemory);
+      } else {
+        generalMemories.push(enhancedMemory);
+      }
+    }
+    
+    // Return podcast memories first, then fill with general memories
+    const combinedMemories = [...podcastMemories, ...generalMemories];
+    return combinedMemories.slice(0, limit);
+  }
+  
+  // Helper method to identify podcast-related memories
+  private isPodcastRelatedMemory(memory: MemoryEntry): boolean {
+    const podcastKeywords = [
+      'podcast', 'episode', 'streaming', 'twitch', 'youtube', 
+      'chat', 'audience', 'viewer', 'subscriber', 'content',
+      'story', 'tale', 'told', 'sharing', 'explain', 'talked about',
+      'discussion', 'topic', 'segment', 'show', 'broadcast'
+    ];
+    
+    const content = memory.content.toLowerCase();
+    const source = (memory.source || '').toLowerCase();
+    
+    // Check if memory content contains podcast-related keywords
+    const hasKeywords = podcastKeywords.some(keyword => 
+      content.includes(keyword) || source.includes(keyword)
+    );
+    
+    // Check if memory type suggests podcast content
+    const isPodcastType = memory.type === 'LORE' || memory.type === 'STORY';
+    
+    // Check if source indicates podcast origin
+    const isPodcastSource = source.includes('conversation') || source.includes('chat') || source.includes('episode');
+    
+    return hasKeywords || isPodcastType || isPodcastSource;
   }
 
   async markFactsAsContradicting(factIds: string[], groupId: string): Promise<void> {

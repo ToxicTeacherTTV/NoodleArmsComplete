@@ -367,10 +367,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         semanticSearchUsed = false;
       }
       
-      // Get additional high-confidence memories as backup context
-      const highConfidenceMemories = await storage.getEnrichedMemoriesForAI(activeProfile.id, 10);
+      // 📖 ENHANCED: Get podcast-aware memories as backup context
+      const podcastAwareMemories = await storage.getPodcastAwareMemories(activeProfile.id, mode, 15);
       const seenIds = new Set(searchBasedMemories.map(m => m.id));
-      const additionalMemories = highConfidenceMemories.filter(m => !seenIds.has(m.id));
+      const additionalMemories = podcastAwareMemories.filter(m => !seenIds.has(m.id));
       const relevantMemories = [...searchBasedMemories, ...additionalMemories.slice(0, 10)];
       
       // Update retrieval tracking for all used memories
@@ -387,7 +387,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         avg: Math.round(relevantMemories.reduce((sum, m) => sum + (m.confidence || 50), 0) / relevantMemories.length)
       } : { min: 0, max: 0, avg: 0 };
       
-      console.log(`🧠 AI Context: ${searchBasedMemories.length} search-based + ${additionalMemories.slice(0, 10).length} high-confidence facts (${relevantMemories.length} total). Confidence: ${confidenceStats.min}-${confidenceStats.max}% (avg: ${confidenceStats.avg}%)`);
+      // 📖 NEW: Track podcast content prioritization
+      const podcastContentCount = additionalMemories.filter(m => (m as any).isPodcastContent).length;
+      const modeLabel = mode === 'PODCAST' ? '🎙️  PODCAST MODE' : '💬 CHAT MODE';
+      
+      console.log(`🧠 AI Context (${modeLabel}): ${searchBasedMemories.length} search-based + ${additionalMemories.slice(0, 10).length} context facts (${podcastContentCount} podcast-specific) (${relevantMemories.length} total). Confidence: ${confidenceStats.min}-${confidenceStats.max}% (avg: ${confidenceStats.avg}%)`);
       
       // 🌐 ENHANCED: Web search integration for current information
       let webSearchResults: any[] = [];
