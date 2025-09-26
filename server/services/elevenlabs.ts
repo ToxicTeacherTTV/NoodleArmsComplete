@@ -362,31 +362,44 @@ class ElevenLabsService {
    * Apply AI-generated emotion tags to text
    */
   public applySectionedDeliveryWithAI(text: string, aiTags: {hook: string, body: string, cta: string}): string {
-    // Split text into sentences
-    const sentences = text.split('.').filter(s => s.trim());
+    // Split text into sentences but preserve punctuation - handles . ! ? endings
+    const sentences = text.split(/([.!?]+)/).filter(part => part.trim() && part !== '.');
     
     if (sentences.length === 0) return text;
     
-    // Determine sections
-    const hook = sentences[0]?.trim();
-    const cta = sentences[sentences.length - 1]?.trim();
-    const body = sentences.slice(1, -1).join('. ').trim();
-    
+    // Reconstruct with proper emotion tags at sentence boundaries
     let result = '';
+    let currentSentence = '';
     
-    // Apply AI-generated hook cue
-    if (hook) {
-      result += `${aiTags.hook} ${hook}.`;
+    for (let i = 0; i < sentences.length; i++) {
+      const part = sentences[i];
+      
+      // If this part contains punctuation, it's the end of a sentence
+      if (/[.!?]+/.test(part)) {
+        currentSentence += part;
+        
+        // Determine which tag to apply based on position
+        if (i <= 1) {
+          // First sentence gets hook tag
+          result += `${aiTags.hook} ${currentSentence.trim()}`;
+        } else if (i >= sentences.length - 2) {
+          // Final sentence ALWAYS gets special CTA tag (this is what user expects!)
+          result += ` ${aiTags.cta} ${currentSentence.trim()}`;
+        } else {
+          // Middle sentences get body tags
+          result += ` ${aiTags.body} ${currentSentence.trim()}`;
+        }
+        
+        currentSentence = '';
+      } else {
+        // Regular text content
+        currentSentence += part;
+      }
     }
     
-    // Apply AI-generated body cue (if there's a body)
-    if (body) {
-      result += ` ${aiTags.body} ${body}.`;
-    }
-    
-    // Apply AI-generated CTA cue (if different from hook)
-    if (cta && cta !== hook) {
-      result += ` ${aiTags.cta} ${cta}.`;
+    // Handle any remaining text (edge case)
+    if (currentSentence.trim()) {
+      result += ` ${aiTags.cta} ${currentSentence.trim()}`;
     }
     
     return result.trim();

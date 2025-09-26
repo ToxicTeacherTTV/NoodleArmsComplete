@@ -52,39 +52,6 @@ const upload = multer({
   }
 });
 
-/**
- * Apply emotion tags to different sections of a response (hook/body/cta)
- * This distributes tags every 2-3 sentences for better voice synthesis
- */
-function applySectionedEmotionTags(text: string, aiTags: {hook: string, body: string, cta: string}): string {
-  // FIXED: Simple approach that preserves ALL content
-  const sentences = text.split(/([.!?]+)/); // Split but keep the punctuation
-  const words = text.split(' ');
-  
-  if (words.length < 15) {
-    // Short text: hook + body + rest
-    return `${aiTags.hook} ${text}`;
-  }
-  
-  // For longer content, inject tags every ~20-25 words to distribute throughout
-  const wordsPerSection = Math.ceil(words.length / 4); // 4 sections with tags
-  let result = '';
-  const tags = [aiTags.hook, aiTags.body, aiTags.cta, aiTags.body];
-  
-  for (let i = 0; i < words.length; i += wordsPerSection) {
-    const chunk = words.slice(i, i + wordsPerSection).join(' ');
-    const tagIndex = Math.floor(i / wordsPerSection);
-    const tag = tags[tagIndex] || aiTags.body;
-    
-    if (i === 0) {
-      result += `${tag} ${chunk}`;
-    } else {
-      result += ` ${tag} ${chunk}`;
-    }
-  }
-  
-  return result.trim();
-}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint with system status
@@ -525,11 +492,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Strip ALL existing emotion tags (including [bronx] temporarily) to prevent duplication
         processedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
         
-        // Apply AI-generated emotion tags with fixed sectioning (no truncation)
-        console.log(`🎭 BEFORE applying tags: "${processedContent.substring(0, 50)}..."`);
-        processedContent = applySectionedEmotionTags(processedContent, emotionTags);
-        console.log(`🎭 AFTER applying tags: "${processedContent.substring(0, 50)}..."`);
-        console.log(`🎭 Applied emotion tags: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
+        // Emotion tags are now properly applied by ElevenLabsService
+        console.log(`🎭 Generated emotion tags: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
         
         // For podcast mode, prepend [bronx] tag to the whole response
         if (mode === 'PODCAST' || hasBronxTag) {
