@@ -469,45 +469,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .replace(/\[NICKY STATE\][^\n]*/gi, '') // Remove debug state header
         .replace(/<!--\s*METRICS[^>]*-->/gi, '') // Remove metrics footer
         .trim();
-      try {
-        const { emotionTagGenerator } = await import('./services/emotionTagGenerator');
-        
-        const emotionTags = await emotionTagGenerator.generateEmotionTags({
-          content: processedContent,
-          personality: activeProfile.name,
-          contentType: 'voice_response',
-          mood: controls.preset === 'Chill Nicky' ? 'relaxed' : 
-                controls.preset === 'Roast Mode' ? 'aggressive' :
-                controls.preset === 'Unhinged' ? 'chaotic' : 'balanced',
-          intensity: controls.intensity === 'low' ? 'low' : 
-                    controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
-        });
-        
-        // Apply emotion tags to content using sectioned delivery for proper distribution
-        console.log(`🎭 Original content starts with: "${processedContent.substring(0, 20)}..."`);
-        
-        // First, preserve the [bronx] tag if present
-        const hasBronxTag = processedContent.includes('[bronx]');
-        
-        // Strip ALL existing emotion tags (including [bronx] temporarily) to prevent duplication
-        processedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
-        
-        // Emotion tags are now properly applied by ElevenLabsService
-        console.log(`🎭 Generated emotion tags: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
-        
-        // For podcast mode, prepend [bronx] tag to the whole response
-        if (mode === 'PODCAST' || hasBronxTag) {
-          processedContent = `[bronx] ${processedContent}`;
-          console.log(`🎭 Applied sectioned emotion tags with [bronx] prefix for podcast mode`);
-        } else {
-          console.log(`🎭 Applied sectioned emotion tags for non-podcast mode`);
+      // 🎭 EMOTION TAGS: Apply only for PODCAST and STREAMING modes, NOT Discord
+      if (mode === 'PODCAST' || mode === 'STREAMING') {
+        try {
+          const { emotionTagGenerator } = await import('./services/emotionTagGenerator');
+          const { elevenlabsService } = await import('./services/elevenlabs');
+          
+          const emotionTags = await emotionTagGenerator.generateEmotionTags({
+            content: processedContent,
+            personality: activeProfile.name,
+            contentType: 'voice_response',
+            mood: controls.preset === 'Chill Nicky' ? 'relaxed' : 
+                  controls.preset === 'Roast Mode' ? 'aggressive' :
+                  controls.preset === 'Unhinged' ? 'chaotic' : 'balanced',
+            intensity: controls.intensity === 'low' ? 'low' : 
+                      controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
+          });
+          
+          console.log(`🎭 Generated emotion tags: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
+          
+          // First, preserve the [bronx] tag if present
+          const hasBronxTag = processedContent.includes('[bronx]');
+          
+          // Strip ALL existing emotion tags (including [bronx] temporarily) to prevent duplication
+          let cleanedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
+          
+          // Apply emotion tags using the same logic as ElevenLabs
+          const taggedContent = elevenlabsService.applySectionedDeliveryWithAI(cleanedContent, emotionTags);
+          
+          // For podcast mode, prepend [bronx] tag to the final tagged response
+          if (mode === 'PODCAST' || hasBronxTag) {
+            processedContent = `[bronx] ${taggedContent}`;
+            console.log(`🎭 Applied sectioned emotion tags with [bronx] prefix for podcast mode`);
+          } else {
+            processedContent = taggedContent;
+            console.log(`🎭 Applied sectioned emotion tags for streaming mode`);
+          }
+          
+          console.log(`🎭 Final tagged content: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
+          
+        } catch (error) {
+          console.warn('⚠️ Failed to generate emotion tags:', error);
+          // Continue with original content if emotion tag generation fails
+          
+          // Still add [bronx] for podcast mode if emotion tagging fails
+          if (mode === 'PODCAST' && !processedContent.includes('[bronx]')) {
+            processedContent = `[bronx] ${processedContent}`;
+          }
         }
-        
-        console.log(`🎭 Final tagged content: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
-        
-      } catch (error) {
-        console.warn('⚠️ Failed to generate emotion tags:', error);
-        // Continue with original content if emotion tag generation fails
+      } else if (mode === 'DISCORD') {
+        // Discord mode: NO emotion tags, just clean text
+        processedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
+        console.log(`🎭 Discord mode: No emotion tags applied, clean text only`);
+      } else {
+        // CHAT mode or other modes: add [bronx] if not present but no emotion tags
+        if (!processedContent.includes('[bronx]')) {
+          processedContent = `[bronx] ${processedContent}`;
+        }
+        console.log(`🎭 Chat mode: Added [bronx] tag only`);
       }
 
       const response = {
