@@ -77,8 +77,18 @@ Only include strong, meaningful relationships (strength >= 6).`;
 
       return JSON.parse(response.text || "[]");
     } catch (error) {
-      console.error('Relationship discovery failed:', error);
-      return [];
+      console.error('❌ Relationship discovery failed:', error);
+      console.warn('⚠️ No relationships discovered due to AI error - knowledge graph will be incomplete');
+      
+      // Return empty array with error metadata
+      const result: any[] = [];
+      (result as any)._discoveryError = {
+        type: 'AI_ANALYSIS_FAILED',
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+        factsCount: facts.length
+      };
+      return result;
     }
   }
 
@@ -145,8 +155,18 @@ Return JSON array of clusters:
         lastUpdated: new Date()
       }));
     } catch (error) {
-      console.error('Clustering failed:', error);
-      return [];
+      console.error('❌ Clustering failed:', error);
+      console.warn('⚠️ Knowledge clustering unavailable due to AI error - memory organization degraded');
+      
+      // Return empty array with error metadata
+      const result: any[] = [];
+      (result as any)._clusteringError = {
+        type: 'AI_CLUSTERING_FAILED',
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+        factsCount: facts.length
+      };
+      return result;
     }
   }
 
@@ -209,8 +229,19 @@ Return JSON array:
 
       return JSON.parse(response.text || "[]");
     } catch (error) {
-      console.error('Knowledge gap analysis failed:', error);
-      return [];
+      console.error('❌ Knowledge gap analysis failed:', error);
+      console.warn('⚠️ Gap analysis unavailable due to AI error - missing insights into knowledge completeness');
+      
+      // Return empty array with error metadata
+      const result: any[] = [];
+      (result as any)._gapAnalysisError = {
+        type: 'AI_GAP_ANALYSIS_FAILED',
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+        clustersCount: clusters.length,
+        factsCount: facts.length
+      };
+      return result;
     }
   }
 
@@ -289,8 +320,18 @@ Return optimized facts in JSON:
         updatedAt: new Date().toISOString(),
       }));
     } catch (error) {
-      console.error('Context-aware consolidation failed:', error);
-      return facts;
+      console.error('❌ Context-aware consolidation failed:', error);
+      console.warn('⚠️ Advanced consolidation unavailable due to AI error - using original facts without optimization');
+      
+      // Return original facts with error metadata
+      const result = [...facts];
+      (result as any)._consolidationError = {
+        type: 'AI_CONSOLIDATION_FAILED',
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+        originalFactsCount: facts.length
+      };
+      return result;
     }
   }
 
