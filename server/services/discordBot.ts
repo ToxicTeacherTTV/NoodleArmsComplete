@@ -839,31 +839,49 @@ export class DiscordBotService {
       console.log(`🎭 AGGRESSIVE Emotion filter: "${content.substring(0, 100)}..." → "${discordContent.substring(0, 100)}..."`);
 
       // Enforce Discord's 2000 character limit with smart truncation (check AFTER adding mention)
-      if (discordContent.length > 1980) {
-        // Find the last complete sentence that fits
+      if (discordContent.length > 1990) {
+        console.log(`📏 Message length ${discordContent.length} exceeds limit, applying smart truncation...`);
+        
+        // Try sentence-based truncation first
         const sentences = discordContent.split(/(?<=[.!?])\s+/);
         let truncated = "";
         
         for (const sentence of sentences) {
-          if ((truncated + sentence).length <= 1980) {
+          const testLength = (truncated + sentence + " (continued...)").length;
+          if (testLength <= 1990) {
             truncated += (truncated ? " " : "") + sentence;
           } else {
             break;
           }
         }
         
-        // If we got at least one complete sentence, use it
+        // If we got at least one complete sentence, use it with continuation indicator
         if (truncated.length > 100) {
           const originalLength = discordContent.length;
-          discordContent = truncated;
+          discordContent = truncated + " (continued...)";
           console.log(`✂️ Smart truncated message from ${originalLength} to ${discordContent.length} characters at sentence boundary`);
         } else {
-          // Fallback: truncate at 1980 characters but end with proper punctuation
-          discordContent = discordContent.substring(0, 1980).replace(/[^.!?]*$/, '');
-          if (!discordContent.match(/[.!?]$/)) {
-            discordContent += "...";
+          // Try comma/dash based splitting if no good sentence boundary
+          const phrases = discordContent.split(/(?<=[,;-])\s+/);
+          truncated = "";
+          
+          for (const phrase of phrases) {
+            const testLength = (truncated + phrase + "...").length;
+            if (testLength <= 1990) {
+              truncated += (truncated ? " " : "") + phrase;
+            } else {
+              break;
+            }
           }
-          console.log(`✂️ Fallback truncated message to ${discordContent.length} characters`);
+          
+          if (truncated.length > 100) {
+            discordContent = truncated + "...";
+            console.log(`✂️ Phrase-based truncated message to ${discordContent.length} characters`);
+          } else {
+            // Final fallback: hard truncate with ellipsis
+            discordContent = discordContent.substring(0, 1985) + "...";
+            console.log(`✂️ Hard truncated message to ${discordContent.length} characters`);
+          }
         }
       }
 
