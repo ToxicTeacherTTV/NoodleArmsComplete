@@ -88,31 +88,43 @@ export default function JazzDashboard() {
   const { data: activeProfile, isLoading: profileLoading, isError: profileError } = useQuery<Profile>({
     queryKey: ['/api/profiles/active'],
     refetchInterval: false,
-    onError: (error) => {
-      console.error('Failed to fetch active profile:', error);
+  });
+
+  // Handle profile error
+  useEffect(() => {
+    if (profileError) {
+      console.error('Failed to fetch active profile:', profileError);
       toast({
         title: "Profile Error",
         description: "Failed to load active profile. Please refresh the page.",
         variant: "destructive",
       });
-    },
-  });
+    }
+  }, [profileError, toast]);
 
   const { data: memoryStats, isLoading: statsLoading, isError: statsError } = useQuery<MemoryStats>({
     queryKey: ['/api/memory/stats'],
     refetchInterval: 120000, // Reduced from 30s to 2min to reduce flickering
-    onError: (error) => {
-      console.error('Failed to fetch memory stats:', error);
-    },
   });
+
+  // Handle memory stats error
+  useEffect(() => {
+    if (statsError) {
+      console.error('Failed to fetch memory stats:', statsError);
+    }
+  }, [statsError]);
 
   const { data: documents, isLoading: documentsLoading, isError: documentsError } = useQuery({
     queryKey: ['/api/documents'],
     refetchInterval: false,
-    onError: (error) => {
-      console.error('Failed to fetch documents:', error);
-    },
   });
+
+  // Handle documents error
+  useEffect(() => {
+    if (documentsError) {
+      console.error('Failed to fetch documents:', documentsError);
+    }
+  }, [documentsError]);
 
   // Note: chaosState no longer needed - PersonalitySurgePanel manages its own state
 
@@ -135,6 +147,10 @@ export default function JazzDashboard() {
           type: 'AI',
           content: response.content,
           createdAt: new Date().toISOString(),
+          metadata: {
+            processingTime: response.processingTime,
+            retrieved_context: response.retrieved_context,
+          },
         };
         setMessages(prev => [...prev, aiMessage]);
         
@@ -394,6 +410,7 @@ export default function JazzDashboard() {
                   type: 'USER',
                   content: message,
                   createdAt: new Date().toISOString(),
+                  metadata: null,
                 };
                 setMessages(prev => [...prev, userMessage]);
                 setAiStatus('PROCESSING');
@@ -515,6 +532,7 @@ export default function JazzDashboard() {
                           type: 'USER',
                           content: message,
                           createdAt: new Date().toISOString(),
+                          metadata: null,
                         };
                         setMessages(prev => [...prev, userMessage]);
                         setAiStatus('PROCESSING');
@@ -564,6 +582,7 @@ export default function JazzDashboard() {
                       type: 'USER',
                       content: message,
                       createdAt: new Date().toISOString(),
+                      metadata: null,
                     };
                     setMessages(prev => [...prev, userMessage]);
                     setAiStatus('PROCESSING');
