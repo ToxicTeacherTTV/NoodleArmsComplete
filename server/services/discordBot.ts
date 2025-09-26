@@ -1123,10 +1123,16 @@ export class DiscordBotService {
 
       const randomPrompt = selectedPrompts[Math.floor(Math.random() * selectedPrompts.length)];
 
+      // Get recent channel context for contextual proactive messages
+      const channelContext = await this.getChannelContext(channel, 6);
+      console.log(`🎲 Proactive message with ${channelContext ? 'context' : 'no context'} for #${channelName}`);
+
       // Build context for the proactive message
       const contextParts = [
         `Generate a spontaneous Discord message for Nicky "Noodle Arms" A.I. Dente.`,
         `Channel context: This is being posted in #${channelName} - tailor content appropriately for this channel's theme.`,
+        channelContext ? `Recent conversation context:\n${channelContext}` : '',
+        channelContext ? `Note: Join the ongoing conversation naturally or pivot to a related topic. Don't completely ignore what people are talking about!` : '',
         `Prompt: ${randomPrompt}`,
         `Behavior Settings:
 - Aggressiveness: ${effectiveBehavior.aggressiveness}/100
@@ -1135,7 +1141,7 @@ export class DiscordBotService {
 - Family Business Mode: ${effectiveBehavior.familyBusinessMode}/100`,
         `Make it feel natural and spontaneous, like he just thought of something random to say.`,
         `Keep response natural - 3-4 sentences max. Write like people actually chat on Discord - conversational but not essay-length!`
-      ];
+      ].filter(part => part.length > 0); // Remove empty parts
 
       const fullContext = contextParts.join('\n\n');
 
