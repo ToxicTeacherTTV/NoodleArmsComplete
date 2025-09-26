@@ -299,6 +299,57 @@ export class DiscordBotService {
   }
 
   /**
+   * Fetch recent channel messages for conversation context
+   */
+  private async getChannelContext(channel: any, limit: number = 8): Promise<string> {
+    try {
+      if (!channel || !('messages' in channel)) {
+        return '';
+      }
+
+      const recentMessages = await channel.messages.fetch({ limit: Math.min(limit, 20) });
+      
+      if (recentMessages.size === 0) {
+        return '';
+      }
+
+      // Filter and format messages for context
+      const contextMessages = recentMessages
+        .filter((msg: Message) => {
+          // Exclude bot messages and very old messages (older than 30 minutes)
+          const isBot = msg.author.bot;
+          const isTooOld = (Date.now() - msg.createdTimestamp) > (30 * 60 * 1000);
+          const isEmpty = !msg.content || msg.content.trim().length === 0;
+          
+          return !isBot && !isTooOld && !isEmpty;
+        })
+        .sort((a: Message, b: Message) => a.createdTimestamp - b.createdTimestamp) // Chronological order
+        .map((msg: Message) => {
+          // Clean content and limit length
+          const cleanContent = msg.content
+            .replace(/<@[!&]?\d+>/g, '@someone') // Replace mentions
+            .replace(/https?:\/\/[^\s]+/g, '[link]') // Replace URLs
+            .trim()
+            .substring(0, 150); // Limit message length
+          
+          return `${msg.author.username}: ${cleanContent}`;
+        })
+        .slice(-limit); // Keep most recent messages
+
+      if (contextMessages.length === 0) {
+        return '';
+      }
+
+      console.log(`📖 Channel context: ${contextMessages.length} recent messages from ${channel.name}`);
+      return `Recent conversation in ${channel.name}:\n${contextMessages.join('\n')}`;
+      
+    } catch (error) {
+      console.warn('⚠️ Failed to fetch channel context:', error);
+      return '';
+    }
+  }
+
+  /**
    * Helper function to check if bot should message in this channel
    * based on server's allowedChannels and blockedChannels settings
    */
