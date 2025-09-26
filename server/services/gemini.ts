@@ -180,11 +180,20 @@ Return as JSON array.`;
         throw new Error("Empty response from Gemini");
       }
     } catch (error) {
-      console.error("Gemini atomic fact extraction error:", error);
+      console.error("❌ Gemini atomic fact extraction error:", error);
       
-      // Return empty array instead of crashing the app
-      console.warn("Continuing without atomic fact extraction due to API error");
-      return [];
+      // Classify the error for better handling
+      const errorType = this.classifyGeminiError(error);
+      console.warn(`⚠️ Fact extraction failed (${errorType}): Returning empty result with error flag`);
+      
+      // Return empty array but with error metadata for upstream handling
+      const result: any[] = [];
+      (result as any)._extractionError = {
+        type: errorType,
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
+      };
+      return result;
     }
   }
 
@@ -332,13 +341,24 @@ Return the optimized facts as a JSON array. Keep the most important and unique i
         throw new Error("Empty response from Gemini");
       }
     } catch (error) {
-      console.error("Gemini optimization error:", error);
-      return facts as Array<{
+      console.error("❌ Gemini optimization error:", error);
+      
+      const errorType = this.classifyGeminiError(error);
+      console.warn(`⚠️ Memory optimization failed (${errorType}): Using original facts`);
+      
+      // Return original facts but flag that optimization failed
+      const result = facts as Array<{
         content: string;
         type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
         importance: number;
         keywords: string[];
-      }>; // Return original facts if optimization fails
+      }>;
+      (result as any)._optimizationError = {
+        type: errorType,
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
+      };
+      return result;
     }
   }
 
@@ -681,8 +701,20 @@ Example format:
         throw new Error("Empty response from Gemini");
       }
     } catch (error) {
-      console.error("Gemini segment parsing error:", error);
-      return []; // Return empty array if parsing fails
+      console.error("❌ Gemini segment parsing error:", error);
+      
+      const errorType = this.classifyGeminiError(error);
+      console.warn(`⚠️ Podcast segment parsing failed (${errorType}): No segments extracted`);
+      
+      // Return empty array with error information
+      const result: any[] = [];
+      (result as any)._parsingError = {
+        type: errorType,
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+        episodeTitle
+      };
+      return result;
     }
   }
 
@@ -766,6 +798,50 @@ Respond with ONLY a JSON array - no other text:
       console.error("Gemini fact extraction error:", error);
       return []; // Return empty array if extraction fails
     }
+  }
+
+  /**
+   * Classify Gemini API errors for appropriate handling
+   */
+  private classifyGeminiError(error: any): string {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const statusCode = error?.status || error?.response?.status;
+
+    // API key issues
+    if (statusCode === 401 || errorMessage.includes('API key') || errorMessage.includes('unauthorized')) {
+      return 'AUTH_ERROR';
+    }
+
+    // Rate limiting
+    if (statusCode === 429 || errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
+      return 'RATE_LIMIT';
+    }
+
+    // Model/content issues
+    if (statusCode === 400 || errorMessage.includes('invalid') || errorMessage.includes('model')) {
+      return 'INVALID_REQUEST';
+    }
+
+    // Network/timeout errors
+    if (statusCode >= 500 || 
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('ETIMEDOUT') ||
+        errorMessage.includes('ECONNRESET') ||
+        errorMessage.includes('network')) {
+      return 'NETWORK_ERROR';
+    }
+
+    // Service unavailable
+    if (statusCode === 503 || errorMessage.includes('service unavailable')) {
+      return 'SERVICE_UNAVAILABLE';
+    }
+
+    // JSON parsing errors
+    if (errorMessage.includes('JSON') || errorMessage.includes('parse')) {
+      return 'PARSE_ERROR';
+    }
+
+    return 'UNKNOWN_ERROR';
   }
 }
 
