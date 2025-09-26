@@ -142,6 +142,19 @@ Format as JSON:
 
     } catch (error) {
       console.error('❌ Error generating lore:', error);
+      console.warn('⚠️ Lore generation failed - background storytelling unavailable for this session');
+      
+      // Store error information for potential debugging
+      const errorInfo = {
+        type: 'LORE_GENERATION_FAILED',
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+        profileId,
+        contextSize: context.toString().length
+      };
+      
+      // Log to help with debugging lore issues
+      console.warn('🔍 Lore generation error details:', JSON.stringify(errorInfo, null, 2));
     }
   }
 

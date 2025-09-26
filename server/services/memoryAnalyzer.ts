@@ -126,8 +126,19 @@ Focus on authentic Italian-American culture and Dead by Daylight streaming conte
       const result = await generateLoreContent(analysisPrompt);
       return JSON.parse(result);
     } catch (error) {
-      console.error('Failed to analyze memory batch:', error);
-      return { characters: [], locations: [], events: [], relationships: [] };
+      console.error('❌ Failed to analyze memory batch:', error);
+      console.warn('⚠️ Memory analysis failed - knowledge graph will be incomplete for this batch');
+      
+      // Return empty result with error metadata
+      const result = { characters: [], locations: [], events: [], relationships: [] };
+      (result as any)._analysisError = {
+        type: 'MEMORY_ANALYSIS_FAILED',
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+        batchSize: 0, // Batch size unavailable due to error
+        profileId
+      };
+      return result;
     }
   }
 
