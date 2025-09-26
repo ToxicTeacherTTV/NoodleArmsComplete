@@ -416,9 +416,16 @@ export class DiscordBotService {
     
     // Always respond when mentioned (but still respect message type filters in generateResponse)
     if (isMention) {
+      // Get channel context for mentioned responses too
+      const channelContext = await this.getChannelContext(message.channel, 6);
+      console.log(`💬 Mention response with ${channelContext ? 'context' : 'no context'}`);
+      
       return {
         respond: true,
         triggerType: 'MENTION',
+        triggerData: {
+          channelContext: channelContext, // Add conversation context to mentions
+        },
         processingTime: Date.now() - startTime,
       };
     }
@@ -696,6 +703,12 @@ export class DiscordBotService {
       // Add trigger context
       if (responseContext.triggerType === 'TOPIC_TRIGGER' && responseContext.triggerData?.topics) {
         contextParts.push(`Triggered by topics: ${responseContext.triggerData.topics.join(', ')}`);
+      }
+
+      // Add recent channel context if available (for auto-replies and mentions)
+      if (responseContext.triggerData?.channelContext) {
+        contextParts.push(`${responseContext.triggerData.channelContext}\n\nNote: Join the ongoing conversation naturally. Respond contextually to what people are talking about instead of random unrelated topics.`);
+        console.log(`📖 Added channel conversation context to AI prompt`);
       }
 
       // Enhanced conversation context with more detail
