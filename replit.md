@@ -124,6 +124,12 @@ Preferred communication style: Simple, everyday language.
 ## Development Roadmap
 
 ### ✅ Recently Completed
+- **Discord Conversation Context Awareness**: Complete implementation of channel message awareness for contextual responses
+  - All response types now read recent channel messages before responding (mentions, auto-replies, topic triggers, conversation continuations, proactive messages)
+  - Intelligent message filtering (human messages only, ≤30 minutes old, bot message exclusion)
+  - Context-aware AI prompts that instruct Nicky to join ongoing conversations naturally instead of random interjections
+  - Performance optimized with smart message limits and Discord API rate limit protection
+  - Comprehensive logging for context availability tracking and debugging
 - **Unified Personality Control System**: Complete consolidation of personality management through preset-based PersonalityController
   - Replaced ChaosMeter with PersonalitySurgePanel for unified chat personality controls
   - Migrated Discord behavior sliders to preset-aligned controls (preset picker, intensity, spice, DBD lens)
