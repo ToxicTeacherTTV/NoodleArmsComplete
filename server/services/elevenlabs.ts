@@ -229,7 +229,6 @@ class ElevenLabsService {
     for (const model of models) {
       try {
         console.log(`🎵 ElevenLabs request: voice_id=${this.config.voiceId}, model=${model}, settings=${JSON.stringify(settings)}`);
-        console.log(`🎤 EXACT TEXT SENT TO ELEVENLABS: "${text}"`);
         
         const response = await fetch(
           `https://api.elevenlabs.io/v1/text-to-speech/${this.config.voiceId}`,
