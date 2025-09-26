@@ -443,6 +443,10 @@ export class DiscordBotService {
           // Use response chance to determine if we should actually respond
           const randomChance = Math.random() * 100;
           if (randomChance <= (trigger.responseChance || 75)) {
+            // Get channel context for topic/keyword triggered responses
+            const channelContext = await this.getChannelContext(message.channel, 6);
+            console.log(`🔍 Topic trigger "${trigger.topic}" with ${channelContext ? 'context' : 'no context'}`);
+            
             // Update trigger statistics
             await storage.updateDiscordTopicTrigger(trigger.id, {
               triggerCount: (trigger.triggerCount || 0) + 1,
@@ -453,6 +457,7 @@ export class DiscordBotService {
               respond: true,
               triggerType: 'TOPIC_TRIGGER',
               triggerData: {
+                channelContext: channelContext, // Add conversation context to topic triggers
                 topics: [trigger.topic],
                 keywords: triggerWords,
                 responseChance: trigger.responseChance,
@@ -480,11 +485,15 @@ export class DiscordBotService {
       
       // If same user replied to Nicky within 5 minutes, continue the conversation
       if (isFromSameUser && isRecentConversation) {
-        console.log(`💬 Conversation continuation detected from ${message.author.username}`);
+        // Get channel context for conversation continuation
+        const channelContext = await this.getChannelContext(message.channel, 6);
+        console.log(`💬 Conversation continuation detected from ${message.author.username} with ${channelContext ? 'context' : 'no context'}`);
+        
         return {
           respond: true,
           triggerType: 'TOPIC_TRIGGER',
           triggerData: {
+            channelContext: channelContext, // Add conversation context to continuations
             conversationContinuation: true,
             lastMessage: lastNickyMessage.nickyResponse,
             behaviorSettings: {
