@@ -402,7 +402,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { webSearchService } = await import('./services/webSearchService');
         
         // Intelligent decision: Should we search the web?
-        const shouldSearch = webSearchService.shouldTriggerSearch(
+        const shouldSearch = await webSearchService.shouldTriggerSearch(
           relevantMemories,
           message,
           confidenceStats.avg
@@ -3314,8 +3314,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                        personalityState.effectivePersonality.intensity === 'med' ? 55 : 35,
         unpredictability: personalityState.effectivePersonality.spice === 'spicy' ? 85 :
                          personalityState.effectivePersonality.spice === 'normal' ? 50 : 15,
-        dbdObsession: personalityState.effectivePersonality.dbdLensActive ? 80 : 40,
-        familyBusinessMode: personalityState.effectivePersonality.preset === 'Family Business' ? 80 : 35,
+        dbdObsession: personalityState.effectivePersonality.dbd_lens ? 80 : 40,
+        familyBusinessMode: 35,
       };
 
       res.json(legacyFormat);
@@ -3351,15 +3351,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         preset: migratedPersonality.preset,
         intensity: personalityController['mapIntensityToLevel'](migratedPersonality.intensity),
         spice: personalityController['mapSpiceToLevel'](migratedPersonality.spice),
-        dbdLensActive: migratedPersonality.dbdLensActive
+        dbd_lens: migratedPersonality.dbdLensActive
       }, 'discord_override');
       
       // Mark the server as migrated
       const server = await storage.getDiscordServer(id);
       if (server) {
-        await storage.updateDiscordServer(server.id, {
-          unifiedPersonalityMigrated: true
-        });
+        // Note: Migration status tracking would need to be added to schema if needed
+        // await storage.updateDiscordServer(server.id, {
+        //   unifiedPersonalityMigrated: true
+        // });
       }
       
       console.log(`🔄 Updated Discord behavior via legacy API: ${JSON.stringify(legacyBehavior)} → ${migratedPersonality.preset}`);
@@ -3371,7 +3372,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         responsiveness: Math.max(30, migratedPersonality.intensity - 10),
         unpredictability: migratedPersonality.spice,
         dbdObsession: migratedPersonality.dbdLensActive ? 80 : 40,
-        familyBusinessMode: migratedPersonality.preset === 'Family Business' ? 80 : 35,
+        familyBusinessMode: 35,
       };
       
       res.json(legacyFormat);
@@ -3400,7 +3401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         success: false,
         error: 'Failed to migrate Discord servers',
-        message: error.message 
+        message: error instanceof Error ? error.message : 'Unknown error' 
       });
     }
   });

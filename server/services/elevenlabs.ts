@@ -359,7 +359,7 @@ class ElevenLabsService {
   }
 
   /**
-   * Apply AI-generated emotion tags to text
+   * Apply AI-generated emotion tags to text with proper 2-3 sentence distribution for podcast mode
    */
   public applySectionedDeliveryWithAI(text: string, aiTags: {hook: string, body: string, cta: string}): string {
     // Split text into sentences but preserve punctuation - handles . ! ? endings
@@ -367,9 +367,14 @@ class ElevenLabsService {
     
     if (sentences.length === 0) return text;
     
-    // Reconstruct with proper emotion tags at sentence boundaries
+    console.log(`🎭 BEFORE applying tags: "${text.substring(0, 50)}..."`);
+    
+    // Group sentences for better emotion tag distribution
     let result = '';
     let currentSentence = '';
+    let sentenceCount = 0;
+    let tagIndex = 0;
+    const tagCycle = ['hook', 'body', 'cta']; // Cycle through all emotion types
     
     for (let i = 0; i < sentences.length; i++) {
       const part = sentences[i];
@@ -377,17 +382,41 @@ class ElevenLabsService {
       // If this part contains punctuation, it's the end of a sentence
       if (/[.!?]+/.test(part)) {
         currentSentence += part;
+        sentenceCount++;
         
-        // Determine which tag to apply based on position
-        if (i <= 1) {
-          // First sentence gets hook tag
-          result += `${aiTags.hook} ${currentSentence.trim()}`;
-        } else if (i >= sentences.length - 2) {
-          // Final sentence ALWAYS gets special CTA tag (this is what user expects!)
-          result += ` ${aiTags.cta} ${currentSentence.trim()}`;
+        // Apply emotion tags every 2-3 sentences for podcast mode variety
+        const shouldApplyTag = sentenceCount === 1 || // First sentence always gets a tag
+                              sentenceCount % 3 === 0 || // Every 3rd sentence
+                              sentenceCount % 2 === 0 && Math.random() > 0.5 || // Sometimes every 2nd
+                              i >= sentences.length - 2; // Final sentences always get tags
+        
+        if (shouldApplyTag) {
+          // Determine which emotion tag to use
+          let emotionTag: string;
+          
+          if (sentenceCount === 1) {
+            // First sentence always uses hook
+            emotionTag = aiTags.hook;
+          } else if (i >= sentences.length - 2) {
+            // Final sentences use CTA for strong finish
+            emotionTag = aiTags.cta;
+          } else {
+            // Cycle through emotions for variety: hook → body → cta → hook...
+            const currentTag = tagCycle[tagIndex % tagCycle.length];
+            emotionTag = aiTags[currentTag as keyof typeof aiTags];
+            tagIndex++;
+          }
+          
+          if (result.trim()) {
+            result += ` ${emotionTag} ${currentSentence.trim()}`;
+          } else {
+            result += `${emotionTag} ${currentSentence.trim()}`;
+          }
+          
+          console.log(`🎭 Applied ${tagCycle[tagIndex % tagCycle.length] || 'hook'} tag to sentence ${sentenceCount}: "${currentSentence.substring(0, 30)}..."`);
         } else {
-          // Middle sentences get body tags
-          result += ` ${aiTags.body} ${currentSentence.trim()}`;
+          // Add sentence without emotion tag
+          result += result.trim() ? ` ${currentSentence.trim()}` : currentSentence.trim();
         }
         
         currentSentence = '';
@@ -400,8 +429,10 @@ class ElevenLabsService {
     // Handle any remaining text (edge case)
     if (currentSentence.trim()) {
       result += ` ${aiTags.cta} ${currentSentence.trim()}`;
+      console.log(`🎭 Applied final CTA tag to remaining text: "${currentSentence.substring(0, 30)}..."`);
     }
     
+    console.log(`🎭 AFTER applying tags: "${result.substring(0, 50)}..."`);
     return result.trim();
   }
 
