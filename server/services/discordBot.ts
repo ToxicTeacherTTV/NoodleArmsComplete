@@ -500,10 +500,15 @@ export class DiscordBotService {
       // Balanced response rate - aim for ~25% at max responsiveness (100)
       const responseRate = Math.min(25, effectiveBehavior.responsiveness * 0.25);
       if (randomChance <= responseRate) {
+        // Get channel context for contextual auto-replies
+        const channelContext = await this.getChannelContext(message.channel, 6);
+        console.log(`🎲 Auto-reply triggered with ${channelContext ? 'context' : 'no context'}`);
+        
         return {
           respond: true,
           triggerType: 'RANDOM',
           triggerData: {
+            channelContext: channelContext, // Add conversation context
             behaviorSettings: {
               aggressiveness: effectiveBehavior.aggressiveness,
               responsiveness: effectiveBehavior.responsiveness,
@@ -519,10 +524,15 @@ export class DiscordBotService {
       const randomChance = Math.random() * 100;
       const fallbackResponseRate = Math.min(25, (server.responsiveness || 30) * 0.25);
       if (randomChance <= fallbackResponseRate) {
+        // Get channel context even in fallback mode
+        const channelContext = await this.getChannelContext(message.channel, 6);
+        console.log(`🎲 Auto-reply fallback triggered with ${channelContext ? 'context' : 'no context'}`);
+        
         return {
           respond: true,
           triggerType: 'RANDOM',
           triggerData: {
+            channelContext: channelContext, // Add conversation context
             behaviorSettings: {
               aggressiveness: server.aggressiveness || 80,
               responsiveness: server.responsiveness || 60,
