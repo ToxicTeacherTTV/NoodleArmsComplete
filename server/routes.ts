@@ -613,6 +613,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Rate message endpoint
+  app.patch('/api/messages/:id/rate', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { rating } = req.body; // 1 = thumbs down, 2 = thumbs up
+      
+      if (!rating || ![1, 2].includes(rating)) {
+        return res.status(400).json({ error: 'Rating must be 1 (thumbs down) or 2 (thumbs up)' });
+      }
+      
+      await storage.updateMessageRating(id, rating);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Rating update error:', error);
+      res.status(500).json({ error: 'Failed to update rating' });
+    }
+  });
+
   // Get available voices
   app.get('/api/speech/voices', async (req, res) => {
     try {
@@ -723,6 +741,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const document = await storage.createDocument({
         profileId: activeProfile.id,
+        name: req.body.name || null, // Custom name provided by user
         filename: req.file.originalname,
         contentType: req.file.mimetype,
         size: req.file.size,

@@ -76,6 +76,7 @@ export interface IStorage {
   getConversation(id: string): Promise<Conversation | undefined>;
   getConversationMessages(conversationId: string): Promise<Message[]>;
   addMessage(message: InsertMessage): Promise<Message>;
+  updateMessageRating(messageId: string, rating: number): Promise<void>;
   getRecentMessages(conversationId: string, limit: number): Promise<Message[]>;
   
   // Enhanced memory persistence methods
@@ -278,6 +279,13 @@ export class DatabaseStorage implements IStorage {
     return newMessage;
   }
 
+  async updateMessageRating(messageId: string, rating: number): Promise<void> {
+    await db
+      .update(messages)
+      .set({ rating })
+      .where(eq(messages.id, messageId));
+  }
+
   async getRecentMessages(conversationId: string, limit: number): Promise<Message[]> {
     return await db
       .select()
@@ -377,6 +385,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select({
         id: documents.id,
+        name: documents.name,
         filename: documents.filename,
         contentType: documents.contentType,
         size: documents.size,

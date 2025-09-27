@@ -18,14 +18,18 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [textInput, setTextInput] = useState('');
+  const [documentName, setDocumentName] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [viewingDocument, setViewingDocument] = useState<Document | null>(null);
   const [documentContent, setDocumentContent] = useState<string>('');
 
   const uploadDocumentMutation = useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({file, name}: {file: File, name?: string}) => {
       const formData = new FormData();
       formData.append('document', file);
+      if (name) {
+        formData.append('name', name);
+      }
       
       const response = await fetch('/api/documents/upload', {
         method: 'POST',
@@ -39,10 +43,12 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
       return response.json();
     },
     onSuccess: (result) => {
+      const displayName = result.name || result.filename;
       toast({
         title: "Upload Successful",
-        description: `${result.filename} is being processed`,
+        description: `${displayName} is being processed`,
       });
+      setDocumentName('');
       queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
     },
     onError: (error) => {
@@ -55,12 +61,15 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
   });
 
   const uploadTextMutation = useMutation({
-    mutationFn: async (text: string) => {
+    mutationFn: async ({text, name}: {text: string, name?: string}) => {
       const blob = new Blob([text], { type: 'text/plain' });
       const file = new File([blob], `pasted-text-${Date.now()}.txt`, { type: 'text/plain' });
       
       const formData = new FormData();
       formData.append('document', file);
+      if (name) {
+        formData.append('name', name);
+      }
       
       const response = await fetch('/api/documents/upload', {
         method: 'POST',
@@ -74,11 +83,13 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
       return response.json();
     },
     onSuccess: (result) => {
+      const displayName = result.name || result.filename;
       toast({
         title: "Text Uploaded",
-        description: `Pasted text is being processed as ${result.filename}`,
+        description: `Pasted text is being processed as ${displayName}`,
       });
       setTextInput('');
+      setDocumentName('');
       setShowTextInput(false);
       queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
     },
@@ -203,7 +214,7 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
       return;
     }
     
-    uploadDocumentMutation.mutate(file);
+    uploadDocumentMutation.mutate({ file, name: documentName });
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -245,7 +256,7 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
       return;
     }
     
-    uploadTextMutation.mutate(textInput);
+    uploadTextMutation.mutate({ text: textInput, name: documentName });
   };
 
   const getFileIcon = (contentType: string) => {
@@ -291,6 +302,19 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
         <i className="fas fa-cloud-upload-alt text-3xl text-muted-foreground mb-3"></i>
         <h3 className="text-sm font-medium text-foreground mb-1">Upload Documents</h3>
         <p className="text-xs text-muted-foreground mb-3">PDF, DOCX, TXT files supported</p>
+        
+        {/* Document Name Input */}
+        <div className="mb-3">
+          <input
+            type="text"
+            value={documentName}
+            onChange={(e) => setDocumentName(e.target.value)}
+            className="w-full p-2 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
+            placeholder="Give this document a name (optional)"
+            data-testid="input-document-name"
+          />
+        </div>
+        
         <div className="flex gap-2 mb-3">
           <Button 
             className="bg-primary hover:bg-primary/90 text-primary-foreground py-2 px-4 rounded-lg text-xs transition-all duration-200"
@@ -397,9 +421,14 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-2 flex-1 min-w-0">
                       <i className={getFileIcon(doc.contentType)}></i>
-                      <span className="text-sm text-foreground truncate" title={doc.filename}>
-                        {doc.filename}
+                      <span className="text-sm text-foreground truncate" title={doc.name || doc.filename}>
+                        {doc.name || doc.filename}
                       </span>
+                      {doc.name && (
+                        <span className="text-xs text-muted-foreground truncate">
+                          ({doc.filename})
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center space-x-2">
                       <div className={`text-xs ${getStatusColor(doc.processingStatus)}`}>

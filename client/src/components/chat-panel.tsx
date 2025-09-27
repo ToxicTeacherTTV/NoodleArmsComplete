@@ -1,5 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import type { Message, AppMode } from "@/types";
 
 interface ChatPanelProps {
@@ -19,6 +23,47 @@ interface ChatPanelProps {
 
 export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', onPlayAudio, onReplayAudio, onSaveAudio, isPlayingAudio = false, isPausedAudio = false, canReplay = false, canSave = false, onTextSelection }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const rateMessageMutation = useMutation({
+    mutationFn: async ({ messageId, rating }: { messageId: string; rating: number }) => {
+      return await apiRequest('PATCH', `/api/messages/${messageId}/rate`, { rating });
+    },
+    onMutate: async ({ messageId, rating }) => {
+      // Optimistically update the UI immediately
+      queryClient.setQueryData(['messages'], (oldMessages: Message[] | undefined) => {
+        if (!oldMessages) return oldMessages;
+        return oldMessages.map(msg => 
+          msg.id === messageId ? { ...msg, rating } : msg
+        );
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Rating Saved",
+        description: "Thank you for your feedback!",
+      });
+      // Invalidate conversation-related queries to ensure data consistency
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+    },
+    onError: (error: any, { messageId }) => {
+      // Revert optimistic update on error
+      queryClient.setQueryData(['messages'], (oldMessages: Message[] | undefined) => {
+        if (!oldMessages) return oldMessages;
+        return oldMessages.map(msg => 
+          msg.id === messageId ? { ...msg, rating: undefined } : msg
+        );
+      });
+      
+      toast({
+        title: "Rating Failed",
+        description: error.message || "Could not save rating",
+        variant: "destructive",
+      });
+    },
+  });
 
   const scrollToBottom = () => {
     // Force immediate scroll to ensure visibility
@@ -187,6 +232,40 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                         )}
                         {message.metadata?.processingTime && (
                           <span className="text-muted-foreground">({message.metadata.processingTime}ms)</span>
+                        )}
+                        
+                        {/* Rating buttons for AI messages */}
+                        {message.type === 'AI' && (
+                          <div className="flex items-center space-x-2 ml-2 pl-2 border-l border-border">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => rateMessageMutation.mutate({ messageId: message.id, rating: 2 })}
+                              className={`h-6 px-2 text-xs transition-colors ${
+                                message.rating === 2 
+                                  ? 'text-green-400 hover:text-green-500' 
+                                  : 'text-muted-foreground hover:text-green-400'
+                              }`}
+                              disabled={rateMessageMutation.isPending}
+                              data-testid={`button-thumbs-up-${message.id}`}
+                            >
+                              <i className="fas fa-thumbs-up text-xs"></i>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => rateMessageMutation.mutate({ messageId: message.id, rating: 1 })}
+                              className={`h-6 px-2 text-xs transition-colors ${
+                                message.rating === 1 
+                                  ? 'text-red-400 hover:text-red-500' 
+                                  : 'text-muted-foreground hover:text-red-400'
+                              }`}
+                              disabled={rateMessageMutation.isPending}
+                              data-testid={`button-thumbs-down-${message.id}`}
+                            >
+                              <i className="fas fa-thumbs-down text-xs"></i>
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </div>

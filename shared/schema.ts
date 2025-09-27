@@ -41,6 +41,7 @@ export const messages = pgTable("messages", {
   conversationId: varchar("conversation_id").references(() => conversations.id).notNull(),
   type: text("type").$type<'USER' | 'AI' | 'CHATTER' | 'SYSTEM'>().notNull(),
   content: text("content").notNull(),
+  rating: integer("rating"), // User rating: 1 = thumbs down, 2 = thumbs up
   metadata: json("metadata").$type<{
     voice?: boolean;
     speaker?: string;
@@ -53,6 +54,7 @@ export const messages = pgTable("messages", {
 export const documents = pgTable("documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  name: text("name"), // Custom name provided by user
   filename: text("filename").notNull(),
   contentType: text("content_type").notNull(),
   size: integer("size").notNull(),
