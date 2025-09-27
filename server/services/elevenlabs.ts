@@ -194,11 +194,11 @@ class ElevenLabsService {
         // Apply AI-generated tags
         enhancedText = this.applySectionedDeliveryWithAI(text, aiTags);
         
-        // Use stable voice settings optimized for variety
+        // Use maximum expressiveness settings (lowest stability for most emotional range)
         settings = voiceSettings || {
-          stability: 0.3,
+          stability: 0.0, // Maximum expressiveness
           similarity_boost: 0.75,
-          style: 0.6,
+          style: 0.8, // Slightly higher style for more character
           use_speaker_boost: true,
           seed: Math.floor(Math.random() * 1000000)
         };
@@ -463,9 +463,9 @@ class ElevenLabsService {
       // Add randomized seed to prevent identical prosody
       seed: Math.floor(Math.random() * 1000000)
     } : {
-      stability: 0.3,
+      stability: 0.0, // Maximum expressiveness for fallback
       similarity_boost: 0.75,
-      style: 0,
+      style: 0.8,
       use_speaker_boost: true,
     });
   }
