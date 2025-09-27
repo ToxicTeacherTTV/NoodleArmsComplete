@@ -97,7 +97,7 @@ class PersonalityController {
         break;
       case 'FAKE_PROFESSIONAL':
         influence.presetSuggestion = 'Chill Nicky';
-        influence.spiceCap = 'platform_safe';
+        // Remove spice cap - let Nicky curse even when being "professional"
         break;
       case 'HYPER_FOCUSED':
         influence.presetSuggestion = 'Patch Roast';
