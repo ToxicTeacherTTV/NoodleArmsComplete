@@ -53,7 +53,7 @@ class AnthropicService {
     this.contentSuggestionService = new ContentSuggestionService();
   }
 
-  // Extract keywords from user message for context retrieval
+  // 🚀 ENHANCED: Extract keywords from user message with conversation and personality context
   private extractKeywords(message: string): string[] {
     // Remove common stop words and extract meaningful terms
     const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them']);
@@ -71,6 +71,294 @@ class AnthropicService {
         return (isNumber || isLongEnough) && isNotStopWord;
       })
       .slice(0, 8); // Limit to 8 most relevant keywords
+  }
+
+  // 🎯 NEW: Enhanced contextual keyword extraction with conversation history and personality awareness
+  private async extractContextualKeywords(
+    message: string,
+    conversationId?: string,
+    personalityState?: any,
+    mode?: string
+  ): Promise<{keywords: string[], contextualQuery: string}> {
+    // Start with base keywords
+    const baseKeywords = this.extractKeywords(message);
+    let enhancedKeywords = [...baseKeywords];
+    let contextualQuery = message;
+
+    try {
+      // 💬 Add conversation context keywords
+      if (conversationId) {
+        const recentMessages = await storage.getRecentMessages(conversationId, 3);
+        if (recentMessages.length > 0) {
+          // Extract keywords from recent conversation for context continuity
+          const conversationText = recentMessages.map(m => m.content).join(' ');
+          const conversationKeywords = this.extractKeywords(conversationText);
+          
+          // Add conversation keywords with lower weight
+          enhancedKeywords.push(...conversationKeywords.slice(0, 3));
+          
+          // Create enhanced contextual query
+          const recentContext = recentMessages.slice(-1)[0]?.content || '';
+          if (recentContext && recentContext !== message) {
+            contextualQuery = `In context of: "${recentContext}" - User asks: ${message}`;
+          }
+        }
+      }
+
+      // 🎭 Add personality-aware keywords
+      if (personalityState) {
+        const personalityKeywords = this.getPersonalityContextKeywords(personalityState, mode);
+        enhancedKeywords.push(...personalityKeywords);
+      }
+
+      // 🔥 Add emotional context keywords
+      const emotionalKeywords = this.extractEmotionalContext(message);
+      enhancedKeywords.push(...emotionalKeywords);
+
+      // Remove duplicates and limit total
+      const uniqueKeywords = Array.from(new Set(enhancedKeywords)).slice(0, 12);
+      
+      console.log(`🔍 Enhanced keywords: base(${baseKeywords.length}) + context(${enhancedKeywords.length - baseKeywords.length}) = ${uniqueKeywords.length} total`);
+      
+      return {
+        keywords: uniqueKeywords,
+        contextualQuery: contextualQuery
+      };
+      
+    } catch (error) {
+      console.warn('⚠️ Contextual keyword extraction failed, using base keywords:', error);
+      return {
+        keywords: baseKeywords,
+        contextualQuery: message
+      };
+    }
+  }
+
+  // 🎭 Extract personality-aware context keywords
+  private getPersonalityContextKeywords(personalityState: any, mode?: string): string[] {
+    const keywords: string[] = [];
+
+    // Add preset-specific context
+    switch (personalityState.preset) {
+      case 'Gaming Rage':
+      case 'Patch Roast':
+        keywords.push('dead by daylight', 'gaming', 'killer', 'survivor', 'patch', 'bhvr');
+        break;
+      case 'Storytime':
+        keywords.push('family', 'newark', 'italian', 'childhood', 'stories', 'memories');
+        break;
+      case 'Roast Mode':
+      case 'Unhinged':
+        keywords.push('roast', 'insults', 'comeback', 'trash talk');
+        break;
+      case 'Chill Nicky':
+        keywords.push('relaxed', 'casual', 'friendly', 'advice');
+        break;
+    }
+
+    // Add mode-specific context
+    if (mode === 'PODCAST') {
+      keywords.push('episode', 'show', 'podcast', 'discussion');
+    } else if (mode === 'STREAMING') {
+      keywords.push('stream', 'twitch', 'viewers', 'chat');
+    } else if (mode === 'DISCORD') {
+      keywords.push('server', 'discord', 'channel', 'members');
+    }
+
+    // Add intensity-based emotional context
+    if (personalityState.intensity === 'ultra' || personalityState.intensity === 'high') {
+      keywords.push('intense', 'passionate', 'energetic');
+    }
+
+    return keywords.slice(0, 4); // Limit personality keywords
+  }
+
+  // 🔥 Extract emotional context from message
+  private extractEmotionalContext(message: string): string[] {
+    const keywords: string[] = [];
+    const lowerMessage = message.toLowerCase();
+
+    // Detect emotional indicators
+    if (/angry|mad|pissed|frustrated|annoying/.test(lowerMessage)) {
+      keywords.push('frustration', 'anger', 'complaint');
+    }
+    if (/happy|excited|awesome|great|love/.test(lowerMessage)) {
+      keywords.push('positive', 'excitement', 'joy');
+    }
+    if (/sad|depressed|down|upset/.test(lowerMessage)) {
+      keywords.push('sadness', 'support', 'comfort');
+    }
+    if (/question|how|what|why|when/.test(lowerMessage)) {
+      keywords.push('question', 'help', 'explanation');
+    }
+    if (/problem|issue|broken|wrong|error/.test(lowerMessage)) {
+      keywords.push('problem', 'troubleshooting', 'solution');
+    }
+
+    return keywords.slice(0, 2); // Limit emotional keywords
+  }
+
+  // 🎯 NEW: Enhanced contextual memory retrieval with personality and conversation awareness
+  async getContextualMemories(
+    userMessage: string,
+    profileId: string,
+    conversationId?: string,
+    personalityState?: any,
+    mode?: string,
+    limit: number = 15
+  ): Promise<Array<any & { contextualRelevance?: number, retrievalMethod?: string }>> {
+    try {
+      console.log(`🧠 Enhanced contextual memory retrieval for: "${userMessage}"`);
+      
+      // Extract enhanced keywords with context
+      const { keywords, contextualQuery } = await this.extractContextualKeywords(
+        userMessage,
+        conversationId,
+        personalityState,
+        mode
+      );
+
+      // Use the existing embedding service but with enhanced query
+      const { embeddingService } = await import('./embeddingService');
+      const hybridResults = await embeddingService.hybridSearch(contextualQuery, profileId, limit);
+      
+      // Extract memories from hybrid search results
+      const semanticMemories = hybridResults.semantic.map((result: any) => ({
+        ...result,
+        contextualRelevance: this.calculateContextualRelevance(result, personalityState, mode, keywords),
+        retrievalMethod: 'semantic_enhanced'
+      }));
+      
+      const keywordMemories = hybridResults.keyword.map((result: any) => ({
+        ...result, 
+        contextualRelevance: this.calculateContextualRelevance(result, personalityState, mode, keywords),
+        retrievalMethod: 'keyword_enhanced'
+      }));
+      
+      // Combine and deduplicate with enhanced scoring
+      const seenIds = new Set();
+      const combinedResults = [];
+      
+      // Prioritize semantic results with enhanced contextual relevance
+      for (const result of semanticMemories) {
+        if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
+          seenIds.add(result.id);
+          combinedResults.push({
+            ...result,
+            finalScore: result.similarity * 1.2 + (result.contextualRelevance || 0) * 0.3
+          });
+        }
+      }
+      
+      // Add keyword results that weren't found semantically
+      for (const result of keywordMemories) {
+        if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
+          seenIds.add(result.id);
+          combinedResults.push({
+            ...result,
+            finalScore: 0.7 + (result.contextualRelevance || 0) * 0.3
+          });
+        }
+      }
+      
+      // Sort by enhanced final score
+      const sortedResults = combinedResults
+        .sort((a, b) => b.finalScore - a.finalScore)
+        .slice(0, limit);
+      
+      console.log(`🎯 Contextual search: ${semanticMemories.length} semantic + ${keywordMemories.length} keyword = ${sortedResults.length} enhanced results`);
+      
+      return sortedResults;
+      
+    } catch (error) {
+      console.warn('⚠️ Enhanced contextual memory retrieval failed, falling back to basic retrieval:', error);
+      
+      // Fallback to basic memory search
+      const fallbackResults = await storage.searchEnrichedMemoryEntries(profileId, userMessage);
+      return fallbackResults.filter(m => (m.confidence || 50) >= 60).map(m => ({
+        ...m,
+        contextualRelevance: 0.5,
+        retrievalMethod: 'fallback'
+      }));
+    }
+  }
+
+  // 📊 Calculate contextual relevance score based on personality and context
+  private calculateContextualRelevance(
+    memory: any,
+    personalityState?: any,
+    mode?: string,
+    keywords?: string[]
+  ): number {
+    let relevance = 0.5; // Base relevance
+
+    // Boost relevance based on memory type and personality
+    if (personalityState) {
+      switch (personalityState.preset) {
+        case 'Gaming Rage':
+        case 'Patch Roast':
+          if (memory.type === 'LORE' || memory.content?.toLowerCase().includes('dead by daylight')) {
+            relevance += 0.3;
+          }
+          break;
+        case 'Storytime':
+          if (memory.type === 'STORY' || memory.content?.toLowerCase().match(/family|childhood|newark/)) {
+            relevance += 0.4;
+          }
+          break;
+        case 'Roast Mode':
+        case 'Unhinged':
+          if (memory.content?.toLowerCase().match(/roast|insult|trash/)) {
+            relevance += 0.3;
+          }
+          break;
+      }
+    }
+
+    // Boost based on mode
+    if (mode === 'PODCAST' && (memory as any).isPodcastContent) {
+      relevance += 0.4;
+    } else if (mode === 'STREAMING' && memory.content?.toLowerCase().includes('stream')) {
+      relevance += 0.2;
+    } else if (mode === 'DISCORD' && memory.content?.toLowerCase().includes('discord')) {
+      relevance += 0.2;
+    }
+
+    // Boost based on memory importance and confidence
+    if (memory.importance >= 4) {
+      relevance += 0.2;
+    }
+    if ((memory.confidence || 50) >= 80) {
+      relevance += 0.1;
+    }
+
+    // Boost if memory contains multiple keywords
+    if (keywords && memory.content) {
+      const contentLower = memory.content.toLowerCase();
+      const keywordMatches = keywords.filter(kw => contentLower.includes(kw)).length;
+      relevance += Math.min(keywordMatches * 0.1, 0.3);
+    }
+
+    return Math.min(relevance, 1.0); // Cap at 1.0
+  }
+
+  // 🎯 PUBLIC: Enhanced memory retrieval method for use by routes
+  async retrieveContextualMemories(
+    userMessage: string,
+    profileId: string,
+    conversationId?: string,
+    personalityState?: any,
+    mode?: string,
+    limit: number = 15
+  ): Promise<any[]> {
+    return this.getContextualMemories(
+      userMessage,
+      profileId,
+      conversationId,
+      personalityState,
+      mode,
+      limit
+    );
   }
 
   async generateResponse(
@@ -151,7 +439,20 @@ class AnthropicService {
 
       // 🎙️ NEW: Add relevant podcast content to context
       if (profileId) {
-        const keywords = this.extractKeywords(userMessage);
+        // 🚀 ENHANCED: Use contextual keywords instead of basic ones
+        let keywords: string[];
+        try {
+          const contextualKeywords = await this.extractContextualKeywords(
+            userMessage,
+            conversationId,
+            personalityPrompt ? { preset: 'detected' } : undefined,
+            mode
+          );
+          keywords = contextualKeywords.keywords;
+        } catch (error) {
+          console.warn('⚠️ Contextual keywords failed, using basic extraction:', error);
+          keywords = this.extractKeywords(userMessage);
+        }
         const podcastContent = await storage.getRelevantPodcastContent(profileId, keywords);
         
         if (podcastContent.episodes.length > 0) {

@@ -314,58 +314,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate personality prompt with unified controls
       const { generatePersonalityPrompt } = await import('./types/personalityControl');
 
-      // 🚀 REVOLUTIONARY: Semantic search with embeddings - finds relevant memories even without exact keyword matches
-      console.log(`🔍 Performing hybrid semantic + keyword search for: "${message}"`);
+      // 🎯 ENHANCED: Contextual memory retrieval with conversation flow and personality awareness
+      console.log(`🧠 Performing enhanced contextual memory retrieval for: "${message}"`);
       
       let searchBasedMemories: any[] = [];
-      let semanticSearchUsed = false;
+      let enhancedSearchUsed = false;
       
       try {
-        const { embeddingService } = await import('./services/embeddingService');
-        const hybridResults = await embeddingService.hybridSearch(message, activeProfile.id, 15);
+        // Use enhanced contextual memory retrieval
+        const contextualMemories = await anthropicService.retrieveContextualMemories(
+          message,
+          activeProfile.id,
+          conversationId,
+          controls, // personality state
+          mode,
+          15
+        );
         
-        // Extract memories from hybrid search results (semantic + keyword combined)
-        const semanticMemories = hybridResults.semantic.map(result => ({
-          ...result,
-          relevanceScore: result.similarity * 100,
-          searchMethod: 'semantic'
-        }));
+        searchBasedMemories = contextualMemories;
+        enhancedSearchUsed = true;
         
-        const keywordMemories = hybridResults.keyword.map(result => ({
-          ...result, 
-          relevanceScore: 70, // Default relevance for keyword matches
-          searchMethod: 'keyword'
-        }));
+        const semanticCount = contextualMemories.filter(m => m.retrievalMethod?.includes('semantic')).length;
+        const keywordCount = contextualMemories.filter(m => m.retrievalMethod?.includes('keyword')).length;
+        const avgContextualRelevance = contextualMemories.length > 0 
+          ? Math.round(contextualMemories.reduce((sum, m) => sum + (m.contextualRelevance || 0), 0) / contextualMemories.length * 100)
+          : 0;
         
-        // Combine and deduplicate hybrid results
-        const seenIds = new Set();
-        const combinedResults = [];
+        console.log(`🎯 Enhanced contextual search: ${semanticCount} semantic + ${keywordCount} keyword = ${searchBasedMemories.length} results (avg contextual relevance: ${avgContextualRelevance}%)`);
         
-        // Prioritize semantic results (they're usually better)
-        for (const result of semanticMemories) {
-          if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
-            seenIds.add(result.id);
-            combinedResults.push(result);
-          }
-        }
-        
-        // Add keyword results that weren't found semantically
-        for (const result of keywordMemories) {
-          if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
-            seenIds.add(result.id);
-            combinedResults.push(result);
-          }
-        }
-        
-        searchBasedMemories = combinedResults;
-        semanticSearchUsed = true;
-        
-        console.log(`🧠 Hybrid search: ${semanticMemories.length} semantic + ${keywordMemories.length} keyword = ${searchBasedMemories.length} unique results`);
       } catch (error) {
-        console.warn('⚠️ Semantic search failed, falling back to keyword search:', error);
-        const fallbackResults = await storage.searchEnrichedMemoryEntries(activeProfile.id, message);
-        searchBasedMemories = fallbackResults.filter(m => (m.confidence || 50) >= 60);
-        semanticSearchUsed = false;
+        console.warn('⚠️ Enhanced contextual search failed, falling back to basic hybrid search:', error);
+        
+        try {
+          // Fallback to existing hybrid search
+          const { embeddingService } = await import('./services/embeddingService');
+          const hybridResults = await embeddingService.hybridSearch(message, activeProfile.id, 15);
+          
+          const semanticMemories = hybridResults.semantic.map(result => ({
+            ...result,
+            relevanceScore: result.similarity * 100,
+            searchMethod: 'semantic'
+          }));
+          
+          const keywordMemories = hybridResults.keyword.map(result => ({
+            ...result, 
+            relevanceScore: 70,
+            searchMethod: 'keyword'
+          }));
+          
+          const seenIds = new Set();
+          const combinedResults = [];
+          
+          for (const result of semanticMemories) {
+            if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
+              seenIds.add(result.id);
+              combinedResults.push(result);
+            }
+          }
+          
+          for (const result of keywordMemories) {
+            if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
+              seenIds.add(result.id);
+              combinedResults.push(result);
+            }
+          }
+          
+          searchBasedMemories = combinedResults;
+          console.log(`🧠 Fallback hybrid search: ${semanticMemories.length} semantic + ${keywordMemories.length} keyword = ${searchBasedMemories.length} results`);
+          
+        } catch (fallbackError) {
+          console.warn('⚠️ Hybrid search also failed, using basic keyword search:', fallbackError);
+          const fallbackResults = await storage.searchEnrichedMemoryEntries(activeProfile.id, message);
+          searchBasedMemories = fallbackResults.filter(m => (m.confidence || 50) >= 60);
+          enhancedSearchUsed = false;
+        }
       }
       
       // 📖 ENHANCED: Get podcast-aware memories as backup context
