@@ -137,7 +137,7 @@ class IntrusiveThoughts {
   ): Promise<string> {
     try {
       // Get some recent memories for context
-      const memories = await storage.searchMemories(['nicky', 'story', 'newark'], 3);
+      const memories = await storage.searchMemoriesByKeywords(conversationId || '', ['nicky', 'story', 'newark'], 3);
       const memoryContext = memories.map((m: any) => m.content).join(' ');
       
       // Generate a short, contextual interruption
@@ -148,7 +148,7 @@ User just said: "${userMessage}"
       
 Respond with a sudden, random thought that pops into your head. Start with something like "Oh! Speaking of..." or "Wait, that reminds me..." or "Yo, random thought but..."`;
       
-      const response = await geminiService.generateChatResponse(prompt, []);
+      const response = await geminiService.generateChatResponse(userMessage, `You are Nicky "Noodle Arms" A.I. Dente, interrupting with a random thought. Keep it under 100 characters. Your background: ${memoryContext}`, "Respond with a sudden, random thought that pops into your head. Start with something like 'Oh! Speaking of...' or 'Wait, that reminds me...' or 'Yo, random thought but...'");
       return response.content || "Yo, random thought but... never mind, what were we talking about?";
       
     } catch (error) {
