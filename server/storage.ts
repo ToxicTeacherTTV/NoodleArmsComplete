@@ -19,6 +19,11 @@ import {
   podcastEpisodes,
   podcastSegments,
   topicEscalation,
+  // NEW: Entity tables
+  entitySystemConfig,
+  people,
+  places,
+  events,
   type Profile, 
   type InsertProfile,
   type Conversation,
@@ -58,7 +63,16 @@ import {
   type PodcastSegment,
   type InsertPodcastSegment,
   type TopicEscalation,
-  type InsertTopicEscalation
+  type InsertTopicEscalation,
+  // NEW: Entity types
+  type EntitySystemConfig,
+  type InsertEntitySystemConfig,
+  type Person,
+  type InsertPerson,
+  type Place,
+  type InsertPlace,
+  type Event,
+  type InsertEvent
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, sql } from "drizzle-orm";
@@ -215,6 +229,42 @@ export interface IStorage {
   getHighIntensityTopics(profileId: string, minIntensity?: number): Promise<TopicEscalation[]>;
   updateTopicIntensity(id: string, newIntensity: number): Promise<TopicEscalation>;
   coolDownTopics(profileId: string): Promise<void>;
+
+  // NEW: Entity System Management (Phase 1)
+  // Feature flag management
+  getEntitySystemConfig(): Promise<EntitySystemConfig | undefined>;
+  setEntitySystemEnabled(enabled: boolean): Promise<EntitySystemConfig>;
+  
+  // Entity CRUD operations (all optional for backward compatibility)
+  createPerson(person: InsertPerson): Promise<Person>;
+  getPerson(id: string): Promise<Person | undefined>;
+  getProfilePeople(profileId: string): Promise<Person[]>;
+  updatePerson(id: string, updates: Partial<Person>): Promise<Person>;
+  deletePerson(id: string): Promise<void>;
+  
+  createPlace(place: InsertPlace): Promise<Place>;
+  getPlace(id: string): Promise<Place | undefined>;
+  getProfilePlaces(profileId: string): Promise<Place[]>;
+  updatePlace(id: string, updates: Partial<Place>): Promise<Place>;
+  deletePlace(id: string): Promise<void>;
+  
+  createEvent(event: InsertEvent): Promise<Event>;
+  getEvent(id: string): Promise<Event | undefined>;
+  getProfileEvents(profileId: string): Promise<Event[]>;
+  updateEvent(id: string, updates: Partial<Event>): Promise<Event>;
+  deleteEvent(id: string): Promise<void>;
+  
+  // Entity linking for memory entries (optional)
+  linkMemoryToEntities(memoryId: string, entityLinks: {
+    personId?: string;
+    placeId?: string;
+    eventId?: string;
+  }): Promise<MemoryEntry>;
+  getMemoryWithEntityLinks(profileId: string, limit?: number): Promise<Array<MemoryEntry & {
+    person?: Person;
+    place?: Place;
+    event?: Event;
+  }>>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -551,6 +601,10 @@ export class DatabaseStorage implements IStorage {
         embeddingModel: memoryEntries.embeddingModel,
         embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
         searchVector: memoryEntries.searchVector,
+        // NEW: Entity linking fields
+        personId: memoryEntries.personId,
+        placeId: memoryEntries.placeId,
+        eventId: memoryEntries.eventId,
         createdAt: memoryEntries.createdAt,
         updatedAt: memoryEntries.updatedAt,
         // Add relevance score from full-text search
@@ -1695,6 +1749,10 @@ export class DatabaseStorage implements IStorage {
         embeddingModel: memoryEntries.embeddingModel,
         embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
         searchVector: memoryEntries.searchVector,
+        // NEW: Entity linking fields
+        personId: memoryEntries.personId,
+        placeId: memoryEntries.placeId,
+        eventId: memoryEntries.eventId,
         createdAt: memoryEntries.createdAt,
         updatedAt: memoryEntries.updatedAt,
         relevance: sql<number>`ts_rank(${memoryEntries.searchVector}, to_tsquery('english', ${searchQuery}))`.as('relevance')
@@ -1873,6 +1931,194 @@ export class DatabaseStorage implements IStorage {
         updatedAt: sql`now()`
       })
       .where(eq(topicEscalation.profileId, profileId));
+  }
+
+  // ===== NEW: Entity System Implementation (Phase 1) =====
+  
+  // Feature flag management
+  async getEntitySystemConfig(): Promise<EntitySystemConfig | undefined> {
+    const [config] = await db.select().from(entitySystemConfig).limit(1);
+    return config || undefined;
+  }
+
+  async setEntitySystemEnabled(enabled: boolean): Promise<EntitySystemConfig> {
+    const existing = await this.getEntitySystemConfig();
+    
+    if (existing) {
+      const [updated] = await db
+        .update(entitySystemConfig)
+        .set({ isEnabled: enabled, updatedAt: sql`now()` })
+        .where(eq(entitySystemConfig.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [newConfig] = await db
+        .insert(entitySystemConfig)
+        .values({ isEnabled: enabled })
+        .returning();
+      return newConfig;
+    }
+  }
+  
+  // Person management
+  async createPerson(person: InsertPerson): Promise<Person> {
+    const [newPerson] = await db
+      .insert(people)
+      .values([person as any])
+      .returning();
+    return newPerson;
+  }
+
+  async getPerson(id: string): Promise<Person | undefined> {
+    const [person] = await db.select().from(people).where(eq(people.id, id));
+    return person || undefined;
+  }
+
+  async getProfilePeople(profileId: string): Promise<Person[]> {
+    return await db
+      .select()
+      .from(people)
+      .where(eq(people.profileId, profileId))
+      .orderBy(desc(people.createdAt));
+  }
+
+  async updatePerson(id: string, updates: Partial<Person>): Promise<Person> {
+    const updateData = { ...updates, updatedAt: sql`now()` };
+    const [updatedPerson] = await db
+      .update(people)
+      .set(updateData as any)
+      .where(eq(people.id, id))
+      .returning();
+    return updatedPerson;
+  }
+
+  async deletePerson(id: string): Promise<void> {
+    await db.delete(people).where(eq(people.id, id));
+  }
+  
+  // Place management
+  async createPlace(place: InsertPlace): Promise<Place> {
+    const [newPlace] = await db
+      .insert(places)
+      .values([place as any])
+      .returning();
+    return newPlace;
+  }
+
+  async getPlace(id: string): Promise<Place | undefined> {
+    const [place] = await db.select().from(places).where(eq(places.id, id));
+    return place || undefined;
+  }
+
+  async getProfilePlaces(profileId: string): Promise<Place[]> {
+    return await db
+      .select()
+      .from(places)
+      .where(eq(places.profileId, profileId))
+      .orderBy(desc(places.createdAt));
+  }
+
+  async updatePlace(id: string, updates: Partial<Place>): Promise<Place> {
+    const updateData = { ...updates, updatedAt: sql`now()` };
+    const [updatedPlace] = await db
+      .update(places)
+      .set(updateData as any)
+      .where(eq(places.id, id))
+      .returning();
+    return updatedPlace;
+  }
+
+  async deletePlace(id: string): Promise<void> {
+    await db.delete(places).where(eq(places.id, id));
+  }
+  
+  // Event management
+  async createEvent(event: InsertEvent): Promise<Event> {
+    const [newEvent] = await db
+      .insert(events)
+      .values([event as any])
+      .returning();
+    return newEvent;
+  }
+
+  async getEvent(id: string): Promise<Event | undefined> {
+    const [event] = await db.select().from(events).where(eq(events.id, id));
+    return event || undefined;
+  }
+
+  async getProfileEvents(profileId: string): Promise<Event[]> {
+    return await db
+      .select()
+      .from(events)
+      .where(eq(events.profileId, profileId))
+      .orderBy(desc(events.createdAt));
+  }
+
+  async updateEvent(id: string, updates: Partial<Event>): Promise<Event> {
+    const updateData = { ...updates, updatedAt: sql`now()` };
+    const [updatedEvent] = await db
+      .update(events)
+      .set(updateData as any)
+      .where(eq(events.id, id))
+      .returning();
+    return updatedEvent;
+  }
+
+  async deleteEvent(id: string): Promise<void> {
+    await db.delete(events).where(eq(events.id, id));
+  }
+  
+  // Entity linking for memory entries
+  async linkMemoryToEntities(memoryId: string, entityLinks: {
+    personId?: string;
+    placeId?: string;
+    eventId?: string;
+  }): Promise<MemoryEntry> {
+    const updateData: any = { updatedAt: sql`now()` };
+    
+    if (entityLinks.personId !== undefined) updateData.personId = entityLinks.personId;
+    if (entityLinks.placeId !== undefined) updateData.placeId = entityLinks.placeId;
+    if (entityLinks.eventId !== undefined) updateData.eventId = entityLinks.eventId;
+    
+    const [updatedMemory] = await db
+      .update(memoryEntries)
+      .set(updateData)
+      .where(eq(memoryEntries.id, memoryId))
+      .returning();
+    return updatedMemory;
+  }
+
+  async getMemoryWithEntityLinks(profileId: string, limit = 50): Promise<Array<MemoryEntry & {
+    person?: Person;
+    place?: Place;
+    event?: Event;
+  }>> {
+    const results = await db
+      .select({
+        memory: memoryEntries,
+        person: people,
+        place: places,
+        event: events,
+      })
+      .from(memoryEntries)
+      .leftJoin(people, eq(memoryEntries.personId, people.id))
+      .leftJoin(places, eq(memoryEntries.placeId, places.id))
+      .leftJoin(events, eq(memoryEntries.eventId, events.id))
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt))
+      .limit(limit);
+
+    return results.map(row => ({
+      ...row.memory,
+      person: row.person || undefined,
+      place: row.place || undefined,
+      event: row.event || undefined,
+    }));
   }
 }
 
