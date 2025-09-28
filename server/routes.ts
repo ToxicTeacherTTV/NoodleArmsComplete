@@ -4359,6 +4359,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Topic Escalation Management
+  app.get('/api/topics/escalations', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const escalations = await storage.getTopicEscalations(activeProfile.id);
+      res.json(escalations);
+    } catch (error) {
+      console.error('Error getting topic escalations:', error);
+      res.status(500).json({ error: 'Failed to get topic escalations' });
+    }
+  });
+
+  app.get('/api/topics/escalations/high-intensity', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const minIntensity = parseInt(req.query.minIntensity as string) || 60;
+      const highIntensityTopics = await storage.getHighIntensityTopics(activeProfile.id, minIntensity);
+      res.json(highIntensityTopics);
+    } catch (error) {
+      console.error('Error getting high intensity topics:', error);
+      res.status(500).json({ error: 'Failed to get high intensity topics' });
+    }
+  });
+
+  app.post('/api/topics/track', async (req, res) => {
+    try {
+      const { topic, context } = req.body;
+      
+      if (!topic || !context) {
+        return res.status(400).json({ error: 'Topic and context are required' });
+      }
+
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const escalation = await storage.trackTopicMention(activeProfile.id, topic, context);
+      res.json(escalation);
+    } catch (error) {
+      console.error('Error tracking topic:', error);
+      res.status(500).json({ error: 'Failed to track topic' });
+    }
+  });
+
+  app.get('/api/topics/escalations/:topic', async (req, res) => {
+    try {
+      const { topic } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const escalation = await storage.getTopicEscalation(activeProfile.id, topic);
+      if (!escalation) {
+        return res.status(404).json({ error: 'Topic escalation not found' });
+      }
+
+      res.json(escalation);
+    } catch (error) {
+      console.error('Error getting topic escalation:', error);
+      res.status(500).json({ error: 'Failed to get topic escalation' });
+    }
+  });
+
+  app.post('/api/topics/cooldown', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      await storage.coolDownTopics(activeProfile.id);
+      res.json({ message: 'All topics cooled down successfully' });
+    } catch (error) {
+      console.error('Error cooling down topics:', error);
+      res.status(500).json({ error: 'Failed to cool down topics' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

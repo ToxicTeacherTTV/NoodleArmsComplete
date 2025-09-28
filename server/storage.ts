@@ -18,6 +18,7 @@ import {
   prerollAds,
   podcastEpisodes,
   podcastSegments,
+  topicEscalation,
   type Profile, 
   type InsertProfile,
   type Conversation,
@@ -55,7 +56,9 @@ import {
   type PodcastEpisode,
   type InsertPodcastEpisode,
   type PodcastSegment,
-  type InsertPodcastSegment
+  type InsertPodcastSegment,
+  type TopicEscalation,
+  type InsertTopicEscalation
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, sql } from "drizzle-orm";
@@ -204,6 +207,14 @@ export interface IStorage {
   getContentLibraryWithoutEmbeddings(profileId: string): Promise<ContentLibraryEntry[]>;
   updateContentLibraryEmbedding(id: string, embedding: {embedding: string, embeddingModel: string, embeddingUpdatedAt: Date}): Promise<void>;
   getContentLibraryEntries(profileId: string): Promise<ContentLibraryEntry[]>;
+
+  // Topic Escalation System
+  trackTopicMention(profileId: string, topic: string, context: string): Promise<TopicEscalation>;
+  getTopicEscalation(profileId: string, topic: string): Promise<TopicEscalation | undefined>;
+  getTopicEscalations(profileId: string): Promise<TopicEscalation[]>;
+  getHighIntensityTopics(profileId: string, minIntensity?: number): Promise<TopicEscalation[]>;
+  updateTopicIntensity(id: string, newIntensity: number): Promise<TopicEscalation>;
+  coolDownTopics(profileId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1747,6 +1758,121 @@ export class DatabaseStorage implements IStorage {
       .from(contentLibrary)
       .where(eq(contentLibrary.profileId, profileId))
       .orderBy(desc(contentLibrary.updatedAt));
+  }
+
+  // Topic Escalation System Implementation
+  async trackTopicMention(profileId: string, topic: string, context: string): Promise<TopicEscalation> {
+    const normalizedTopic = topic.toLowerCase().trim();
+    
+    // Check if topic already exists
+    const existingTopic = await this.getTopicEscalation(profileId, topic);
+    
+    if (existingTopic) {
+      // Escalate existing topic
+      const newMentionCount = (existingTopic.mentionCount || 0) + 1;
+      const currentIntensity = existingTopic.currentIntensity || 15;
+      const escalationRate = existingTopic.escalationRate || 15;
+      const newIntensity = Math.min(100, currentIntensity + escalationRate);
+      const newMaxIntensity = Math.max(existingTopic.maxIntensity || 15, newIntensity);
+      
+      // Update contexts array (keep last 5 contexts)
+      const updatedContexts = [context, ...(existingTopic.contexts || [])].slice(0, 5);
+      
+      // Check if it's becoming personal (intensity > 60)
+      const isPersonal = newIntensity > 60;
+      const familyHonorInvolved = newIntensity > 85; // Family honor threshold
+      
+      const [updatedTopic] = await db
+        .update(topicEscalation)
+        .set({
+          mentionCount: newMentionCount,
+          currentIntensity: newIntensity,
+          maxIntensity: newMaxIntensity,
+          lastMentioned: sql`now()`,
+          contexts: updatedContexts,
+          isPersonal,
+          familyHonorInvolved,
+          updatedAt: sql`now()`
+        })
+        .where(eq(topicEscalation.id, existingTopic.id))
+        .returning();
+      
+      return updatedTopic;
+    } else {
+      // Create new topic escalation
+      const [newTopic] = await db
+        .insert(topicEscalation)
+        .values({
+          profileId,
+          topic,
+          normalizedTopic,
+          mentionCount: 1,
+          currentIntensity: 15, // Starting intensity
+          maxIntensity: 15,
+          contexts: [context],
+          relatedKeywords: [],
+          emotionalTriggers: []
+        })
+        .returning();
+      
+      return newTopic;
+    }
+  }
+
+  async getTopicEscalation(profileId: string, topic: string): Promise<TopicEscalation | undefined> {
+    const normalizedTopic = topic.toLowerCase().trim();
+    const [escalation] = await db
+      .select()
+      .from(topicEscalation)
+      .where(and(
+        eq(topicEscalation.profileId, profileId),
+        eq(topicEscalation.normalizedTopic, normalizedTopic)
+      ));
+    
+    return escalation || undefined;
+  }
+
+  async getTopicEscalations(profileId: string): Promise<TopicEscalation[]> {
+    return await db
+      .select()
+      .from(topicEscalation)
+      .where(eq(topicEscalation.profileId, profileId))
+      .orderBy(desc(topicEscalation.currentIntensity), desc(topicEscalation.lastMentioned));
+  }
+
+  async getHighIntensityTopics(profileId: string, minIntensity = 60): Promise<TopicEscalation[]> {
+    return await db
+      .select()
+      .from(topicEscalation)
+      .where(and(
+        eq(topicEscalation.profileId, profileId),
+        sql`${topicEscalation.currentIntensity} >= ${minIntensity}`
+      ))
+      .orderBy(desc(topicEscalation.currentIntensity));
+  }
+
+  async updateTopicIntensity(id: string, newIntensity: number): Promise<TopicEscalation> {
+    const [updatedTopic] = await db
+      .update(topicEscalation)
+      .set({
+        currentIntensity: Math.max(0, Math.min(100, newIntensity)),
+        updatedAt: sql`now()`
+      })
+      .where(eq(topicEscalation.id, id))
+      .returning();
+    
+    return updatedTopic;
+  }
+
+  async coolDownTopics(profileId: string): Promise<void> {
+    // Cool down all topics by their cooling rate (natural decay over time)
+    await db
+      .update(topicEscalation)
+      .set({
+        currentIntensity: sql`GREATEST(0, ${topicEscalation.currentIntensity} - ${topicEscalation.coolingRate})`,
+        updatedAt: sql`now()`
+      })
+      .where(eq(topicEscalation.profileId, profileId));
   }
 }
 
