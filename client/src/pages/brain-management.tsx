@@ -661,11 +661,11 @@ export default function BrainManagement() {
               size="sm"
               variant="ghost"
               onClick={() => makeProtectedMutation.mutate(fact.id)}
-              disabled={makeProtectedMutation.isPending}
+              disabled={makeProtectedMutation.isPending && makeProtectedMutation.variables === fact.id}
               data-testid={`button-protect-compact-${fact.id}`}
               title="Make Protected (100% confidence, cannot be contradicted)"
             >
-              {makeProtectedMutation.isPending ? (
+              {makeProtectedMutation.isPending && makeProtectedMutation.variables === fact.id ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
                 <Shield className="h-3 w-3" />
@@ -721,11 +721,11 @@ export default function BrainManagement() {
               size="sm"
               variant="secondary"
               onClick={() => makeProtectedMutation.mutate(fact.id)}
-              disabled={makeProtectedMutation.isPending}
+              disabled={makeProtectedMutation.isPending && makeProtectedMutation.variables === fact.id}
               data-testid={`button-protect-${fact.id}`}
             >
               <Shield className="h-4 w-4 mr-1" />
-              {makeProtectedMutation.isPending ? "PROTECTING..." : "MAKE PROTECTED"}
+              {makeProtectedMutation.isPending && makeProtectedMutation.variables === fact.id ? "PROTECTING..." : "MAKE PROTECTED"}
             </Button>
           )}
           <Button
@@ -2008,10 +2008,10 @@ export default function BrainManagement() {
             </Button>
             <Button
               onClick={saveEditedFact}
-              disabled={updateFactMutation.isPending || !editContent.trim()}
+              disabled={(updateFactMutation.isPending && updateFactMutation.variables?.factId === editingFact?.id) || !editContent.trim()}
               data-testid="button-save-edit"
             >
-              {updateFactMutation.isPending ? (
+              {updateFactMutation.isPending && updateFactMutation.variables?.factId === editingFact?.id ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Saving...
