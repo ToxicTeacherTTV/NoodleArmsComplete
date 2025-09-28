@@ -315,15 +315,15 @@ class PersonalityController {
     let preset: PersonalityControl['preset'] = 'Roast Mode'; // default
 
     if (dbd >= 70 && dbd > Math.max(aggro, family, chaos)) {
-      preset = 'DBD Obsessed';
+      preset = 'Patch Roast';
     } else if (family >= 70 && family > Math.max(aggro, dbd, chaos)) {
-      preset = 'Family Business';
+      preset = 'Storytime';
     } else if (chaos >= 80 && chaos > Math.max(aggro, dbd, family)) {
-      preset = 'Chaos Gremlin';
+      preset = 'Unhinged';
     } else if (aggro >= 75 && aggro > Math.max(dbd, family)) {
       preset = 'Roast Mode';
     } else if (aggro <= 50 && resp <= 50 && chaos <= 50) {
-      preset = 'Chill Vibes';
+      preset = 'Chill Nicky';
     }
 
     // Calculate intensity as weighted average of engagement metrics
@@ -364,15 +364,22 @@ class PersonalityController {
         familyBusinessMode: server.familyBusinessMode
       };
 
-      // Convert to unified personality settings
-      const migratedPersonality = this.migrateDiscordBehaviorToPersonality(legacyBehavior);
+      // Convert to unified personality settings (convert null to undefined for compatibility)
+      const safeBehavior = {
+        aggressiveness: server.aggressiveness ?? undefined,
+        responsiveness: server.responsiveness ?? undefined,
+        unpredictability: server.unpredictability ?? undefined,
+        dbdObsession: server.dbdObsession ?? undefined,
+        familyBusinessMode: server.familyBusinessMode ?? undefined
+      };
+      const migratedPersonality = this.migrateDiscordBehaviorToPersonality(safeBehavior);
 
       // Update unified personality controller with Discord-specific settings
       await this.updatePersonality({
         preset: migratedPersonality.preset,
         intensity: this.mapIntensityToLevel(migratedPersonality.intensity),
         spice: this.mapSpiceToLevel(migratedPersonality.spice),
-        dbdLensActive: migratedPersonality.dbdLensActive
+        dbd_lens: migratedPersonality.dbdLensActive
       }, 'discord_override');
 
       // Mark server as migrated to prevent re-migration

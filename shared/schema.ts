@@ -599,6 +599,9 @@ export const discordServers = pgTable("discord_servers", {
   dailyProactiveCount: integer("daily_proactive_count").default(0), // Number of proactive messages sent today
   lastProactiveDate: text("last_proactive_date").default(''), // Date string for tracking daily resets
   
+  // Unified personality migration flag
+  unifiedPersonalityMigrated: boolean("unified_personality_migrated").default(false),
+  
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
