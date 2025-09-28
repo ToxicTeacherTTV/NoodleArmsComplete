@@ -474,9 +474,14 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                         variant="ghost"
                         size="sm"
                         className="text-xs text-muted-foreground hover:text-destructive p-1"
+                        disabled={deleteDocumentMutation.isPending && deleteDocumentMutation.variables === doc.id}
                         data-testid={`button-delete-document-${doc.id}`}
                       >
-                        <i className="fas fa-trash"></i>
+                        {deleteDocumentMutation.isPending && deleteDocumentMutation.variables === doc.id ? (
+                          <i className="fas fa-spinner fa-spin"></i>
+                        ) : (
+                          <i className="fas fa-trash"></i>
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -488,12 +493,12 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                       <div className="flex gap-2 flex-wrap">
                         <Button
                           onClick={() => extractAsFactsMutation.mutate(doc.id)}
-                          disabled={extractAsFactsMutation.isPending}
+                          disabled={extractAsFactsMutation.isPending && extractAsFactsMutation.variables === doc.id}
                           size="sm"
                           className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5"
                           data-testid={`button-extract-facts-${doc.id}`}
                         >
-                          {extractAsFactsMutation.isPending ? (
+                          {extractAsFactsMutation.isPending && extractAsFactsMutation.variables === doc.id ? (
                             <>
                               <i className="fas fa-spinner fa-spin mr-1"></i>
                               Extracting...
@@ -507,13 +512,13 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                         </Button>
                         <Button
                           onClick={() => saveToContentLibraryMutation.mutate(doc.id)}
-                          disabled={saveToContentLibraryMutation.isPending}
+                          disabled={saveToContentLibraryMutation.isPending && saveToContentLibraryMutation.variables === doc.id}
                           variant="outline"
                           size="sm"
                           className="text-xs px-3 py-1.5 border-green-600 text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
                           data-testid={`button-save-content-${doc.id}`}
                         >
-                          {saveToContentLibraryMutation.isPending ? (
+                          {saveToContentLibraryMutation.isPending && saveToContentLibraryMutation.variables === doc.id ? (
                             <>
                               <i className="fas fa-spinner fa-spin mr-1"></i>
                               Saving...
@@ -527,13 +532,13 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                         </Button>
                         <Button
                           onClick={() => reprocessDocumentMutation.mutate(doc.id)}
-                          disabled={reprocessDocumentMutation.isPending}
+                          disabled={reprocessDocumentMutation.isPending && reprocessDocumentMutation.variables === doc.id}
                           variant="outline"
                           size="sm"
                           className="text-xs px-3 py-1.5 border-purple-600 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950"
                           data-testid={`button-reprocess-${doc.id}`}
                         >
-                          {reprocessDocumentMutation.isPending ? (
+                          {reprocessDocumentMutation.isPending && reprocessDocumentMutation.variables === doc.id ? (
                             <>
                               <i className="fas fa-spinner fa-spin mr-1"></i>
                               Reprocessing...
