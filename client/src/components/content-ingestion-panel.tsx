@@ -457,7 +457,7 @@ export default function ContentIngestionPanel({ profileId }: ContentIngestionPan
                                 setSelectedContent(item);
                                 setIsRejectDialogOpen(true);
                               }}
-                              disabled={rejectContentMutation.isPending}
+                              disabled={rejectContentMutation.isPending && rejectContentMutation.variables?.contentId === item.id}
                               data-testid={`button-reject-${item.id}`}
                             >
                               <XCircle className="h-4 w-4 mr-2" />
@@ -467,7 +467,7 @@ export default function ContentIngestionPanel({ profileId }: ContentIngestionPan
                             <Button
                               size="sm"
                               onClick={() => approveContentMutation.mutate(item.id)}
-                              disabled={approveContentMutation.isPending}
+                              disabled={approveContentMutation.isPending && approveContentMutation.variables === item.id}
                               data-testid={`button-approve-${item.id}`}
                             >
                               <ThumbsUp className="h-4 w-4 mr-2" />
