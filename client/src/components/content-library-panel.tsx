@@ -329,6 +329,7 @@ export default function ContentLibraryPanel({ profileId }: ContentLibraryPanelPr
                       size="sm"
                       className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                       data-testid={`button-delete-${entry.id}`}
+                      disabled={deleteContentMutation.isPending && deleteContentMutation.variables === entry.id}
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -514,10 +515,10 @@ export default function ContentLibraryPanel({ profileId }: ContentLibraryPanelPr
               </Button>
               <Button
                 onClick={handleSaveEdit}
-                disabled={updateContentMutation.isPending}
+                disabled={updateContentMutation.isPending && updateContentMutation.variables?.id === editingContent?.id}
                 data-testid="button-save-edit"
               >
-                {updateContentMutation.isPending ? "Saving..." : "Save Changes"}
+                {updateContentMutation.isPending && updateContentMutation.variables?.id === editingContent?.id ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           </div>

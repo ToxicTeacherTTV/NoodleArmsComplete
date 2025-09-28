@@ -329,11 +329,11 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
 
           <Button 
             onClick={handleGenerateAd}
-            disabled={generatingAd}
+            disabled={generateAdMutation.isPending}
             className="w-full"
             data-testid="button-generate-ad"
           >
-            {generatingAd ? (
+            {generateAdMutation.isPending ? (
               <>
                 <Dice3 className="h-4 w-4 mr-2 animate-spin" />
                 Generating Nicky's Ad Magic...
@@ -475,9 +475,10 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
                                     onClick={() => markUsedMutation.mutate(ad.id)}
                                     size="sm"
                                     data-testid={`button-use-${ad.id}`}
+                                    disabled={markUsedMutation.isPending && markUsedMutation.variables === ad.id}
                                   >
                                     <Clock className="h-3 w-3 mr-1" />
-                                    Mark as Used
+                                    {markUsedMutation.isPending && markUsedMutation.variables === ad.id ? 'Marking...' : 'Mark as Used'}
                                   </Button>
                                 </div>
                               </div>
