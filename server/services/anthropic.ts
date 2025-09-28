@@ -6,6 +6,7 @@ import { contentFilter } from './contentFilter.js';
 import { varietyController } from './VarietyController.js';
 import { ContentSuggestionService } from './ContentSuggestionService.js';
 import { storyCompletionTracker } from './storyCompletionTracker.js';
+import { intrusiveThoughts } from './intrusiveThoughts.js';
 import { storage } from '../storage.js';
 import { z } from 'zod';
 
@@ -544,6 +545,17 @@ class AnthropicService {
       // Get current chaos state and personality modifier
       const chaosModifier = this.chaosEngine.getPersonalityModifier();
       
+      // 🧠 NEW: Check for intrusive thoughts injection
+      let intrusiveThought = null;
+      try {
+        intrusiveThought = await intrusiveThoughts.shouldInjectThought(userMessage, conversationId);
+        if (intrusiveThought) {
+          console.log(`💭 Injecting intrusive thought (${intrusiveThought.intensity}): ${intrusiveThought.thought.substring(0, 50)}...`);
+        }
+      } catch (error) {
+        console.warn('⚠️ Intrusive thoughts injection failed:', error);
+      }
+      
       // 🔥 NEW: Topic escalation tracking and emotional investment system
       let escalationPrompt = "";
       if (profileId && conversationId) {
@@ -605,7 +617,14 @@ class AnthropicService {
         }
       }
       
-      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}${modeContext}${escalationPrompt}${sceneCard}`;
+      // 💭 Apply intrusive thought if one was generated
+      let promptWithIntrusion = `The Toxic Teacher says: "${userMessage}"`;
+      if (intrusiveThought) {
+        // Inject the intrusive thought as an interruption in Nicky's inner monologue
+        promptWithIntrusion += `\n\n💭 INTRUSIVE THOUGHT: While they're talking, you suddenly think: "${intrusiveThought.thought}" - inject this random thought naturally into your response as if it just popped into your head.`;
+      }
+      
+      const fullPrompt = `${promptWithIntrusion}${contextPrompt}${modeContext}${escalationPrompt}${sceneCard}`;
 
       // Enhanced system prompt with personality controls, chaos personality AND variety control
       let enhancedCoreIdentity = `${coreIdentity}`;
