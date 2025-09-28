@@ -544,6 +544,51 @@ class AnthropicService {
       // Get current chaos state and personality modifier
       const chaosModifier = this.chaosEngine.getPersonalityModifier();
       
+      // 🔥 NEW: Topic escalation tracking and emotional investment system
+      let escalationPrompt = "";
+      if (profileId && conversationId) {
+        try {
+          // Extract potential topics from user message
+          const keywords = this.extractKeywords(userMessage);
+          
+          // Track each topic and get escalation data
+          for (const topic of keywords) {
+            await storage.trackTopicMention(profileId, topic, userMessage);
+          }
+          
+          // Get high-intensity topics to add emotional investment
+          const highIntensityTopics = await storage.getHighIntensityTopics(profileId, 30);
+          
+          if (highIntensityTopics.length > 0) {
+            escalationPrompt = "\n\n🔥 EMOTIONAL INVESTMENT TRACKER:\n";
+            escalationPrompt += "You have been discussing these topics repeatedly and they are becoming increasingly personal to you:\n";
+            
+            highIntensityTopics.forEach(topic => {
+              let intensityLevel = "";
+              const intensity = topic.currentIntensity || 0;
+              if (intensity >= 80) {
+                intensityLevel = "MAXIMUM RAGE/PASSION (this is deeply personal now!)";
+              } else if (intensity >= 60) {
+                intensityLevel = "Very emotional and invested";
+              } else if (intensity >= 40) {
+                intensityLevel = "Moderately passionate";
+              } else {
+                intensityLevel = "Starting to care more";
+              }
+              
+              escalationPrompt += `- "${topic.topic}" (mentioned ${topic.mentionCount || 0} times, intensity: ${intensityLevel})\n`;
+              const lastContext = topic.contexts && topic.contexts.length > 0 ? topic.contexts[topic.contexts.length - 1] : 'No context';
+              escalationPrompt += `  Context: ${lastContext.substring(0, 100)}...\n`;
+            });
+            
+            escalationPrompt += "\nWhen these topics come up again, respond with escalating emotional investment based on the intensity level. Start casual, but by mention 4-5 it should be deeply personal!";
+            console.log(`🔥 Added escalation context for ${highIntensityTopics.length} topics`);
+          }
+        } catch (error) {
+          console.warn('⚠️ Topic escalation tracking failed:', error);
+        }
+      }
+      
       // ✨ NEW: Get variety controller facet and prompt
       let varietyPrompt = "";
       let sceneCard = "";
@@ -560,7 +605,7 @@ class AnthropicService {
         }
       }
       
-      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}${modeContext}${sceneCard}`;
+      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}${modeContext}${escalationPrompt}${sceneCard}`;
 
       // Enhanced system prompt with personality controls, chaos personality AND variety control
       let enhancedCoreIdentity = `${coreIdentity}`;
