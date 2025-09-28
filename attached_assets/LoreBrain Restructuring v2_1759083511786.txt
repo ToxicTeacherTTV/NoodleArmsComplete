@@ -1,0 +1,218 @@
+Lore/Brain Restructuring v2
+
+Project Brief: Dente-Verse Lore Structuring & Recanonization (v2)
+Objective:
+To evolve the existing memory_entries system into a structured, relational knowledge base capable of disambiguating entities with the same name (e.g., "Sal"). This will be achieved by introducing new database tables for core entities (People, Places, Events) with added contextual fields and running a one-time migration script to process, disambiguate, and link all existing memories to these new, unique entities.
+
+Core Philosophy: We are not just storing names; we are storing identities. The system must treat ambiguity as a feature to be resolved through context, not as an error.
+
+Phase 1: Database Schema Evolution
+File to Modify: shared/schema.ts
+
+Action:
+
+Define New Entity Tables: Add the Drizzle schema definitions for people, places, and events. Note the critical addition of the disambiguation field in the people table.
+
+Augment memory_entries Table: Add new nullable foreign key columns to the existing memory_entries table.
+
+Code:
+
+TypeScript
+
+// --- ADD NEW TABLES ---
+
+// The "Dossier" for every character in the universe
+export const people = pgTable("people", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  canonicalName: text("canonical_name").notNull(), // e.g., "Sal" for all four Sals
+
+  // --- NEW FIELD ---
+  // The human-readable nickname to tell them apart. It's the key to solving name collisions.
+  // e.g., "The Butcher", "My No-Good Cousin"
+  disambiguation: text("disambiguation"), 
+
+  aliases: jsonb("aliases").$type<string[]>(),
+  relationship: text("relationship"),
+  description: text("description"), // AI-generated summary
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// The "Atlas" for all significant locations
+export const places = pgTable("places", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  canonicalName: text("canonical_name").notNull(),
+  locationType: text("location_type"),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// The "Chronicle" for the timeline of events
+export const events = pgTable("events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  canonicalName: text("canonical_name").notNull(),
+  eventDate: text("event_date"), // Text for fuzzy dates like "1998"
+  description: text("description"),
+  isCanonical: boolean("is_canonical").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+
+// --- AUGMENT EXISTING TABLE ---
+
+export const memoryEntries = pgTable("memory_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // ... (keep all existing columns)
+
+  // --- ADD THESE NEW COLUMNS ---
+  personId: varchar("person_id").references(() => people.id),
+  placeId: varchar("place_id").references(() => places.id),
+  eventId: varchar("event_id").references(() => events.id),
+});
+Phase 2: Backend Migration Service (LoreRefineryService)
+File to Create: server/services/LoreRefineryService.ts
+
+Action:
+Create the migration service. The key change is the updated "Archivist" prompt, which now extracts context alongside names.
+
+1. Function: extractEntitiesWithContext()
+
+Purpose: To read all memory_entries and use an LLM to extract potential entities along with their contextual clues.
+
+Logic:
+
+Fetch all memory_entries.
+
+Loop through them, calling the Anthropic API with the new "Archivist v2 Prompt".
+
+Store the JSON output, which now includes a context field for each entity, in a temporary location (e.g., raw_extracted_entities table).
+
+The "Archivist v2" Prompt:
+
+You are a data extraction bot. Analyze the following fact: '{memory.content}'.
+
+Your task is to identify all named people. For each person, provide their name and a concise, one-sentence description based *only* on the context of this fact.
+
+Return your findings in a strict JSON format.
+
+Example 1:
+Fact: 'Sal the Butcher owed my father a favor, so he took care of the Marinelli problem.'
+{
+  "people": [{
+    "name": "Sal the Butcher",
+    "context": "He is a butcher who owed the user's father a favor."
+  }, {
+    "name": "Marinelli",
+    "context": "They were a 'problem' that needed to be taken care of."
+  }]
+}
+
+Example 2:
+Fact: 'My cousin Sal from accounting is cooking the books again.'
+{
+  "people": [{
+    "name": "Sal",
+    "context": "He is the user's cousin, works in accounting, and is 'cooking the books'."
+  }]
+}
+
+Now, analyze this fact: '{memory.content}'
+2. Function: groupAndPrepareForDisambiguation()
+
+Purpose: To cluster the raw extracted data and prepare it for the human-in-the-loop review.
+
+Logic:
+
+Read the temporary data.
+
+Group extracted entities by their base name (e.g., all mentions of "Sal," "Sal the Butcher," etc., go into one bucket).
+
+Within each bucket, further cluster the memories based on the similarity of their extracted context field. This should naturally separate "Sal the Butcher" memories from "Sal the Accountant" memories.
+
+Store these proposed groupings in a pending_disambiguation table.
+
+3. Function: linkMemoriesToCanonicalEntities()
+
+Purpose: The final migration step, to be run after human review.
+
+Logic:
+
+Read the approved, disambiguated entities.
+
+Populate the people, places, and events tables. Each Sal will now have a unique ID.
+
+Iterate through the original memories one last time, matching them to the correct, disambiguated entity.
+
+Update the memory_entries table with the correct personId, placeId, or eventId.
+
+Phase 3: The "Conflict Resolution" UI
+File to Create: A new, temporary admin page/component.
+
+Action:
+This is the most critical part of the process. Build an interface specifically for resolving name collisions identified in Phase 2.
+
+Display: For each name with conflicts (like "Sal"), the UI should present the context-based groups of memories.
+
+Interface Layout:
+
+CONFLICT DETECTED: "Sal"
+
+The system found multiple individuals named "Sal." Please review the memory groups below and assign each to a canonical identity.
+
+Group 1 (Suggested Context: "butcher", "favors", "meat")
+
+Memory: "Sal the Butcher owed my father a favor..."
+
+Memory: "I sent Sal to get some prime cuts..."
+
+Action:
+
+[Create New Person]
+
+Name: Sal
+
+Disambiguation: <input type="text" placeholder="e.g., The Butcher">
+
+Group 2 (Suggested Context: "accounting", "cousin", "money")
+
+Memory: "My cousin Sal from accounting is cooking the books..."
+
+Memory: "Sal is good with numbers..."
+
+Action:
+
+[Create New Person]
+
+Name: Sal
+
+Disambiguation: <input type="text" placeholder="e.g., The Accountant Cousin">
+
+Functionality: Your input in the Disambiguation field is what allows the system to create separate, unique entries in the people table for each Sal.
+
+Phase 4: Core Logic Integration & Disambiguation
+Files to Modify: server/storage.ts, services that create memories, and prompt construction logic.
+
+Action:
+Update the live application to handle potential ambiguity during new conversations.
+
+Memory Creation:
+
+When a new memory with "Sal" is created, the system must now check for ambiguity.
+
+It should query the people table for all entries where canonicalName is "Sal."
+
+Using the conversation's context, the AI should make a best guess as to which Sal is being discussed.
+
+If the AI is confident, it links the memory to the correct Sal.
+
+If the context is ambiguous, the system should either flag it for your review or be programmed to have Nicky ask for clarification ("Hold on, which Sal we talkin' about?").
+
+Prompt Construction:
+
+When the user mentions an ambiguous name like "Sal," the context block sent to the LLM should include a list of the known, disambiguated Sals.
+
+Example Context: ...Relevant memories about the topic... Known individuals named Sal include: Sal (The Butcher) and Sal (The Accountant Cousin). The user's current context is about money.
+
+This gives the AI the necessary information to choose the correct character and generate a relevant, personality-driven response.
