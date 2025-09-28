@@ -169,9 +169,7 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
 
   const reprocessDocumentMutation = useMutation({
     mutationFn: async (documentId: string) => {
-      const response = await apiRequest('POST', `/api/documents/reprocess`, {
-        documentId,
-      });
+      const response = await apiRequest('POST', `/api/documents/${documentId}/reprocess`);
       return response.json();
     },
     onSuccess: (result) => {
