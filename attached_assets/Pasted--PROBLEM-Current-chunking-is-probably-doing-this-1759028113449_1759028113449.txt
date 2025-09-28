@@ -1,0 +1,472 @@
+// ============================================
+// PROBLEM: Current chunking is probably doing this:
+// ============================================
+
+// BAD - What's likely happening now:
+class BadChunking {
+  chunk(text: string, maxSize: number = 1000) {
+    // Splits mid-sentence, loses context
+    const chunks = [];
+    for (let i = 0; i < text.length; i += maxSize) {
+      chunks.push(text.slice(i, i + maxSize)); // CUTS MID-SENTENCE!
+    }
+    return chunks;
+  }
+}
+
+// ============================================
+// SOLUTION: Intelligent Document Processing
+// ============================================
+
+import natural from 'natural'; // npm install natural
+import { encoding_for_model } from 'tiktoken'; // npm install tiktoken
+
+interface ExtractedStory {
+  content: string;
+  entities: {
+    people: string[];
+    places: string[];
+    events: string[];
+  };
+  storyArc: 'complete' | 'partial' | 'fragment';
+  relatedChunks: string[];
+  importance: number;
+}
+
+class IntelligentDocumentProcessor {
+  private encoder = encoding_for_model('gpt-4');
+  private sentenceTokenizer = new natural.SentenceTokenizer();
+  
+  // ==========================================
+  // STEP 1: Smart Chunking (Respect Boundaries)
+  // ==========================================
+  
+  async processDocument(text: string): Promise<ExtractedStory[]> {
+    // Clean the text first
+    text = this.cleanText(text);
+    
+    // Extract entities BEFORE chunking so we don't lose them
+    const globalEntities = await this.extractGlobalEntities(text);
+    
+    // Chunk intelligently
+    const chunks = this.intelligentChunk(text);
+    
+    // Process each chunk with context
+    const stories = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const story = await this.processChunk(
+        chunks[i], 
+        chunks[i-1], // previous chunk for context
+        chunks[i+1], // next chunk for context
+        globalEntities
+      );
+      stories.push(story);
+    }
+    
+    // Reconnect related stories
+    return this.connectRelatedStories(stories);
+  }
+  
+  private cleanText(text: string): string {
+    // Fix common PDF extraction issues
+    return text
+      .replace(/\s+/g, ' ') // Multiple spaces to single
+      .replace(/(\w)-\s+(\w)/g, '$1$2') // Reconnect hyphenated words
+      .replace(/\n{3,}/g, '\n\n') // Max 2 newlines
+      .replace(/(\w)\s*\n\s*(\w)/g, '$1 $2') // Join broken sentences
+      .trim();
+  }
+  
+  private intelligentChunk(text: string, maxTokens: number = 500): string[] {
+    // Split into paragraphs first
+    const paragraphs = text.split(/\n\n+/);
+    const chunks: string[] = [];
+    let currentChunk = '';
+    let currentTokens = 0;
+    
+    for (const paragraph of paragraphs) {
+      const paragraphTokens = this.encoder.encode(paragraph).length;
+      
+      // If single paragraph is too long, split by sentences
+      if (paragraphTokens > maxTokens) {
+        const sentences = this.sentenceTokenizer.tokenize(paragraph);
+        let tempChunk = '';
+        let tempTokens = 0;
+        
+        for (const sentence of sentences) {
+          const sentTokens = this.encoder.encode(sentence).length;
+          
+          if (tempTokens + sentTokens > maxTokens && tempChunk) {
+            // Save current chunk
+            chunks.push(tempChunk.trim());
+            tempChunk = sentence;
+            tempTokens = sentTokens;
+          } else {
+            tempChunk += ' ' + sentence;
+            tempTokens += sentTokens;
+          }
+        }
+        
+        if (tempChunk) {
+          chunks.push(tempChunk.trim());
+        }
+      } 
+      // If adding paragraph exceeds limit, save current and start new
+      else if (currentTokens + paragraphTokens > maxTokens && currentChunk) {
+        chunks.push(currentChunk.trim());
+        currentChunk = paragraph;
+        currentTokens = paragraphTokens;
+      } 
+      // Otherwise, add to current chunk
+      else {
+        currentChunk += '\n\n' + paragraph;
+        currentTokens += paragraphTokens;
+      }
+    }
+    
+    // Don't forget the last chunk
+    if (currentChunk) {
+      chunks.push(currentChunk.trim());
+    }
+    
+    return chunks;
+  }
+  
+  // ==========================================
+  // STEP 2: Entity Extraction (Don't Miss People/Places)
+  // ==========================================
+  
+  private async extractGlobalEntities(text: string) {
+    // Extract ALL entities from document first
+    // This ensures we don't miss important people/places
+    
+    const entities = {
+      people: new Set<string>(),
+      places: new Set<string>(),
+      events: new Set<string>(),
+      relationships: new Map<string, string[]>()
+    };
+    
+    // Pattern matching for names (capitalized words)
+    const namePattern = /\b([A-Z][a-z]+ (?:[A-Z][a-z]+ ?){0,2})\b/g;
+    const matches = text.matchAll(namePattern);
+    
+    for (const match of matches) {
+      const potential = match[1].trim();
+      
+      // Filter out common non-names
+      if (!this.isCommonWord(potential) && potential.length > 2) {
+        // Use context to determine if it's a person or place
+        const context = text.substring(
+          Math.max(0, match.index! - 50),
+          Math.min(text.length, match.index! + 50)
+        );
+        
+        if (this.isPerson(potential, context)) {
+          entities.people.add(potential);
+        } else if (this.isPlace(potential, context)) {
+          entities.places.add(potential);
+        }
+      }
+    }
+    
+    // Extract events (looking for time markers + actions)
+    const eventPattern = /(when|after|before|during) ([^.!?]+)/gi;
+    const eventMatches = text.matchAll(eventPattern);
+    for (const match of eventMatches) {
+      entities.events.add(match[2].trim());
+    }
+    
+    return {
+      people: Array.from(entities.people),
+      places: Array.from(entities.places),
+      events: Array.from(entities.events)
+    };
+  }
+  
+  private isPerson(text: string, context: string): boolean {
+    const personIndicators = [
+      'said', 'told', 'asked', 'replied', 'thought',
+      'went', 'came', 'his', 'her', 'their', 'was', 'is'
+    ];
+    return personIndicators.some(ind => context.toLowerCase().includes(ind));
+  }
+  
+  private isPlace(text: string, context: string): boolean {
+    const placeIndicators = [
+      'in', 'at', 'from', 'to', 'near', 'city', 
+      'town', 'street', 'restaurant', 'house'
+    ];
+    return placeIndicators.some(ind => context.toLowerCase().includes(ind));
+  }
+  
+  private isCommonWord(word: string): boolean {
+    const common = [
+      'The', 'This', 'That', 'These', 'Those', 'Monday',
+      'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 
+      'Sunday', 'January', 'February', 'March', 'April', 'May',
+      'June', 'July', 'August', 'September', 'October', 
+      'November', 'December'
+    ];
+    return common.includes(word);
+  }
+  
+  // ==========================================
+  // STEP 3: Story Recognition & Context Preservation
+  // ==========================================
+  
+  private async processChunk(
+    chunk: string,
+    prevChunk: string | undefined,
+    nextChunk: string | undefined,
+    globalEntities: any
+  ): Promise<ExtractedStory> {
+    // Look for story markers
+    const storyMarkers = {
+      beginning: /^(once|one day|it started|first|initially)/i,
+      middle: /(then|after|during|while|as)/i,
+      end: /(finally|in the end|ultimately|concluded|last)/i,
+      complete: /(the story|here's what happened|let me tell you)/i
+    };
+    
+    // Determine story completeness
+    let storyArc: 'complete' | 'partial' | 'fragment' = 'fragment';
+    
+    if (storyMarkers.complete.test(chunk)) {
+      storyArc = 'complete';
+    } else if (
+      storyMarkers.beginning.test(chunk) && 
+      storyMarkers.end.test(chunk)
+    ) {
+      storyArc = 'complete';
+    } else if (
+      storyMarkers.beginning.test(chunk) || 
+      storyMarkers.end.test(chunk)
+    ) {
+      storyArc = 'partial';
+    }
+    
+    // Extract local entities
+    const localEntities = await this.extractLocalEntities(chunk);
+    
+    // Merge with global entities (don't miss anyone!)
+    const entities = {
+      people: [...new Set([...localEntities.people, ...globalEntities.people])],
+      places: [...new Set([...localEntities.places, ...globalEntities.places])],
+      events: localEntities.events // Keep local events
+    };
+    
+    // Calculate importance based on entity mentions and story completeness
+    const importance = this.calculateImportance(chunk, entities, storyArc);
+    
+    return {
+      content: chunk,
+      entities,
+      storyArc,
+      relatedChunks: [], // Will be filled by connectRelatedStories
+      importance
+    };
+  }
+  
+  private async extractLocalEntities(chunk: string) {
+    // Similar to global but for specific chunk
+    // This catches entities mentioned only in this part
+    return this.extractGlobalEntities(chunk);
+  }
+  
+  private calculateImportance(
+    chunk: string,
+    entities: any,
+    storyArc: string
+  ): number {
+    let importance = 500; // Base
+    
+    // Complete stories are more important
+    if (storyArc === 'complete') importance += 200;
+    if (storyArc === 'partial') importance += 100;
+    
+    // More entities = more important
+    importance += entities.people.length * 50;
+    importance += entities.places.length * 30;
+    importance += entities.events.length * 40;
+    
+    // Emotional content is important for Nicky
+    const emotionalWords = [
+      'angry', 'frustrated', 'happy', 'sad', 'betrayed',
+      'excited', 'disappointed', 'proud', 'ashamed'
+    ];
+    const emotionCount = emotionalWords.filter(
+      word => chunk.toLowerCase().includes(word)
+    ).length;
+    importance += emotionCount * 75;
+    
+    // Cap at 999 (reserved for protected facts)
+    return Math.min(importance, 990);
+  }
+  
+  // ==========================================
+  // STEP 4: Connect Related Stories
+  // ==========================================
+  
+  private connectRelatedStories(stories: ExtractedStory[]): ExtractedStory[] {
+    // Find stories that reference the same entities
+    for (let i = 0; i < stories.length; i++) {
+      for (let j = i + 1; j < stories.length; j++) {
+        const sharedPeople = stories[i].entities.people.filter(
+          p => stories[j].entities.people.includes(p)
+        );
+        
+        const sharedPlaces = stories[i].entities.places.filter(
+          p => stories[j].entities.places.includes(p)
+        );
+        
+        // If they share entities, they're related
+        if (sharedPeople.length > 0 || sharedPlaces.length > 0) {
+          stories[i].relatedChunks.push(stories[j].content);
+          stories[j].relatedChunks.push(stories[i].content);
+          
+          // Incomplete stories that relate might form complete story
+          if (
+            stories[i].storyArc === 'partial' && 
+            stories[j].storyArc === 'partial'
+          ) {
+            // Check if they form a complete arc together
+            const combined = stories[i].content + ' ' + stories[j].content;
+            if (this.isCompleteStory(combined)) {
+              stories[i].storyArc = 'complete';
+              stories[j].storyArc = 'complete';
+            }
+          }
+        }
+      }
+    }
+    
+    return stories;
+  }
+  
+  private isCompleteStory(text: string): boolean {
+    // Has beginning, middle, and end markers
+    const hasBeginning = /^(once|one day|it started|first)/i.test(text);
+    const hasMiddle = /(then|after|during|while)/i.test(text);
+    const hasEnd = /(finally|in the end|ultimately|concluded)/i.test(text);
+    
+    return hasBeginning && hasMiddle && hasEnd;
+  }
+}
+
+// ==========================================
+// STEP 5: AI-Enhanced Fact Extraction
+// ==========================================
+
+class EnhancedFactExtractor {
+  async extractFactsFromStory(story: ExtractedStory): Promise<MemoryEntry[]> {
+    const facts: MemoryEntry[] = [];
+    
+    // First, extract atomic facts
+    const atomicFacts = await this.extractAtomicFacts(story);
+    
+    // Then, create story-level memory
+    const storyMemory = await this.createStoryMemory(story);
+    
+    // Link atomic facts to parent story
+    for (const fact of atomicFacts) {
+      fact.parentStoryId = storyMemory.id;
+      fact.storyContext = story.content;
+      facts.push(fact);
+    }
+    
+    // Add the complete story as a memory too
+    facts.push(storyMemory);
+    
+    return facts;
+  }
+  
+  private async extractAtomicFacts(story: ExtractedStory) {
+    // Use AI to extract facts but with better prompting
+    const prompt = `
+    Extract atomic facts from this story. 
+    PRESERVE FULL NAMES AND PLACES.
+    Each fact should be a complete, standalone statement.
+    
+    Story: "${story.content}"
+    
+    Entities to ensure are included:
+    - People: ${story.entities.people.join(', ')}
+    - Places: ${story.entities.places.join(', ')}
+    
+    Format each fact as a complete sentence that includes:
+    1. WHO is involved (full names)
+    2. WHAT happened
+    3. WHERE it happened (if mentioned)
+    4. WHEN it happened (if mentioned)
+    5. WHY it matters to Nicky
+    
+    DO NOT ABBREVIATE NAMES OR PLACES.
+    DO NOT SPLIT SENTENCES MID-THOUGHT.
+    `;
+    
+    const response = await generateResponse(prompt, {
+      maxTokens: 1000,
+      temperature: 0.3 // Lower temp for accuracy
+    });
+    
+    return this.parseFactsFromResponse(response, story);
+  }
+  
+  private async createStoryMemory(story: ExtractedStory): Promise<MemoryEntry> {
+    // Save the complete story as its own memory
+    return {
+      id: generateId(),
+      content: story.content,
+      category: 'STORY',
+      importance: story.importance,
+      isAtomicFact: false,
+      storyArc: story.storyArc,
+      entities: story.entities,
+      relatedChunks: story.relatedChunks,
+      keywords: [
+        ...story.entities.people,
+        ...story.entities.places,
+        ...story.entities.events
+      ]
+    };
+  }
+}
+
+// ==========================================
+// USAGE: How to integrate this
+// ==========================================
+
+// In your document processing endpoint:
+app.post('/api/documents/upload', async (req, res) => {
+  const file = req.file;
+  const text = await extractText(file);
+  
+  // Use the new processor
+  const processor = new IntelligentDocumentProcessor();
+  const stories = await processor.processDocument(text);
+  
+  // Extract facts from stories
+  const factExtractor = new EnhancedFactExtractor();
+  const memories = [];
+  
+  for (const story of stories) {
+    const facts = await factExtractor.extractFactsFromStory(story);
+    memories.push(...facts);
+  }
+  
+  // Save to database
+  for (const memory of memories) {
+    await storage.createMemoryEntry(memory);
+  }
+  
+  res.json({
+    success: true,
+    storiesFound: stories.length,
+    factsExtracted: memories.length,
+    entities: {
+      people: [...new Set(stories.flatMap(s => s.entities.people))],
+      places: [...new Set(stories.flatMap(s => s.entities.places))]
+    }
+  });
+});

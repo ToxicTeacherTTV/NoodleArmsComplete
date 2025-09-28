@@ -355,6 +355,39 @@ export const contentLibraryRelations = relations(contentLibrary, ({ one }) => ({
   }),
 }));
 
+// Topic Escalation System - Tracks how invested Nicky gets in various topics
+export const topicEscalation = pgTable("topic_escalation", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  topic: text("topic").notNull(), // The topic being tracked (normalized)
+  normalizedTopic: text("normalized_topic").notNull(), // Cleaned version for deduplication
+  mentionCount: integer("mention_count").default(1), // How many times mentioned
+  currentIntensity: integer("current_intensity").default(15), // Current emotional intensity (0-100)
+  maxIntensity: integer("max_intensity").default(15), // Highest intensity reached
+  lastMentioned: timestamp("last_mentioned").default(sql`now()`),
+  contexts: text("contexts").array(), // Recent contexts where this was mentioned
+  relatedKeywords: text("related_keywords").array(), // Associated terms
+  emotionalTriggers: text("emotional_triggers").array(), // What aspects trigger intensity
+  escalationRate: integer("escalation_rate").default(15), // How much intensity increases per mention
+  coolingRate: integer("cooling_rate").default(5), // How much intensity decreases over time
+  isPersonal: boolean("is_personal").default(false), // Has this become personal to Nicky?
+  familyHonorInvolved: boolean("family_honor_involved").default(false), // Ultimate escalation
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+}, (table) => {
+  return {
+    // Unique index to prevent duplicate topics per profile
+    topicProfileIdx: uniqueIndex("topic_escalation_profile_topic_idx").on(table.profileId, table.normalizedTopic),
+  };
+});
+
+export const topicEscalationRelations = relations(topicEscalation, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [topicEscalation.profileId],
+    references: [profiles.id],
+  }),
+}));
+
 // Insert schemas for lore system
 export const insertLoreEventSchema = createInsertSchema(loreEvents).omit({
   id: true,
@@ -392,6 +425,12 @@ export const insertContentLibrarySchema = createInsertSchema(contentLibrary).omi
   updatedAt: true,
 });
 
+export const insertTopicEscalationSchema = createInsertSchema(topicEscalation).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types for lore system
 export type LoreEvent = typeof loreEvents.$inferSelect;
 export type InsertLoreEvent = z.infer<typeof insertLoreEventSchema>;
@@ -407,6 +446,10 @@ export type InsertLoreRelationship = z.infer<typeof insertLoreRelationshipSchema
 // Types for content library
 export type ContentLibraryEntry = typeof contentLibrary.$inferSelect;
 export type InsertContentLibraryEntry = z.infer<typeof insertContentLibrarySchema>;
+
+// Types for topic escalation
+export type TopicEscalation = typeof topicEscalation.$inferSelect;
+export type InsertTopicEscalation = z.infer<typeof insertTopicEscalationSchema>;
 
 // Podcast Management System
 export const podcastEpisodes = pgTable("podcast_episodes", {
