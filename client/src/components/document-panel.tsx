@@ -167,6 +167,30 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
     },
   });
 
+  const reprocessDocumentMutation = useMutation({
+    mutationFn: async (documentId: string) => {
+      const response = await apiRequest('POST', `/api/documents/reprocess`, {
+        documentId,
+      });
+      return response.json();
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Document Reprocessed with Enhanced AI",
+        description: `Document reprocessed with intelligent chunking and entity extraction. ${result.factsCreated || 'New insights'} extracted.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Reprocessing Failed",
+        description: error.message || "Failed to reprocess document with enhanced AI",
+        variant: "destructive",
+      });
+    },
+  });
+
   const viewDocument = async (document: Document) => {
     try {
       // WORKAROUND: Direct access to document content since API is intercepted by Vite
@@ -503,10 +527,31 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                             </>
                           )}
                         </Button>
+                        <Button
+                          onClick={() => reprocessDocumentMutation.mutate(doc.id)}
+                          disabled={reprocessDocumentMutation.isPending}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs px-3 py-1.5 border-purple-600 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950"
+                          data-testid={`button-reprocess-${doc.id}`}
+                        >
+                          {reprocessDocumentMutation.isPending ? (
+                            <>
+                              <i className="fas fa-spinner fa-spin mr-1"></i>
+                              Reprocessing...
+                            </>
+                          ) : (
+                            <>
+                              <i className="fas fa-magic mr-1"></i>
+                              Reprocess with Enhanced AI
+                            </>
+                          )}
+                        </Button>
                       </div>
                       <div className="text-xs text-muted-foreground mt-2 space-y-1">
                         <div><strong>Facts:</strong> Patch notes, game info, technical data (goes into Nicky's memory for RAG)</div>
                         <div><strong>Content:</strong> AITA posts, stories, entertainment (saved to content library)</div>
+                        <div><strong>Reprocess:</strong> Upgrade old documents with enhanced AI chunking, entity extraction & story linking</div>
                       </div>
                     </div>
                   )}
