@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, json, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, json, boolean, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -101,6 +101,61 @@ export const memoryEntries = pgTable("memory_entries", {
   embeddingUpdatedAt: timestamp("embedding_updated_at"), // When embedding was last generated
   // PostgreSQL Full-Text Search support - will be added via migration SQL
   searchVector: text("search_vector"), // Will be converted to tsvector via migration
+  
+  // === NEW: Entity linking (nullable for backward compatibility) ===
+  personId: varchar("person_id").references(() => people.id),
+  placeId: varchar("place_id").references(() => places.id),
+  eventId: varchar("event_id").references(() => events.id),
+  
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+// === NEW: Entity Disambiguation System ===
+// Feature flag to enable/disable the entity disambiguation system
+export const entitySystemConfig = pgTable("entity_system_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  isEnabled: boolean("is_enabled").default(false),
+  version: text("version").default("1.0"),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+// The "Dossier" for every character in the universe  
+export const people = pgTable("people", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  canonicalName: text("canonical_name").notNull(), // e.g., "Sal" for all four Sals
+  
+  // The human-readable nickname to tell them apart. Key to solving name collisions.
+  // e.g., "The Butcher", "My No-Good Cousin"
+  disambiguation: text("disambiguation"), 
+  
+  aliases: jsonb("aliases").$type<string[]>(),
+  relationship: text("relationship"),
+  description: text("description"), // AI-generated summary
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+// The "Atlas" for all significant locations
+export const places = pgTable("places", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  canonicalName: text("canonical_name").notNull(),
+  locationType: text("location_type"),
+  description: text("description"),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+// The "Chronicle" for the timeline of events
+export const events = pgTable("events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  canonicalName: text("canonical_name").notNull(),
+  eventDate: text("event_date"), // Text for fuzzy dates like "1998"
+  description: text("description"),
+  isCanonical: boolean("is_canonical").default(true),
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
@@ -178,6 +233,46 @@ export const memoryEntriesRelations = relations(memoryEntries, ({ one }) => ({
     fields: [memoryEntries.profileId],
     references: [profiles.id],
   }),
+  // NEW: Entity relations
+  person: one(people, {
+    fields: [memoryEntries.personId],
+    references: [people.id],
+  }),
+  place: one(places, {
+    fields: [memoryEntries.placeId],
+    references: [places.id],
+  }),
+  event: one(events, {
+    fields: [memoryEntries.eventId],
+    references: [events.id],
+  }),
+}));
+
+// NEW: Entity system relations
+export const entitySystemConfigRelations = relations(entitySystemConfig, ({ }) => ({}));
+
+export const peopleRelations = relations(people, ({ one, many }) => ({
+  profile: one(profiles, {
+    fields: [people.profileId],
+    references: [profiles.id],
+  }),
+  memoryEntries: many(memoryEntries),
+}));
+
+export const placesRelations = relations(places, ({ one, many }) => ({
+  profile: one(profiles, {
+    fields: [places.profileId],
+    references: [profiles.id],
+  }),
+  memoryEntries: many(memoryEntries),
+}));
+
+export const eventsRelations = relations(events, ({ one, many }) => ({
+  profile: one(profiles, {
+    fields: [events.profileId],
+    references: [profiles.id],
+  }),
+  memoryEntries: many(memoryEntries),
 }));
 
 // Insert schemas
@@ -214,6 +309,30 @@ export const insertChaosStateSchema = createInsertSchema(chaosState).omit({
   updatedAt: true,
 });
 
+// NEW: Entity system insert schemas
+export const insertEntitySystemConfigSchema = createInsertSchema(entitySystemConfig).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export const insertPersonSchema = createInsertSchema(people).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPlaceSchema = createInsertSchema(places).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEventSchema = createInsertSchema(events).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type Profile = typeof profiles.$inferSelect;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
@@ -227,6 +346,16 @@ export type MemoryEntry = typeof memoryEntries.$inferSelect;
 export type InsertMemoryEntry = z.infer<typeof insertMemoryEntrySchema>;
 export type ChaosState = typeof chaosState.$inferSelect;
 export type InsertChaosState = z.infer<typeof insertChaosStateSchema>;
+
+// NEW: Entity system types
+export type EntitySystemConfig = typeof entitySystemConfig.$inferSelect;
+export type InsertEntitySystemConfig = z.infer<typeof insertEntitySystemConfigSchema>;
+export type Person = typeof people.$inferSelect;
+export type InsertPerson = z.infer<typeof insertPersonSchema>;
+export type Place = typeof places.$inferSelect;
+export type InsertPlace = z.infer<typeof insertPlaceSchema>;
+export type Event = typeof events.$inferSelect;
+export type InsertEvent = z.infer<typeof insertEventSchema>;
 
 // Emergent Lore System - Nicky's ongoing life events
 export const loreEvents = pgTable("lore_events", {
