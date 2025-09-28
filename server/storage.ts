@@ -505,22 +505,61 @@ export class DatabaseStorage implements IStorage {
   }
 
   async searchMemoryEntries(profileId: string, query: string): Promise<MemoryEntry[]> {
+    if (!query || query.trim().length === 0) return [];
+    
+    // Use PostgreSQL full-text search with ranking
     return await db
-      .select()
+      .select({
+        id: memoryEntries.id,
+        profileId: memoryEntries.profileId,
+        type: memoryEntries.type,
+        content: memoryEntries.content,
+        importance: memoryEntries.importance,
+        retrievalCount: memoryEntries.retrievalCount,
+        successRate: memoryEntries.successRate,
+        lastUsed: memoryEntries.lastUsed,
+        clusterId: memoryEntries.clusterId,
+        keywords: memoryEntries.keywords,
+        relationships: memoryEntries.relationships,
+        qualityScore: memoryEntries.qualityScore,
+        temporalContext: memoryEntries.temporalContext,
+        source: memoryEntries.source,
+        confidence: memoryEntries.confidence,
+        sourceId: memoryEntries.sourceId,
+        supportCount: memoryEntries.supportCount,
+        firstSeenAt: memoryEntries.firstSeenAt,
+        lastSeenAt: memoryEntries.lastSeenAt,
+        contradictionGroupId: memoryEntries.contradictionGroupId,
+        canonicalKey: memoryEntries.canonicalKey,
+        status: memoryEntries.status,
+        isProtected: memoryEntries.isProtected,
+        parentFactId: memoryEntries.parentFactId,
+        isAtomicFact: memoryEntries.isAtomicFact,
+        storyContext: memoryEntries.storyContext,
+        embedding: memoryEntries.embedding,
+        embeddingModel: memoryEntries.embeddingModel,
+        embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
+        searchVector: memoryEntries.searchVector,
+        createdAt: memoryEntries.createdAt,
+        updatedAt: memoryEntries.updatedAt,
+        // Add relevance score from full-text search
+        relevance: sql<number>`ts_rank(${memoryEntries.searchVector}, plainto_tsquery('english', ${query}))`.as('relevance')
+      })
       .from(memoryEntries)
       .where(
         and(
           eq(memoryEntries.profileId, profileId),
-          eq(memoryEntries.status, 'ACTIVE'), // Only search active facts, exclude contradictions
-          like(memoryEntries.content, `%${query}%`)
+          eq(memoryEntries.status, 'ACTIVE'),
+          sql`${memoryEntries.searchVector} @@ plainto_tsquery('english', ${query})`
         )
       )
       .orderBy(
-        desc(memoryEntries.confidence), // Prioritize high confidence first
-        desc(memoryEntries.importance), // Then by importance
-        desc(memoryEntries.supportCount), // Then by support count
-        desc(memoryEntries.retrievalCount) // Finally by usage frequency
-      );
+        sql`ts_rank(${memoryEntries.searchVector}, plainto_tsquery('english', ${query})) DESC`,
+        desc(memoryEntries.confidence),
+        desc(memoryEntries.importance),
+        desc(memoryEntries.supportCount)
+      )
+      .limit(50); // Limit results for performance
   }
 
   async deleteMemoryEntry(id: string): Promise<void> {
@@ -1610,22 +1649,58 @@ export class DatabaseStorage implements IStorage {
   async searchMemoriesByKeywords(profileId: string, keywords: string[], limit = 20): Promise<MemoryEntry[]> {
     if (keywords.length === 0) return [];
     
-    // Build OR conditions for content search
-    const contentConditions = keywords.map(keyword => 
-      like(memoryEntries.content, `%${keyword}%`)
-    );
+    // Combine keywords into a single search query for PostgreSQL full-text search
+    const searchQuery = keywords.join(' | '); // OR search for any keyword
     
     return await db
-      .select()
+      .select({
+        id: memoryEntries.id,
+        profileId: memoryEntries.profileId,
+        type: memoryEntries.type,
+        content: memoryEntries.content,
+        importance: memoryEntries.importance,
+        retrievalCount: memoryEntries.retrievalCount,
+        successRate: memoryEntries.successRate,
+        lastUsed: memoryEntries.lastUsed,
+        clusterId: memoryEntries.clusterId,
+        keywords: memoryEntries.keywords,
+        relationships: memoryEntries.relationships,
+        qualityScore: memoryEntries.qualityScore,
+        temporalContext: memoryEntries.temporalContext,
+        source: memoryEntries.source,
+        confidence: memoryEntries.confidence,
+        sourceId: memoryEntries.sourceId,
+        supportCount: memoryEntries.supportCount,
+        firstSeenAt: memoryEntries.firstSeenAt,
+        lastSeenAt: memoryEntries.lastSeenAt,
+        contradictionGroupId: memoryEntries.contradictionGroupId,
+        canonicalKey: memoryEntries.canonicalKey,
+        status: memoryEntries.status,
+        isProtected: memoryEntries.isProtected,
+        parentFactId: memoryEntries.parentFactId,
+        isAtomicFact: memoryEntries.isAtomicFact,
+        storyContext: memoryEntries.storyContext,
+        embedding: memoryEntries.embedding,
+        embeddingModel: memoryEntries.embeddingModel,
+        embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
+        searchVector: memoryEntries.searchVector,
+        createdAt: memoryEntries.createdAt,
+        updatedAt: memoryEntries.updatedAt,
+        relevance: sql<number>`ts_rank(${memoryEntries.searchVector}, to_tsquery('english', ${searchQuery}))`.as('relevance')
+      })
       .from(memoryEntries)
       .where(
         and(
           eq(memoryEntries.profileId, profileId),
           eq(memoryEntries.status, 'ACTIVE'),
-          or(...contentConditions)
+          sql`${memoryEntries.searchVector} @@ to_tsquery('english', ${searchQuery})`
         )
       )
-      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.confidence))
+      .orderBy(
+        sql`ts_rank(${memoryEntries.searchVector}, to_tsquery('english', ${searchQuery})) DESC`,
+        desc(memoryEntries.importance),
+        desc(memoryEntries.confidence)
+      )
       .limit(limit);
   }
 

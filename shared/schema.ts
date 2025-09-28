@@ -99,6 +99,8 @@ export const memoryEntries = pgTable("memory_entries", {
   embedding: text("embedding"), // JSON array of vector embeddings for semantic search
   embeddingModel: text("embedding_model"), // Model used to generate embedding (e.g., 'gemini-embedding-001')
   embeddingUpdatedAt: timestamp("embedding_updated_at"), // When embedding was last generated
+  // PostgreSQL Full-Text Search support - will be added via migration SQL
+  searchVector: text("search_vector"), // Will be converted to tsvector via migration
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
