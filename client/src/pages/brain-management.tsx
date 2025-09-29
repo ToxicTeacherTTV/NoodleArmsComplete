@@ -1318,7 +1318,7 @@ export default function BrainManagement() {
 
                 {/* Entity Overview */}
                 {entities && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <Card>
                       <CardHeader className="pb-3">
                         <CardTitle className="text-base flex items-center space-x-2">
@@ -1385,6 +1385,213 @@ export default function BrainManagement() {
                       </CardContent>
                     </Card>
                   </div>
+                )}
+
+                {/* Entity Management Tabs */}
+                {entities && (entities.people?.length > 0 || entities.places?.length > 0 || entities.events?.length > 0) && (
+                  <Tabs defaultValue="people" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="people" data-testid="tab-entity-people">
+                        <Users className="h-4 w-4 mr-2" />
+                        People ({entities.people?.length || 0})
+                      </TabsTrigger>
+                      <TabsTrigger value="places" data-testid="tab-entity-places">
+                        <MapPin className="h-4 w-4 mr-2" />
+                        Places ({entities.places?.length || 0})
+                      </TabsTrigger>
+                      <TabsTrigger value="events" data-testid="tab-entity-events">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Events ({entities.events?.length || 0})
+                      </TabsTrigger>
+                    </TabsList>
+
+                    {/* People Tab */}
+                    <TabsContent value="people" className="mt-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>People Entities</CardTitle>
+                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                            Manage individuals that Nicky knows about
+                          </p>
+                        </CardHeader>
+                        <CardContent>
+                          <ScrollArea className="h-[400px]">
+                            <div className="space-y-4">
+                              {entities.people?.map((person: Person) => (
+                                <div key={person.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                                        {person.canonicalName}
+                                      </h3>
+                                      {person.disambiguation && (
+                                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                                          {person.disambiguation}
+                                        </p>
+                                      )}
+                                      {person.aliases && person.aliases.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-2">
+                                          {person.aliases.map((alias, index) => (
+                                            <Badge key={index} variant="outline" className="text-xs">
+                                              {alias}
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {person.relationship && (
+                                        <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
+                                          <strong>Relationship:</strong> {person.relationship}
+                                        </p>
+                                      )}
+                                      {person.description && (
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                                          {person.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div className="flex space-x-2">
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        data-testid={`button-edit-person-${person.id}`}
+                                      >
+                                        Edit
+                                      </Button>
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        className="text-red-600 hover:text-red-700"
+                                        data-testid={`button-delete-person-${person.id}`}
+                                      >
+                                        Delete
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    {/* Places Tab */}
+                    <TabsContent value="places" className="mt-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Place Entities</CardTitle>
+                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                            Manage locations that Nicky knows about
+                          </p>
+                        </CardHeader>
+                        <CardContent>
+                          <ScrollArea className="h-[400px]">
+                            <div className="space-y-4">
+                              {entities.places?.map((place: Place) => (
+                                <div key={place.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                                        {place.canonicalName}
+                                      </h3>
+                                      {place.locationType && (
+                                        <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                                          <strong>Type:</strong> {place.locationType}
+                                        </p>
+                                      )}
+                                      {place.description && (
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                                          {place.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div className="flex space-x-2">
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        data-testid={`button-edit-place-${place.id}`}
+                                      >
+                                        Edit
+                                      </Button>
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        className="text-red-600 hover:text-red-700"
+                                        data-testid={`button-delete-place-${place.id}`}
+                                      >
+                                        Delete
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    {/* Events Tab */}
+                    <TabsContent value="events" className="mt-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Event Entities</CardTitle>
+                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                            Manage events that Nicky knows about
+                          </p>
+                        </CardHeader>
+                        <CardContent>
+                          <ScrollArea className="h-[400px]">
+                            <div className="space-y-4">
+                              {entities.events?.map((event: Event) => (
+                                <div key={event.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                                        {event.canonicalName}
+                                      </h3>
+                                      {event.eventDate && (
+                                        <p className="text-sm text-purple-600 dark:text-purple-400 mt-1">
+                                          <strong>Date:</strong> {event.eventDate}
+                                        </p>
+                                      )}
+                                      {event.isCanonical && (
+                                        <Badge variant="default" className="mt-2">
+                                          Canonical Event
+                                        </Badge>
+                                      )}
+                                      {event.description && (
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                                          {event.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div className="flex space-x-2">
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        data-testid={`button-edit-event-${event.id}`}
+                                      >
+                                        Edit
+                                      </Button>
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        className="text-red-600 hover:text-red-700"
+                                        data-testid={`button-delete-event-${event.id}`}
+                                      >
+                                        Delete
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+                  </Tabs>
                 )}
               </CardContent>
             </Card>
