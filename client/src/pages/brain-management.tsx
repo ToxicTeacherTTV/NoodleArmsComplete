@@ -388,6 +388,65 @@ export default function BrainManagement() {
     },
   });
 
+  // Entity editing mutations
+  const updateEntityMutation = useMutation({
+    mutationFn: async ({ type, id, data }: { type: 'person' | 'place' | 'event'; id: string; data: any }) => {
+      const endpoint = type === 'person' ? 'people' : type === 'place' ? 'places' : 'events';
+      const response = await fetch(`/api/entities/${endpoint}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to update ${type}`);
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/entities'] });
+      setShowEntityEditDialog(false);
+      setEditingEntity(null);
+      toast({
+        title: "Entity Updated",
+        description: "Entity has been updated successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update entity",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteEntityMutation = useMutation({
+    mutationFn: async ({ type, id }: { type: 'person' | 'place' | 'event'; id: string }) => {
+      const endpoint = type === 'person' ? 'people' : type === 'place' ? 'places' : 'events';
+      const response = await fetch(`/api/entities/${endpoint}/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to delete ${type}`);
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/entities'] });
+      toast({
+        title: "Entity Deleted",
+        description: "Entity has been deleted successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Failed to delete entity",
+        variant: "destructive",
+      });
+    },
+  });
+
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("recent-memories");
@@ -417,6 +476,20 @@ export default function BrainManagement() {
   const [duplicateGroups, setDuplicateGroups] = useState<any[]>([]);
   const [isLoadingDuplicates, setIsLoadingDuplicates] = useState(false);
   const [autoMergeInProgress, setAutoMergeInProgress] = useState(false);
+
+  // Entity editing state
+  const [editingEntity, setEditingEntity] = useState<{type: 'person' | 'place' | 'event', data: any} | null>(null);
+  const [showEntityEditDialog, setShowEntityEditDialog] = useState(false);
+  const [entityEditForm, setEntityEditForm] = useState({
+    canonicalName: '',
+    disambiguation: '',
+    aliases: [''],
+    relationship: '',
+    description: '',
+    locationType: '',
+    eventDate: '',
+    isCanonical: false
+  });
 
   // Profile editing state
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -468,6 +541,84 @@ export default function BrainManagement() {
 
   const handleProfileSave = () => {
     updateProfileMutation.mutate(profileForm);
+  };
+
+  // Entity editing handlers
+  const openEntityEditDialog = (type: 'person' | 'place' | 'event', data: any) => {
+    setEditingEntity({ type, data });
+    
+    // Pre-populate form with current data
+    setEntityEditForm({
+      canonicalName: data.canonicalName || '',
+      disambiguation: data.disambiguation || '',
+      aliases: data.aliases?.length > 0 ? data.aliases : [''],
+      relationship: data.relationship || '',
+      description: data.description || '',
+      locationType: data.locationType || '',
+      eventDate: data.eventDate || '',
+      isCanonical: data.isCanonical || false
+    });
+    
+    setShowEntityEditDialog(true);
+  };
+
+  const handleEntitySave = () => {
+    if (!editingEntity) return;
+
+    const formData: any = {
+      canonicalName: entityEditForm.canonicalName,
+      disambiguation: entityEditForm.disambiguation,
+      aliases: entityEditForm.aliases.filter(alias => alias.trim() !== ''),
+      description: entityEditForm.description,
+    };
+
+    // Add type-specific fields
+    if (editingEntity.type === 'person') {
+      formData.relationship = entityEditForm.relationship;
+    } else if (editingEntity.type === 'place') {
+      formData.locationType = entityEditForm.locationType;
+    } else if (editingEntity.type === 'event') {
+      formData.eventDate = entityEditForm.eventDate;
+      formData.isCanonical = entityEditForm.isCanonical;
+    }
+
+    updateEntityMutation.mutate({
+      type: editingEntity.type,
+      id: editingEntity.data.id,
+      data: formData
+    });
+  };
+
+  const handleEntityDelete = (type: 'person' | 'place' | 'event', id: string, name: string) => {
+    if (confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+      deleteEntityMutation.mutate({ type, id });
+    }
+  };
+
+  const addAliasField = () => {
+    setEntityEditForm({
+      ...entityEditForm,
+      aliases: [...entityEditForm.aliases, '']
+    });
+  };
+
+  const updateAlias = (index: number, value: string) => {
+    const newAliases = [...entityEditForm.aliases];
+    newAliases[index] = value;
+    setEntityEditForm({
+      ...entityEditForm,
+      aliases: newAliases
+    });
+  };
+
+  const removeAlias = (index: number) => {
+    if (entityEditForm.aliases.length > 1) {
+      const newAliases = entityEditForm.aliases.filter((_, i) => i !== index);
+      setEntityEditForm({
+        ...entityEditForm,
+        aliases: newAliases
+      });
+    }
   };
 
   // Find duplicates mutation
@@ -1453,6 +1604,7 @@ export default function BrainManagement() {
                                       <Button 
                                         size="sm" 
                                         variant="outline"
+                                        onClick={() => openEntityEditDialog('person', person)}
                                         data-testid={`button-edit-person-${person.id}`}
                                       >
                                         Edit
@@ -1461,6 +1613,7 @@ export default function BrainManagement() {
                                         size="sm" 
                                         variant="outline" 
                                         className="text-red-600 hover:text-red-700"
+                                        onClick={() => handleEntityDelete('person', person.id, person.canonicalName)}
                                         data-testid={`button-delete-person-${person.id}`}
                                       >
                                         Delete
@@ -1509,6 +1662,7 @@ export default function BrainManagement() {
                                       <Button 
                                         size="sm" 
                                         variant="outline"
+                                        onClick={() => openEntityEditDialog('place', place)}
                                         data-testid={`button-edit-place-${place.id}`}
                                       >
                                         Edit
@@ -1517,6 +1671,7 @@ export default function BrainManagement() {
                                         size="sm" 
                                         variant="outline" 
                                         className="text-red-600 hover:text-red-700"
+                                        onClick={() => handleEntityDelete('place', place.id, place.canonicalName)}
                                         data-testid={`button-delete-place-${place.id}`}
                                       >
                                         Delete
@@ -1570,6 +1725,7 @@ export default function BrainManagement() {
                                       <Button 
                                         size="sm" 
                                         variant="outline"
+                                        onClick={() => openEntityEditDialog('event', event)}
                                         data-testid={`button-edit-event-${event.id}`}
                                       >
                                         Edit
@@ -1578,6 +1734,7 @@ export default function BrainManagement() {
                                         size="sm" 
                                         variant="outline" 
                                         className="text-red-600 hover:text-red-700"
+                                        onClick={() => handleEntityDelete('event', event.id, event.canonicalName)}
                                         data-testid={`button-delete-event-${event.id}`}
                                       >
                                         Delete
@@ -2692,6 +2849,161 @@ export default function BrainManagement() {
               className="bg-primary hover:bg-primary/90"
             >
               {updateProfileMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Changes'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Entity Edit Modal */}
+      <Dialog open={showEntityEditDialog} onOpenChange={setShowEntityEditDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Edit {editingEntity?.type === 'person' ? 'Person' : editingEntity?.type === 'place' ? 'Place' : 'Event'}
+            </DialogTitle>
+            <DialogDescription>
+              Update the information for this {editingEntity?.type}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Canonical Name */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Name *</label>
+              <Input
+                value={entityEditForm.canonicalName}
+                onChange={(e) => setEntityEditForm(prev => ({ ...prev, canonicalName: e.target.value }))}
+                placeholder="Enter the canonical name..."
+                data-testid="input-entity-name"
+              />
+            </div>
+
+            {/* Disambiguation */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Disambiguation</label>
+              <Input
+                value={entityEditForm.disambiguation}
+                onChange={(e) => setEntityEditForm(prev => ({ ...prev, disambiguation: e.target.value }))}
+                placeholder="Brief description to distinguish from others..."
+                data-testid="input-entity-disambiguation"
+              />
+            </div>
+
+            {/* Aliases */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Aliases</label>
+              <div className="space-y-2">
+                {entityEditForm.aliases.map((alias, index) => (
+                  <div key={index} className="flex gap-2">
+                    <Input
+                      value={alias}
+                      onChange={(e) => updateAlias(index, e.target.value)}
+                      placeholder="Alternative name or nickname..."
+                      data-testid={`input-alias-${index}`}
+                    />
+                    {entityEditForm.aliases.length > 1 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => removeAlias(index)}
+                        data-testid={`button-remove-alias-${index}`}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={addAliasField}
+                  data-testid="button-add-alias"
+                >
+                  Add Alias
+                </Button>
+              </div>
+            </div>
+
+            {/* Type-specific fields */}
+            {editingEntity?.type === 'person' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Relationship</label>
+                <Input
+                  value={entityEditForm.relationship}
+                  onChange={(e) => setEntityEditForm(prev => ({ ...prev, relationship: e.target.value }))}
+                  placeholder="Relationship to Nicky or role..."
+                  data-testid="input-person-relationship"
+                />
+              </div>
+            )}
+
+            {editingEntity?.type === 'place' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Location Type</label>
+                <Input
+                  value={entityEditForm.locationType}
+                  onChange={(e) => setEntityEditForm(prev => ({ ...prev, locationType: e.target.value }))}
+                  placeholder="Type of location (city, restaurant, etc.)..."
+                  data-testid="input-place-type"
+                />
+              </div>
+            )}
+
+            {editingEntity?.type === 'event' && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Event Date</label>
+                  <Input
+                    value={entityEditForm.eventDate}
+                    onChange={(e) => setEntityEditForm(prev => ({ ...prev, eventDate: e.target.value }))}
+                    placeholder="Date or time period..."
+                    data-testid="input-event-date"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    checked={entityEditForm.isCanonical}
+                    onCheckedChange={(checked) => setEntityEditForm(prev => ({ ...prev, isCanonical: !!checked }))}
+                    data-testid="checkbox-event-canonical"
+                  />
+                  <label className="text-sm">Mark as canonical event</label>
+                </div>
+              </>
+            )}
+
+            {/* Description */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Description</label>
+              <Textarea
+                value={entityEditForm.description}
+                onChange={(e) => setEntityEditForm(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Additional details or context..."
+                className="h-24"
+                data-testid="input-entity-description"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowEntityEditDialog(false)}
+              disabled={updateEntityMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEntitySave}
+              disabled={updateEntityMutation.isPending || !entityEditForm.canonicalName.trim()}
+            >
+              {updateEntityMutation.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Saving...
