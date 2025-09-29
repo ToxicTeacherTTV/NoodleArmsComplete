@@ -100,7 +100,7 @@ export const memoryEntries = pgTable("memory_entries", {
   embeddingModel: text("embedding_model"), // Model used to generate embedding (e.g., 'gemini-embedding-001')
   embeddingUpdatedAt: timestamp("embedding_updated_at"), // When embedding was last generated
   // PostgreSQL Full-Text Search support - will be added via migration SQL
-  searchVector: text("search_vector"), // Will be converted to tsvector via migration
+  searchVector: text("search_vector"), // Keep as text for now to prevent data loss
   
   // === NEW: Entity linking (nullable for backward compatibility) ===
   personId: varchar("person_id").references(() => people.id),
