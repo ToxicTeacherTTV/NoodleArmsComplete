@@ -3454,16 +3454,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getProfileEvents(profile.id)
       ]);
 
+      // Transform database entities to match extraction service interface
+      const transformedPeople = people.map(p => ({
+        id: p.id,
+        canonicalName: p.canonicalName,
+        disambiguation: p.disambiguation ?? undefined,
+        aliases: p.aliases ?? undefined
+      }));
+      const transformedPlaces = places.map(p => ({
+        id: p.id,
+        canonicalName: p.canonicalName,
+        locationType: p.locationType ?? undefined,
+        description: p.description ?? undefined
+      }));
+      const transformedEvents = events.map(e => ({
+        id: e.id,
+        canonicalName: e.canonicalName,
+        eventDate: e.eventDate ?? undefined,
+        description: e.description ?? undefined
+      }));
+
       // Extract entities using AI
       const extractionResult = await entityExtraction.extractEntitiesFromMemory(
         memoryContent,
-        { people, places, events }
+        { 
+          people: transformedPeople, 
+          places: transformedPlaces, 
+          events: transformedEvents 
+        }
       );
 
       // Run disambiguation
       const disambiguationResult = await entityExtraction.disambiguateEntities(
         extractionResult.entities,
-        { people, places, events }
+        { 
+          people: transformedPeople, 
+          places: transformedPlaces, 
+          events: transformedEvents 
+        }
       );
 
       res.json({
@@ -3490,15 +3518,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'memoryIds array is required' });
       }
 
-      // Get memory entries
-      const memories = await Promise.all(
-        memoryIds.map(async (id: string) => {
-          const memory = await storage.getMemoryEntry(id);
-          return memory ? { id: memory.id, content: memory.content } : null;
-        })
-      );
-
-      const validMemories = memories.filter(m => m !== null);
+      // Get memory entries by filtering from all entries
+      const allMemories = await storage.getMemoryEntries(profile.id, 1000);
+      const validMemories = allMemories
+        .filter(memory => memoryIds.includes(memory.id))
+        .map(memory => ({ id: memory.id, content: memory.content }));
 
       // Get existing entities for context
       const [people, places, events] = await Promise.all([
@@ -3507,10 +3531,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getProfileEvents(profile.id)
       ]);
 
+      // Transform database entities to match extraction service interface
+      const transformedPeople = people.map(p => ({
+        id: p.id,
+        canonicalName: p.canonicalName,
+        disambiguation: p.disambiguation ?? undefined,
+        aliases: p.aliases ?? undefined
+      }));
+      const transformedPlaces = places.map(p => ({
+        id: p.id,
+        canonicalName: p.canonicalName,
+        locationType: p.locationType ?? undefined,
+        description: p.description ?? undefined
+      }));
+      const transformedEvents = events.map(e => ({
+        id: e.id,
+        canonicalName: e.canonicalName,
+        eventDate: e.eventDate ?? undefined,
+        description: e.description ?? undefined
+      }));
+
       // Extract entities from all memories
       const extractionResults = await entityExtraction.extractEntitiesFromMultipleMemories(
         validMemories,
-        { people, places, events }
+        { 
+          people: transformedPeople, 
+          places: transformedPlaces, 
+          events: transformedEvents 
+        }
       );
 
       res.json({

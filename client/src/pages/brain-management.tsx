@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield, Copy, Merge } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield, Copy, Merge, Users, MapPin, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ProtectedFactsManager } from "@/components/protected-facts-manager";
@@ -65,6 +66,17 @@ export default function BrainManagement() {
 
   const { data: documents } = useQuery({
     queryKey: ['/api/documents'],
+    refetchInterval: false,
+  });
+
+  // Entity system queries
+  const { data: entityConfig } = useQuery({
+    queryKey: ['/api/entities/config'],
+    refetchInterval: false,
+  });
+
+  const { data: entities } = useQuery({
+    queryKey: ['/api/entities'],
     refetchInterval: false,
   });
 
@@ -268,6 +280,58 @@ export default function BrainManagement() {
       toast({
         title: "Scan Failed",
         description: error.message || "Failed to scan for contradictions",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Entity system mutations
+  const toggleEntitySystemMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      return apiRequest('/api/entities/config', {
+        method: 'POST',
+        body: { enabled }
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/entities/config'] });
+      toast({
+        title: entityConfig?.isEnabled ? "Entity System Disabled" : "Entity System Enabled",
+        description: entityConfig?.isEnabled 
+          ? "Entity detection and linking is now disabled" 
+          : "Entity detection and linking is now enabled",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Toggle Failed",
+        description: error.message || "Failed to toggle entity system",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const extractEntitiesFromMemoriesMutation = useMutation({
+    mutationFn: async () => {
+      const memories = await apiRequest('/api/memory/entries');
+      const memoryIds = memories.slice(0, 20).map((m: any) => m.id);
+      
+      return apiRequest('/api/entities/batch-extract', {
+        method: 'POST',
+        body: { memoryIds }
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/entities'] });
+      toast({
+        title: "Entity Extraction Complete",
+        description: `Extracted ${data.totalEntitiesDetected} entities from ${data.processedMemories} memories`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Extraction Failed",
+        description: error.message || "Failed to extract entities",
         variant: "destructive",
       });
     },
@@ -1031,6 +1095,9 @@ export default function BrainManagement() {
             <TabsTrigger value="identity" data-testid="tab-identity" className="text-xs">
               🎭 Identity
             </TabsTrigger>
+            <TabsTrigger value="entities" data-testid="tab-entities" className="text-xs">
+              👥 Entities
+            </TabsTrigger>
             <TabsTrigger value="discord" data-testid="tab-discord" className="text-xs">
               🤖 Discord
             </TabsTrigger>
@@ -1123,6 +1190,151 @@ export default function BrainManagement() {
                   onOpenProfileManager={openProfileManager}
                   onResetChat={() => {/* This could be moved or handled differently in brain management */}}
                 />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Entity Management */}
+          <TabsContent value="entities" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Users className="h-5 w-5" />
+                  <span>Entity Management</span>
+                </CardTitle>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Manage people, places, and events that Nicky knows about with AI-powered entity detection
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Entity System Toggle */}
+                <Card>
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-lg flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Brain className="h-4 w-4" />
+                        <span>Entity System</span>
+                        <Badge variant={entityConfig?.isEnabled ? "default" : "secondary"}>
+                          {entityConfig?.isEnabled ? "Enabled" : "Disabled"}
+                        </Badge>
+                      </div>
+                      <Switch
+                        checked={entityConfig?.isEnabled || false}
+                        onCheckedChange={(enabled) => toggleEntitySystemMutation.mutate(enabled)}
+                        disabled={toggleEntitySystemMutation.isPending}
+                        data-testid="toggle-entity-system"
+                      />
+                    </CardTitle>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      {entityConfig?.isEnabled 
+                        ? "Entity detection and disambiguation is active. New memories will automatically identify people, places, and events."
+                        : "Entity system is disabled. Enable to automatically detect and link entities in memories."}
+                    </p>
+                  </CardHeader>
+                </Card>
+
+                {/* Entity Extraction */}
+                {entityConfig?.isEnabled && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Extract Entities from Existing Memories</CardTitle>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        Analyze your existing memories to detect and organize people, places, and events
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <Button 
+                        onClick={() => extractEntitiesFromMemoriesMutation.mutate()}
+                        disabled={extractEntitiesFromMemoriesMutation.isPending}
+                        className="w-full"
+                        data-testid="button-extract-entities"
+                      >
+                        {extractEntitiesFromMemoriesMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Extracting Entities...
+                          </>
+                        ) : (
+                          <>
+                            <Search className="h-4 w-4 mr-2" />
+                            Extract Entities from Recent Memories
+                          </>
+                        )}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Entity Overview */}
+                {entities && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center space-x-2">
+                          <Users className="h-4 w-4 text-blue-500" />
+                          <span>People</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-blue-500">
+                          {entities.people?.length || 0}
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Individuals mentioned in memories
+                        </p>
+                        {entities.people?.slice(0, 3).map((person: any) => (
+                          <div key={person.id} className="text-xs text-gray-500 mt-1">
+                            • {person.canonicalName} {person.disambiguation && `(${person.disambiguation})`}
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center space-x-2">
+                          <MapPin className="h-4 w-4 text-green-500" />
+                          <span>Places</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-green-500">
+                          {entities.places?.length || 0}
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Locations mentioned in memories
+                        </p>
+                        {entities.places?.slice(0, 3).map((place: any) => (
+                          <div key={place.id} className="text-xs text-gray-500 mt-1">
+                            • {place.canonicalName} {place.locationType && `(${place.locationType})`}
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center space-x-2">
+                          <Calendar className="h-4 w-4 text-purple-500" />
+                          <span>Events</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-purple-500">
+                          {entities.events?.length || 0}
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Events mentioned in memories
+                        </p>
+                        {entities.events?.slice(0, 3).map((event: any) => (
+                          <div key={event.id} className="text-xs text-gray-500 mt-1">
+                            • {event.canonicalName} {event.eventDate && `(${event.eventDate})`}
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
