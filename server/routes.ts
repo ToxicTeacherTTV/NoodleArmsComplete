@@ -3505,6 +3505,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get memories for a specific person
+  app.get('/api/entities/people/:id/memories', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const memories = await storage.getMemoriesForPerson(req.params.id, profile.id);
+      res.json(memories);
+    } catch (error) {
+      console.error('Error fetching memories for person:', error);
+      res.status(500).json({ error: 'Failed to fetch memories for person' });
+    }
+  });
+
+  // Get memories for a specific place
+  app.get('/api/entities/places/:id/memories', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const memories = await storage.getMemoriesForPlace(req.params.id, profile.id);
+      res.json(memories);
+    } catch (error) {
+      console.error('Error fetching memories for place:', error);
+      res.status(500).json({ error: 'Failed to fetch memories for place' });
+    }
+  });
+
+  // Get memories for a specific event
+  app.get('/api/entities/events/:id/memories', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const memories = await storage.getMemoriesForEvent(req.params.id, profile.id);
+      res.json(memories);
+    } catch (error) {
+      console.error('Error fetching memories for event:', error);
+      res.status(500).json({ error: 'Failed to fetch memories for event' });
+    }
+  });
+
   // Batch extract entities from multiple memories
   app.post('/api/entities/batch-extract', async (req, res) => {
     try {

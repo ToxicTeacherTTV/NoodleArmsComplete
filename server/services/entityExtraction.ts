@@ -284,6 +284,97 @@ Be conservative with matches - only match if confidence > 0.7`;
   }
 
   /**
+   * Process memory content and return entity IDs for linking
+   * This creates new entities if needed and returns the IDs for database linking
+   */
+  async processMemoryForEntityLinking(
+    memoryContent: string,
+    profileId: string,
+    storage: any // Storage interface for creating entities
+  ): Promise<{
+    personId?: string;
+    placeId?: string;
+    eventId?: string;
+    entitiesCreated: number;
+  }> {
+    try {
+      // Get existing entities from database
+      const existingEntities = await storage.getAllEntities();
+      
+      // Extract entities from memory content
+      const extraction = await this.extractEntitiesFromMemory(memoryContent, existingEntities);
+      
+      if (extraction.entities.length === 0) {
+        return { entitiesCreated: 0 };
+      }
+
+      // Disambiguate against existing entities
+      const disambiguation = await this.disambiguateEntities(extraction.entities, existingEntities);
+      
+      let personId: string | undefined;
+      let placeId: string | undefined;  
+      let eventId: string | undefined;
+      let entitiesCreated = 0;
+
+      // Process matches (link to existing entities)
+      for (const match of disambiguation.matches) {
+        if (match.confidence > 0.7) { // High confidence threshold
+          if (match.matchType === 'PERSON' && !personId) {
+            personId = match.existingEntityId;
+          } else if (match.matchType === 'PLACE' && !placeId) {
+            placeId = match.existingEntityId;
+          } else if (match.matchType === 'EVENT' && !eventId) {
+            eventId = match.existingEntityId;
+          }
+        }
+      }
+
+      // Process new entities (create them in database)
+      for (const newEntity of disambiguation.newEntities) {
+        try {
+          let createdEntity;
+          
+          if (newEntity.type === 'PERSON' && !personId) {
+            createdEntity = await storage.addPersonEntity(profileId, {
+              canonicalName: newEntity.name,
+              disambiguation: newEntity.disambiguation,
+              aliases: newEntity.aliases,
+              relationship: '', // Will be filled by AI context
+              description: newEntity.context
+            });
+            personId = createdEntity.id;
+            entitiesCreated++;
+          } else if (newEntity.type === 'PLACE' && !placeId) {
+            createdEntity = await storage.addPlaceEntity(profileId, {
+              canonicalName: newEntity.name,
+              locationType: newEntity.disambiguation,
+              description: newEntity.context
+            });
+            placeId = createdEntity.id;
+            entitiesCreated++;
+          } else if (newEntity.type === 'EVENT' && !eventId) {
+            createdEntity = await storage.addEventEntity(profileId, {
+              canonicalName: newEntity.name,
+              eventDate: newEntity.disambiguation,
+              description: newEntity.context,
+              isCanonical: true
+            });
+            eventId = createdEntity.id;
+            entitiesCreated++;
+          }
+        } catch (error) {
+          console.error(`Error creating ${newEntity.type} entity:`, error);
+        }
+      }
+
+      return { personId, placeId, eventId, entitiesCreated };
+    } catch (error) {
+      console.error("Error processing memory for entity linking:", error);
+      return { entitiesCreated: 0 };
+    }
+  }
+
+  /**
    * Bulk process multiple memories for entity extraction
    */
   async extractEntitiesFromMultipleMemories(

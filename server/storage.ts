@@ -265,6 +265,11 @@ export interface IStorage {
     place?: Place;
     event?: Event;
   }>>;
+  
+  // Get memories for specific entities
+  getMemoriesForPerson(personId: string, profileId: string): Promise<MemoryEntry[]>;
+  getMemoriesForPlace(placeId: string, profileId: string): Promise<MemoryEntry[]>;
+  getMemoriesForEvent(eventId: string, profileId: string): Promise<MemoryEntry[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2119,6 +2124,49 @@ export class DatabaseStorage implements IStorage {
       place: row.place || undefined,
       event: row.event || undefined,
     }));
+  }
+
+  // Get memories for specific entities
+  async getMemoriesForPerson(personId: string, profileId: string): Promise<MemoryEntry[]> {
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.personId, personId),
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
+  }
+
+  async getMemoriesForPlace(placeId: string, profileId: string): Promise<MemoryEntry[]> {
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.placeId, placeId),
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
+  }
+
+  async getMemoriesForEvent(eventId: string, profileId: string): Promise<MemoryEntry[]> {
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.eventId, eventId),
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
   }
 }
 

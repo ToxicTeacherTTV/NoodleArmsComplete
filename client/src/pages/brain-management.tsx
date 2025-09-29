@@ -480,6 +480,22 @@ export default function BrainManagement() {
   // Entity editing state
   const [editingEntity, setEditingEntity] = useState<{type: 'person' | 'place' | 'event', data: any} | null>(null);
   const [showEntityEditDialog, setShowEntityEditDialog] = useState(false);
+  const [showEntityMemoriesDialog, setShowEntityMemoriesDialog] = useState(false);
+  const [selectedEntityForMemories, setSelectedEntityForMemories] = useState<{id: string, name: string, type: 'person' | 'place' | 'event'} | null>(null);
+
+  // Query to fetch memories for selected entity
+  const { data: entityMemories, isLoading: entityMemoriesLoading } = useQuery({
+    queryKey: ['/api/entities', selectedEntityForMemories?.type, selectedEntityForMemories?.id, 'memories'],
+    queryFn: async () => {
+      if (!selectedEntityForMemories) return [];
+      const endpoint = selectedEntityForMemories.type === 'person' ? 'people' :
+                      selectedEntityForMemories.type === 'place' ? 'places' : 'events';
+      const response = await fetch(`/api/entities/${endpoint}/${selectedEntityForMemories.id}/memories`);
+      if (!response.ok) throw new Error('Failed to fetch entity memories');
+      return response.json();
+    },
+    enabled: !!selectedEntityForMemories && showEntityMemoriesDialog,
+  });
   const [entityEditForm, setEntityEditForm] = useState({
     canonicalName: '',
     disambiguation: '',
@@ -593,6 +609,11 @@ export default function BrainManagement() {
     if (confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
       deleteEntityMutation.mutate({ type, id });
     }
+  };
+
+  const showEntityMemories = (type: 'person' | 'place' | 'event', id: string, name: string) => {
+    setSelectedEntityForMemories({ id, name, type });
+    setShowEntityMemoriesDialog(true);
   };
 
   const addAliasField = () => {
@@ -1604,6 +1625,15 @@ export default function BrainManagement() {
                                       <Button 
                                         size="sm" 
                                         variant="outline"
+                                        className="text-blue-600 hover:text-blue-700"
+                                        onClick={() => showEntityMemories('person', person.id, person.canonicalName)}
+                                        data-testid={`button-memories-person-${person.id}`}
+                                      >
+                                        Show Memories
+                                      </Button>
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
                                         onClick={() => openEntityEditDialog('person', person)}
                                         data-testid={`button-edit-person-${person.id}`}
                                       >
@@ -1659,6 +1689,15 @@ export default function BrainManagement() {
                                       )}
                                     </div>
                                     <div className="flex space-x-2">
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        className="text-blue-600 hover:text-blue-700"
+                                        onClick={() => showEntityMemories('place', place.id, place.canonicalName)}
+                                        data-testid={`button-memories-place-${place.id}`}
+                                      >
+                                        Show Memories
+                                      </Button>
                                       <Button 
                                         size="sm" 
                                         variant="outline"
@@ -1722,6 +1761,15 @@ export default function BrainManagement() {
                                       )}
                                     </div>
                                     <div className="flex space-x-2">
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        className="text-blue-600 hover:text-blue-700"
+                                        onClick={() => showEntityMemories('event', event.id, event.canonicalName)}
+                                        data-testid={`button-memories-event-${event.id}`}
+                                      >
+                                        Show Memories
+                                      </Button>
                                       <Button 
                                         size="sm" 
                                         variant="outline"
@@ -3011,6 +3059,79 @@ export default function BrainManagement() {
               ) : (
                 'Save Changes'
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Entity Memories Modal */}
+      <Dialog open={showEntityMemoriesDialog} onOpenChange={setShowEntityMemoriesDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Memories for {selectedEntityForMemories?.name}
+            </DialogTitle>
+            <DialogDescription>
+              All memories that mention this {selectedEntityForMemories?.type}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {entityMemoriesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                Loading memories...
+              </div>
+            ) : entityMemories && entityMemories.length > 0 ? (
+              <ScrollArea className="h-[400px]">
+                <div className="space-y-3">
+                  {entityMemories.map((memory: any) => (
+                    <div 
+                      key={memory.id} 
+                      className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <Badge variant="secondary" className="text-xs">
+                            {memory.type}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            Importance: {memory.importance}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(memory.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        {memory.content}
+                      </p>
+                      {memory.source && (
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                          Source: {memory.source}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Brain className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>No memories found for this {selectedEntityForMemories?.type}.</p>
+                <p className="text-sm mt-2">
+                  Memories will appear here when they mention "{selectedEntityForMemories?.name}".
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowEntityMemoriesDialog(false)}
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
