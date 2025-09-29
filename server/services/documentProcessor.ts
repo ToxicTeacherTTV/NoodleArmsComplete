@@ -5,6 +5,7 @@ import mammoth from 'mammoth';
 import { geminiService } from './gemini';
 import { contradictionDetector } from './contradictionDetector';
 import { conversationParser } from './conversationParser';
+import { entityExtraction } from './entityExtraction';
 import natural from 'natural';
 import { encoding_for_model } from 'tiktoken';
 
@@ -323,6 +324,23 @@ class DocumentProcessor {
         if (storyFact?.id) {
           storyIds.push(storyFact.id);
           console.log(`📚 Stored story: ${story.content.substring(0, 60)}...`);
+          
+          // 🔗 NEW: Extract and link entities for this story
+          try {
+            const entityLinks = await entityExtraction.processMemoryForEntityLinking(
+              story.content, 
+              profileId, 
+              storage
+            );
+            
+            if (entityLinks.personId || entityLinks.placeId || entityLinks.eventId) {
+              await storage.linkMemoryToEntities(storyFact.id, entityLinks);
+              console.log(`🔗 Linked story to ${entityLinks.entitiesCreated} entities`);
+            }
+          } catch (error) {
+            console.error(`❌ Failed to link entities for story:`, error);
+            // Continue processing - don't fail the whole reprocessing
+          }
         } else {
           console.warn(`⚠️ Failed to store story, skipping atomic fact extraction for this story`);
         }
@@ -350,7 +368,7 @@ class DocumentProcessor {
           for (const atomicFact of atomicFacts) {
             const atomicCanonicalKey = this.generateCanonicalKey(atomicFact.content);
             
-            await storage.addMemoryEntry({
+            const atomicMemory = await storage.addMemoryEntry({
               profileId,
               type: 'ATOMIC',
               content: atomicFact.content,
@@ -365,6 +383,25 @@ class DocumentProcessor {
             });
             
             totalAtomicFacts++;
+            
+            // 🔗 NEW: Extract and link entities for this atomic fact
+            if (atomicMemory?.id) {
+              try {
+                const entityLinks = await entityExtraction.processMemoryForEntityLinking(
+                  atomicFact.content, 
+                  profileId, 
+                  storage
+                );
+                
+                if (entityLinks.personId || entityLinks.placeId || entityLinks.eventId) {
+                  await storage.linkMemoryToEntities(atomicMemory.id, entityLinks);
+                  console.log(`🔗 Linked atomic fact to ${entityLinks.entitiesCreated} entities`);
+                }
+              } catch (error) {
+                console.error(`❌ Failed to link entities for atomic fact:`, error);
+                // Continue processing - don't fail the whole reprocessing
+              }
+            }
           }
         } catch (error) {
           console.error(`❌ Failed to extract atomic facts from story ${i + 1}:`, error);
