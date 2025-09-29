@@ -1308,7 +1308,7 @@ export default function BrainManagement() {
 
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="flex w-full overflow-x-auto pb-2">
+          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 2xl:grid-cols-9 gap-1 h-auto p-1">
             <TabsTrigger value="recent-memories" data-testid="tab-recent-memories" className="text-xs">
               📝 Recent
             </TabsTrigger>
