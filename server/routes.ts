@@ -21,6 +21,7 @@ import { storyReconstructor } from './services/storyReconstructor';
 import { ContentCollectionManager } from './services/ingestion/ContentCollectionManager';
 import { adGenerationService } from './services/AdGenerationService';
 import { podcastFactExtractor } from './services/podcastFactExtractor';
+import { entityExtraction } from './services/entityExtraction';
 import { insertAutomatedSourceSchema, insertPendingContentSchema, insertAdTemplateSchema, insertPrerollAdSchema } from '@shared/schema';
 import multer from "multer";
 import { z } from "zod";
@@ -3230,6 +3231,336 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('❌ Failed to approve reconstructions:', error);
       res.status(500).json({ error: 'Failed to approve story reconstructions' });
+    }
+  });
+
+  // ===== ENTITY MANAGEMENT ROUTES =====
+
+  // Get entity system status/config
+  app.get('/api/entities/config', async (req, res) => {
+    try {
+      const config = await storage.getEntitySystemConfig();
+      res.json(config || { isEnabled: false });
+    } catch (error) {
+      console.error('Error fetching entity config:', error);
+      res.status(500).json({ error: 'Failed to fetch entity system config' });
+    }
+  });
+
+  // Toggle entity system on/off
+  app.post('/api/entities/config', async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'enabled field must be boolean' });
+      }
+
+      const config = await storage.setEntitySystemEnabled(enabled);
+      res.json(config);
+    } catch (error) {
+      console.error('Error updating entity config:', error);
+      res.status(500).json({ error: 'Failed to update entity system config' });
+    }
+  });
+
+  // Get all entities for active profile
+  app.get('/api/entities', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const [people, places, events] = await Promise.all([
+        storage.getProfilePeople(profile.id),
+        storage.getProfilePlaces(profile.id),
+        storage.getProfileEvents(profile.id)
+      ]);
+
+      res.json({ people, places, events });
+    } catch (error) {
+      console.error('Error fetching entities:', error);
+      res.status(500).json({ error: 'Failed to fetch entities' });
+    }
+  });
+
+  // People routes
+  app.post('/api/entities/people', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const personData = { ...req.body, profileId: profile.id };
+      const person = await storage.createPerson(personData);
+      res.status(201).json(person);
+    } catch (error) {
+      console.error('Error creating person:', error);
+      res.status(500).json({ error: 'Failed to create person' });
+    }
+  });
+
+  app.get('/api/entities/people/:id', async (req, res) => {
+    try {
+      const person = await storage.getPerson(req.params.id);
+      if (!person) {
+        return res.status(404).json({ error: 'Person not found' });
+      }
+      res.json(person);
+    } catch (error) {
+      console.error('Error fetching person:', error);
+      res.status(500).json({ error: 'Failed to fetch person' });
+    }
+  });
+
+  app.put('/api/entities/people/:id', async (req, res) => {
+    try {
+      const person = await storage.updatePerson(req.params.id, req.body);
+      res.json(person);
+    } catch (error) {
+      console.error('Error updating person:', error);
+      res.status(500).json({ error: 'Failed to update person' });
+    }
+  });
+
+  app.delete('/api/entities/people/:id', async (req, res) => {
+    try {
+      await storage.deletePerson(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting person:', error);
+      res.status(500).json({ error: 'Failed to delete person' });
+    }
+  });
+
+  // Places routes
+  app.post('/api/entities/places', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const placeData = { ...req.body, profileId: profile.id };
+      const place = await storage.createPlace(placeData);
+      res.status(201).json(place);
+    } catch (error) {
+      console.error('Error creating place:', error);
+      res.status(500).json({ error: 'Failed to create place' });
+    }
+  });
+
+  app.get('/api/entities/places/:id', async (req, res) => {
+    try {
+      const place = await storage.getPlace(req.params.id);
+      if (!place) {
+        return res.status(404).json({ error: 'Place not found' });
+      }
+      res.json(place);
+    } catch (error) {
+      console.error('Error fetching place:', error);
+      res.status(500).json({ error: 'Failed to fetch place' });
+    }
+  });
+
+  app.put('/api/entities/places/:id', async (req, res) => {
+    try {
+      const place = await storage.updatePlace(req.params.id, req.body);
+      res.json(place);
+    } catch (error) {
+      console.error('Error updating place:', error);
+      res.status(500).json({ error: 'Failed to update place' });
+    }
+  });
+
+  app.delete('/api/entities/places/:id', async (req, res) => {
+    try {
+      await storage.deletePlace(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting place:', error);
+      res.status(500).json({ error: 'Failed to delete place' });
+    }
+  });
+
+  // Events routes  
+  app.post('/api/entities/events', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const eventData = { ...req.body, profileId: profile.id };
+      const event = await storage.createEvent(eventData);
+      res.status(201).json(event);
+    } catch (error) {
+      console.error('Error creating event:', error);
+      res.status(500).json({ error: 'Failed to create event' });
+    }
+  });
+
+  app.get('/api/entities/events/:id', async (req, res) => {
+    try {
+      const event = await storage.getEvent(req.params.id);
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+      res.json(event);
+    } catch (error) {
+      console.error('Error fetching event:', error);
+      res.status(500).json({ error: 'Failed to fetch event' });
+    }
+  });
+
+  app.put('/api/entities/events/:id', async (req, res) => {
+    try {
+      const event = await storage.updateEvent(req.params.id, req.body);
+      res.json(event);
+    } catch (error) {
+      console.error('Error updating event:', error);
+      res.status(500).json({ error: 'Failed to update event' });
+    }
+  });
+
+  app.delete('/api/entities/events/:id', async (req, res) => {
+    try {
+      await storage.deleteEvent(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      res.status(500).json({ error: 'Failed to delete event' });
+    }
+  });
+
+  // Extract entities from memory content
+  app.post('/api/entities/extract', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { memoryContent } = req.body;
+      if (!memoryContent) {
+        return res.status(400).json({ error: 'memoryContent is required' });
+      }
+
+      // Get existing entities for context
+      const [people, places, events] = await Promise.all([
+        storage.getProfilePeople(profile.id),
+        storage.getProfilePlaces(profile.id),
+        storage.getProfileEvents(profile.id)
+      ]);
+
+      // Extract entities using AI
+      const extractionResult = await entityExtraction.extractEntitiesFromMemory(
+        memoryContent,
+        { people, places, events }
+      );
+
+      // Run disambiguation
+      const disambiguationResult = await entityExtraction.disambiguateEntities(
+        extractionResult.entities,
+        { people, places, events }
+      );
+
+      res.json({
+        detectedEntities: extractionResult.entities,
+        matches: disambiguationResult.matches,
+        newEntities: disambiguationResult.newEntities
+      });
+    } catch (error) {
+      console.error('Error extracting entities:', error);
+      res.status(500).json({ error: 'Failed to extract entities' });
+    }
+  });
+
+  // Batch extract entities from multiple memories
+  app.post('/api/entities/batch-extract', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { memoryIds } = req.body;
+      if (!memoryIds || !Array.isArray(memoryIds)) {
+        return res.status(400).json({ error: 'memoryIds array is required' });
+      }
+
+      // Get memory entries
+      const memories = await Promise.all(
+        memoryIds.map(async (id: string) => {
+          const memory = await storage.getMemoryEntry(id);
+          return memory ? { id: memory.id, content: memory.content } : null;
+        })
+      );
+
+      const validMemories = memories.filter(m => m !== null);
+
+      // Get existing entities for context
+      const [people, places, events] = await Promise.all([
+        storage.getProfilePeople(profile.id),
+        storage.getProfilePlaces(profile.id),
+        storage.getProfileEvents(profile.id)
+      ]);
+
+      // Extract entities from all memories
+      const extractionResults = await entityExtraction.extractEntitiesFromMultipleMemories(
+        validMemories,
+        { people, places, events }
+      );
+
+      res.json({
+        processedMemories: extractionResults.length,
+        totalEntitiesDetected: extractionResults.reduce((sum, result) => sum + result.entities.length, 0),
+        results: extractionResults
+      });
+    } catch (error) {
+      console.error('Error batch extracting entities:', error);
+      res.status(500).json({ error: 'Failed to batch extract entities' });
+    }
+  });
+
+  // Link memory to entities
+  app.post('/api/entities/link-memory', async (req, res) => {
+    try {
+      const { memoryId, personId, placeId, eventId } = req.body;
+      
+      if (!memoryId) {
+        return res.status(400).json({ error: 'memoryId is required' });
+      }
+
+      const updatedMemory = await storage.linkMemoryToEntities(memoryId, {
+        personId: personId || undefined,
+        placeId: placeId || undefined,
+        eventId: eventId || undefined
+      });
+
+      res.json(updatedMemory);
+    } catch (error) {
+      console.error('Error linking memory to entities:', error);
+      res.status(500).json({ error: 'Failed to link memory to entities' });
+    }
+  });
+
+  // Get memories with entity links
+  app.get('/api/entities/linked-memories', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const memories = await storage.getMemoryWithEntityLinks(profile.id, limit);
+      
+      res.json(memories);
+    } catch (error) {
+      console.error('Error fetching linked memories:', error);
+      res.status(500).json({ error: 'Failed to fetch linked memories' });
     }
   });
 
