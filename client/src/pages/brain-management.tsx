@@ -49,6 +49,43 @@ interface ContradictionGroup {
   explanation: string;
 }
 
+interface EntityConfig {
+  isEnabled: boolean;
+  version?: string;
+  id?: string;
+  updatedAt?: string;
+}
+
+interface Person {
+  id: string;
+  canonicalName: string;
+  disambiguation?: string;
+  aliases?: string[];
+  relationship?: string;
+  description?: string;
+}
+
+interface Place {
+  id: string;
+  canonicalName: string;
+  locationType?: string;
+  description?: string;
+}
+
+interface Event {
+  id: string;
+  canonicalName: string;
+  eventDate?: string;
+  description?: string;
+  isCanonical?: boolean;
+}
+
+interface Entities {
+  people: Person[];
+  places: Place[];
+  events: Event[];
+}
+
 export default function BrainManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -70,12 +107,12 @@ export default function BrainManagement() {
   });
 
   // Entity system queries
-  const { data: entityConfig } = useQuery({
+  const { data: entityConfig } = useQuery<EntityConfig>({
     queryKey: ['/api/entities/config'],
     refetchInterval: false,
   });
 
-  const { data: entities } = useQuery({
+  const { data: entities } = useQuery<Entities>({
     queryKey: ['/api/entities'],
     refetchInterval: false,
   });
@@ -288,10 +325,15 @@ export default function BrainManagement() {
   // Entity system mutations
   const toggleEntitySystemMutation = useMutation({
     mutationFn: async (enabled: boolean) => {
-      return apiRequest('/api/entities/config', {
+      const response = await fetch('/api/entities/config', {
         method: 'POST',
-        body: { enabled }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
       });
+      if (!response.ok) {
+        throw new Error('Failed to toggle entity system');
+      }
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/entities/config'] });
@@ -313,13 +355,22 @@ export default function BrainManagement() {
 
   const extractEntitiesFromMemoriesMutation = useMutation({
     mutationFn: async () => {
-      const memories = await apiRequest('/api/memory/entries');
+      const memoriesResponse = await fetch('/api/memory/entries');
+      if (!memoriesResponse.ok) {
+        throw new Error('Failed to fetch memories');
+      }
+      const memories = await memoriesResponse.json();
       const memoryIds = memories.slice(0, 20).map((m: any) => m.id);
       
-      return apiRequest('/api/entities/batch-extract', {
+      const response = await fetch('/api/entities/batch-extract', {
         method: 'POST',
-        body: { memoryIds }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memoryIds })
       });
+      if (!response.ok) {
+        throw new Error('Failed to extract entities');
+      }
+      return response.json();
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/entities'] });
