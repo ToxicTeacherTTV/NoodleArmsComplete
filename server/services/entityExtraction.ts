@@ -299,7 +299,7 @@ Be conservative with matches - only match if confidence > 0.7`;
   }> {
     try {
       // Get existing entities from database
-      const existingEntities = await storage.getAllEntities();
+      const existingEntities = await storage.getAllEntities(profileId);
       
       // Extract entities from memory content
       const extraction = await this.extractEntitiesFromMemory(memoryContent, existingEntities);

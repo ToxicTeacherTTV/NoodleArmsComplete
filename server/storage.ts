@@ -2072,6 +2072,24 @@ export class DatabaseStorage implements IStorage {
   async deleteEvent(id: string): Promise<void> {
     await db.delete(events).where(eq(events.id, id));
   }
+
+  async getAllEntities(profileId: string): Promise<{
+    people: Person[];
+    places: Place[];
+    events: Event[];
+  }> {
+    const [peopleList, placesList, eventsList] = await Promise.all([
+      this.getProfilePeople(profileId),
+      this.getProfilePlaces(profileId),
+      this.getProfileEvents(profileId),
+    ]);
+    
+    return {
+      people: peopleList,
+      places: placesList,
+      events: eventsList,
+    };
+  }
   
   // Entity linking for memory entries
   async linkMemoryToEntities(memoryId: string, entityLinks: {
