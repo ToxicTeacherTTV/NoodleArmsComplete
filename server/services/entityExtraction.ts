@@ -335,7 +335,8 @@ Be conservative with matches - only match if confidence > 0.7`;
           let createdEntity;
           
           if (newEntity.type === 'PERSON' && !personId) {
-            createdEntity = await storage.addPersonEntity(profileId, {
+            createdEntity = await storage.createPerson({
+              profileId: profileId,
               canonicalName: newEntity.name,
               disambiguation: newEntity.disambiguation,
               aliases: newEntity.aliases,
@@ -344,16 +345,20 @@ Be conservative with matches - only match if confidence > 0.7`;
             });
             personId = createdEntity.id;
             entitiesCreated++;
+            console.log(`✨ Created new person: ${newEntity.name}`);
           } else if (newEntity.type === 'PLACE' && !placeId) {
-            createdEntity = await storage.addPlaceEntity(profileId, {
+            createdEntity = await storage.createPlace({
+              profileId: profileId,
               canonicalName: newEntity.name,
               locationType: newEntity.disambiguation,
               description: newEntity.context
             });
             placeId = createdEntity.id;
             entitiesCreated++;
+            console.log(`✨ Created new place: ${newEntity.name}`);
           } else if (newEntity.type === 'EVENT' && !eventId) {
-            createdEntity = await storage.addEventEntity(profileId, {
+            createdEntity = await storage.createEvent({
+              profileId: profileId,
               canonicalName: newEntity.name,
               eventDate: newEntity.disambiguation,
               description: newEntity.context,
@@ -361,6 +366,7 @@ Be conservative with matches - only match if confidence > 0.7`;
             });
             eventId = createdEntity.id;
             entitiesCreated++;
+            console.log(`✨ Created new event: ${newEntity.name}`);
           }
         } catch (error) {
           console.error(`Error creating ${newEntity.type} entity:`, error);
