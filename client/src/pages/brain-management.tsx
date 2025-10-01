@@ -649,6 +649,44 @@ export default function BrainManagement() {
     setShowEntityMemoriesDialog(true);
   };
 
+  const toggleMergeMode = (type: 'person' | 'place' | 'event') => {
+    if (mergeMode?.type === type) {
+      setMergeMode(null);
+      setSelectedForMerge([]);
+    } else {
+      setMergeMode({ type });
+      setSelectedForMerge([]);
+    }
+  };
+
+  const toggleEntitySelection = (id: string) => {
+    setSelectedForMerge(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(entityId => entityId !== id);
+      } else if (prev.length < 2) {
+        return [...prev, id];
+      }
+      return prev;
+    });
+  };
+
+  const handleMergeEntities = () => {
+    if (selectedForMerge.length !== 2 || !mergeMode) return;
+    setShowMergeDialog(true);
+  };
+
+  const confirmMerge = (primaryId: string) => {
+    if (!mergeMode) return;
+    const duplicateId = selectedForMerge.find(id => id !== primaryId);
+    if (!duplicateId) return;
+    
+    mergeEntitiesMutation.mutate({
+      type: mergeMode.type,
+      primaryId,
+      duplicateId
+    });
+  };
+
   const addAliasField = () => {
     setEntityEditForm({
       ...entityEditForm,
@@ -1614,10 +1652,34 @@ export default function BrainManagement() {
                     <TabsContent value="people" className="mt-4">
                       <Card>
                         <CardHeader>
-                          <CardTitle>People Entities</CardTitle>
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            Manage individuals that Nicky knows about
-                          </p>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <CardTitle>People Entities</CardTitle>
+                              <p className="text-sm text-gray-600 dark:text-gray-300">
+                                Manage individuals that Nicky knows about
+                              </p>
+                            </div>
+                            <div className="flex gap-2">
+                              {mergeMode?.type === 'person' && (
+                                <Button
+                                  onClick={handleMergeEntities}
+                                  disabled={selectedForMerge.length !== 2}
+                                  className="bg-purple-600 hover:bg-purple-700"
+                                  data-testid="button-merge-people"
+                                >
+                                  <Merge className="h-4 w-4 mr-2" />
+                                  Merge Selected ({selectedForMerge.length}/2)
+                                </Button>
+                              )}
+                              <Button
+                                onClick={() => toggleMergeMode('person')}
+                                variant={mergeMode?.type === 'person' ? 'destructive' : 'outline'}
+                                data-testid="button-toggle-merge-mode-people"
+                              >
+                                {mergeMode?.type === 'person' ? 'Cancel Merge' : 'Merge Duplicates'}
+                              </Button>
+                            </div>
+                          </div>
                         </CardHeader>
                         <CardContent>
                           <ScrollArea className="h-[400px]">
@@ -1625,7 +1687,17 @@ export default function BrainManagement() {
                               {entities.people?.map((person: Person) => (
                                 <div key={person.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
                                   <div className="flex items-start justify-between">
-                                    <div className="flex-1">
+                                    <div className="flex gap-3 flex-1">
+                                      {mergeMode?.type === 'person' && (
+                                        <Checkbox
+                                          checked={selectedForMerge.includes(person.id)}
+                                          onCheckedChange={() => toggleEntitySelection(person.id)}
+                                          disabled={selectedForMerge.length >= 2 && !selectedForMerge.includes(person.id)}
+                                          className="mt-1"
+                                          data-testid={`checkbox-merge-person-${person.id}`}
+                                        />
+                                      )}
+                                      <div className="flex-1">
                                       <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
                                         {person.canonicalName}
                                       </h3>
@@ -1653,6 +1725,7 @@ export default function BrainManagement() {
                                           {person.description}
                                         </p>
                                       )}
+                                      </div>
                                     </div>
                                     <div className="flex space-x-2">
                                       <Button 
@@ -3165,6 +3238,87 @@ export default function BrainManagement() {
               onClick={() => setShowEntityMemoriesDialog(false)}
             >
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Merge Entities Dialog */}
+      <Dialog open={showMergeDialog} onOpenChange={setShowMergeDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Merge {mergeMode?.type === 'person' ? 'People' : mergeMode?.type === 'place' ? 'Places' : 'Events'}</DialogTitle>
+            <DialogDescription>
+              Choose which entity to keep as the primary. The duplicate will be deleted and all its memory links will be transferred.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {selectedForMerge.map((entityId) => {
+              const entity = mergeMode?.type === 'person' 
+                ? entities.people?.find((p: Person) => p.id === entityId)
+                : mergeMode?.type === 'place'
+                ? entities.places?.find((p: Place) => p.id === entityId)
+                : entities.events?.find((e: Event) => e.id === entityId);
+              
+              if (!entity) return null;
+
+              return (
+                <div key={entityId} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                        {entity.canonicalName}
+                      </h3>
+                      {entity.disambiguation && (
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                          {entity.disambiguation}
+                        </p>
+                      )}
+                      {entity.aliases && entity.aliases.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          <span className="text-xs text-gray-500">Aliases:</span>
+                          {entity.aliases.map((alias: string, index: number) => (
+                            <Badge key={index} variant="outline" className="text-xs">
+                              {alias}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      {entity.description && (
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                          {entity.description}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      onClick={() => confirmMerge(entityId)}
+                      disabled={mergeEntitiesMutation.isPending}
+                      className="ml-4"
+                      data-testid={`button-select-primary-${entityId}`}
+                    >
+                      {mergeEntitiesMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Merging...
+                        </>
+                      ) : (
+                        'Keep This One'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowMergeDialog(false)}
+              disabled={mergeEntitiesMutation.isPending}
+            >
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>
