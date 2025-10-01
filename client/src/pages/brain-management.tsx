@@ -422,7 +422,7 @@ export default function BrainManagement() {
 
   const deleteEntityMutation = useMutation({
     mutationFn: async ({ type, id }: { type: 'person' | 'place' | 'event'; id: string }) => {
-      const endpoint = type === 'person' ? 'people' : type === 'place' ? 'places' : 'events';
+      const endpoint = type === 'person' ? 'people' : type === 'place' | 'place' ? 'places' : 'events';
       const response = await fetch(`/api/entities/${endpoint}/${id}`, {
         method: 'DELETE',
       });
@@ -442,6 +442,34 @@ export default function BrainManagement() {
       toast({
         title: "Delete Failed",
         description: error.message || "Failed to delete entity",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const mergeEntitiesMutation = useMutation({
+    mutationFn: async ({ type, primaryId, duplicateId }: { type: 'person' | 'place' | 'event'; primaryId: string; duplicateId: string }) => {
+      const endpoint = type === 'person' ? 'people' : type === 'place' ? 'places' : 'events';
+      const response = await apiRequest('POST', `/api/entities/${endpoint}/merge`, {
+        primaryId,
+        duplicateId
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/entities'] });
+      toast({
+        title: "Entities Merged",
+        description: "Duplicate entity merged successfully. All memories have been transferred.",
+      });
+      setMergeMode(null);
+      setSelectedForMerge([]);
+      setShowMergeDialog(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "Merge Failed",
+        description: error.message || "Failed to merge entities",
         variant: "destructive",
       });
     },
@@ -482,6 +510,11 @@ export default function BrainManagement() {
   const [showEntityEditDialog, setShowEntityEditDialog] = useState(false);
   const [showEntityMemoriesDialog, setShowEntityMemoriesDialog] = useState(false);
   const [selectedEntityForMemories, setSelectedEntityForMemories] = useState<{id: string, name: string, type: 'person' | 'place' | 'event'} | null>(null);
+  
+  // Entity merging state
+  const [mergeMode, setMergeMode] = useState<{type: 'person' | 'place' | 'event'} | null>(null);
+  const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
 
   // Query to fetch memories for selected entity
   const { data: entityMemories, isLoading: entityMemoriesLoading } = useQuery({
