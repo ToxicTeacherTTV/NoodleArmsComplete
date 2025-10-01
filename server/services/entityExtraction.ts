@@ -343,9 +343,11 @@ Be conservative with matches - only match if confidence > 0.7`;
               relationship: '', // Will be filled by AI context
               description: newEntity.context
             });
-            personId = createdEntity.id;
-            entitiesCreated++;
-            console.log(`✨ Created new person: ${newEntity.name}`);
+            if (createdEntity?.id) {
+              personId = createdEntity.id;
+              entitiesCreated++;
+              console.log(`✨ Created new person: ${newEntity.name}`);
+            }
           } else if (newEntity.type === 'PLACE' && !placeId) {
             createdEntity = await storage.createPlace({
               profileId: profileId,
@@ -353,9 +355,11 @@ Be conservative with matches - only match if confidence > 0.7`;
               locationType: newEntity.disambiguation,
               description: newEntity.context
             });
-            placeId = createdEntity.id;
-            entitiesCreated++;
-            console.log(`✨ Created new place: ${newEntity.name}`);
+            if (createdEntity?.id) {
+              placeId = createdEntity.id;
+              entitiesCreated++;
+              console.log(`✨ Created new place: ${newEntity.name}`);
+            }
           } else if (newEntity.type === 'EVENT' && !eventId) {
             createdEntity = await storage.createEvent({
               profileId: profileId,
@@ -364,16 +368,31 @@ Be conservative with matches - only match if confidence > 0.7`;
               description: newEntity.context,
               isCanonical: true
             });
-            eventId = createdEntity.id;
-            entitiesCreated++;
-            console.log(`✨ Created new event: ${newEntity.name}`);
+            if (createdEntity?.id) {
+              eventId = createdEntity.id;
+              entitiesCreated++;
+              console.log(`✨ Created new event: ${newEntity.name}`);
+            }
           }
         } catch (error) {
           console.error(`Error creating ${newEntity.type} entity:`, error);
+          // Don't let entity creation failures break the whole process
         }
       }
 
-      return { personId, placeId, eventId, entitiesCreated };
+      // Only return entity IDs that were successfully created
+      const result: {
+        personId?: string;
+        placeId?: string;
+        eventId?: string;
+        entitiesCreated: number;
+      } = { entitiesCreated };
+      
+      if (personId) result.personId = personId;
+      if (placeId) result.placeId = placeId;
+      if (eventId) result.eventId = eventId;
+      
+      return result;
     } catch (error) {
       console.error("Error processing memory for entity linking:", error);
       return { entitiesCreated: 0 };

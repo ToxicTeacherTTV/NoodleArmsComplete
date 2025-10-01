@@ -199,7 +199,7 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
       console.error('Document view error:', error);
       toast({
         title: "Error",
-        description: `Failed to view document: ${error.message}`,
+        description: `Failed to view document: ${(error as Error).message}`,
         variant: "destructive",
       });
     }
@@ -454,7 +454,7 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                     </div>
                     <div className="flex items-center space-x-2">
                       <div className={`text-xs ${getStatusColor(doc.processingStatus)}`}>
-                        {doc.processingStatus.charAt(0) + doc.processingStatus.slice(1).toLowerCase()}
+                        {(doc.processingStatus || 'PENDING').charAt(0) + (doc.processingStatus || 'PENDING').slice(1).toLowerCase()}
                         {doc.processingStatus === 'PROCESSING' && (
                           <i className="fas fa-spinner fa-spin ml-1"></i>
                         )}
@@ -603,7 +603,7 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                   <span>Size: {formatFileSize(viewingDocument.size)}</span>
                   <span>Added: {new Date(viewingDocument.createdAt).toLocaleDateString()}</span>
                   {viewingDocument.chunks && <span>Chunks: {viewingDocument.chunks.length}</span>}
-                  {viewingDocument.retrievalCount > 0 && (
+                  {(viewingDocument.retrievalCount || 0) > 0 && (
                     <span className="text-accent">Retrieved {viewingDocument.retrievalCount} times</span>
                   )}
                 </div>

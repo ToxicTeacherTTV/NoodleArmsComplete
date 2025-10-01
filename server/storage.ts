@@ -2029,11 +2029,13 @@ export class DatabaseStorage implements IStorage {
       };
     } else {
       // Auto-merge logic
-      const mergedAliases = [...new Set([
-        ...(primary.aliases || []),
-        ...(duplicate.aliases || []),
+      const primaryAliases = Array.isArray(primary.aliases) ? primary.aliases : [];
+      const duplicateAliases = Array.isArray(duplicate.aliases) ? duplicate.aliases : [];
+      const mergedAliases = Array.from(new Set([
+        ...primaryAliases,
+        ...duplicateAliases,
         duplicate.canonicalName // Add the duplicate's name as an alias
-      ])];
+      ]));
 
       const mergedDescription = [primary.description, duplicate.description]
         .filter(Boolean)
@@ -2109,8 +2111,6 @@ export class DatabaseStorage implements IStorage {
     if (mergedData) {
       updateData = {
         canonicalName: mergedData.canonicalName || primary.canonicalName,
-        disambiguation: mergedData.disambiguation,
-        aliases: mergedData.aliases || [],
         locationType: mergedData.locationType,
         description: mergedData.description
       };
@@ -2186,8 +2186,6 @@ export class DatabaseStorage implements IStorage {
     if (mergedData) {
       updateData = {
         canonicalName: mergedData.canonicalName || primary.canonicalName,
-        disambiguation: mergedData.disambiguation,
-        aliases: mergedData.aliases || [],
         eventDate: mergedData.eventDate,
         isCanonical: mergedData.isCanonical,
         description: mergedData.description
@@ -2235,9 +2233,33 @@ export class DatabaseStorage implements IStorage {
   }): Promise<MemoryEntry> {
     const updateData: any = { updatedAt: sql`now()` };
     
-    if (entityLinks.personId !== undefined) updateData.personId = entityLinks.personId;
-    if (entityLinks.placeId !== undefined) updateData.placeId = entityLinks.placeId;
-    if (entityLinks.eventId !== undefined) updateData.eventId = entityLinks.eventId;
+    // Validate that entity IDs exist before linking
+    if (entityLinks.personId) {
+      const person = await this.getPerson(entityLinks.personId);
+      if (person) {
+        updateData.personId = entityLinks.personId;
+      } else {
+        console.warn(`⚠️ Person ID ${entityLinks.personId} not found, skipping link`);
+      }
+    }
+    
+    if (entityLinks.placeId) {
+      const place = await this.getPlace(entityLinks.placeId);
+      if (place) {
+        updateData.placeId = entityLinks.placeId;
+      } else {
+        console.warn(`⚠️ Place ID ${entityLinks.placeId} not found, skipping link`);
+      }
+    }
+    
+    if (entityLinks.eventId) {
+      const event = await this.getEvent(entityLinks.eventId);
+      if (event) {
+        updateData.eventId = entityLinks.eventId;
+      } else {
+        console.warn(`⚠️ Event ID ${entityLinks.eventId} not found, skipping link`);
+      }
+    }
     
     const [updatedMemory] = await db
       .update(memoryEntries)

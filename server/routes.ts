@@ -3344,7 +3344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(merged);
     } catch (error) {
       console.error('Error merging people:', error);
-      res.status(500).json({ error: error.message || 'Failed to merge people' });
+      res.status(500).json({ error: (error as Error).message || 'Failed to merge people' });
     }
   });
 
@@ -3408,7 +3408,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(merged);
     } catch (error) {
       console.error('Error merging places:', error);
-      res.status(500).json({ error: error.message || 'Failed to merge places' });
+      res.status(500).json({ error: (error as Error).message || 'Failed to merge places' });
     }
   });
 
@@ -3472,7 +3472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(merged);
     } catch (error) {
       console.error('Error merging events:', error);
-      res.status(500).json({ error: error.message || 'Failed to merge events' });
+      res.status(500).json({ error: (error as Error).message || 'Failed to merge events' });
     }
   });
 
