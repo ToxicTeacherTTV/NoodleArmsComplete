@@ -48,7 +48,7 @@ Preferred communication style: Simple, everyday language.
   - ElevenLabs integration with pause/resume/replay/save functionality
 
 ### AI Integration Architecture
-- **Primary AI Service**: Anthropic's Claude API (claude-sonnet-4-20250514 model)
+- **Primary AI Service**: Anthropic's Claude API (claude-sonnet-4-5-20250929 model - Sonnet 4.5)
 - **Alternative TTS**: ElevenLabs integration for enhanced voice synthesis
 - **Memory System**: Retrieval-Augmented Generation (RAG) with keyword-based knowledge retrieval
 - **Unified Personality System**: Preset-based PersonalityControl as single source of truth

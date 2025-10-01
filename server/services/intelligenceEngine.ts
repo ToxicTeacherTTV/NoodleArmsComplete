@@ -142,7 +142,7 @@ Return a JSON array:
 If no clusters found, return: []`;
 
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: 3000,
         temperature: 0.3,
         messages: [{ role: 'user', content: prompt }]
@@ -306,7 +306,7 @@ Return JSON array:
 If no drift detected, return: []`;
 
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: 2000,
         temperature: 0.3,
         messages: [{ role: 'user', content: prompt }]

@@ -7,7 +7,7 @@
 - **Backend**: Node.js + Express.js with TypeScript, session-based storage
 - **Frontend**: React 19 + TypeScript with Vite, TanStack Query for state management
 - **External APIs**: 
-  - Anthropic Claude (claude-sonnet-4-20250514) for AI conversation
+  - Anthropic Claude (claude-sonnet-4-5-20250929 / Sonnet 4.5) for AI conversation
   - ElevenLabs for enhanced voice synthesis
   - Discord.js for Discord bot integration
   - Web Speech API for browser-based voice recognition

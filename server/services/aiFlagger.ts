@@ -84,7 +84,7 @@ export class AIFlaggerService {
         console.log(`🤖 Anthropic flagging attempt ${attempt}/3`);
         
         const response = await this.anthropic.messages.create({
-          model: 'claude-3-5-sonnet-20241022',
+          model: 'claude-sonnet-4-5-20250929',
           max_tokens: 2000,
           temperature: 0.1, // Low temperature for consistent flagging
           messages: [

@@ -16,7 +16,7 @@ interface AdGenerationRequest {
   forceNew?: boolean;
 }
 
-const DEFAULT_MODEL_STR = "claude-sonnet-4-20250514";
+const DEFAULT_MODEL_STR = "claude-sonnet-4-5-20250929";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || "",
