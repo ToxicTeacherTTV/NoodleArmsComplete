@@ -515,6 +515,7 @@ export default function BrainManagement() {
   const [mergeMode, setMergeMode] = useState<{type: 'person' | 'place' | 'event'} | null>(null);
   const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [showMergeSelectionDialog, setShowMergeSelectionDialog] = useState(false);
 
   // Query to fetch memories for selected entity
   const { data: entityMemories, isLoading: entityMemoriesLoading } = useQuery({
@@ -649,29 +650,15 @@ export default function BrainManagement() {
     setShowEntityMemoriesDialog(true);
   };
 
-  const toggleMergeMode = (type: 'person' | 'place' | 'event') => {
-    if (mergeMode?.type === type) {
-      setMergeMode(null);
-      setSelectedForMerge([]);
-    } else {
-      setMergeMode({ type });
-      setSelectedForMerge([]);
-    }
+  const startMergeFlow = (type: 'person' | 'place' | 'event', entityId: string) => {
+    setMergeMode({ type });
+    setSelectedForMerge([entityId]);
+    setShowMergeSelectionDialog(true);
   };
 
-  const toggleEntitySelection = (id: string) => {
-    setSelectedForMerge(prev => {
-      if (prev.includes(id)) {
-        return prev.filter(entityId => entityId !== id);
-      } else if (prev.length < 2) {
-        return [...prev, id];
-      }
-      return prev;
-    });
-  };
-
-  const handleMergeEntities = () => {
-    if (selectedForMerge.length !== 2 || !mergeMode) return;
+  const selectMergeTarget = (targetId: string) => {
+    setSelectedForMerge(prev => [...prev, targetId]);
+    setShowMergeSelectionDialog(false);
     setShowMergeDialog(true);
   };
 
@@ -1652,34 +1639,10 @@ export default function BrainManagement() {
                     <TabsContent value="people" className="mt-4">
                       <Card>
                         <CardHeader>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <CardTitle>People Entities</CardTitle>
-                              <p className="text-sm text-gray-600 dark:text-gray-300">
-                                Manage individuals that Nicky knows about
-                              </p>
-                            </div>
-                            <div className="flex gap-2">
-                              {mergeMode?.type === 'person' && (
-                                <Button
-                                  onClick={handleMergeEntities}
-                                  disabled={selectedForMerge.length !== 2}
-                                  className="bg-purple-600 hover:bg-purple-700"
-                                  data-testid="button-merge-people"
-                                >
-                                  <Merge className="h-4 w-4 mr-2" />
-                                  Merge Selected ({selectedForMerge.length}/2)
-                                </Button>
-                              )}
-                              <Button
-                                onClick={() => toggleMergeMode('person')}
-                                variant={mergeMode?.type === 'person' ? 'destructive' : 'outline'}
-                                data-testid="button-toggle-merge-mode-people"
-                              >
-                                {mergeMode?.type === 'person' ? 'Cancel Merge' : 'Merge Duplicates'}
-                              </Button>
-                            </div>
-                          </div>
+                          <CardTitle>People Entities</CardTitle>
+                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                            Manage individuals that Nicky knows about
+                          </p>
                         </CardHeader>
                         <CardContent>
                           <ScrollArea className="h-[400px]">
@@ -1687,17 +1650,7 @@ export default function BrainManagement() {
                               {entities.people?.map((person: Person) => (
                                 <div key={person.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
                                   <div className="flex items-start justify-between">
-                                    <div className="flex gap-3 flex-1">
-                                      {mergeMode?.type === 'person' && (
-                                        <Checkbox
-                                          checked={selectedForMerge.includes(person.id)}
-                                          onCheckedChange={() => toggleEntitySelection(person.id)}
-                                          disabled={selectedForMerge.length >= 2 && !selectedForMerge.includes(person.id)}
-                                          className="mt-1"
-                                          data-testid={`checkbox-merge-person-${person.id}`}
-                                        />
-                                      )}
-                                      <div className="flex-1">
+                                    <div className="flex-1">
                                       <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
                                         {person.canonicalName}
                                       </h3>
@@ -1725,7 +1678,6 @@ export default function BrainManagement() {
                                           {person.description}
                                         </p>
                                       )}
-                                      </div>
                                     </div>
                                     <div className="flex space-x-2">
                                       <Button 
@@ -1736,6 +1688,16 @@ export default function BrainManagement() {
                                         data-testid={`button-memories-person-${person.id}`}
                                       >
                                         Show Memories
+                                      </Button>
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        className="text-purple-600 hover:text-purple-700"
+                                        onClick={() => startMergeFlow('person', person.id)}
+                                        data-testid={`button-merge-person-${person.id}`}
+                                      >
+                                        <Merge className="h-4 w-4 mr-1" />
+                                        Merge
                                       </Button>
                                       <Button 
                                         size="sm" 
@@ -3238,6 +3200,141 @@ export default function BrainManagement() {
               onClick={() => setShowEntityMemoriesDialog(false)}
             >
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Merge Selection Dialog - Choose which entity to merge with */}
+      <Dialog open={showMergeSelectionDialog} onOpenChange={setShowMergeSelectionDialog}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Select Entity to Merge With</DialogTitle>
+            <DialogDescription>
+              Choose which {mergeMode?.type} you want to merge with the selected one.
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="h-[500px]">
+            <div className="space-y-3">
+              {mergeMode?.type === 'person' && entities.people
+                ?.filter((p: Person) => p.id !== selectedForMerge[0])
+                .map((person: Person) => (
+                  <div
+                    key={person.id}
+                    className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800 hover:border-purple-400 dark:hover:border-purple-500 cursor-pointer transition-colors"
+                    onClick={() => selectMergeTarget(person.id)}
+                    data-testid={`select-merge-target-person-${person.id}`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                          {person.canonicalName}
+                        </h3>
+                        {person.disambiguation && (
+                          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                            {person.disambiguation}
+                          </p>
+                        )}
+                        {person.aliases && person.aliases.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            <span className="text-xs text-gray-500">Aliases:</span>
+                            {person.aliases.map((alias, index) => (
+                              <Badge key={index} variant="outline" className="text-xs">
+                                {alias}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                        {person.description && (
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                            {person.description}
+                          </p>
+                        )}
+                      </div>
+                      <Button variant="ghost" size="sm">
+                        Select →
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+              {mergeMode?.type === 'place' && entities.places
+                ?.filter((p: Place) => p.id !== selectedForMerge[0])
+                .map((place: Place) => (
+                  <div
+                    key={place.id}
+                    className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800 hover:border-purple-400 dark:hover:border-purple-500 cursor-pointer transition-colors"
+                    onClick={() => selectMergeTarget(place.id)}
+                    data-testid={`select-merge-target-place-${place.id}`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                          {place.canonicalName}
+                        </h3>
+                        {place.locationType && (
+                          <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                            <strong>Type:</strong> {place.locationType}
+                          </p>
+                        )}
+                        {place.description && (
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                            {place.description}
+                          </p>
+                        )}
+                      </div>
+                      <Button variant="ghost" size="sm">
+                        Select →
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+              {mergeMode?.type === 'event' && entities.events
+                ?.filter((e: Event) => e.id !== selectedForMerge[0])
+                .map((event: Event) => (
+                  <div
+                    key={event.id}
+                    className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800 hover:border-purple-400 dark:hover:border-purple-500 cursor-pointer transition-colors"
+                    onClick={() => selectMergeTarget(event.id)}
+                    data-testid={`select-merge-target-event-${event.id}`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                          {event.canonicalName}
+                        </h3>
+                        {event.eventDate && (
+                          <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
+                            <strong>Date:</strong> {event.eventDate}
+                          </p>
+                        )}
+                        {event.description && (
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                            {event.description}
+                          </p>
+                        )}
+                      </div>
+                      <Button variant="ghost" size="sm">
+                        Select →
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </ScrollArea>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowMergeSelectionDialog(false);
+                setMergeMode(null);
+                setSelectedForMerge([]);
+              }}
+            >
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>
