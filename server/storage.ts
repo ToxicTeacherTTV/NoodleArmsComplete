@@ -2000,6 +2000,45 @@ export class DatabaseStorage implements IStorage {
   async deletePerson(id: string): Promise<void> {
     await db.delete(people).where(eq(people.id, id));
   }
+
+  async mergePeople(primaryId: string, duplicateId: string): Promise<Person> {
+    // Get both entities
+    const primary = await this.getPerson(primaryId);
+    const duplicate = await this.getPerson(duplicateId);
+    
+    if (!primary || !duplicate) {
+      throw new Error('One or both people not found');
+    }
+
+    // Update all memories that reference the duplicate to reference the primary
+    await db
+      .update(memoryEntries)
+      .set({ personId: primaryId })
+      .where(eq(memoryEntries.personId, duplicateId));
+
+    // Merge aliases
+    const mergedAliases = [...new Set([
+      ...(primary.aliases || []),
+      ...(duplicate.aliases || []),
+      duplicate.canonicalName // Add the duplicate's name as an alias
+    ])];
+
+    // Merge descriptions
+    const mergedDescription = [primary.description, duplicate.description]
+      .filter(Boolean)
+      .join(' | ');
+
+    // Update primary with merged data
+    const updated = await this.updatePerson(primaryId, {
+      aliases: mergedAliases,
+      description: mergedDescription || primary.description
+    });
+
+    // Delete the duplicate
+    await this.deletePerson(duplicateId);
+
+    return updated;
+  }
   
   // Place management
   async createPlace(place: InsertPlace): Promise<Place> {
@@ -2036,6 +2075,33 @@ export class DatabaseStorage implements IStorage {
   async deletePlace(id: string): Promise<void> {
     await db.delete(places).where(eq(places.id, id));
   }
+
+  async mergePlaces(primaryId: string, duplicateId: string): Promise<Place> {
+    const primary = await this.getPlace(primaryId);
+    const duplicate = await this.getPlace(duplicateId);
+    
+    if (!primary || !duplicate) {
+      throw new Error('One or both places not found');
+    }
+
+    // Update all memories that reference the duplicate
+    await db
+      .update(memoryEntries)
+      .set({ placeId: primaryId })
+      .where(eq(memoryEntries.placeId, duplicateId));
+
+    // Merge descriptions
+    const mergedDescription = [primary.description, duplicate.description]
+      .filter(Boolean)
+      .join(' | ');
+
+    const updated = await this.updatePlace(primaryId, {
+      description: mergedDescription || primary.description
+    });
+
+    await this.deletePlace(duplicateId);
+    return updated;
+  }
   
   // Event management
   async createEvent(event: InsertEvent): Promise<Event> {
@@ -2071,6 +2137,33 @@ export class DatabaseStorage implements IStorage {
 
   async deleteEvent(id: string): Promise<void> {
     await db.delete(events).where(eq(events.id, id));
+  }
+
+  async mergeEvents(primaryId: string, duplicateId: string): Promise<Event> {
+    const primary = await this.getEvent(primaryId);
+    const duplicate = await this.getEvent(duplicateId);
+    
+    if (!primary || !duplicate) {
+      throw new Error('One or both events not found');
+    }
+
+    // Update all memories that reference the duplicate
+    await db
+      .update(memoryEntries)
+      .set({ eventId: primaryId })
+      .where(eq(memoryEntries.eventId, duplicateId));
+
+    // Merge descriptions
+    const mergedDescription = [primary.description, duplicate.description]
+      .filter(Boolean)
+      .join(' | ');
+
+    const updated = await this.updateEvent(primaryId, {
+      description: mergedDescription || primary.description
+    });
+
+    await this.deleteEvent(duplicateId);
+    return updated;
   }
 
   async getAllEntities(profileId: string): Promise<{

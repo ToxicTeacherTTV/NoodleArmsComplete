@@ -3334,6 +3334,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/entities/people/merge', async (req, res) => {
+    try {
+      const { primaryId, duplicateId } = req.body;
+      if (!primaryId || !duplicateId) {
+        return res.status(400).json({ error: 'Both primaryId and duplicateId are required' });
+      }
+      const merged = await storage.mergePeople(primaryId, duplicateId);
+      res.json(merged);
+    } catch (error) {
+      console.error('Error merging people:', error);
+      res.status(500).json({ error: error.message || 'Failed to merge people' });
+    }
+  });
+
   // Places routes
   app.post('/api/entities/places', async (req, res) => {
     try {
@@ -3384,6 +3398,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/entities/places/merge', async (req, res) => {
+    try {
+      const { primaryId, duplicateId } = req.body;
+      if (!primaryId || !duplicateId) {
+        return res.status(400).json({ error: 'Both primaryId and duplicateId are required' });
+      }
+      const merged = await storage.mergePlaces(primaryId, duplicateId);
+      res.json(merged);
+    } catch (error) {
+      console.error('Error merging places:', error);
+      res.status(500).json({ error: error.message || 'Failed to merge places' });
+    }
+  });
+
   // Events routes  
   app.post('/api/entities/events', async (req, res) => {
     try {
@@ -3431,6 +3459,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error deleting event:', error);
       res.status(500).json({ error: 'Failed to delete event' });
+    }
+  });
+
+  app.post('/api/entities/events/merge', async (req, res) => {
+    try {
+      const { primaryId, duplicateId } = req.body;
+      if (!primaryId || !duplicateId) {
+        return res.status(400).json({ error: 'Both primaryId and duplicateId are required' });
+      }
+      const merged = await storage.mergeEvents(primaryId, duplicateId);
+      res.json(merged);
+    } catch (error) {
+      console.error('Error merging events:', error);
+      res.status(500).json({ error: error.message || 'Failed to merge events' });
     }
   });
 
