@@ -2001,7 +2001,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(people).where(eq(people.id, id));
   }
 
-  async mergePeople(primaryId: string, duplicateId: string): Promise<Person> {
+  async mergePeople(primaryId: string, duplicateId: string, mergedData?: Partial<Person>): Promise<Person> {
     // Get both entities
     const primary = await this.getPerson(primaryId);
     const duplicate = await this.getPerson(duplicateId);
@@ -2016,23 +2016,37 @@ export class DatabaseStorage implements IStorage {
       .set({ personId: primaryId })
       .where(eq(memoryEntries.personId, duplicateId));
 
-    // Merge aliases
-    const mergedAliases = [...new Set([
-      ...(primary.aliases || []),
-      ...(duplicate.aliases || []),
-      duplicate.canonicalName // Add the duplicate's name as an alias
-    ])];
+    // Use provided mergedData if available, otherwise auto-merge
+    let updateData: Partial<Person>;
+    if (mergedData) {
+      // User has edited the merge, use their data
+      updateData = {
+        canonicalName: mergedData.canonicalName || primary.canonicalName,
+        disambiguation: mergedData.disambiguation,
+        aliases: mergedData.aliases || [],
+        relationship: mergedData.relationship,
+        description: mergedData.description
+      };
+    } else {
+      // Auto-merge logic
+      const mergedAliases = [...new Set([
+        ...(primary.aliases || []),
+        ...(duplicate.aliases || []),
+        duplicate.canonicalName // Add the duplicate's name as an alias
+      ])];
 
-    // Merge descriptions
-    const mergedDescription = [primary.description, duplicate.description]
-      .filter(Boolean)
-      .join(' | ');
+      const mergedDescription = [primary.description, duplicate.description]
+        .filter(Boolean)
+        .join(' | ');
+
+      updateData = {
+        aliases: mergedAliases,
+        description: mergedDescription || primary.description
+      };
+    }
 
     // Update primary with merged data
-    const updated = await this.updatePerson(primaryId, {
-      aliases: mergedAliases,
-      description: mergedDescription || primary.description
-    });
+    const updated = await this.updatePerson(primaryId, updateData);
 
     // Delete the duplicate
     await this.deletePerson(duplicateId);
@@ -2076,7 +2090,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(places).where(eq(places.id, id));
   }
 
-  async mergePlaces(primaryId: string, duplicateId: string): Promise<Place> {
+  async mergePlaces(primaryId: string, duplicateId: string, mergedData?: Partial<Place>): Promise<Place> {
     const primary = await this.getPlace(primaryId);
     const duplicate = await this.getPlace(duplicateId);
     
@@ -2090,14 +2104,28 @@ export class DatabaseStorage implements IStorage {
       .set({ placeId: primaryId })
       .where(eq(memoryEntries.placeId, duplicateId));
 
-    // Merge descriptions
-    const mergedDescription = [primary.description, duplicate.description]
-      .filter(Boolean)
-      .join(' | ');
+    // Use provided mergedData if available, otherwise auto-merge
+    let updateData: Partial<Place>;
+    if (mergedData) {
+      updateData = {
+        canonicalName: mergedData.canonicalName || primary.canonicalName,
+        disambiguation: mergedData.disambiguation,
+        aliases: mergedData.aliases || [],
+        locationType: mergedData.locationType,
+        description: mergedData.description
+      };
+    } else {
+      // Auto-merge logic
+      const mergedDescription = [primary.description, duplicate.description]
+        .filter(Boolean)
+        .join(' | ');
 
-    const updated = await this.updatePlace(primaryId, {
-      description: mergedDescription || primary.description
-    });
+      updateData = {
+        description: mergedDescription || primary.description
+      };
+    }
+
+    const updated = await this.updatePlace(primaryId, updateData);
 
     await this.deletePlace(duplicateId);
     return updated;
@@ -2139,7 +2167,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(events).where(eq(events.id, id));
   }
 
-  async mergeEvents(primaryId: string, duplicateId: string): Promise<Event> {
+  async mergeEvents(primaryId: string, duplicateId: string, mergedData?: Partial<Event>): Promise<Event> {
     const primary = await this.getEvent(primaryId);
     const duplicate = await this.getEvent(duplicateId);
     
@@ -2153,14 +2181,29 @@ export class DatabaseStorage implements IStorage {
       .set({ eventId: primaryId })
       .where(eq(memoryEntries.eventId, duplicateId));
 
-    // Merge descriptions
-    const mergedDescription = [primary.description, duplicate.description]
-      .filter(Boolean)
-      .join(' | ');
+    // Use provided mergedData if available, otherwise auto-merge
+    let updateData: Partial<Event>;
+    if (mergedData) {
+      updateData = {
+        canonicalName: mergedData.canonicalName || primary.canonicalName,
+        disambiguation: mergedData.disambiguation,
+        aliases: mergedData.aliases || [],
+        eventDate: mergedData.eventDate,
+        isCanonical: mergedData.isCanonical,
+        description: mergedData.description
+      };
+    } else {
+      // Auto-merge logic
+      const mergedDescription = [primary.description, duplicate.description]
+        .filter(Boolean)
+        .join(' | ');
 
-    const updated = await this.updateEvent(primaryId, {
-      description: mergedDescription || primary.description
-    });
+      updateData = {
+        description: mergedDescription || primary.description
+      };
+    }
+
+    const updated = await this.updateEvent(primaryId, updateData);
 
     await this.deleteEvent(duplicateId);
     return updated;

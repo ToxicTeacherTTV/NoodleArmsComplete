@@ -3336,11 +3336,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/entities/people/merge', async (req, res) => {
     try {
-      const { primaryId, duplicateId } = req.body;
+      const { primaryId, duplicateId, mergedData } = req.body;
       if (!primaryId || !duplicateId) {
         return res.status(400).json({ error: 'Both primaryId and duplicateId are required' });
       }
-      const merged = await storage.mergePeople(primaryId, duplicateId);
+      const merged = await storage.mergePeople(primaryId, duplicateId, mergedData);
       res.json(merged);
     } catch (error) {
       console.error('Error merging people:', error);
@@ -3400,11 +3400,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/entities/places/merge', async (req, res) => {
     try {
-      const { primaryId, duplicateId } = req.body;
+      const { primaryId, duplicateId, mergedData } = req.body;
       if (!primaryId || !duplicateId) {
         return res.status(400).json({ error: 'Both primaryId and duplicateId are required' });
       }
-      const merged = await storage.mergePlaces(primaryId, duplicateId);
+      const merged = await storage.mergePlaces(primaryId, duplicateId, mergedData);
       res.json(merged);
     } catch (error) {
       console.error('Error merging places:', error);
@@ -3464,11 +3464,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/entities/events/merge', async (req, res) => {
     try {
-      const { primaryId, duplicateId } = req.body;
+      const { primaryId, duplicateId, mergedData } = req.body;
       if (!primaryId || !duplicateId) {
         return res.status(400).json({ error: 'Both primaryId and duplicateId are required' });
       }
-      const merged = await storage.mergeEvents(primaryId, duplicateId);
+      const merged = await storage.mergeEvents(primaryId, duplicateId, mergedData);
       res.json(merged);
     } catch (error) {
       console.error('Error merging events:', error);

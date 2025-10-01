@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield, Copy, Merge, Users, MapPin, Calendar } from "lucide-react";
+import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield, Copy, Merge, Users, MapPin, Calendar, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ProtectedFactsManager } from "@/components/protected-facts-manager";
@@ -516,6 +516,16 @@ export default function BrainManagement() {
   const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [showMergeSelectionDialog, setShowMergeSelectionDialog] = useState(false);
+  const [mergeForm, setMergeForm] = useState({
+    canonicalName: '',
+    disambiguation: '',
+    aliases: [] as string[],
+    relationship: '',
+    description: '',
+    locationType: '',
+    eventDate: '',
+    isCanonical: false
+  });
 
   // Query to fetch memories for selected entity
   const { data: entityMemories, isLoading: entityMemoriesLoading } = useQuery({
@@ -657,21 +667,90 @@ export default function BrainManagement() {
   };
 
   const selectMergeTarget = (targetId: string) => {
-    setSelectedForMerge(prev => [...prev, targetId]);
+    const fullSelection = [selectedForMerge[0], targetId];
+    setSelectedForMerge(fullSelection);
+    
+    // Get both entities
+    const entity1 = mergeMode?.type === 'person' 
+      ? entities.people?.find((p: Person) => p.id === fullSelection[0])
+      : mergeMode?.type === 'place'
+      ? entities.places?.find((p: Place) => p.id === fullSelection[0])
+      : entities.events?.find((e: Event) => e.id === fullSelection[0]);
+      
+    const entity2 = mergeMode?.type === 'person' 
+      ? entities.people?.find((p: Person) => p.id === targetId)
+      : mergeMode?.type === 'place'
+      ? entities.places?.find((p: Place) => p.id === targetId)
+      : entities.events?.find((e: Event) => e.id === targetId);
+    
+    if (entity1 && entity2) {
+      // Combine aliases from both entities (remove duplicates)
+      const combinedAliases = Array.from(new Set([
+        ...(entity1.aliases || []),
+        ...(entity2.aliases || [])
+      ]));
+      
+      // Combine descriptions (if both exist, separate with newline)
+      let combinedDescription = entity1.description || '';
+      if (entity2.description) {
+        combinedDescription = combinedDescription 
+          ? `${combinedDescription}\n\n${entity2.description}`
+          : entity2.description;
+      }
+      
+      // Initialize merge form with primary entity's data + combined fields
+      setMergeForm({
+        canonicalName: entity1.canonicalName,
+        disambiguation: entity1.disambiguation || entity2.disambiguation || '',
+        aliases: combinedAliases,
+        relationship: entity1.relationship || entity2.relationship || '',
+        description: combinedDescription,
+        locationType: entity1.locationType || entity2.locationType || '',
+        eventDate: entity1.eventDate || entity2.eventDate || '',
+        isCanonical: entity1.isCanonical || entity2.isCanonical || false
+      });
+    }
+    
     setShowMergeSelectionDialog(false);
     setShowMergeDialog(true);
   };
 
-  const confirmMerge = (primaryId: string) => {
-    if (!mergeMode) return;
-    const duplicateId = selectedForMerge.find(id => id !== primaryId);
-    if (!duplicateId) return;
+  const confirmMerge = () => {
+    if (!mergeMode || selectedForMerge.length !== 2) return;
+    const [primaryId, duplicateId] = selectedForMerge;
     
     mergeEntitiesMutation.mutate({
       type: mergeMode.type,
       primaryId,
-      duplicateId
+      duplicateId,
+      mergedData: mergeForm
     });
+  };
+
+  const addMergeAlias = () => {
+    setMergeForm({
+      ...mergeForm,
+      aliases: [...mergeForm.aliases, '']
+    });
+  };
+
+  const updateMergeAlias = (index: number, value: string) => {
+    const newAliases = [...mergeForm.aliases];
+    newAliases[index] = value;
+    setMergeForm({
+      ...mergeForm,
+      aliases: newAliases
+    });
+  };
+
+  const removeMergeAlias = (index: number) => {
+    if (mergeForm.aliases.length > 0) {
+      const newAliases = mergeForm.aliases.filter((_, i) => i !== index);
+      setMergeForm({
+        ...mergeForm,
+        aliases: newAliases
+      });
+    }
   };
 
   const addAliasField = () => {
@@ -3340,82 +3419,206 @@ export default function BrainManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Merge Entities Dialog */}
+      {/* Merge Entities Dialog - Enhanced with editable fields */}
       <Dialog open={showMergeDialog} onOpenChange={setShowMergeDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Merge {mergeMode?.type === 'person' ? 'People' : mergeMode?.type === 'place' ? 'Places' : 'Events'}</DialogTitle>
             <DialogDescription>
-              Choose which entity to keep as the primary. The duplicate will be deleted and all its memory links will be transferred.
+              Review and edit the combined information before merging. The duplicate will be deleted and all memory links transferred.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            {selectedForMerge.map((entityId) => {
-              const entity = mergeMode?.type === 'person' 
-                ? entities.people?.find((p: Person) => p.id === entityId)
-                : mergeMode?.type === 'place'
-                ? entities.places?.find((p: Place) => p.id === entityId)
-                : entities.events?.find((e: Event) => e.id === entityId);
-              
-              if (!entity) return null;
+          <div className="grid grid-cols-2 gap-6">
+            {/* Original Entities Side-by-Side */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300 uppercase">Original Entities</h3>
+              {selectedForMerge.map((entityId, index) => {
+                const entity = mergeMode?.type === 'person' 
+                  ? entities.people?.find((p: Person) => p.id === entityId)
+                  : mergeMode?.type === 'place'
+                  ? entities.places?.find((p: Place) => p.id === entityId)
+                  : entities.events?.find((e: Event) => e.id === entityId);
+                
+                if (!entity) return null;
 
-              return (
-                <div key={entityId} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                        {entity.canonicalName}
-                      </h3>
-                      {entity.disambiguation && (
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                          {entity.disambiguation}
-                        </p>
-                      )}
-                      {entity.aliases && entity.aliases.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          <span className="text-xs text-gray-500">Aliases:</span>
-                          {entity.aliases.map((alias: string, index: number) => (
-                            <Badge key={index} variant="outline" className="text-xs">
-                              {alias}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      {entity.description && (
-                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
-                          {entity.description}
-                        </p>
-                      )}
+                return (
+                  <div key={entityId} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant={index === 0 ? "default" : "secondary"}>
+                        {index === 0 ? 'Primary' : 'Merging Into Primary'}
+                      </Badge>
                     </div>
+                    <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+                      {entity.canonicalName}
+                    </h4>
+                    {entity.disambiguation && (
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {entity.disambiguation}
+                      </p>
+                    )}
+                    {entity.aliases && entity.aliases.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {entity.aliases.map((alias: string, idx: number) => (
+                          <Badge key={idx} variant="outline" className="text-xs">
+                            {alias}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {entity.description && (
+                      <p className="text-xs text-gray-700 dark:text-gray-300 mt-2">
+                        {entity.description}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Editable Combined Data */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm text-purple-700 dark:text-purple-400 uppercase">
+                Combined Result (Editable)
+              </h3>
+              <div className="space-y-4 border border-purple-300 dark:border-purple-700 rounded-lg p-4 bg-purple-50 dark:bg-purple-900/20">
+                <div>
+                  <label className="text-sm font-medium">Canonical Name</label>
+                  <Input
+                    value={mergeForm.canonicalName}
+                    onChange={(e) => setMergeForm({ ...mergeForm, canonicalName: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Disambiguation (optional)</label>
+                  <Input
+                    value={mergeForm.disambiguation}
+                    onChange={(e) => setMergeForm({ ...mergeForm, disambiguation: e.target.value })}
+                    placeholder="e.g., 'from episode 42'"
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Aliases (combined from both)</label>
+                  <div className="space-y-2 mt-1">
+                    {mergeForm.aliases.map((alias, index) => (
+                      <div key={index} className="flex gap-2">
+                        <Input
+                          value={alias}
+                          onChange={(e) => updateMergeAlias(index, e.target.value)}
+                          placeholder="Alias name"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeMergeAlias(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
                     <Button
-                      onClick={() => confirmMerge(entityId)}
-                      disabled={mergeEntitiesMutation.isPending}
-                      className="ml-4"
-                      data-testid={`button-select-primary-${entityId}`}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addMergeAlias}
                     >
-                      {mergeEntitiesMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Merging...
-                        </>
-                      ) : (
-                        'Keep This One'
-                      )}
+                      <Plus className="h-4 w-4 mr-1" /> Add Alias
                     </Button>
                   </div>
                 </div>
-              );
-            })}
+
+                <div>
+                  <label className="text-sm font-medium">Description (combined)</label>
+                  <Textarea
+                    value={mergeForm.description}
+                    onChange={(e) => setMergeForm({ ...mergeForm, description: e.target.value })}
+                    placeholder="Combined description from both entities"
+                    className="mt-1 min-h-[100px]"
+                  />
+                </div>
+
+                {mergeMode?.type === 'person' && (
+                  <div>
+                    <label className="text-sm font-medium">Relationship</label>
+                    <Input
+                      value={mergeForm.relationship}
+                      onChange={(e) => setMergeForm({ ...mergeForm, relationship: e.target.value })}
+                      placeholder="e.g., friend, family, colleague"
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+
+                {mergeMode?.type === 'place' && (
+                  <div>
+                    <label className="text-sm font-medium">Location Type</label>
+                    <Input
+                      value={mergeForm.locationType}
+                      onChange={(e) => setMergeForm({ ...mergeForm, locationType: e.target.value })}
+                      placeholder="e.g., restaurant, city, venue"
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+
+                {mergeMode?.type === 'event' && (
+                  <>
+                    <div>
+                      <label className="text-sm font-medium">Event Date</label>
+                      <Input
+                        value={mergeForm.eventDate}
+                        onChange={(e) => setMergeForm({ ...mergeForm, eventDate: e.target.value })}
+                        placeholder="e.g., 2024-03-15"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        checked={mergeForm.isCanonical}
+                        onCheckedChange={(checked) => setMergeForm({ ...mergeForm, isCanonical: !!checked })}
+                      />
+                      <label className="text-sm">Is Canonical Event</label>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="mt-6">
             <Button
               variant="outline"
-              onClick={() => setShowMergeDialog(false)}
+              onClick={() => {
+                setShowMergeDialog(false);
+                setMergeMode(null);
+                setSelectedForMerge([]);
+              }}
               disabled={mergeEntitiesMutation.isPending}
             >
               Cancel
+            </Button>
+            <Button
+              onClick={confirmMerge}
+              disabled={mergeEntitiesMutation.isPending || !mergeForm.canonicalName.trim()}
+              className="bg-purple-600 hover:bg-purple-700"
+              data-testid="button-confirm-merge"
+            >
+              {mergeEntitiesMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Merging...
+                </>
+              ) : (
+                <>
+                  <Merge className="w-4 h-4 mr-2" />
+                  Confirm Merge
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
