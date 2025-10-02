@@ -30,6 +30,69 @@ class EntityExtractionService {
   }
 
   /**
+   * Retry helper for Gemini API calls with exponential backoff
+   */
+  private async retryWithBackoff<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    maxRetries = 3
+  ): Promise<T> {
+    const delays = [1000, 3000, 9000]; // 1s, 3s, 9s
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        const isLastAttempt = attempt === maxRetries;
+        const isRetryable = this.isRetryableError(error);
+        
+        if (!isRetryable || isLastAttempt) {
+          console.error(`❌ ${operationName} failed after ${attempt + 1} attempts:`, error);
+          throw error;
+        }
+        
+        const delay = delays[attempt] || delays[delays.length - 1]; // Use last delay if we exceed array
+        console.warn(`⚠️ ${operationName} failed (attempt ${attempt + 1}/${maxRetries + 1}): ${error.message || error}`);
+        console.log(`🔄 Retrying in ${delay / 1000}s...`);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    
+    // TypeScript safety - should never reach here
+    throw new Error(`Unexpected retry loop exit for ${operationName}`);
+  }
+
+  /**
+   * Check if error is retryable (transient errors like overload, rate limits)
+   */
+  private isRetryableError(error: any): boolean {
+    const errorStr = error?.message || error?.toString() || '';
+    const errorCode = error?.error?.code || error?.status || 0;
+    
+    // Retry on: overloaded (503), rate limits (429), timeouts, network errors
+    const retryablePatterns = [
+      /overloaded/i,
+      /rate.?limit/i,
+      /timeout/i,
+      /ECONNRESET/i,
+      /ETIMEDOUT/i,
+      /503/,
+      /429/
+    ];
+    
+    const isRetryable = retryablePatterns.some(pattern => 
+      pattern.test(errorStr) || errorCode === 503 || errorCode === 429
+    );
+    
+    if (!isRetryable) {
+      console.log(`Non-retryable error detected: ${errorStr}`);
+    }
+    
+    return isRetryable;
+  }
+
+  /**
    * Extract entities (people, places, events) from memory content using AI
    */
   async extractEntitiesFromMemory(memoryContent: string, existingEntities?: {
@@ -99,35 +162,40 @@ DO NOT extract:
 - Pronouns or generic references (he, she, it, there)`;
 
     try {
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "object",
-            properties: {
-              entities: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    name: { type: "string" },
-                    type: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
-                    disambiguation: { type: "string" },
-                    aliases: { type: "array", items: { type: "string" } },
-                    context: { type: "string" },
-                    confidence: { type: "number" },
-                    mentions: { type: "array", items: { type: "string" } }
-                  },
-                  required: ["name", "type", "disambiguation", "aliases", "context", "confidence", "mentions"]
-                }
+      const response = await this.retryWithBackoff(
+        async () => {
+          return await this.ai.models.generateContent({
+            model: "gemini-2.5-pro",
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "object",
+                properties: {
+                  entities: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string" },
+                        type: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
+                        disambiguation: { type: "string" },
+                        aliases: { type: "array", items: { type: "string" } },
+                        context: { type: "string" },
+                        confidence: { type: "number" },
+                        mentions: { type: "array", items: { type: "string" } }
+                      },
+                      required: ["name", "type", "disambiguation", "aliases", "context", "confidence", "mentions"]
+                    }
+                  }
+                },
+                required: ["entities"]
               }
             },
-            required: ["entities"]
-          }
+            contents: prompt,
+          });
         },
-        contents: prompt,
-      });
+        "Entity extraction"
+      );
 
       const rawJson = response.text;
       if (rawJson) {
@@ -213,46 +281,51 @@ Return as JSON:
 Be conservative with matches - only match if confidence > 0.7`;
 
     try {
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "object",
-            properties: {
-              matches: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    detectedEntityName: { type: "string" },
-                    existingEntityId: { type: "string" },
-                    matchType: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
-                    confidence: { type: "number" },
-                    reason: { type: "string" }
+      const response = await this.retryWithBackoff(
+        async () => {
+          return await this.ai.models.generateContent({
+            model: "gemini-2.5-pro",
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "object",
+                properties: {
+                  matches: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        detectedEntityName: { type: "string" },
+                        existingEntityId: { type: "string" },
+                        matchType: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
+                        confidence: { type: "number" },
+                        reason: { type: "string" }
+                      },
+                      required: ["detectedEntityName", "existingEntityId", "matchType", "confidence", "reason"]
+                    }
                   },
-                  required: ["detectedEntityName", "existingEntityId", "matchType", "confidence", "reason"]
-                }
-              },
-              newEntities: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    name: { type: "string" },
-                    type: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
-                    disambiguation: { type: "string" },
-                    reason: { type: "string" }
-                  },
-                  required: ["name", "type", "disambiguation", "reason"]
-                }
+                  newEntities: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string" },
+                        type: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
+                        disambiguation: { type: "string" },
+                        reason: { type: "string" }
+                      },
+                      required: ["name", "type", "disambiguation", "reason"]
+                    }
+                  }
+                },
+                required: ["matches", "newEntities"]
               }
             },
-            required: ["matches", "newEntities"]
-          }
+            contents: prompt,
+          });
         },
-        contents: prompt,
-      });
+        "Entity disambiguation"
+      );
 
       const rawJson = response.text;
       if (rawJson) {
