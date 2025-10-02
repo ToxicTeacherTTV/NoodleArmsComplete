@@ -1096,6 +1096,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Deduplicate memory entries
+  app.post('/api/memory/deduplicate', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const entries = await storage.getMemoryEntries(activeProfile.id, 10000);
+      const contentMap = new Map<string, typeof entries>();
+      let deletedCount = 0;
+
+      // Group entries by exact content match
+      for (const entry of entries) {
+        const normalizedContent = entry.content.trim();
+        if (!contentMap.has(normalizedContent)) {
+          contentMap.set(normalizedContent, []);
+        }
+        contentMap.get(normalizedContent)!.push(entry);
+      }
+
+      // Process duplicates - keep the oldest (first created), delete the rest
+      for (const [content, duplicates] of Array.from(contentMap.entries())) {
+        if (duplicates.length > 1) {
+          // Sort by creation date (oldest first)
+          duplicates.sort((a: any, b: any) => {
+            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return dateA - dateB;
+          });
+
+          // Keep the first one, delete the rest
+          console.log(`🔍 Found ${duplicates.length} duplicates of: "${content.substring(0, 60)}..."`);
+          for (let i = 1; i < duplicates.length; i++) {
+            await storage.deleteMemoryEntry(duplicates[i].id);
+            deletedCount++;
+            console.log(`  🗑️ Deleted duplicate ${i}/${duplicates.length - 1}`);
+          }
+        }
+      }
+
+      console.log(`✅ Deduplication complete: Removed ${deletedCount} duplicate entries`);
+      res.json({ 
+        message: `Removed ${deletedCount} duplicate memory entries`,
+        deletedCount,
+        totalEntries: entries.length,
+        uniqueEntries: entries.length - deletedCount
+      });
+    } catch (error) {
+      console.error('Memory deduplication error:', error);
+      res.status(500).json({ error: 'Failed to deduplicate memories' });
+    }
+  });
+
   // Clean up hardcoded lore characters that conflict with user preferences
   app.post('/api/memory/cleanup-lore-characters', async (req, res) => {
     try {

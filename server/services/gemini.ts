@@ -10,6 +10,46 @@ class GeminiService {
     });
   }
 
+  // Retry helper with exponential backoff
+  private async retryWithBackoff<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    maxRetries: number = 3
+  ): Promise<T> {
+    const delays = [1000, 3000, 9000]; // 1s, 3s, 9s
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        const isLastAttempt = attempt === maxRetries;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Check if this is a retryable error
+        const isRetryable = 
+          errorMessage.toLowerCase().includes('overload') ||
+          errorMessage.toLowerCase().includes('rate limit') ||
+          errorMessage.toLowerCase().includes('quota') ||
+          errorMessage.toLowerCase().includes('unavailable') ||
+          errorMessage.toLowerCase().includes('timeout');
+        
+        if (!isRetryable || isLastAttempt) {
+          console.error(`❌ ${operationName} failed after ${attempt + 1} attempts:`, errorMessage);
+          throw error;
+        }
+        
+        const delayMs = delays[attempt];
+        console.warn(`⚠️ ${operationName} failed (attempt ${attempt + 1}/${maxRetries + 1}): ${errorMessage}`);
+        console.log(`🔄 Retrying in ${delayMs / 1000}s...`);
+        
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+    
+    // TypeScript safety - should never reach here
+    throw new Error(`Unexpected retry loop exit for ${operationName}`);
+  }
+
   // Enhanced hierarchical extraction methods
   async extractStoriesFromDocument(content: string, filename: string): Promise<Array<{
     content: string;
@@ -58,7 +98,7 @@ Example format:
   }
 ]`;
 
-    try {
+    return await this.retryWithBackoff(async () => {
       const response = await this.ai.models.generateContent({
         model: "gemini-2.5-pro",
         config: {
@@ -86,10 +126,7 @@ Example format:
       } else {
         throw new Error("Empty response from Gemini");
       }
-    } catch (error) {
-      console.error("Gemini story extraction error:", error);
-      throw new Error(`Failed to extract stories: ${error}`);
-    }
+    }, `Extract stories from ${filename}`);
   }
 
   async extractAtomicFactsFromStory(storyContent: string, storyContext: string): Promise<Array<{
@@ -151,34 +188,36 @@ Example - from story about WoW incident:
 Return as JSON array.`;
 
     try {
-      const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                content: { type: "string" },
-                type: { type: "string", enum: ["ATOMIC"] },
-                importance: { type: "number" },
-                keywords: { type: "array", items: { type: "string" } },
-                storyContext: { type: "string" }
-              },
-              required: ["content", "type", "importance", "keywords", "storyContext"]
+      return await this.retryWithBackoff(async () => {
+        const response = await this.ai.models.generateContent({
+          model: "gemini-2.5-pro",
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  content: { type: "string" },
+                  type: { type: "string", enum: ["ATOMIC"] },
+                  importance: { type: "number" },
+                  keywords: { type: "array", items: { type: "string" } },
+                  storyContext: { type: "string" }
+                },
+                required: ["content", "type", "importance", "keywords", "storyContext"]
+              }
             }
-          }
-        },
-        contents: prompt,
-      });
+          },
+          contents: prompt,
+        });
 
-      const rawJson = response.text;
-      if (rawJson) {
-        return JSON.parse(rawJson);
-      } else {
-        throw new Error("Empty response from Gemini");
-      }
+        const rawJson = response.text;
+        if (rawJson) {
+          return JSON.parse(rawJson);
+        } else {
+          throw new Error("Empty response from Gemini");
+        }
+      }, `Extract atomic facts from story`);
     } catch (error) {
       console.error("❌ Gemini atomic fact extraction error:", error);
       
