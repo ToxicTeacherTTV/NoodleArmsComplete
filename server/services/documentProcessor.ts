@@ -94,8 +94,10 @@ class DocumentProcessor {
         processingStatus: 'COMPLETED',
       });
 
-      // Extract and store relevant information using hierarchical approach
-      await this.extractAndStoreHierarchicalKnowledge(document.profileId, extractedContent, document.filename, document.id);
+      // 🚫 DISABLED: No longer auto-extract knowledge on upload
+      // Users must manually trigger extraction via "Extract Facts" or "Reprocess" buttons
+      // This prevents unwanted API costs and gives users control over large documents
+      // await this.extractAndStoreHierarchicalKnowledge(document.profileId, extractedContent, document.filename, document.id);
 
     } catch (error) {
       console.error('Document processing error:', error);
