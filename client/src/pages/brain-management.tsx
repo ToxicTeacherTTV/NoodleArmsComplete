@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield, Copy, Merge, Users, MapPin, Calendar, Plus, Trash2 } from "lucide-react";
+import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield, Copy, Merge, Users, MapPin, Calendar, Plus, Trash2, Sparkles, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ProtectedFactsManager } from "@/components/protected-facts-manager";
@@ -84,6 +84,41 @@ interface Entities {
   people: Person[];
   places: Place[];
   events: Event[];
+}
+
+// Auto-Approval Stats Component
+function AutoApprovalStats() {
+  const { data: weeklyStats } = useQuery<{
+    totalAutoApproved: number;
+    averagePerDay: number;
+    peakDay: string;
+    peakCount: number;
+    categoryTrends: Record<string, number>;
+  }>({
+    queryKey: ['/api/flags/auto-approve/stats'],
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
+  if (!weeklyStats) {
+    return null;
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-3 mt-2">
+      <div className="text-center p-2 bg-white dark:bg-gray-900 rounded">
+        <div className="text-lg font-bold text-blue-600">{weeklyStats.totalAutoApproved}</div>
+        <div className="text-xs text-muted-foreground">This Week</div>
+      </div>
+      <div className="text-center p-2 bg-white dark:bg-gray-900 rounded">
+        <div className="text-lg font-bold text-blue-600">{weeklyStats.averagePerDay.toFixed(1)}</div>
+        <div className="text-xs text-muted-foreground">Avg/Day</div>
+      </div>
+      <div className="text-center p-2 bg-white dark:bg-gray-900 rounded">
+        <div className="text-lg font-bold text-blue-600">{weeklyStats.peakCount}</div>
+        <div className="text-xs text-muted-foreground">Peak Day</div>
+      </div>
+    </div>
+  );
 }
 
 export default function BrainManagement() {
@@ -2326,6 +2361,40 @@ export default function BrainManagement() {
                     </div>
                   </div>
                 )}
+
+                {/* Auto-Approval Section */}
+                <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-blue-500" />
+                      <h3 className="text-sm font-semibold">Smart Auto-Approval</h3>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        fetch('/api/flags/auto-approve', { method: 'POST' })
+                          .then(res => res.json())
+                          .then(() => {
+                            queryClient.invalidateQueries({ queryKey: ['/api/flags/pending'] });
+                            toast({ title: 'Auto-approval completed', description: 'High-confidence flags have been automatically approved' });
+                          })
+                          .catch(() => {
+                            toast({ title: 'Auto-approval failed', variant: 'destructive' });
+                          });
+                      }}
+                      data-testid="button-run-auto-approval"
+                    >
+                      <Zap className="w-4 h-4 mr-1" />
+                      Run Auto-Approval
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Automatically approves high-confidence flags from proven categories (max 100/day). Safe categories like DbD gameplay and pasta content are approved at 85%+ confidence.
+                  </p>
+                  
+                  {/* Auto-Approval Stats */}
+                  <AutoApprovalStats />
+                </div>
 
                 <ScrollArea className="h-96">
                   <div className="space-y-3">
