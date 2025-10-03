@@ -700,6 +700,26 @@ export const insertContentFlagSchema = createInsertSchema(contentFlags).omit({
 export type ContentFlag = typeof contentFlags.$inferSelect;
 export type InsertContentFlag = z.infer<typeof insertContentFlagSchema>;
 
+// Auto-Approval Tracking
+export const flagAutoApprovals = pgTable("flag_auto_approvals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  approvalDate: text("approval_date").notNull(), // YYYY-MM-DD format
+  approvalCount: integer("approval_count").default(0), // Number of auto-approvals for this date
+  flagIds: text("flag_ids").array(), // IDs of flags auto-approved on this date
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+}, (table) => {
+  return {
+    uniqueDateProfile: uniqueIndex("unique_date_profile_idx").on(
+      table.profileId,
+      table.approvalDate
+    ),
+  };
+});
+
+export type FlagAutoApproval = typeof flagAutoApprovals.$inferSelect;
+
 // Discord Integration Tables
 export const discordServers = pgTable("discord_servers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

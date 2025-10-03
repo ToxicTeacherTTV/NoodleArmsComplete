@@ -3828,6 +3828,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Smart Auto-Approval System for Flags
+  
+  // Run auto-approval process
+  app.post('/api/flags/auto-approve', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { flagAutoApprovalService } = await import('./services/flagAutoApproval');
+      const result = await flagAutoApprovalService.runAutoApproval(profile.id);
+
+      res.json({
+        success: true,
+        ...result
+      });
+    } catch (error) {
+      console.error('Error running auto-approval:', error);
+      res.status(500).json({ error: 'Failed to run auto-approval' });
+    }
+  });
+
+  // Get daily auto-approval digest
+  app.get('/api/flags/auto-approve/digest', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { date } = req.query;
+      const { flagAutoApprovalService } = await import('./services/flagAutoApproval');
+      const digest = await flagAutoApprovalService.getDailyDigest(
+        profile.id, 
+        date as string | undefined
+      );
+
+      if (!digest) {
+        return res.json({
+          date: date || new Date().toISOString().split('T')[0],
+          totalApproved: 0,
+          flags: [],
+          categoryBreakdown: {}
+        });
+      }
+
+      res.json(digest);
+    } catch (error) {
+      console.error('Error fetching auto-approval digest:', error);
+      res.status(500).json({ error: 'Failed to fetch digest' });
+    }
+  });
+
+  // Get weekly auto-approval stats
+  app.get('/api/flags/auto-approve/stats', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { flagAutoApprovalService } = await import('./services/flagAutoApproval');
+      const stats = await flagAutoApprovalService.getWeeklyStats(profile.id);
+
+      res.json(stats);
+    } catch (error) {
+      console.error('Error fetching auto-approval stats:', error);
+      res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+  });
+
   // Discord API Routes (Protected by basic auth check)
   
   // Simple auth middleware for Discord routes
