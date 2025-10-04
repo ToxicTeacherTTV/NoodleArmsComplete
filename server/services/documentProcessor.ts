@@ -210,17 +210,10 @@ class DocumentProcessor {
     filename: string, 
     documentId: string
   ): Promise<void> {
-    // Step 1: Classify content (5% -> 15%)
+    // Step 1: Always use FULL content for large documents (no conversational filtering)
     await storage.updateDocument(documentId, { processingProgress: 10 });
-    const classification = this.classifyContent(content, filename);
-    let contentToProcess = content;
-    
-    if (classification.mode === 'conversational') {
-      console.log(`🎭 Processing as conversational content...`);
-      contentToProcess = conversationParser.extractFactRelevantContent(content, filename);
-    } else {
-      console.log(`📖 Processing as informational content...`);
-    }
+    console.log(`📖 Processing full document content (${content.length} chars)...`);
+    const contentToProcess = content; // Always use full content - don't filter
     
     await storage.updateDocument(documentId, { processingProgress: 15 });
     
