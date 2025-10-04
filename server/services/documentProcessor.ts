@@ -179,80 +179,114 @@ class DocumentProcessor {
     console.log(`✅ Background job queued for ${filename}`);
   }
 
-  // 📦 BATCHED: Process entities in batches to prevent database overload
+  // 📦 BATCHED: Full entity extraction in background with progress tracking
   private async extractAndStoreHierarchicalKnowledgeInBackground(
     profileId: string, 
     content: string, 
     filename: string, 
     documentId: string
   ): Promise<void> {
-    console.log(`🔄 Running batched entity extraction for ${filename}...`);
+    console.log(`🔄 Running FULL entity extraction in background for ${filename}...`);
     
-    // First, do the entity extraction without writing to DB
-    const chunks = this.intelligentChunkText(content);
-    console.log(`📝 Created ${chunks.length} chunks - will process in small batches`);
+    // Update progress as we work through the full extraction
+    await storage.updateDocument(documentId, { processingProgress: 5 });
     
-    // Update progress: 10% (chunking complete)
-    await storage.updateDocument(documentId, { processingProgress: 10 });
-    
-    // Process in VERY small batches to avoid overwhelming the database
-    // For large documents (282 chunks), this prevents connection timeouts
-    const BATCH_SIZE = 5; // Process only 5 chunks at a time
-    const totalBatches = Math.ceil(chunks.length / BATCH_SIZE);
-    
-    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-      const batch = chunks.slice(i, i + BATCH_SIZE);
-      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+    try {
+      // Just call the full extraction method and update progress along the way
+      // This does ALL the entity extraction, story parsing, etc.
+      await this.extractAndStoreHierarchicalKnowledgeWithProgress(profileId, content, filename, documentId);
       
-      console.log(`📦 Processing batch ${batchNum}/${totalBatches} (chunks ${i+1}-${Math.min(i+BATCH_SIZE, chunks.length)}/${chunks.length})`);
-      
-      try {
-        // Process this batch - extract and store facts for these chunks only
-        await this.processBatch(profileId, batch, filename, documentId);
-        
-        // Update progress (10% to 95%)
-        const progress = Math.min(10 + Math.floor((batchNum / totalBatches) * 85), 95);
-        await storage.updateDocument(documentId, { processingProgress: progress });
-        
-        // Longer delay to let database breathe
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } catch (error) {
-        console.error(`❌ Batch ${batchNum} failed:`, error);
-        // Continue with next batch instead of failing completely
-      }
+      console.log(`✅ Full background extraction completed for ${filename}`);
+    } catch (error) {
+      console.error(`❌ Background extraction failed:`, error);
+      throw error;
     }
-    
-    console.log(`✅ Batched extraction completed for ${filename}`);
   }
 
-  // Process a single batch of chunks (simplified version)
-  private async processBatch(profileId: string, chunks: string[], filename: string, documentId: string): Promise<void> {
-    // Process just these chunks - extract facts and store them
-    const batchContent = chunks.join('\n\n');
+  // Wrapper that adds progress tracking to the full extraction
+  private async extractAndStoreHierarchicalKnowledgeWithProgress(
+    profileId: string, 
+    content: string, 
+    filename: string, 
+    documentId: string
+  ): Promise<void> {
+    // Step 1: Classify content (5% -> 15%)
+    await storage.updateDocument(documentId, { processingProgress: 10 });
+    const classification = this.classifyContent(content, filename);
+    let contentToProcess = content;
     
-    // Use Gemini to extract just facts from this batch
-    const facts = await geminiService.extractFactsFromDocument(batchContent, filename);
+    if (classification.mode === 'conversational') {
+      console.log(`🎭 Processing as conversational content...`);
+      contentToProcess = conversationParser.extractFactRelevantContent(content, filename);
+    } else {
+      console.log(`📖 Processing as informational content...`);
+    }
     
-    // Store facts in database
-    for (const fact of facts) {
-      try {
-        const canonicalKey = this.generateCanonicalKey(fact.content);
+    await storage.updateDocument(documentId, { processingProgress: 15 });
+    
+    // Step 2: Extract stories (15% -> 40%)
+    console.log(`📖 Extracting stories and contexts...`);
+    const stories = await geminiService.extractStoriesFromDocument(contentToProcess, filename);
+    console.log(`✅ Extracted ${stories.length} stories/contexts`);
+    
+    await storage.updateDocument(documentId, { processingProgress: 30 });
+    
+    // Store story-level facts
+    const storyIds: string[] = [];
+    for (const story of stories) {
+      const canonicalKey = this.generateCanonicalKey(story.content);
+      const storyFact = await storage.addMemoryEntry({
+        profileId,
+        type: story.type,
+        content: story.content,
+        importance: story.importance,
+        keywords: story.keywords,
+        source: filename,
+        sourceId: documentId,
+        canonicalKey,
+        isAtomicFact: false,
+      });
+      storyIds.push(storyFact.id);
+    }
+    
+    await storage.updateDocument(documentId, { processingProgress: 40 });
+    
+    // Step 3: Extract atomic facts (40% -> 95%)
+    console.log(`⚛️ Extracting atomic facts from stories...`);
+    let totalAtomicFacts = 0;
+    
+    for (let i = 0; i < stories.length; i++) {
+      const story = stories[i];
+      const storyContextSnippet = story.content.substring(0, 200);
+      const atomicFacts = await geminiService.extractAtomicFactsFromStory(story.content, storyContextSnippet);
+      
+      for (const atomicFact of atomicFacts) {
+        const canonicalKey = this.generateCanonicalKey(atomicFact.content);
         await storage.addMemoryEntry({
           profileId,
-          type: fact.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT',
-          content: fact.content,
-          importance: fact.importance || 3,
-          keywords: fact.keywords || [],
+          type: atomicFact.type,
+          content: atomicFact.content,
+          importance: atomicFact.importance,
+          keywords: atomicFact.keywords,
           source: filename,
           sourceId: documentId,
           canonicalKey,
           isAtomicFact: true,
+          parentFactId: storyIds[i],
+          storyContext: storyContextSnippet,
         });
-      } catch (error) {
-        console.error(`Failed to store fact:`, error);
-        // Continue with next fact
+        totalAtomicFacts++;
       }
+      
+      // Update progress based on stories processed
+      const progress = 40 + Math.floor((i + 1) / stories.length * 55);
+      await storage.updateDocument(documentId, { processingProgress: Math.min(progress, 95) });
+      
+      // Small delay between stories
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
+    
+    console.log(`✅ Extracted ${totalAtomicFacts} atomic facts from ${stories.length} stories`);
   }
 
   // Enhanced chunking with global entity extraction and story arc detection
