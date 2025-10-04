@@ -130,7 +130,7 @@ export class FlagAutoApprovalService {
           .update(flagAutoApprovals)
           .set({
             approvalCount: currentCount + approvedFlagIds.length,
-            flagIds: sql`array_cat(flag_ids, ${approvedFlagIds})`,
+            flagIds: sql`array_cat(flag_ids, ARRAY[${sql.join(approvedFlagIds.map(id => sql`${id}`), sql`, `)}]::text[])`,
             updatedAt: new Date(),
           })
           .where(eq(flagAutoApprovals.id, dailyStats.id));
