@@ -210,17 +210,42 @@ class DocumentProcessor {
     filename: string, 
     documentId: string
   ): Promise<void> {
-    // Step 1: Always use FULL content for large documents (no conversational filtering)
+    // Step 1: Chunk large documents to prevent API overload
     await storage.updateDocument(documentId, { processingProgress: 10 });
     console.log(`📖 Processing full document content (${content.length} chars)...`);
-    const contentToProcess = content; // Always use full content - don't filter
     
+    // Chunk the content first if it's too large (>100k chars = ~25k tokens)
+    const MAX_CHUNK_SIZE = 100000; // ~25k tokens
+    const chunks = content.length > MAX_CHUNK_SIZE 
+      ? this.intelligentChunkText(content, 500) // Use intelligent chunking
+      : [content]; // Small enough to process as-is
+    
+    console.log(`📦 Split into ${chunks.length} chunks for processing`);
     await storage.updateDocument(documentId, { processingProgress: 15 });
     
-    // Step 2: Extract stories (15% -> 40%)
-    console.log(`📖 Extracting stories and contexts...`);
-    const stories = await geminiService.extractStoriesFromDocument(contentToProcess, filename);
-    console.log(`✅ Extracted ${stories.length} stories/contexts`);
+    // Step 2: Extract stories from each chunk (15% -> 40%)
+    console.log(`📖 Extracting stories from ${chunks.length} chunks...`);
+    const allStories = [];
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      console.log(`📝 Processing chunk ${i + 1}/${chunks.length}...`);
+      
+      const chunkStories = await geminiService.extractStoriesFromDocument(chunk, `${filename} (chunk ${i + 1})`);
+      allStories.push(...chunkStories);
+      
+      // Update progress
+      const progress = 15 + Math.floor((i + 1) / chunks.length * 15);
+      await storage.updateDocument(documentId, { processingProgress: Math.min(progress, 30) });
+      
+      // Small delay between chunks to avoid rate limiting
+      if (i < chunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    const stories = allStories;
+    console.log(`✅ Extracted ${stories.length} total stories from ${chunks.length} chunks`);
     
     await storage.updateDocument(documentId, { processingProgress: 30 });
     
