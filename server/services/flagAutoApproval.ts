@@ -26,6 +26,12 @@ const SAFE_CATEGORIES = [
   'mask_dropped',
   'chaos_level_2',
   'relationship_dynamics',
+  'high_importance',
+  'hierarchy_claim',
+  'location_mention',
+  'humor_tactic',
+  'self_reference',
+  'stream_commentary',
 ] as const;
 
 // Categories that need manual review (no auto-approval)
@@ -168,13 +174,13 @@ export class FlagAutoApprovalService {
 
     const confidence = flag.confidence || 0;
 
-    // Safe categories with good confidence (>=85%)
-    if (SAFE_CATEGORIES.includes(flag.flagType as any) && confidence >= 85) {
+    // Safe categories with good confidence (>=75%)
+    if (SAFE_CATEGORIES.includes(flag.flagType as any) && confidence >= 75) {
       return true;
     }
 
-    // High confidence categories need even higher confidence (>=90%)
-    if (HIGH_CONFIDENCE_CATEGORIES.includes(flag.flagType as any) && confidence >= 90) {
+    // High confidence categories need even higher confidence (>=85%)
+    if (HIGH_CONFIDENCE_CATEGORIES.includes(flag.flagType as any) && confidence >= 85) {
       return true;
     }
 
