@@ -161,36 +161,69 @@ class DocumentProcessor {
     
     // First, do the entity extraction without writing to DB
     const chunks = this.intelligentChunkText(content);
-    console.log(`📝 Created ${chunks.length} chunks`);
+    console.log(`📝 Created ${chunks.length} chunks - will process in small batches`);
     
-    // Update progress: 25% (chunking complete)
-    await storage.updateDocument(documentId, { processingProgress: 25 });
+    // Update progress: 10% (chunking complete)
+    await storage.updateDocument(documentId, { processingProgress: 10 });
     
-    // Process in smaller batches to avoid overwhelming the database
-    const BATCH_SIZE = 10;
+    // Process in VERY small batches to avoid overwhelming the database
+    // For large documents (282 chunks), this prevents connection timeouts
+    const BATCH_SIZE = 5; // Process only 5 chunks at a time
+    const totalBatches = Math.ceil(chunks.length / BATCH_SIZE);
+    
     for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
       const batch = chunks.slice(i, i + BATCH_SIZE);
-      console.log(`📦 Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(chunks.length / BATCH_SIZE)}`);
+      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
       
-      // Process this batch
-      await this.processBatch(profileId, batch, filename, documentId);
+      console.log(`📦 Processing batch ${batchNum}/${totalBatches} (chunks ${i+1}-${Math.min(i+BATCH_SIZE, chunks.length)}/${chunks.length})`);
       
-      // Update progress
-      const progress = Math.min(25 + Math.floor(((i + BATCH_SIZE) / chunks.length) * 70), 95);
-      await storage.updateDocument(documentId, { processingProgress: progress });
-      
-      // Small delay to prevent connection saturation
-      await new Promise(resolve => setTimeout(resolve, 100));
+      try {
+        // Process this batch - extract and store facts for these chunks only
+        await this.processBatch(profileId, batch, filename, documentId);
+        
+        // Update progress (10% to 95%)
+        const progress = Math.min(10 + Math.floor((batchNum / totalBatches) * 85), 95);
+        await storage.updateDocument(documentId, { processingProgress: progress });
+        
+        // Longer delay to let database breathe
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        console.error(`❌ Batch ${batchNum} failed:`, error);
+        // Continue with next batch instead of failing completely
+      }
     }
     
     console.log(`✅ Batched extraction completed for ${filename}`);
   }
 
-  // Process a single batch of chunks
+  // Process a single batch of chunks (simplified version)
   private async processBatch(profileId: string, chunks: string[], filename: string, documentId: string): Promise<void> {
-    // Call the original extraction method for this batch
-    // We'll need to modify extractAndStoreHierarchicalKnowledge to accept chunks
-    await this.extractAndStoreHierarchicalKnowledge(profileId, chunks.join('\n\n'), filename, documentId);
+    // Process just these chunks - extract facts and store them
+    const batchContent = chunks.join('\n\n');
+    
+    // Use Gemini to extract just facts from this batch
+    const facts = await geminiService.extractFactsFromDocument(batchContent, filename);
+    
+    // Store facts in database
+    for (const fact of facts) {
+      try {
+        const canonicalKey = this.generateCanonicalKey(fact.content);
+        await storage.addMemoryEntry({
+          profileId,
+          type: fact.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT',
+          content: fact.content,
+          importance: fact.importance || 3,
+          keywords: fact.keywords || [],
+          source: filename,
+          sourceId: documentId,
+          canonicalKey,
+          isAtomicFact: true,
+        });
+      } catch (error) {
+        console.error(`Failed to store fact:`, error);
+        // Continue with next fact
+      }
+    }
   }
 
   // Enhanced chunking with global entity extraction and story arc detection
