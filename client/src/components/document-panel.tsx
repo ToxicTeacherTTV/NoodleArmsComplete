@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,6 +22,19 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
   const [showTextInput, setShowTextInput] = useState(false);
   const [viewingDocument, setViewingDocument] = useState<Document | null>(null);
   const [documentContent, setDocumentContent] = useState<string>('');
+
+  // 🔄 Auto-refresh documents while processing
+  useEffect(() => {
+    const hasProcessingDocs = documents?.some(doc => doc.processingStatus === 'PROCESSING');
+    
+    if (!hasProcessingDocs) return;
+
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+    }, 2000); // Poll every 2 seconds
+
+    return () => clearInterval(interval);
+  }, [documents, queryClient]);
 
   const uploadDocumentMutation = useMutation({
     mutationFn: async ({file, name}: {file: File, name?: string}) => {
@@ -575,9 +588,14 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                   {doc.processingStatus === 'PROCESSING' && (
                     <div className="mt-2">
                       <div className="w-full bg-muted rounded-full h-1.5">
-                        <div className="bg-accent h-1.5 rounded-full w-3/4 transition-all duration-300"></div>
+                        <div 
+                          className="bg-accent h-1.5 rounded-full transition-all duration-300" 
+                          style={{ width: `${doc.processingProgress || 0}%` }}
+                        ></div>
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1">Extracting knowledge...</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Extracting knowledge... {doc.processingProgress || 0}%
+                      </div>
                     </div>
                   )}
                 </CardContent>
