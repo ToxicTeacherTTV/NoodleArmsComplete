@@ -74,18 +74,20 @@ class DocumentProcessor {
       if (document.contentType === 'application/pdf') {
         const pdfData = await pdf(buffer);
         extractedContent = pdfData.text;
-        chunks = this.intelligentChunkText(extractedContent);
+        chunks = this.simpleChunkText(extractedContent); // ⚡ FAST: No entity extraction on upload
       } else if (document.contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         // Process Word documents (.docx)
         const result = await mammoth.extractRawText({ buffer });
         extractedContent = result.value;
-        chunks = this.intelligentChunkText(extractedContent);
+        chunks = this.simpleChunkText(extractedContent); // ⚡ FAST: No entity extraction on upload
       } else if (document.contentType.includes('text/')) {
         extractedContent = buffer.toString('utf-8');
-        chunks = this.intelligentChunkText(extractedContent);
+        chunks = this.simpleChunkText(extractedContent); // ⚡ FAST: No entity extraction on upload
       } else {
         throw new Error(`Unsupported file type: ${document.contentType}`);
       }
+
+      console.log(`✅ Document uploaded: ${chunks.length} chunks created (text extraction only)`);
 
       // Update document with processed content
       await storage.updateDocument(documentId, {
@@ -104,6 +106,33 @@ class DocumentProcessor {
       await storage.updateDocument(documentId, { processingStatus: 'FAILED' });
       throw error;
     }
+  }
+
+  // ⚡ FAST: Simple chunking without entity extraction (for upload)
+  private simpleChunkText(text: string, maxChunkSize: number = 2000): string[] {
+    const chunks: string[] = [];
+    const paragraphs = text.split(/\n\n+/);
+    let currentChunk = '';
+    
+    for (const paragraph of paragraphs) {
+      const trimmedParagraph = paragraph.trim();
+      
+      if (!trimmedParagraph) continue;
+      
+      // If adding this paragraph would exceed chunk size, save current chunk
+      if (currentChunk && (currentChunk.length + trimmedParagraph.length) > maxChunkSize) {
+        chunks.push(currentChunk.trim());
+        currentChunk = trimmedParagraph;
+      } else {
+        currentChunk += (currentChunk ? '\n\n' : '') + trimmedParagraph;
+      }
+    }
+    
+    if (currentChunk.trim()) {
+      chunks.push(currentChunk.trim());
+    }
+    
+    return chunks.length > 0 ? chunks : [text]; // Fallback to full text if no chunks
   }
 
   // 🚀 NEW: Public method for reprocessing documents without full pipeline
