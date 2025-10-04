@@ -61,6 +61,7 @@ export const documents = pgTable("documents", {
   chunks: text("chunks").array(),
   extractedContent: text("extracted_content"),
   processingStatus: text("processing_status").$type<'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'>().default('PENDING'),
+  processingProgress: integer("processing_progress").default(0), // 0-100 percentage for background jobs
   retrievalCount: integer("retrieval_count").default(0),
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),

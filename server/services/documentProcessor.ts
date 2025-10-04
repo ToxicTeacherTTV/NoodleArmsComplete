@@ -116,6 +116,83 @@ class DocumentProcessor {
     console.log(`✅ Document reprocessing completed for ${filename}`);
   }
 
+  // 🎯 BACKGROUND: Start entity extraction in the background without blocking
+  async startBackgroundProcessing(profileId: string, extractedContent: string, filename: string, documentId: string): Promise<void> {
+    console.log(`🚀 Starting background processing for ${filename}...`);
+    
+    // Update status to indicate processing has started
+    await storage.updateDocument(documentId, { 
+      processingStatus: 'PROCESSING',
+      processingProgress: 0 
+    });
+
+    // Run extraction in the background (don't await)
+    setImmediate(async () => {
+      try {
+        await this.extractAndStoreHierarchicalKnowledgeInBackground(profileId, extractedContent, filename, documentId);
+        
+        // Mark as completed
+        await storage.updateDocument(documentId, { 
+          processingStatus: 'COMPLETED',
+          processingProgress: 100
+        });
+        
+        console.log(`✅ Background processing completed for ${filename}`);
+      } catch (error) {
+        console.error(`❌ Background processing failed for ${filename}:`, error);
+        await storage.updateDocument(documentId, { 
+          processingStatus: 'FAILED',
+          processingProgress: 0
+        });
+      }
+    });
+
+    console.log(`✅ Background job queued for ${filename}`);
+  }
+
+  // 📦 BATCHED: Process entities in batches to prevent database overload
+  private async extractAndStoreHierarchicalKnowledgeInBackground(
+    profileId: string, 
+    content: string, 
+    filename: string, 
+    documentId: string
+  ): Promise<void> {
+    console.log(`🔄 Running batched entity extraction for ${filename}...`);
+    
+    // First, do the entity extraction without writing to DB
+    const chunks = this.intelligentChunkText(content);
+    console.log(`📝 Created ${chunks.length} chunks`);
+    
+    // Update progress: 25% (chunking complete)
+    await storage.updateDocument(documentId, { processingProgress: 25 });
+    
+    // Process in smaller batches to avoid overwhelming the database
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+      const batch = chunks.slice(i, i + BATCH_SIZE);
+      console.log(`📦 Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(chunks.length / BATCH_SIZE)}`);
+      
+      // Process this batch
+      await this.processBatch(profileId, batch, filename, documentId);
+      
+      // Update progress
+      const progress = Math.min(25 + Math.floor(((i + BATCH_SIZE) / chunks.length) * 70), 95);
+      await storage.updateDocument(documentId, { processingProgress: progress });
+      
+      // Small delay to prevent connection saturation
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    console.log(`✅ Batched extraction completed for ${filename}`);
+  }
+
+  // Process a single batch of chunks
+  private async processBatch(profileId: string, chunks: string[], filename: string, documentId: string): Promise<void> {
+    // Call the original extraction method for this batch
+    // We'll need to modify extractAndStoreHierarchicalKnowledge to accept chunks
+    await this.extractAndStoreHierarchicalKnowledge(profileId, chunks.join('\n\n'), filename, documentId);
+  }
+
   // Enhanced chunking with global entity extraction and story arc detection
   private intelligentChunkText(text: string, maxTokens: number = 500): string[] {
     try {

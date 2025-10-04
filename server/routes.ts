@@ -803,7 +803,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Extract facts from document to memory system
+  // Extract facts from document to memory system (BACKGROUND MODE)
   app.post('/api/documents/:id/extract-facts', async (req, res) => {
     try {
       const { id } = req.params;
@@ -821,25 +821,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Document must be processed before extracting facts' });
       }
 
-      // Extract facts from the document using the document processor
-      await documentProcessor.extractAndStoreKnowledge(
+      // 🚀 Start background processing (returns immediately)
+      await documentProcessor.startBackgroundProcessing(
         activeProfile.id, 
         document.extractedContent, 
         document.filename, 
         document.id
       );
-
-      // Get a count of facts created (approximate)
-      const memoryStats = await storage.getMemoryStats(activeProfile.id);
       
       res.json({ 
         success: true, 
-        factsCreated: 'Facts extracted successfully',
-        message: 'Document content has been processed into Nicky\'s memory for RAG retrieval'
+        status: 'processing',
+        message: 'Fact extraction started in background. Check document status for progress.',
+        documentId: id
       });
     } catch (error) {
       console.error('Fact extraction error:', error);
-      res.status(500).json({ error: 'Failed to extract facts from document' });
+      res.status(500).json({ error: 'Failed to start fact extraction' });
     }
   });
 
