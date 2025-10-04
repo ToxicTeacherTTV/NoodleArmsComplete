@@ -216,11 +216,19 @@ class DocumentProcessor {
     
     // Chunk the content first if it's too large (>100k chars = ~25k tokens)
     const MAX_CHUNK_SIZE = 100000; // ~25k tokens
-    const chunks = content.length > MAX_CHUNK_SIZE 
-      ? this.intelligentChunkText(content, 500) // Use intelligent chunking
-      : [content]; // Small enough to process as-is
+    const chunks: string[] = [];
     
-    console.log(`📦 Split into ${chunks.length} chunks for processing`);
+    if (content.length > MAX_CHUNK_SIZE) {
+      // Split into large character-based chunks
+      for (let i = 0; i < content.length; i += MAX_CHUNK_SIZE) {
+        chunks.push(content.substring(i, i + MAX_CHUNK_SIZE));
+      }
+      console.log(`📦 Split ${content.length} chars into ${chunks.length} chunks of ~${MAX_CHUNK_SIZE} chars each`);
+    } else {
+      chunks.push(content);
+      console.log(`📦 Content small enough to process in single chunk (${content.length} chars)`);
+    }
+    
     await storage.updateDocument(documentId, { processingProgress: 15 });
     
     // Step 2: Extract stories from each chunk (15% -> 40%)
