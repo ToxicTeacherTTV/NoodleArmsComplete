@@ -1,6 +1,6 @@
 import { db } from "../db.js";
 import { contentFlags, flagAutoApprovals } from "../../shared/schema.js";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 
 /**
  * Smart Auto-Approval System for Content Flags
@@ -266,7 +266,7 @@ export class FlagAutoApprovalService {
       // Fetch flags for category trends
       if (day.flagIds && day.flagIds.length > 0) {
         const flags = await db.query.contentFlags.findMany({
-          where: sql`${contentFlags.id} = ANY(${day.flagIds})`,
+          where: inArray(contentFlags.id, day.flagIds),
         });
         
         flags.forEach(flag => {
