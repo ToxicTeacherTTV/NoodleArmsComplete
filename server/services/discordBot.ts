@@ -1217,6 +1217,12 @@ export class DiscordBotService {
    */
   private async generateShortDiscordResponse(prompt: string, coreIdentity: string): Promise<string | null> {
     try {
+      // Get personality controls for chaotic Nicky behavior
+      const { personalityController } = await import('./personalityController');
+      const controls = await personalityController.getEffectivePersonality();
+      const { generatePersonalityPrompt } = await import('../types/personalityControl');
+      const personalityPrompt = generatePersonalityPrompt(controls);
+      
       // First try Anthropic
       const anthropic = new (await import('@anthropic-ai/sdk')).Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
@@ -1227,6 +1233,8 @@ export class DiscordBotService {
         max_tokens: 200, // Reasonable limit for 3-4 sentences
         temperature: 1.0,
         system: `${coreIdentity}
+
+${personalityPrompt}
 
 DISCORD MODE: You are chatting on Discord. Your responses MUST be:
 - 3-4 sentences maximum 
