@@ -378,9 +378,11 @@ If no drift detected, return: []`;
       });
 
       const content = response.content.find(c => c.type === 'text')?.text || '';
-      const drifts = JSON.parse(content);
+      console.log(`📝 Anthropic drift raw response (first 200 chars): ${content.slice(0, 200)}...`);
+      
+      const drifts = this.extractJSON(content);
 
-      console.log(`🎯 Detected ${Array.isArray(drifts) ? drifts.length : 0} personality drifts`);
+      console.log(`🎯 Anthropic detected ${Array.isArray(drifts) ? drifts.length : 0} personality drifts from ${recentFacts.length} facts`);
       return Array.isArray(drifts) ? drifts : [];
 
     } catch (anthropicError) {
@@ -395,9 +397,11 @@ If no drift detected, return: []`;
           temperature: 0.3
         });
 
-        const drifts = JSON.parse(geminiResponse.content);
+        console.log(`📝 Gemini drift raw response (first 200 chars): ${geminiResponse.content.slice(0, 200)}...`);
+        
+        const drifts = this.extractJSON(geminiResponse.content);
 
-        console.log(`✅ Gemini detected ${Array.isArray(drifts) ? drifts.length : 0} personality drifts`);
+        console.log(`✅ Gemini detected ${Array.isArray(drifts) ? drifts.length : 0} personality drifts from ${recentFacts.length} facts`);
         return Array.isArray(drifts) ? drifts : [];
         
       } catch (geminiError) {
