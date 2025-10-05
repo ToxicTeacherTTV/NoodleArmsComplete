@@ -81,6 +81,35 @@ export class IntelligenceEngine {
   }
 
   /**
+   * Helper: Extract JSON from LLM responses that may contain code fences or extra text
+   */
+  private extractJSON(text: string): any {
+    try {
+      // Try direct parse first
+      return JSON.parse(text);
+    } catch {
+      // Strip markdown code fences
+      const jsonMatch = text.match(/```(?:json)?\s*(\[[\s\S]*?\]|\{[\s\S]*?\})\s*```/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[1]);
+      }
+      
+      // Try to find JSON array or object
+      const arrayMatch = text.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        return JSON.parse(arrayMatch[0]);
+      }
+      
+      const objectMatch = text.match(/\{[\s\S]*\}/);
+      if (objectMatch) {
+        return JSON.parse(objectMatch[0]);
+      }
+      
+      throw new Error('No valid JSON found in response');
+    }
+  }
+
+  /**
    * INTELLIGENCE LAYER 1: Pattern Recognition for Fact Clustering
    * Identifies groups of related facts that should be consolidated
    */
@@ -149,7 +178,9 @@ If no clusters found, return: []`;
       });
 
       const content = response.content.find(c => c.type === 'text')?.text || '';
-      const analysis = JSON.parse(content);
+      console.log(`📝 Anthropic raw response (first 200 chars): ${content.slice(0, 200)}...`);
+      
+      const analysis = this.extractJSON(content);
 
       if (Array.isArray(analysis)) {
         for (const cluster of analysis) {
@@ -164,7 +195,7 @@ If no clusters found, return: []`;
         }
       }
 
-      console.log(`🎯 Found ${clusters.length} fact clusters needing consolidation`);
+      console.log(`🎯 Anthropic found ${clusters.length} fact clusters from ${facts.length} candidate facts`);
       return clusters;
 
     } catch (anthropicError) {
@@ -179,7 +210,9 @@ If no clusters found, return: []`;
           temperature: 0.3
         });
 
-        const analysis = JSON.parse(geminiResponse.content);
+        console.log(`📝 Gemini raw response (first 200 chars): ${geminiResponse.content.slice(0, 200)}...`);
+        
+        const analysis = this.extractJSON(geminiResponse.content);
 
         if (Array.isArray(analysis)) {
           for (const cluster of analysis) {
@@ -194,7 +227,7 @@ If no clusters found, return: []`;
           }
         }
 
-        console.log(`✅ Gemini found ${clusters.length} fact clusters`);
+        console.log(`✅ Gemini found ${clusters.length} fact clusters from ${facts.length} candidate facts`);
         return clusters;
         
       } catch (geminiError) {
