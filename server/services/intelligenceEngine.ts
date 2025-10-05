@@ -58,10 +58,10 @@ interface MemorySummary {
 }
 
 interface IntelligenceSummary {
-  clusterAnalysis: ClusterAnalysis[];
+  factClusters: ClusterAnalysis[];
   sourceReliability: SourceReliability[];
   personalityDrift: PersonalityDrift[];
-  relevanceScores: RelevanceScore[];
+  contextRelevance: RelevanceScore[];
   actionRequired: number;
   autoHandled: number;
   priorityActions: string[];
@@ -784,10 +784,10 @@ If no drift detected, return: []`;
     console.log(`✅ Intelligence analysis complete: ${actionRequired} actions needed, ${autoHandled} auto-handled`);
 
     return {
-      clusterAnalysis: clusterAnalysis || [],
+      factClusters: clusterAnalysis || [],
       sourceReliability: sourceReliability || [],
       personalityDrift: personalityDrift || [],
-      relevanceScores: relevanceScores || [],
+      contextRelevance: relevanceScores || [],
       actionRequired,
       autoHandled,
       priorityActions
