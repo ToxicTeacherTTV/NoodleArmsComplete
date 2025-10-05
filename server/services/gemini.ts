@@ -505,6 +505,9 @@ Response format:
         : `The Toxic Teacher says: "${userMessage}"${contextPrompt}`;
 
       console.log('🌟 Using Gemini fallback for chat response');
+      console.log('📝 Gemini userMessage (first 200 chars):', userMessage.substring(0, 200));
+      console.log('📝 Gemini coreIdentity (first 200 chars):', coreIdentity.substring(0, 200));
+      console.log('🎯 isFormattedPrompt:', isFormattedPrompt);
 
       // Try multiple times with different models to handle server overload
       let response;
