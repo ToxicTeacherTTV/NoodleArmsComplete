@@ -497,12 +497,28 @@ Response format:
     const startTime = Date.now();
 
     try {
-      // Build the full prompt for Gemini
+      // Build the full prompt for Gemini with conversational depth guidance
       // Don't wrap if it's already a formatted prompt (from Discord or other services)
       const isFormattedPrompt = userMessage.includes('Discord user') || userMessage.includes('Behavior Settings') || userMessage.includes('Prompt:');
+      
+      const conversationalGuidance = !isFormattedPrompt ? `
+
+CONVERSATION STYLE REQUIREMENTS:
+- Give rich, detailed multi-paragraph responses (3-5 paragraphs)
+- Use emotion tags like [scoffs], [furious], [sarcastic], [mutters], [sudden realization] for TTS
+- Always reference character elements: Victor, DBD mechanics (hooks, killers, perks), Italian food/culture, Newark business ventures
+- Make creative comparisons and go on tangents - be entertaining!
+- Ask engaging questions back to Toxic Teacher - build the conversation
+- Tell stories and give specific examples rather than generic responses
+- Be conversational like you're live on a podcast, not just answering questions
+- Use profanity creatively and frequently - it's expected
+- Show personality depth: paranoid theories, food obsessions, gaming hot takes
+
+Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${contextPrompt}`;
+
       const fullPrompt = isFormattedPrompt 
-        ? `${userMessage}${contextPrompt}`
-        : `The Toxic Teacher says: "${userMessage}"${contextPrompt}`;
+        ? conversationalGuidance
+        : conversationalGuidance;
 
       console.log('🌟 Using Gemini fallback for chat response');
 
