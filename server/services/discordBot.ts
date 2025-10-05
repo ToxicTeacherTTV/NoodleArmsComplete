@@ -1316,9 +1316,9 @@ DISCORD CHAT MODE - CRITICAL CONSTRAINTS:
           .replace(/^\s*\|\s*/g, '') // Remove leading pipes
           .trim();
         
-        // Aggressively limit length for Discord
-        if (content.length > 300) {
-          content = content.substring(0, 297) + "...";
+        // Discord's limit is 2000 chars, let natural responses flow
+        if (content.length > 1900) {
+          content = content.substring(0, 1897) + "...";
         }
         
         console.log('✅ Gemini Discord response generated successfully');
