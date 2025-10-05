@@ -302,8 +302,7 @@ If no clusters found, return: []`;
       return [];
     }
 
-    try {
-      const prompt = `Analyze these personality-related facts for character trait drift:
+    const prompt = `Analyze these personality-related facts for character trait drift:
 
 ${recentFacts.map(f => `"${f.content}"`).join('\n')}
 
@@ -336,6 +335,8 @@ Return JSON array:
 
 If no drift detected, return: []`;
 
+    try {
+      // Try Anthropic first
       const response = await this.anthropic.messages.create({
         model: 'claude-sonnet-4-5-20250929',
         max_tokens: 2000,
@@ -349,9 +350,27 @@ If no drift detected, return: []`;
       console.log(`🎯 Detected ${Array.isArray(drifts) ? drifts.length : 0} personality drifts`);
       return Array.isArray(drifts) ? drifts : [];
 
-    } catch (error) {
-      console.error('❌ Personality drift analysis failed:', error);
-      return [];
+    } catch (anthropicError) {
+      console.error('❌ Anthropic personality drift analysis failed:', anthropicError);
+      console.log('🔄 Falling back to Gemini for personality drift analysis...');
+      
+      // Fallback to Gemini
+      try {
+        const geminiResponse = await this.gemini.generateResponse(prompt, {
+          responseFormat: 'json',
+          maxTokens: 2000,
+          temperature: 0.3
+        });
+
+        const drifts = JSON.parse(geminiResponse.content);
+
+        console.log(`✅ Gemini detected ${Array.isArray(drifts) ? drifts.length : 0} personality drifts`);
+        return Array.isArray(drifts) ? drifts : [];
+        
+      } catch (geminiError) {
+        console.error('❌ Gemini personality drift analysis also failed:', geminiError);
+        return [];
+      }
     }
   }
 
