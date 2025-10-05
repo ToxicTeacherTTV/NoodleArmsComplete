@@ -1280,23 +1280,24 @@ DISCORD MODE: You are chatting on Discord. Your responses MUST be:
         console.log('🔄 Anthropic failed, using Gemini for Discord response...');
         const { geminiService } = await import('./gemini');
         
+        // Get personality controls (already loaded above, reuse them)
+        const { personalityController } = await import('./personalityController');
+        const controls = await personalityController.getEffectivePersonality();
+        const { generatePersonalityPrompt } = await import('../types/personalityControl');
+        const personalityPrompt = generatePersonalityPrompt(controls);
+        
         const discordIdentity = `${coreIdentity}
+
+${personalityPrompt}
 
 DISCORD CHAT MODE - CRITICAL CONSTRAINTS:
 - Maximum 3-4 sentences only
-- Casual conversational tone like texting
+- Conversational and casual like texting
 - No essays, rants, or long explanations
-- Simple responses, not walls of text
-- Stay calm and composed
-- Be friendly and helpful, not aggressive`;
-
-        // Create clean Discord prompt without chaos personality instructions
-        const cleanPrompt = `Discord chat context: Someone said "${prompt.split('Discord user')[1]?.split('said:')[1]?.split('"')[1] || 'hello'}"
-
-Respond naturally in Discord chat style. Keep it short and conversational.`;
+- Simple responses, not walls of text`;
 
         const geminiResponse = await geminiService.generateChatResponse(
-          cleanPrompt,
+          prompt,
           discordIdentity,
           ""
         );
