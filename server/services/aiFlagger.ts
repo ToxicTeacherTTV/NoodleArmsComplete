@@ -553,6 +553,43 @@ Focus on actionable flags that help maintain Nicky's character consistency.`;
 
         console.log(`✅ Analyzed memory ${memoryId}: ${analysis.flags.length} flags generated`);
         
+        // 🔗 Extract and link entities for this memory
+        try {
+          const { entityExtraction } = await import('./entityExtraction');
+          const { storage } = await import('../storage');
+          
+          console.log(`🔍 Starting entity extraction for memory ${memoryId}...`);
+          const entityResult = await entityExtraction.processMemoryForEntityLinking(
+            memory.content,
+            profileId,
+            storage
+          );
+          
+          if (entityResult.entitiesCreated > 0) {
+            console.log(`✨ Created ${entityResult.entitiesCreated} new entities for memory ${memoryId}`);
+          }
+          
+          // Update memory with entity links if any were found
+          if (entityResult.personId || entityResult.placeId || entityResult.eventId) {
+            await db.update(memoryEntries)
+              .set({
+                personId: entityResult.personId || memory.personId,
+                placeId: entityResult.placeId || memory.placeId,
+                eventId: entityResult.eventId || memory.eventId
+              })
+              .where(eq(memoryEntries.id, memoryId));
+            
+            console.log(`🔗 Linked memory ${memoryId} to entities: ${[
+              entityResult.personId ? 'person' : null,
+              entityResult.placeId ? 'place' : null,
+              entityResult.eventId ? 'event' : null
+            ].filter(Boolean).join(', ')}`);
+          }
+        } catch (entityError) {
+          console.error(`❌ Entity extraction failed for memory ${memoryId}:`, entityError);
+          // Don't fail the whole batch if entity extraction fails
+        }
+        
         // Small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
