@@ -206,15 +206,19 @@ If no clusters found, return: []`;
       
       // Fallback to Gemini
       try {
-        const geminiResponse = await this.gemini.generateResponse(prompt, {
-          responseFormat: 'json',
-          maxTokens: 3000,
-          temperature: 0.3
+        const geminiResponse = await this.gemini.ai.models.generateContent({
+          model: "gemini-2.5-pro",
+          config: {
+            responseMimeType: "application/json",
+            temperature: 0.3
+          },
+          contents: prompt,
         });
 
-        console.log(`📝 Gemini raw response (first 200 chars): ${geminiResponse.content.slice(0, 200)}...`);
+        const content = geminiResponse.text || '';
+        console.log(`📝 Gemini raw response (first 200 chars): ${content.slice(0, 200)}...`);
         
-        const analysis = this.extractJSON(geminiResponse.content);
+        const analysis = this.extractJSON(content);
 
         if (Array.isArray(analysis)) {
           for (const cluster of analysis) {
@@ -395,15 +399,19 @@ If no drift detected, return: []`;
       
       // Fallback to Gemini
       try {
-        const geminiResponse = await this.gemini.generateResponse(prompt, {
-          responseFormat: 'json',
-          maxTokens: 2000,
-          temperature: 0.3
+        const geminiResponse = await this.gemini.ai.models.generateContent({
+          model: "gemini-2.5-pro",
+          config: {
+            responseMimeType: "application/json",
+            temperature: 0.3
+          },
+          contents: prompt,
         });
 
-        console.log(`📝 Gemini drift raw response (first 200 chars): ${geminiResponse.content.slice(0, 200)}...`);
+        const content = geminiResponse.text || '';
+        console.log(`📝 Gemini drift raw response (first 200 chars): ${content.slice(0, 200)}...`);
         
-        const drifts = this.extractJSON(geminiResponse.content);
+        const drifts = this.extractJSON(content);
 
         console.log(`✅ Gemini detected ${Array.isArray(drifts) ? drifts.length : 0} personality drifts from ${recentFacts.length} facts`);
         return Array.isArray(drifts) ? drifts : [];
