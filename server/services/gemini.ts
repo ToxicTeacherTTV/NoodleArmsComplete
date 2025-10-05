@@ -498,7 +498,11 @@ Response format:
 
     try {
       // Build the full prompt for Gemini
-      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}`;
+      // Don't wrap if it's already a formatted prompt (from Discord or other services)
+      const isFormattedPrompt = userMessage.includes('Discord user') || userMessage.includes('Behavior Settings') || userMessage.includes('Prompt:');
+      const fullPrompt = isFormattedPrompt 
+        ? `${userMessage}${contextPrompt}`
+        : `The Toxic Teacher says: "${userMessage}"${contextPrompt}`;
 
       console.log('🌟 Using Gemini fallback for chat response');
 
