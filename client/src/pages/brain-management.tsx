@@ -2504,7 +2504,7 @@ export default function BrainManagement() {
                                   </Badge>
                                   {flag.confidence && (
                                     <Badge variant="outline" className="text-xs">
-                                      {Math.round(flag.confidence * 100)}% confidence
+                                      {Math.round(flag.confidence)}% confidence
                                     </Badge>
                                   )}
                                 </div>

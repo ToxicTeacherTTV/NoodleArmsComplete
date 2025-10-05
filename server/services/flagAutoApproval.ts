@@ -69,7 +69,7 @@ export class FlagAutoApprovalService {
       ),
     });
 
-    const dailyLimit = 500;
+    const dailyLimit = 700;
     const currentCount = dailyStats?.approvalCount || 0;
     const remaining = dailyLimit - currentCount;
 
