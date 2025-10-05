@@ -2870,28 +2870,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get flags for specific content
-  app.get('/api/flags/:targetType/:targetId', async (req, res) => {
-    try {
-      const profile = await storage.getActiveProfile();
-      if (!profile) {
-        return res.status(400).json({ error: 'No active profile found' });
-      }
-
-      const { targetType, targetId } = req.params;
-      
-      if (!['MEMORY', 'MESSAGE', 'DOCUMENT', 'CONVERSATION'].includes(targetType)) {
-        return res.status(400).json({ error: 'Invalid target type' });
-      }
-
-      const flags = await aiFlagger.getContentFlags(db, targetType as any, targetId, profile.id);
-      res.json(flags);
-    } catch (error) {
-      console.error('Error fetching content flags:', error);
-      res.status(500).json({ error: 'Failed to fetch content flags' });
-    }
-  });
-
   // Update flag review status
   app.put('/api/flags/:flagId/review', async (req, res) => {
     try {
@@ -3895,6 +3873,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching auto-approval stats:', error);
       res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+  });
+
+  // Get flags for specific content (MUST be after specific routes above to avoid route conflicts)
+  app.get('/api/flags/:targetType/:targetId', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { targetType, targetId } = req.params;
+      
+      if (!['MEMORY', 'MESSAGE', 'DOCUMENT', 'CONVERSATION'].includes(targetType)) {
+        return res.status(400).json({ error: 'Invalid target type' });
+      }
+
+      const flags = await aiFlagger.getContentFlags(db, targetType as any, targetId, profile.id);
+      res.json(flags);
+    } catch (error) {
+      console.error('Error fetching content flags:', error);
+      res.status(500).json({ error: 'Failed to fetch content flags' });
     }
   });
 
