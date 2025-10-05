@@ -3,6 +3,14 @@ import type { PersonalityControl } from '../types/personalityControl';
 import { DEFAULT_PERSONALITY_CONTROL } from '../types/personalityControl';
 import type { ChaosMode } from './chaosEngine';
 
+// Personality Cluster System for Time-Based Rotation
+const PERSONALITY_CLUSTERS = {
+  normal: ['Chill Nicky', 'Storytime', 'Patch Roast'] as const,
+  maniacal: ['Roast Mode', 'Unhinged', 'Caller War'] as const
+} as const;
+
+type ClusterType = keyof typeof PERSONALITY_CLUSTERS;
+
 export interface ChaosInfluence {
   intensityDelta: -1 | 0 | 1; // -1: lower intensity, 0: no change, +1: raise intensity  
   spiceCap?: 'platform_safe' | 'normal' | 'spicy'; // Maximum spice allowed
@@ -232,6 +240,54 @@ class PersonalityController {
     
     // Don't save this to state - it's temporary
     return temporary;
+  }
+
+  // CLUSTER-BASED PERSONALITY ROTATION SYSTEM
+  
+  /**
+   * Get active cluster based on time of day
+   * Normal hours (6am-6pm): Chill, Storytime, Patch Roast
+   * Maniacal hours (6pm-6am): Roast Mode, Unhinged, Caller War
+   */
+  private getActiveCluster(): ClusterType {
+    const hour = new Date().getHours();
+    
+    // 6am (6) to 6pm (18) = normal
+    // 6pm (18) to 6am (6) = maniacal
+    if (hour >= 6 && hour < 18) {
+      return 'normal';
+    } else {
+      return 'maniacal';
+    }
+  }
+
+  /**
+   * Pick a random preset from the active cluster
+   */
+  private pickPresetFromCluster(cluster: ClusterType): PersonalityControl['preset'] {
+    const presets = PERSONALITY_CLUSTERS[cluster];
+    const randomIndex = Math.floor(Math.random() * presets.length);
+    return presets[randomIndex];
+  }
+
+  /**
+   * Auto-rotate personality for a new conversation
+   * Time-based cluster selection + conversation-based preset randomization
+   */
+  async rotateForNewConversation(): Promise<UnifiedPersonalityState> {
+    if (this.initializePromise) {
+      await this.initializePromise;
+    }
+
+    const activeCluster = this.getActiveCluster();
+    const newPreset = this.pickPresetFromCluster(activeCluster);
+    
+    console.log(`🔄 Auto-rotating personality: ${activeCluster} cluster → ${newPreset}`);
+    
+    return await this.updatePersonality(
+      { preset: newPreset },
+      'preset_change'
+    );
   }
 
   // Save state to database (store as JSON in a simple key-value approach)
