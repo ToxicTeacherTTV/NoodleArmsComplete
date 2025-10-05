@@ -160,9 +160,20 @@ Preferred communication style: Simple, everyday language.
   - AI-powered segment parsing and fact extraction from transcripts
   - Episode metadata tracking (guests, topics, mood, energy levels)
 - **Dynamic Personality System**: 10-facet personality rotation with anti-repetition guards
+- **Cluster-Based Personality Rotation**: Automatic preset switching with time-of-day awareness
+  - Time-based cluster selection: Normal hours (6am-6pm) vs Maniacal hours (6pm-6am)
+  - Conversation-based random preset selection from active cluster
+  - Normal cluster: Chill Nicky, Storytime, Patch Roast
+  - Maniacal cluster: Roast Mode, Unhinged, Caller War
+  - Zero API cost - configuration changes only
 - **Enhanced Reddit Collection**: 9 subreddits across 3 content streams (NNN, Word from Don, DbD)
 - **Anti-Repetition Engine**: N-gram detection, catchphrase limits, automatic regeneration
 - **Character Accuracy**: Little Italy origins, tax-purposes Jersey residence, terrible motivation coaching
+- **Smart Auto-Approval System**: Automated flag review with confidence-based approval
+  - 500 flags per day limit with category-based filtering
+  - Safe categories auto-approved at 75%+ confidence
+  - High confidence categories require 85%+ confidence
+  - Manual review required for risky categories (fourth_wall_break, ooc_behavior)
 
 ### 🚀 High Priority Features
 
