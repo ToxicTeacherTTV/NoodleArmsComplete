@@ -236,6 +236,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const conversationData = insertConversationSchema.parse(req.body);
       const conversation = await storage.createConversation(conversationData);
+      
+      // Auto-rotate personality for new conversation (cluster-based)
+      const { personalityController } = await import('./services/personalityController');
+      await personalityController.rotateForNewConversation();
+      
       res.json(conversation);
     } catch (error) {
       res.status(400).json({ error: 'Invalid conversation data' });
