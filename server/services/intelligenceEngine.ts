@@ -120,21 +120,23 @@ export class IntelligenceEngine {
   ): Promise<ClusterAnalysis[]> {
     console.log(`🧠 Analyzing fact clusters for profile ${profileId}`);
 
-    // Get recent facts that haven't been clustered
+    // Get recent facts for clustering (prioritize unclustered, but include all active facts)
     const facts = await db
       .select()
       .from(memoryEntries)
       .where(
         and(
           eq(memoryEntries.profileId, profileId),
-          eq(memoryEntries.status, 'ACTIVE'),
-          sql`${memoryEntries.clusterId} IS NULL`
+          eq(memoryEntries.status, 'ACTIVE')
         )
       )
       .orderBy(desc(memoryEntries.createdAt))
       .limit(limit);
 
+    console.log(`📊 Found ${facts.length} candidate facts for clustering (${facts.filter(f => !f.clusterId).length} unclustered)`);
+
     if (facts.length < 2) {
+      console.log(`⚠️ Not enough facts (${facts.length}) for clustering analysis`);
       return [];
     }
 
@@ -317,21 +319,23 @@ If no clusters found, return: []`;
   ): Promise<PersonalityDrift[]> {
     console.log(`🎭 Analyzing personality drift for profile ${profileId}`);
 
-    // Get core personality traits from recent facts
+    // Get personality-related facts (LORE, PREFERENCE, and CONTEXT types)
     const recentFacts = await db
       .select()
       .from(memoryEntries)
       .where(
         and(
           eq(memoryEntries.profileId, profileId),
-          eq(memoryEntries.status, 'ACTIVE'),
-          eq(memoryEntries.type, 'LORE')
+          eq(memoryEntries.status, 'ACTIVE')
         )
       )
       .orderBy(desc(memoryEntries.createdAt))
-      .limit(50);
+      .limit(100);
 
-    if (recentFacts.length < 10) {
+    console.log(`📊 Found ${recentFacts.length} facts for drift analysis (types: ${Array.from(new Set(recentFacts.map(f => f.type))).join(', ')})`);
+
+    if (recentFacts.length < 5) {
+      console.log(`⚠️ Not enough facts (${recentFacts.length}) for drift analysis`);
       return [];
     }
 
