@@ -111,9 +111,7 @@ export class IntelligenceEngine {
 
     const clusters: ClusterAnalysis[] = [];
 
-    try {
-      // Use AI to identify semantic clusters
-      const prompt = `Analyze these memory facts and identify clusters of related information that should be consolidated:
+    const prompt = `Analyze these memory facts and identify clusters of related information that should be consolidated:
 
 ${facts.map((f, i) => `${i + 1}. "${f.content}" (ID: ${f.id})`).join('\n')}
 
@@ -141,6 +139,8 @@ Return a JSON array:
 
 If no clusters found, return: []`;
 
+    try {
+      // Try Anthropic first
       const response = await this.anthropic.messages.create({
         model: 'claude-sonnet-4-5-20250929',
         max_tokens: 3000,
@@ -167,9 +167,40 @@ If no clusters found, return: []`;
       console.log(`🎯 Found ${clusters.length} fact clusters needing consolidation`);
       return clusters;
 
-    } catch (error) {
-      console.error('❌ Fact clustering analysis failed:', error);
-      return [];
+    } catch (anthropicError) {
+      console.error('❌ Anthropic fact clustering failed:', anthropicError);
+      console.log('🔄 Falling back to Gemini for fact clustering...');
+      
+      // Fallback to Gemini
+      try {
+        const geminiResponse = await this.gemini.generateResponse(prompt, {
+          responseFormat: 'json',
+          maxTokens: 3000,
+          temperature: 0.3
+        });
+
+        const analysis = JSON.parse(geminiResponse.content);
+
+        if (Array.isArray(analysis)) {
+          for (const cluster of analysis) {
+            clusters.push({
+              clusterId: `cluster_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+              factIds: cluster.factIds,
+              consolidationScore: cluster.consolidationScore,
+              suggestedMerge: cluster.suggestedMerge,
+              reasoning: cluster.reasoning,
+              priority: cluster.priority || 'MEDIUM'
+            });
+          }
+        }
+
+        console.log(`✅ Gemini found ${clusters.length} fact clusters`);
+        return clusters;
+        
+      } catch (geminiError) {
+        console.error('❌ Gemini fact clustering also failed:', geminiError);
+        return [];
+      }
     }
   }
 
