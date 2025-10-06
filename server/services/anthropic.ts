@@ -9,7 +9,6 @@ import { storyCompletionTracker } from './storyCompletionTracker.js';
 import { intrusiveThoughts } from './intrusiveThoughts.js';
 import { storage } from '../storage.js';
 import { z } from 'zod';
-import { getCriticalFactsPrompt } from './criticalFacts.js';
 
 /*
 <important_code_snippet_instructions>
@@ -629,9 +628,6 @@ class AnthropicService {
 
       // Enhanced system prompt with personality controls, chaos personality AND variety control
       let enhancedCoreIdentity = `${coreIdentity}`;
-      
-      // 🚨 CRITICAL: Add critical facts protection first (highest priority)
-      enhancedCoreIdentity += `\n\n${getCriticalFactsPrompt()}`;
       
       // 🎭 NEW: Add personality control prompt if provided
       if (personalityPrompt) {
