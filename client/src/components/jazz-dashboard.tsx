@@ -170,6 +170,8 @@ export default function JazzDashboard() {
       
       // 🎲 ENHANCED: Invalidate chaos state after AI response for dynamic UI updates
       queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
+      // Invalidate conversation list to update message counts
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations/web'] });
       
       setAiStatus('IDLE');
     },
@@ -189,6 +191,7 @@ export default function JazzDashboard() {
     onSuccess: (data) => {
       setCurrentConversationId(data.id);
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations/web'] });
     },
   });
 
@@ -347,6 +350,14 @@ export default function JazzDashboard() {
           <div className="flex items-center space-x-4">
             <StatusIndicator status={aiStatus} />
             <button
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="px-2 md:px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors text-sm hidden md:block"
+              data-testid="button-toggle-sidebar"
+              title={isSidebarOpen ? "Hide chat history" : "Show chat history"}
+            >
+              <i className={`fas ${isSidebarOpen ? 'fa-sidebar' : 'fa-bars'}`}></i>
+            </button>
+            <button
               onClick={() => setLocation('/workspace')}
               className="px-2 md:px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors text-sm"
               data-testid="button-project-workspace"
@@ -470,10 +481,19 @@ export default function JazzDashboard() {
               <Textarea
                 name="message"
                 className="flex-1 bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                placeholder={isListening ? "🎤 Listening... speak now!" : "Type a message to Nicky..."}
+                placeholder={isListening ? "🎤 Listening... speak now!" : "Type a message to Nicky... (Enter to send, Shift+Enter for new line)"}
                 rows={2}
                 data-testid="textarea-message-input"
                 readOnly={isListening}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    const form = e.currentTarget.form;
+                    if (form) {
+                      form.requestSubmit();
+                    }
+                  }
+                }}
               />
               <Button 
                 type="submit" 
