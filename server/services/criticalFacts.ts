@@ -57,19 +57,114 @@ export function validateResponseAgainstCriticalFacts(response: string): {
   const lowerResponse = response.toLowerCase();
 
   for (const criticalFact of CRITICAL_FACTS) {
-    // Check if response might be discussing this topic
-    const isRelevant = criticalFact.keywords.some(keyword => 
+    // Robust first-person detection with regex (handles punctuation and natural speech)
+    const firstPersonPatterns = [
+      /\bi\b/i,           // "I" as standalone word
+      /\bmy\b/i,          // "my" as standalone word
+      /\bme\b/i,          // "me" as standalone word
+      /\bi'm\b/i,         // "I'm"
+      /\bi've\b/i,        // "I've"
+      /\bi\s+main\b/i,    // "I main" (with filler words)
+      /\bmy\s+main\b/i,   // "my main"
+      /\bnicky\b/i        // "Nicky" (self-reference)
+    ];
+    
+    // Check if response is about Nicky (first-person) AND contains relevant keywords
+    const hasFirstPerson = firstPersonPatterns.some(pattern => 
+      pattern.test(lowerResponse)
+    );
+    
+    const hasKeyword = criticalFact.keywords.some(keyword => 
       lowerResponse.includes(keyword.toLowerCase())
     );
+    
+    // Only validate if BOTH first-person and keyword are present (Nicky talking about himself)
+    const isRelevant = hasFirstPerson && hasKeyword;
 
     if (isRelevant) {
-      // Check for wrong answers
-      for (const wrongAnswer of criticalFact.wrongAnswers) {
-        if (lowerResponse.includes(wrongAnswer.toLowerCase())) {
+      // CRITICAL: Check for correct answer with variants (tolerant matching)
+      const correctVariants = [
+        criticalFact.correctAnswer.toLowerCase(),
+        criticalFact.correctAnswer.toLowerCase().replace('the ', ''), // "Twins" instead of "The Twins"
+      ];
+      
+      const hasCorrectAnswer = correctVariants.some(variant => 
+        lowerResponse.includes(variant)
+      );
+      
+      // Check for wrong answers (pre-listed)
+      const hasWrongAnswer = criticalFact.wrongAnswers.some(wrongAnswer => 
+        lowerResponse.includes(wrongAnswer.toLowerCase())
+      );
+      
+      // CRITICAL: Detect ANY alternate killer claims (not just pre-listed)
+      // For killer main fact, look for "main/mains/maining [Name]" patterns that aren't the correct answer
+      let hasAlternateKillerClaim = false;
+      if (criticalFact.fact === "Nicky's killer main") {
+        // Match "main(s)/maining" followed by words (killer names) that aren't "The Twins" or "Twins"
+        // Use case-insensitive pattern on original response to catch capitalized names
+        const killerMainPattern = /\b(main|mains|maining)\s+(?:the\s+)?([a-zA-Z]+(?:\s+[a-zA-Z]+)*)/gi;
+        const matches = Array.from(response.matchAll(killerMainPattern));
+        
+        for (const match of matches) {
+          const claimedKillers = match[2];
+          // Split on conjunctions and commas to handle "Twins and Pyramid Head" or "Twins, Pyramid Head"
+          const individualKillers = claimedKillers.split(/\s+(?:and|or|,)\s+|,\s*/gi);
+          
+          for (const killer of individualKillers) {
+            const killerLower = killer.toLowerCase().trim();
+            // Check if this individual killer is NOT the correct answer (or its variant)
+            if (killerLower && killerLower !== 'twins' && killerLower !== 'the twins' && !killerLower.includes('twin')) {
+              hasAlternateKillerClaim = true;
+              violations.push({
+                fact: criticalFact.fact,
+                detected: `Alternate killer claim: "main ${killer.trim()}"`
+              });
+              break; // Only report one alternate killer per match
+            }
+          }
+        }
+      }
+      
+      // Violation if: no correct answer OR has wrong answer OR has alternate claim
+      if (!hasCorrectAnswer || hasWrongAnswer) {
+        if (!hasCorrectAnswer) {
           violations.push({
             fact: criticalFact.fact,
-            detected: wrongAnswer
+            detected: `Missing correct answer: ${criticalFact.correctAnswer}`
           });
+        }
+        
+        if (hasWrongAnswer) {
+          const detected = criticalFact.wrongAnswers.find(wa => 
+            lowerResponse.includes(wa.toLowerCase())
+          );
+          violations.push({
+            fact: criticalFact.fact,
+            detected: `Wrong answer detected: ${detected}`
+          });
+        }
+      }
+      
+      // Check for negations and contradictions with robust regex (handles intervening words)
+      const factKeyword = criticalFact.correctAnswer.toLowerCase().replace(/^the\s+/, ''); // "twins" from "The Twins"
+      const negationPatterns = [
+        new RegExp(`\\b(don't|do not|doesn't|does not)\\s+[^.]*\\b${factKeyword}\\b`, 'i'),
+        new RegExp(`\\b(not|no|never)\\s+[^.]*\\b${factKeyword}\\b`, 'i'),
+        new RegExp(`\\b(stopped|quit|changed from)\\s+[^.]*\\b${factKeyword}\\b`, 'i'),
+        new RegExp(`\\b(used to|formerly|no longer)\\s+[^.]*\\b${factKeyword}\\b`, 'i'),
+        new RegExp(`\\bisn't\\s+[^.]*\\b${factKeyword}\\b`, 'i'),
+        new RegExp(`\\baren't\\s+[^.]*\\b${factKeyword}\\b`, 'i')
+      ];
+      
+      for (const negationPattern of negationPatterns) {
+        if (negationPattern.test(lowerResponse)) {
+          const match = lowerResponse.match(negationPattern);
+          violations.push({
+            fact: criticalFact.fact,
+            detected: `Negation detected: "${match?.[0] || 'negation pattern'}"`
+          });
+          break; // Only report one negation per fact
         }
       }
     }
