@@ -414,6 +414,48 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
+  async listWebConversations(profileId: string, limit = 50): Promise<Array<Conversation & { messageCount: number; firstMessage?: string }>> {
+    // Get non-Discord conversations (GENERAL, PODCAST, STREAMING)
+    const convos = await db
+      .select()
+      .from(conversations)
+      .where(and(
+        eq(conversations.profileId, profileId),
+        or(
+          eq(conversations.contentType, 'GENERAL'),
+          eq(conversations.contentType, 'PODCAST'),
+          eq(conversations.contentType, 'STREAMING')
+        )
+      ))
+      .orderBy(desc(conversations.createdAt))
+      .limit(limit);
+
+    // Get message counts and first message for each conversation
+    const conversationsWithMeta = await Promise.all(
+      convos.map(async (convo) => {
+        const msgs = await db
+          .select()
+          .from(messages)
+          .where(eq(messages.conversationId, convo.id))
+          .orderBy(messages.createdAt)
+          .limit(1);
+        
+        const messageCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(messages)
+          .where(eq(messages.conversationId, convo.id));
+
+        return {
+          ...convo,
+          messageCount: Number(messageCount[0]?.count || 0),
+          firstMessage: msgs[0]?.content
+        };
+      })
+    );
+
+    return conversationsWithMeta;
+  }
+
   async getCompletedStories(profileId: string): Promise<{conversationId: string; stories: string[]}[]> {
     const conversationsWithStories = await db
       .select({

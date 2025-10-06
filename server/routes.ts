@@ -271,6 +271,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/conversations/web', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(404).json({ error: 'No active profile' });
+      }
+      const conversations = await storage.listWebConversations(activeProfile.id);
+      res.json(conversations);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch conversations' });
+    }
+  });
+
   // AI Chat routes
   app.post('/api/chat', async (req, res) => {
     try {
