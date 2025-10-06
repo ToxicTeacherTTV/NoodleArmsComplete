@@ -453,7 +453,8 @@ export class DatabaseStorage implements IStorage {
       })
     );
 
-    return conversationsWithMeta;
+    // Filter out empty conversations (no messages)
+    return conversationsWithMeta.filter(convo => convo.messageCount > 0);
   }
 
   async getCompletedStories(profileId: string): Promise<{conversationId: string; stories: string[]}[]> {
