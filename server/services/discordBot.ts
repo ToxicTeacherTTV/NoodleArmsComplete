@@ -131,7 +131,8 @@ export class DiscordBotService {
           lastDriftUpdate: null,
           driftMomentum: 0,
           contextNudges: 0,
-          dailyProactiveCount: 0
+          dailyProactiveCount: 0,
+          unifiedPersonalityMigrated: false
         } satisfies DiscordServer;
       }
       
