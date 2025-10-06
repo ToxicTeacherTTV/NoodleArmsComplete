@@ -317,6 +317,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const controls = basePersonality;
       console.log(`🎭 Using personality:`, JSON.stringify(controls));
       
+      // 🎯 CONTEXT-AWARE SWITCHING: Auto-switch preset based on message content
+      const switchOccurred = await personalityController.applyContextualSwitch(message);
+      if (switchOccurred) {
+        const newPersonality = await personalityController.getEffectivePersonality();
+        console.log(`🔄 Context-aware switch: ${controls.preset} → ${newPersonality.preset}`);
+        Object.assign(controls, newPersonality);
+      }
+      
       // Generate personality prompt with unified controls
       const { generatePersonalityPrompt } = await import('./types/personalityControl');
 

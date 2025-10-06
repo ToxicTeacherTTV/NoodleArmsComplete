@@ -17,10 +17,10 @@ export const DEFAULT_PERSONALITY_CONTROL: PersonalityControl = {
 export const PRESET_DEFINITIONS = {
   'Chill Nicky': {
     mode: 'don',
-    description: 'Measured, dry menace with sophisticated delivery',
+    description: 'Perpetually annoyed but not actively attacking - grumpy old man energy, complains about everything with dry irritation',
     baseRoasts: 'light',
     cadence: 'slow',
-    specialFeatures: ['faux-philosophy line']
+    specialFeatures: ['constant low-grade complaints', 'everything mildly irritates him']
   },
   'Roast Mode': {
     mode: 'wiseguy', 

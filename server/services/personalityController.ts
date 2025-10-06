@@ -290,6 +290,122 @@ class PersonalityController {
     );
   }
 
+  /**
+   * CONTEXT-AWARE PRESET SWITCHING
+   * Analyzes user message and auto-switches preset based on emotional/contextual cues
+   * Returns null if no switch needed, or the new preset to apply
+   */
+  async detectContextualPresetSwitch(userMessage: string): Promise<PersonalityControl['preset'] | null> {
+    if (this.initializePromise) {
+      await this.initializePromise;
+    }
+
+    const msgLower = userMessage.toLowerCase();
+    const currentPreset = this.state.effectivePersonality.preset;
+
+    // WHOLESOME/FAMILY CONTENT → Chill Nicky (but still grumpy)
+    const wholesomePatterns = [
+      /tell me (a story|about)/i,
+      /how('s| is) (your )?(family|nonna|ma|uncle)/i,
+      /recipe|cooking|pasta|carbonara/i,
+      /what('s| is) (your favorite|the best)/i,
+      /remember when/i,
+      /back in the day/i
+    ];
+    if (wholesomePatterns.some(p => p.test(msgLower)) && currentPreset !== 'Chill Nicky' && currentPreset !== 'Storytime') {
+      console.log(`🎭 Context switch: wholesome/family → Chill Nicky`);
+      return 'Chill Nicky';
+    }
+
+    // CHALLENGE/CONFRONTATION → Roast Mode
+    const challengePatterns = [
+      /you('re| are) wrong/i,
+      /actually/i,
+      /disagree/i,
+      /roast me/i,
+      /what('s| is) your problem/i,
+      /why (do you|are you)/i,
+      /you don't know/i,
+      /that('s| is) (stupid|dumb|wrong)/i
+    ];
+    if (challengePatterns.some(p => p.test(msgLower)) && currentPreset !== 'Roast Mode' && currentPreset !== 'Caller War') {
+      console.log(`🎭 Context switch: challenge → Roast Mode`);
+      return 'Roast Mode';
+    }
+
+    // AGGRESSIVE/HOSTILE → Caller War
+    const hostilePatterns = [
+      /shut up/i,
+      /you('re| are) (trash|garbage|terrible|awful)/i,
+      /nobody (cares|asked)/i,
+      /get (lost|bent|fucked)/i,
+      /stfu/i
+    ];
+    if (hostilePatterns.some(p => p.test(msgLower)) && currentPreset !== 'Caller War') {
+      console.log(`🎭 Context switch: hostile → Caller War`);
+      return 'Caller War';
+    }
+
+    // STORY REQUEST → Storytime
+    const storyPatterns = [
+      /tell me (a story|about|what happened)/i,
+      /any good stories/i,
+      /what('s| is) (the craziest|wildest|funniest)/i,
+      /have you ever/i
+    ];
+    if (storyPatterns.some(p => p.test(msgLower)) && currentPreset !== 'Storytime') {
+      console.log(`🎭 Context switch: story request → Storytime`);
+      return 'Storytime';
+    }
+
+    // PATCH NOTES/GAME UPDATE → Patch Roast
+    const patchPatterns = [
+      /patch|update|nerf|buff/i,
+      /new (killer|survivor|perk|map)/i,
+      /bhvr|behavior/i,
+      /meta|tier list/i,
+      /what do you think about (the )?(new|latest)/i
+    ];
+    if (patchPatterns.some(p => p.test(msgLower)) && currentPreset !== 'Patch Roast') {
+      console.log(`🎭 Context switch: patch/meta discussion → Patch Roast`);
+      return 'Patch Roast';
+    }
+
+    // RANDOM/WEIRD/NONSENSE → Unhinged
+    const weirdPatterns = [
+      /random|weird|strange|wtf/i,
+      /what if/i,
+      /imagine (if)?/i,
+      /conspiracy/i,
+      /theory/i
+    ];
+    if (weirdPatterns.some(p => p.test(msgLower)) && currentPreset !== 'Unhinged') {
+      console.log(`🎭 Context switch: weird/random → Unhinged`);
+      return 'Unhinged';
+    }
+
+    // No switch needed
+    return null;
+  }
+
+  /**
+   * Apply context-aware preset switch if appropriate
+   * Returns true if a switch occurred
+   */
+  async applyContextualSwitch(userMessage: string): Promise<boolean> {
+    const suggestedPreset = await this.detectContextualPresetSwitch(userMessage);
+    
+    if (suggestedPreset) {
+      await this.updatePersonality(
+        { preset: suggestedPreset },
+        'preset_change'
+      );
+      return true;
+    }
+    
+    return false;
+  }
+
   // Save state to database (store as JSON in a simple key-value approach)
   private async saveStateToDatabase(): Promise<void> {
     try {
