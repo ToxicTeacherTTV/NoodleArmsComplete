@@ -521,6 +521,16 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${c
 
       console.log('🌟 Using Gemini fallback for chat response');
 
+      // 🚫 Add formatting rules to core identity
+      const enhancedCoreIdentity = `${coreIdentity}
+
+🚫 FORMATTING RULES - STRICTLY ENFORCE:
+- NEVER use asterisks (*) for actions, gestures, or stage directions
+- Do NOT write things like *gestures*, *winks*, *leans in*, etc.
+- If you need to convey actions or gestures, describe them in your dialogue naturally
+- Example: Instead of "*waves hand dismissively*" say "I'm wavin' my hand like forget about it!"
+- Actions belong in your WORDS, not in asterisks`;
+
       // Try multiple times with different models to handle server overload
       let response;
       const models = ["gemini-2.5-flash", "gemini-2.5-pro"]; // Try flash first (less busy)
@@ -533,7 +543,7 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${c
             response = await this.ai.models.generateContent({
               model: modelName,
               config: {
-                systemInstruction: coreIdentity,
+                systemInstruction: enhancedCoreIdentity,
                 temperature: 1.0, // Maximum creativity to match Anthropic
               },
               contents: fullPrompt,

@@ -635,6 +635,14 @@ class AnthropicService {
         console.log(`🎭 Applied personality controls to AI prompt`);
       }
       
+      // 🚫 CRITICAL: Enforce formatting rules
+      enhancedCoreIdentity += `\n\n🚫 FORMATTING RULES - STRICTLY ENFORCE:
+- NEVER use asterisks (*) for actions, gestures, or stage directions
+- Do NOT write things like *gestures*, *winks*, *leans in*, etc.
+- If you need to convey actions or gestures, describe them in your dialogue naturally
+- Example: Instead of "*waves hand dismissively*" say "I'm wavin' my hand like forget about it!"
+- Actions belong in your WORDS, not in asterisks`;
+      
       enhancedCoreIdentity += `\n\n${chaosModifier}\n\n${varietyPrompt}`;
 
       const response = await anthropic.messages.create({
