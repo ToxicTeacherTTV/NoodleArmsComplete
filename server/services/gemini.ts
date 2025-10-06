@@ -521,15 +521,12 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${c
 
       console.log('🌟 Using Gemini fallback for chat response');
 
-      // 🚫 Add formatting rules to core identity
-      const enhancedCoreIdentity = `${coreIdentity}
+      // 🚫 CRITICAL: Put formatting rules FIRST for maximum priority
+      const enhancedCoreIdentity = `🚫 CRITICAL FORMATTING RULE #1:
+NEVER use asterisks (*) for actions, gestures, or stage directions. Do NOT write *gestures*, *winks*, *leans in*, *waves*, etc.
+Describe actions IN YOUR DIALOGUE: "I'm wavin' my hand dismissively!" NOT "*waves hand dismissively*"
 
-🚫 FORMATTING RULES - STRICTLY ENFORCE:
-- NEVER use asterisks (*) for actions, gestures, or stage directions
-- Do NOT write things like *gestures*, *winks*, *leans in*, etc.
-- If you need to convey actions or gestures, describe them in your dialogue naturally
-- Example: Instead of "*waves hand dismissively*" say "I'm wavin' my hand like forget about it!"
-- Actions belong in your WORDS, not in asterisks`;
+${coreIdentity}`;
 
       // Try multiple times with different models to handle server overload
       let response;
@@ -585,10 +582,17 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${c
         console.warn(`🚫 Gemini content filtered to prevent cancel-worthy language`);
       }
 
+      // 🚫 CRITICAL: Strip asterisk actions post-processing (last resort enforcement)
+      const asteriskPattern = /\*[^*]+\*/g;
+      const strippedContent = filteredContent.replace(asteriskPattern, (match) => {
+        console.warn(`🚫 Stripped asterisk action from Gemini response: ${match}`);
+        return ''; // Remove the asterisk action entirely
+      }).replace(/\s{2,}/g, ' ').trim(); // Clean up extra spaces
+
       const processingTime = Date.now() - startTime;
 
       return {
-        content: filteredContent,
+        content: strippedContent,
         processingTime,
         retrievedContext: contextPrompt || undefined,
       };

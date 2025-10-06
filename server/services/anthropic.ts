@@ -627,21 +627,18 @@ class AnthropicService {
       const fullPrompt = `${promptWithIntrusion}${contextPrompt}${modeContext}${escalationPrompt}${sceneCard}`;
 
       // Enhanced system prompt with personality controls, chaos personality AND variety control
-      let enhancedCoreIdentity = `${coreIdentity}`;
+      // 🚫 CRITICAL: Put formatting rules FIRST for maximum priority
+      let enhancedCoreIdentity = `🚫 CRITICAL FORMATTING RULE #1:
+NEVER use asterisks (*) for actions, gestures, or stage directions. Do NOT write *gestures*, *winks*, *leans in*, *waves*, etc.
+Describe actions IN YOUR DIALOGUE: "I'm wavin' my hand dismissively!" NOT "*waves hand dismissively*"
+
+${coreIdentity}`;
       
       // 🎭 NEW: Add personality control prompt if provided
       if (personalityPrompt) {
         enhancedCoreIdentity += `\n\n${personalityPrompt}`;
         console.log(`🎭 Applied personality controls to AI prompt`);
       }
-      
-      // 🚫 CRITICAL: Enforce formatting rules
-      enhancedCoreIdentity += `\n\n🚫 FORMATTING RULES - STRICTLY ENFORCE:
-- NEVER use asterisks (*) for actions, gestures, or stage directions
-- Do NOT write things like *gestures*, *winks*, *leans in*, etc.
-- If you need to convey actions or gestures, describe them in your dialogue naturally
-- Example: Instead of "*waves hand dismissively*" say "I'm wavin' my hand like forget about it!"
-- Actions belong in your WORDS, not in asterisks`;
       
       enhancedCoreIdentity += `\n\n${chaosModifier}\n\n${varietyPrompt}`;
 
@@ -672,10 +669,17 @@ class AnthropicService {
         console.warn(`🚫 Content filtered to prevent cancel-worthy language`);
       }
 
+      // 🚫 CRITICAL: Strip asterisk actions post-processing (last resort enforcement)
+      const asteriskPattern = /\*[^*]+\*/g;
+      const strippedContent = filteredContent.replace(asteriskPattern, (match) => {
+        console.warn(`🚫 Stripped asterisk action from response: ${match}`);
+        return ''; // Remove the asterisk action entirely
+      }).replace(/\s{2,}/g, ' ').trim(); // Clean up extra spaces
+
       // ✨ NEW: Post-generation repetition filter
-      let finalContent = filteredContent;
+      let finalContent = strippedContent;
       if (conversationId) {
-        const repetitionCheck = await this.checkForRepetition(conversationId, filteredContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
+        const repetitionCheck = await this.checkForRepetition(conversationId, strippedContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
         finalContent = repetitionCheck.content;
         
         // 📖 NEW: Story completion tracking for enhanced memory persistence
