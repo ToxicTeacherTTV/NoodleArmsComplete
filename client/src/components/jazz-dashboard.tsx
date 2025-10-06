@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import ChatPanel from "@/components/chat-panel";
 import ControlPanel from "@/components/control-panel";
 import DiscordManagementPanel from "@/components/discord-management-panel";
+import ChatHistorySidebar from "@/components/chat-history-sidebar";
 // PersonalityPanel moved to brain-management.tsx
 // MemoryPanel and DocumentPanel moved to brain-management.tsx
 import StatusIndicator from "@/components/status-indicator";
@@ -60,6 +61,7 @@ export default function JazzDashboard() {
   const [pendingTranscript, setPendingTranscript] = useState<string>(''); // For manual voice control
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   const [isControlsCollapsed, setIsControlsCollapsed] = useState(true); // Start collapsed on mobile
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Chat history sidebar
 
   // Refs for queue management
   const messageQueueRef = useRef<Message[]>([]);
@@ -313,6 +315,18 @@ export default function JazzDashboard() {
     }
   };
 
+  // Handle conversation switching
+  const handleSelectConversation = (conversationId: string) => {
+    setCurrentConversationId(conversationId);
+    setMessages([]); // Clear current messages, will be loaded from backend
+  };
+
+  // Handle new chat creation
+  const handleNewChat = () => {
+    createConversationMutation.mutate();
+    setMessages([]);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
       {/* Header - Fixed Height */}
@@ -362,52 +376,66 @@ export default function JazzDashboard() {
 
       {/* Main Content - Flexible Height with Bottom Padding */}
       <main className="flex-1 overflow-hidden pb-32 p-4">
-        <Card className="border-primary/20 shadow-xl h-full">
-          <div className="h-full flex flex-col">
-            <ChatPanel
-              messages={messages}
-              sessionDuration={getSessionDuration()}
-              messageCount={messages.length}
-              appMode={appMode}
-              onPlayAudio={(content: string) => {
-                if (appMode === 'PODCAST') {
-                  if (isSpeakingElevenLabs && !isPausedElevenLabs) {
-                    pauseElevenLabs();
-                  } else if (isPausedElevenLabs) {
-                    resumeElevenLabs();
+        <div className="h-full flex gap-4">
+          {/* Chat History Sidebar */}
+          {isSidebarOpen && (
+            <div className="w-64 flex-shrink-0 hidden md:block">
+              <ChatHistorySidebar
+                currentConversationId={currentConversationId}
+                onSelectConversation={handleSelectConversation}
+                onNewChat={handleNewChat}
+              />
+            </div>
+          )}
+
+          {/* Main Chat Area */}
+          <Card className="border-primary/20 shadow-xl flex-1">
+            <div className="h-full flex flex-col">
+              <ChatPanel
+                messages={messages}
+                sessionDuration={getSessionDuration()}
+                messageCount={messages.length}
+                appMode={appMode}
+                onPlayAudio={(content: string) => {
+                  if (appMode === 'PODCAST') {
+                    if (isSpeakingElevenLabs && !isPausedElevenLabs) {
+                      pauseElevenLabs();
+                    } else if (isPausedElevenLabs) {
+                      resumeElevenLabs();
+                    } else {
+                      speakElevenLabs(content);
+                    }
                   } else {
-                    speakElevenLabs(content);
+                    if (isSpeaking && !isPaused) {
+                      pausePlayback();
+                    } else if (isPaused) {
+                      resumePlayback();
+                    } else {
+                      speakText(content);
+                    }
                   }
-                } else {
-                  if (isSpeaking && !isPaused) {
-                    pausePlayback();
-                  } else if (isPaused) {
-                    resumePlayback();
+                }}
+                onReplayAudio={() => {
+                  if (appMode === 'PODCAST') {
+                    replayElevenLabs();
                   } else {
-                    speakText(content);
+                    replayLastAudio();
                   }
-                }
-              }}
-              onReplayAudio={() => {
-                if (appMode === 'PODCAST') {
-                  replayElevenLabs();
-                } else {
-                  replayLastAudio();
-                }
-              }}
-              onSaveAudio={(filename?: string) => {
-                if (appMode === 'PODCAST') {
-                  saveAudioElevenLabs(filename);
-                }
-              }}
-              isPlayingAudio={appMode === 'PODCAST' ? isSpeakingElevenLabs && !isPausedElevenLabs : isSpeaking && !isPaused}
-              isPausedAudio={appMode === 'PODCAST' ? isPausedElevenLabs : isPaused}
-              canReplay={appMode === 'PODCAST' ? canReplayElevenLabs : canReplay}
-              canSave={appMode === 'PODCAST' ? canSaveElevenLabs : false}
-              onTextSelection={handleTextSelection}
-            />
-          </div>
-        </Card>
+                }}
+                onSaveAudio={(filename?: string) => {
+                  if (appMode === 'PODCAST') {
+                    saveAudioElevenLabs(filename);
+                  }
+                }}
+                isPlayingAudio={appMode === 'PODCAST' ? isSpeakingElevenLabs && !isPausedElevenLabs : isSpeaking && !isPaused}
+                isPausedAudio={appMode === 'PODCAST' ? isPausedElevenLabs : isPaused}
+                canReplay={appMode === 'PODCAST' ? canReplayElevenLabs : canReplay}
+                canSave={appMode === 'PODCAST' ? canSaveElevenLabs : false}
+                onTextSelection={handleTextSelection}
+              />
+            </div>
+          </Card>
+        </div>
       </main>
 
       {/* Footer - Fixed Input Controls */}
