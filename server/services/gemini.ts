@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { contentFilter } from './contentFilter.js';
+import { validateResponseAgainstCriticalFacts, getCriticalFactsPrompt } from './criticalFacts.js';
 
 class GeminiService {
   private ai: GoogleGenAI;
@@ -521,8 +522,14 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${c
 
       console.log('🌟 Using Gemini fallback for chat response');
 
+      // Add critical facts protection to core identity
+      const enhancedIdentity = `${coreIdentity}
+
+${getCriticalFactsPrompt()}`;
+
       // Try multiple times with different models to handle server overload
       let response;
+      let validatedResponse = false;
       const models = ["gemini-2.5-flash", "gemini-2.5-pro"]; // Try flash first (less busy)
       
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -533,14 +540,25 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${c
             response = await this.ai.models.generateContent({
               model: modelName,
               config: {
-                systemInstruction: coreIdentity,
-                temperature: 1.0, // Maximum creativity to match Anthropic
+                systemInstruction: enhancedIdentity,
+                temperature: 0.7, // Lower temperature for better factual accuracy
               },
               contents: fullPrompt,
             });
             
             if (response?.text) {
-              console.log(`✅ Gemini success with ${modelName} on attempt ${attempt + 1}`);
+              // Validate response against critical facts
+              const validation = validateResponseAgainstCriticalFacts(response.text);
+              
+              if (!validation.isValid) {
+                console.warn(`⚠️ Response violated critical facts:`, validation.violations);
+                console.warn(`🔄 Retrying to get factually accurate response...`);
+                response = null; // Force retry
+                continue;
+              }
+              
+              validatedResponse = true;
+              console.log(`✅ Gemini success with ${modelName} on attempt ${attempt + 1} (validated)`);
               break;
             }
           } catch (modelError: any) {
@@ -553,7 +571,7 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${c
           }
         }
         
-        if (response?.text) break;
+        if (response?.text && validatedResponse) break;
         
         // Wait before retrying (exponential backoff)
         if (attempt < 2) {
