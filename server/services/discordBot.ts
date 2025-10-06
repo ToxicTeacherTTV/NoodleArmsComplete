@@ -284,6 +284,33 @@ export class DiscordBotService {
             console.error(`❌ Failed to log Discord conversation:`, loggingError);
             // Continue execution - logging failure shouldn't stop the bot
           }
+
+          // Extract and store facts about the user from their message
+          try {
+            const { discordFactExtractor } = await import('./discordFactExtractor');
+            const newFacts = await discordFactExtractor.extractFactsFromMessage(
+              message.author.username,
+              message.content,
+              discordMember.facts || []
+            );
+
+            if (newFacts.length > 0) {
+              await discordFactExtractor.updateMemberFacts(
+                discordMember.id,
+                newFacts,
+                discordMember.facts || []
+              );
+
+              // Also update keywords for better retrieval
+              const keywords = discordFactExtractor.extractKeywordsFromFacts([...discordMember.facts || [], ...newFacts]);
+              await storage.updateDiscordMember(discordMember.id, { keywords });
+
+              console.log(`✅ Learned ${newFacts.length} new facts about ${message.author.username}`);
+            }
+          } catch (factError) {
+            console.error(`❌ Failed to extract member facts:`, factError);
+            // Continue execution - fact extraction failure shouldn't stop the bot
+          }
         }
       }
     } catch (error) {

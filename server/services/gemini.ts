@@ -859,6 +859,91 @@ Respond with ONLY a JSON array - no other text:
   }
 
   /**
+   * Extract facts about a Discord member from their message
+   */
+  async extractDiscordMemberFacts(
+    username: string,
+    message: string,
+    existingFacts: string[] = []
+  ): Promise<Array<{ fact: string; confidence: number; category: string }>> {
+    if (!process.env.GEMINI_API_KEY) {
+      return [];
+    }
+
+    const prompt = `You are analyzing a Discord message to extract factual information about the user.
+
+USER: ${username}
+MESSAGE: "${message}"
+
+EXISTING FACTS ABOUT ${username}:
+${existingFacts.length > 0 ? '- ' + existingFacts.join('\n- ') : 'None'}
+
+Extract NEW, specific, factual information about ${username} from this message. Focus on:
+1. **Gameplay Preferences**: Killer/survivor mains, playstyle, perk preferences, strategies
+2. **Game Knowledge**: Skill level, experience, opinions on game mechanics
+3. **Personal Info**: Timezone, availability, background (only if explicitly stated)
+4. **Other**: Hobbies, interests mentioned
+
+CRITICAL RULES:
+- Extract ONLY facts explicitly stated BY the user
+- Do NOT infer or assume facts
+- Do NOT extract facts about other people or characters
+- Do NOT duplicate existing facts
+- Be specific (e.g., "mains Nurse killer" not just "plays DBD")
+- Include confidence score (0-100) based on how explicitly stated the fact is
+
+Return as JSON. If no new facts can be extracted, return empty array:
+{
+  "facts": [
+    {
+      "fact": "Specific fact about ${username}",
+      "confidence": 85,
+      "category": "gameplay"
+    }
+  ]
+}`;
+
+    try {
+      const response = await this.ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: {
+              facts: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    fact: { type: "string" },
+                    confidence: { type: "number" },
+                    category: { type: "string", enum: ["gameplay", "preference", "personal", "other"] }
+                  },
+                  required: ["fact", "confidence", "category"]
+                }
+              }
+            },
+            required: ["facts"]
+          },
+          temperature: 0.1
+        },
+        contents: prompt,
+      });
+
+      const rawJson = response.text;
+      if (rawJson) {
+        const result = JSON.parse(rawJson);
+        return result.facts || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('Discord fact extraction error:', error);
+      return [];
+    }
+  }
+
+  /**
    * Classify Gemini API errors for appropriate handling
    */
   private classifyGeminiError(error: any): string {
