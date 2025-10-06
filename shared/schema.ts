@@ -1,8 +1,14 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, json, boolean, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, json, boolean, uniqueIndex, jsonb, customType } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
+
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 
 export const profiles = pgTable("profiles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -100,8 +106,8 @@ export const memoryEntries = pgTable("memory_entries", {
   embedding: text("embedding"), // JSON array of vector embeddings for semantic search
   embeddingModel: text("embedding_model"), // Model used to generate embedding (e.g., 'gemini-embedding-001')
   embeddingUpdatedAt: timestamp("embedding_updated_at"), // When embedding was last generated
-  // PostgreSQL Full-Text Search support - will be added via migration SQL
-  searchVector: text("search_vector"), // Keep as text for now to prevent data loss
+  // PostgreSQL Full-Text Search support
+  searchVector: tsvector("search_vector"),
   
   // === NEW: Entity linking (nullable for backward compatibility) ===
   personId: varchar("person_id").references(() => people.id),
