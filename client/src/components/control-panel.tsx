@@ -43,6 +43,14 @@ export default function ControlPanel({
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Submit on Enter, allow Shift+Enter for new lines
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendText(e as any);
+    }
+  };
+
   return (
     <div className="p-6 space-y-4">
       {/* Voice Controls */}
@@ -121,8 +129,9 @@ export default function ControlPanel({
           <Textarea
             value={isListening ? pendingTranscript : textInput}
             onChange={(e) => setTextInput(e.target.value)}
+            onKeyDown={handleKeyDown}
             className="w-full bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-ring focus:border-transparent"
-            placeholder={isListening ? "🎤 Listening... speak now!" : "Type a message to Nicky..."}
+            placeholder={isListening ? "🎤 Listening... speak now!" : "Type a message to Nicky... (Press Enter to send, Shift+Enter for new line)"}
             rows={3}
             data-testid="textarea-message-input"
             readOnly={isListening} // Prevent typing while listening

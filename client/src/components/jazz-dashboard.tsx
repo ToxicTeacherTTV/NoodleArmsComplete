@@ -147,6 +147,7 @@ export default function JazzDashboard() {
           type: 'AI',
           content: response.content,
           createdAt: new Date().toISOString(),
+          rating: null,
           metadata: {
             processingTime: response.processingTime,
             retrieved_context: response.retrieved_context,
@@ -202,6 +203,20 @@ export default function JazzDashboard() {
     },
   });
 
+  // Fetch messages when conversation changes
+  const { data: conversationMessages } = useQuery<Message[]>({
+    queryKey: ['/api/conversations', currentConversationId, 'messages'],
+    enabled: !!currentConversationId,
+    refetchInterval: false,
+  });
+
+  // Sync fetched messages to state when they load
+  useEffect(() => {
+    if (conversationMessages && conversationMessages.length > 0) {
+      setMessages(conversationMessages);
+    }
+  }, [conversationMessages]);
+
   // Initialize conversation on mount
   useEffect(() => {
     if (!currentConversationId && activeProfile?.id) {
@@ -240,6 +255,7 @@ export default function JazzDashboard() {
           conversationId: currentConversationId,
           type: 'USER',
           content: finalText,
+          rating: null,
           metadata: { voice: true },
           createdAt: new Date().toISOString(),
         };
@@ -410,6 +426,7 @@ export default function JazzDashboard() {
                   type: 'USER',
                   content: message,
                   createdAt: new Date().toISOString(),
+                  rating: null,
                   metadata: null,
                 };
                 setMessages(prev => [...prev, userMessage]);
@@ -532,6 +549,7 @@ export default function JazzDashboard() {
                           type: 'USER',
                           content: message,
                           createdAt: new Date().toISOString(),
+                          rating: null,
                           metadata: null,
                         };
                         setMessages(prev => [...prev, userMessage]);
@@ -582,6 +600,7 @@ export default function JazzDashboard() {
                       type: 'USER',
                       content: message,
                       createdAt: new Date().toISOString(),
+                      rating: null,
                       metadata: null,
                     };
                     setMessages(prev => [...prev, userMessage]);
