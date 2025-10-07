@@ -454,7 +454,7 @@ class AnthropicService {
       
       // Keyword overlap penalty
       const selectedKeywords = new Set(selected.keywords || []);
-      const overlap = [...memoryKeywords].filter(k => selectedKeywords.has(k)).length;
+      const overlap = Array.from(memoryKeywords).filter(k => selectedKeywords.has(k)).length;
       const total = Math.max(memoryKeywords.size, selectedKeywords.size);
       if (total > 0) {
         similarityPenalty += (overlap / total) * 0.2;
@@ -477,23 +477,50 @@ class AnthropicService {
       return { hasGap: false, missingTopics: [] };
     }
     
-    // Check if ANY memory mentions these topics
+    // 🎯 Identify likely proper nouns (capitalized in original message) - these are most specific
+    const messageWords = userMessage.split(/\s+/);
+    const properNouns = messageWords.filter(word => 
+      word.length > 3 && 
+      /^[A-Z]/.test(word) && 
+      !/^(What|Tell|About|Dead|Daylight|The|When|Where|How)$/i.test(word) // Exclude common question words
+    ).map(w => w.toLowerCase());
+    
+    // Check if SPECIFIC topics are mentioned in memories
     const missingTopics: string[] = [];
+    const missingProperNouns: string[] = [];
+    
     for (const topic of topics) {
       const found = retrievedMemories.some(m => 
         m.content?.toLowerCase().includes(topic.toLowerCase()) ||
         m.keywords?.some((k: string) => k.toLowerCase() === topic.toLowerCase())
       );
       
-      if (!found && retrievedMemories.length < 3) {
-        // If we found very few memories AND this topic isn't mentioned, it's likely a gap
+      if (!found) {
         missingTopics.push(topic);
+        // Check if this is a proper noun (more likely to be a specific entity)
+        if (properNouns.includes(topic.toLowerCase())) {
+          missingProperNouns.push(topic);
+        }
       }
     }
     
+    // 🎯 REFINED: Knowledge gap detection logic
+    const hasFewMemories = retrievedMemories.length < 5;
+    const hasUnmatchedTopics = missingTopics.length > 0;
+    const hasUnmatchedProperNouns = missingProperNouns.length > 0;
+    
+    // Trigger knowledge gap if:
+    // 1. Proper noun (specific entity) is completely missing - HIGH PRIORITY
+    // 2. OR few memories (< 5) and ANY topic missing
+    // 3. OR many topics missing (> 50% coverage)
+    const topicCoverage = topics.length > 0 ? (topics.length - missingTopics.length) / topics.length : 1;
+    const isLikelyGap = hasUnmatchedProperNouns || // Proper noun missing = definite gap
+                        (hasFewMemories && hasUnmatchedTopics) || 
+                        topicCoverage < 0.5;
+    
     return {
-      hasGap: missingTopics.length > 0,
-      missingTopics
+      hasGap: isLikelyGap,
+      missingTopics: isLikelyGap ? (missingProperNouns.length > 0 ? missingProperNouns : missingTopics) : []
     };
   }
 
