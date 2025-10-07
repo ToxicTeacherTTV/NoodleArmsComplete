@@ -33,6 +33,7 @@ export const conversations = pgTable("conversations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   profileId: varchar("profile_id").references(() => profiles.id).notNull(),
   sessionId: varchar("session_id"),
+  title: text("title"), // AI-generated or user-provided conversation title
   // NEW: Enhanced memory persistence fields
   contentType: text("content_type").$type<'PODCAST' | 'STREAMING' | 'DISCORD' | 'GENERAL'>().default('GENERAL'),
   topicTags: text("topic_tags").array(), // Topics discussed in this conversation
