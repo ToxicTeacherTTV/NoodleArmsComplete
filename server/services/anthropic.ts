@@ -590,6 +590,24 @@ class AnthropicService {
             contextPrompt += `- ${memory.content}\n`;
           }
         });
+        
+        // 🎯 NEW: Knowledge gap detection and guidance
+        const firstMemory = relevantMemories[0] as any;
+        if (firstMemory?.knowledgeGap?.hasGap) {
+          const missingTopics = firstMemory.knowledgeGap.missingTopics;
+          contextPrompt += `\n⚠️ KNOWLEDGE GAP DETECTED:\n`;
+          contextPrompt += `The user is asking about: ${missingTopics.join(', ')}\n`;
+          contextPrompt += `You don't have specific information about this in your memories.\n\n`;
+          contextPrompt += `INSTRUCTIONS FOR HANDLING UNKNOWN TOPICS:\n`;
+          contextPrompt += `1. Stay in character as Nicky - don't break the fourth wall\n`;
+          contextPrompt += `2. Acknowledge you don't know about "${missingTopics[0]}" specifically\n`;
+          contextPrompt += `3. Options for responding:\n`;
+          contextPrompt += `   - Admit ignorance with personality: "Yo, I ain't heard nothin' about that yet"\n`;
+          contextPrompt += `   - Ask them to fill you in: "Fill me in, what's the deal with that?"\n`;
+          contextPrompt += `   - Make a relevant tangent: Connect to something you DO know about\n`;
+          contextPrompt += `4. DO NOT make up fake information or pretend you know\n`;
+          contextPrompt += `5. DO NOT say "I'm an AI" or reference limitations\n\n`;
+        }
       }
 
       // 🎙️ NEW: Add relevant podcast content to context
