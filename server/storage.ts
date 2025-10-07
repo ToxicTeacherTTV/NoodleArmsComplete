@@ -1,3 +1,5 @@
+import { memoryCaches } from './services/memoryCache';
+import { perfMetrics } from './services/performanceMetrics';
 import { 
   profiles, 
   conversations, 
@@ -559,6 +561,11 @@ export class DatabaseStorage implements IStorage {
       .values([finalEntry as any])
       .returning();
 
+    // 🚀 CACHE: Invalidate caches for this profile since new memory added
+    memoryCaches.warm.invalidatePattern(`enriched_memories:${entry.profileId}`);
+    memoryCaches.warm.invalidatePattern(`search_memories:${entry.profileId}`);
+    console.log(`🗑️ Invalidated memory caches for profile ${entry.profileId}`);
+
     // AI-Assisted Flagging: Analyze new memory content in background
     if (newEntry.content && newEntry.profileId) {
       // Run flagging as background task to avoid slowing down memory creation
@@ -904,6 +911,17 @@ export class DatabaseStorage implements IStorage {
 
   // 🚀 NEW: Enhanced memory retrieval that includes story context for atomic facts
   async getEnrichedMemoriesForAI(profileId: string, limit = 100): Promise<Array<MemoryEntry & { parentStory?: MemoryEntry }>> {
+    const endTimer = perfMetrics.startTimer('getEnrichedMemoriesForAI');
+    
+    // 🚀 CACHE: Check cache first
+    const cacheKey = `enriched_memories:${profileId}:${limit}`;
+    const cached = memoryCaches.warm.get(cacheKey);
+    if (cached) {
+      endTimer();
+      console.log(`⚡ Cache HIT for enriched memories (${profileId})`);
+      return cached;
+    }
+    
     // Get only high-confidence, ACTIVE facts for AI response generation
     const memories = await db
       .select()
@@ -959,6 +977,12 @@ export class DatabaseStorage implements IStorage {
       }
       return { ...memory };
     });
+
+    // 🚀 CACHE: Store result for future use
+    memoryCaches.warm.set(cacheKey, enrichedMemories);
+    
+    const duration = endTimer();
+    perfMetrics.log('getEnrichedMemoriesForAI', duration, { profileId, resultCount: enrichedMemories.length });
 
     return enrichedMemories;
   }
