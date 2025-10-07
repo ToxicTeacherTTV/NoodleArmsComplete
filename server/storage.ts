@@ -377,6 +377,14 @@ export class DatabaseStorage implements IStorage {
     return updatedConversation;
   }
 
+  async updateConversationTitle(id: string, title: string): Promise<Conversation> {
+    const [updated] = await db.update(conversations)
+      .set({ title })
+      .where(eq(conversations.id, id))
+      .returning();
+    return updated;
+  }
+
   async getPodcastConversations(profileId: string, limit = 50): Promise<Conversation[]> {
     return await db
       .select()
