@@ -1004,8 +1004,6 @@ Return as JSON. If no new facts can be extracted, return empty array:
   // Generate a concise title for a conversation based on the first exchange
   async generateConversationTitle(userMessage: string, aiResponse: string): Promise<string> {
     try {
-      const model = this.ai.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-      
       const prompt = `Based on this conversation, generate a SHORT, concise title (3-6 words max). Just return the title, nothing else.
 
 User: ${userMessage.substring(0, 200)}
@@ -1013,8 +1011,12 @@ AI: ${aiResponse.substring(0, 200)}
 
 Title:`;
 
-      const result = await model.generateContent(prompt);
-      const title = result.response.text().trim();
+      const result = await this.ai.models.generateContent({
+        model: "gemini-2.0-flash-exp",
+        contents: prompt
+      });
+      
+      const title = result.text.trim();
       
       // Clean up the title - remove quotes, periods, extra whitespace
       return title.replace(/^["']|["']$/g, '').replace(/\.$/, '').trim().substring(0, 60);
