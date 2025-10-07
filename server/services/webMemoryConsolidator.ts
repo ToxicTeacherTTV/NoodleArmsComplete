@@ -1,5 +1,6 @@
 import { storage } from '../storage.js';
 import { webSearchService } from './webSearchService.js';
+import Anthropic from '@anthropic-ai/sdk';
 
 export interface WebMemoryCandidate {
   title: string;
@@ -14,11 +15,10 @@ export interface WebMemoryCandidate {
 }
 
 class WebMemoryConsolidator {
-  private anthropic: any;
+  private anthropic: Anthropic;
 
   constructor() {
     // Initialize Anthropic for AI-powered consolidation decisions
-    const Anthropic = require('@anthropic-ai/sdk');
     this.anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
@@ -196,8 +196,7 @@ class WebMemoryConsolidator {
    */
   async storeWebMemories(
     candidates: WebMemoryCandidate[],
-    profileId: string,
-    conversationId: string
+    profileId: string
   ): Promise<number> {
     const storableMemories = candidates.filter(c => c.shouldStore);
     
@@ -217,20 +216,12 @@ class WebMemoryConsolidator {
 
         await storage.addMemoryEntry({
           profileId,
-          conversationId,
           type: memory.memoryType,
           content: formattedContent,
           importance: memory.importance,
           source: 'web_search',
           confidence: Math.min(95, memory.score), // Cap confidence at 95% for web results
-          sourceUrl: memory.url,
-          tags: this.extractTags(memory.searchQuery, memory.snippet),
-          metadata: {
-            original_query: memory.searchQuery,
-            web_title: memory.title,
-            evaluation_reasoning: memory.reasoning,
-            search_timestamp: new Date().toISOString()
-          }
+          keywords: this.extractTags(memory.searchQuery, memory.snippet)
         });
 
         storedCount++;
@@ -278,101 +269,33 @@ class WebMemoryConsolidator {
     return Array.from(tags).slice(0, 5); // Limit to 5 tags
   }
 
-  /**
-   * Cleanup old web search memories to prevent memory bloat
-   */
-  async cleanupOldWebMemories(profileId: string, daysToKeep: number = 30): Promise<number> {
-    try {
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
-
-      // Find old web search memories
-      const oldMemories = await storage.getMemoriesBySource(profileId, 'web_search', cutoffDate);
-      
-      if (oldMemories.length === 0) {
-        return 0;
-      }
-
-      console.log(`🧹 Cleaning up ${oldMemories.length} old web search memories (older than ${daysToKeep} days)`);
-
-      let cleanedCount = 0;
-      for (const memory of oldMemories) {
-        // Only remove if it's not high importance and hasn't been retrieved recently
-        if ((memory.importance || 1) <= 2 && (memory.retrievalCount || 0) < 3) {
-          await storage.deleteMemoryEntry(memory.id);
-          cleanedCount++;
-        }
-      }
-
-      console.log(`🧹 Cleaned up ${cleanedCount}/${oldMemories.length} old web search memories`);
-      return cleanedCount;
-
-    } catch (error) {
-      console.error('❌ Error cleaning up old web memories:', error);
-      return 0;
-    }
-  }
-
-  /**
-   * Get statistics about web search memory storage
-   */
-  async getWebMemoryStats(profileId: string): Promise<{
-    totalWebMemories: number;
-    recentWebMemories: number;
-    topSources: string[];
-    memoryTypes: Record<string, number>;
-  }> {
-    try {
-      const webMemories = await storage.getMemoriesBySource(profileId, 'web_search');
-      
-      const recentCutoff = new Date();
-      recentCutoff.setDate(recentCutoff.getDate() - 7);
-      const recentMemories = webMemories.filter(m => 
-        new Date(m.createdAt) > recentCutoff
-      );
-
-      // Extract top sources
-      const sourceCounts = new Map<string, number>();
-      webMemories.forEach(memory => {
-        if (memory.sourceUrl) {
-          try {
-            const domain = new URL(memory.sourceUrl).hostname.replace('www.', '');
-            sourceCounts.set(domain, (sourceCounts.get(domain) || 0) + 1);
-          } catch (error) {
-            // Ignore invalid URLs
-          }
-        }
-      });
-
-      const topSources = Array.from(sourceCounts.entries())
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 5)
-        .map(([domain]) => domain);
-
-      // Count memory types
-      const memoryTypes: Record<string, number> = {};
-      webMemories.forEach(memory => {
-        const type = memory.type || 'GENERAL';
-        memoryTypes[type] = (memoryTypes[type] || 0) + 1;
-      });
-
-      return {
-        totalWebMemories: webMemories.length,
-        recentWebMemories: recentMemories.length,
-        topSources,
-        memoryTypes
-      };
-
-    } catch (error) {
-      console.error('❌ Error getting web memory stats:', error);
-      return {
-        totalWebMemories: 0,
-        recentWebMemories: 0,
-        topSources: [],
-        memoryTypes: {}
-      };
-    }
-  }
+  // Note: Cleanup and stats methods disabled until getMemoriesBySource is added to storage interface
+  // 
+  // /**
+  //  * Cleanup old web search memories to prevent memory bloat
+  //  */
+  // async cleanupOldWebMemories(profileId: string, daysToKeep: number = 30): Promise<number> {
+  //   // Implementation requires getMemoriesBySource() method in storage
+  //   return 0;
+  // }
+  //
+  // /**
+  //  * Get statistics about web search memory storage
+  //  */
+  // async getWebMemoryStats(profileId: string): Promise<{
+  //   totalWebMemories: number;
+  //   recentWebMemories: number;
+  //   topSources: string[];
+  //   memoryTypes: Record<string, number>;
+  // }> {
+  //   // Implementation requires getMemoriesBySource() method in storage
+  //   return {
+  //     totalWebMemories: 0,
+  //     recentWebMemories: 0,
+  //     topSources: [],
+  //     memoryTypes: {}
+  //   };
+  // }
 }
 
 // Export singleton instance
