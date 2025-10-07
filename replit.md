@@ -1,224 +1,101 @@
 # AI-Powered Co-Host Application
 
 ## Overview
-
-This is a sophisticated AI-powered co-host application designed for live streamers. The system functions as an interactive voice agent that can listen to user speech, process it through AI services, and respond with contextually-aware audio responses. The application features real-time voice interaction, persistent memory management, document processing capabilities, and customizable AI personality profiles.
+This AI-powered co-host application acts as an interactive voice agent for live streamers. It processes user speech, leverages AI for contextually-aware audio responses, and features real-time interaction, persistent memory, document processing, and customizable AI personalities. The project aims to enhance live streaming interactions and podcast content creation.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### Frontend Architecture
-- **Framework**: React 19 with TypeScript using functional components and hooks
-- **Styling**: Tailwind CSS with custom CSS variables for theming
-- **UI Components**: Radix UI primitives with shadcn/ui component library
-- **State Management**: Local React state management using hooks (useState, useEffect, useCallback, useRef)
-- **Routing**: Wouter for lightweight client-side routing
-- **Data Fetching**: TanStack React Query for server state management and caching
+### Frontend
+- **Framework**: React 19 (TypeScript, functional components, hooks)
+- **Styling**: Tailwind CSS, custom CSS variables, Radix UI, shadcn/ui
+- **State Management**: Local React state
+- **Routing**: Wouter
+- **Data Fetching**: TanStack React Query
 
-### Backend Architecture
-- **Runtime**: Node.js with Express.js server
-- **Language**: TypeScript with ESM module system
-- **API Design**: RESTful API endpoints for profiles, conversations, messages, documents, and memory management
-- **File Upload**: Multer middleware for handling document uploads
-- **Build System**: Vite for frontend bundling and development, esbuild for server bundling
+### Backend
+- **Runtime**: Node.js with Express.js (TypeScript, ESM)
+- **API**: RESTful (profiles, conversations, messages, documents, memory)
+- **File Upload**: Multer
+- **Build System**: Vite (frontend), esbuild (server)
 
-### Data Storage Solutions
-- **Database**: PostgreSQL with Neon serverless connection
-- **ORM**: Drizzle ORM for type-safe database operations
-- **Schema**: Structured tables for profiles, conversations, messages, documents, and memory entries
-- **Session Storage**: PostgreSQL-based session storage using connect-pg-simple
-- **File Storage**: In-memory storage for document processing with extracted content storage
+### Data Storage
+- **Database**: PostgreSQL (Neon serverless)
+- **ORM**: Drizzle ORM
+- **Schema**: Tables for profiles, conversations, messages, documents, memory
+- **Session Storage**: PostgreSQL-based
+- **File Storage**: In-memory for document processing
 
-### Authentication and Authorization
+### Authentication
 - **Session Management**: Express sessions with PostgreSQL storage
-- **API Key Management**: Environment-based API key configuration for external services
-- **Request Middleware**: Custom logging and error handling middleware
+- **API Keys**: Environment-based configuration
 
-### Voice Processing Architecture
-- **Speech-to-Text**: Browser-native Web Speech API with automatic restart functionality
-- **Text-to-Speech**: Browser-native Speech Synthesis API with queuing system
-- **Voice Activity Detection**: Real-time audio monitoring using Web Audio API
-- **Audio Visualization**: Custom voice activity visualization components
-- **Smart Voice Credit Management**: 
-  - **PODCAST Mode**: `voiceOutput: false` (default) - Manual voice generation only to conserve credits
-  - **STREAMING Mode**: `voiceOutput: true` - Auto-voice enabled for real-time interaction
-  - ElevenLabs integration with pause/resume/replay/save functionality
+### Voice Processing
+- **Speech-to-Text**: Browser-native Web Speech API
+- **Text-to-Speech**: Browser-native Speech Synthesis API, ElevenLabs integration
+- **Voice Activity Detection**: Web Audio API
+- **Smart Voice Credit Management**: PODCAST (manual voice), STREAMING (auto-voice) modes
 
-### AI Integration Architecture
-- **Primary AI Service**: Anthropic's Claude API (claude-sonnet-4-5-20250929 model - Sonnet 4.5)
-- **Alternative TTS**: ElevenLabs integration for enhanced voice synthesis
-- **Memory System**: Retrieval-Augmented Generation (RAG) with keyword-based knowledge retrieval
-- **Unified Personality System**: Preset-based PersonalityControl as single source of truth
-  - 11 personality presets (Chill, Roast Mode, Storyteller, Gaming Rage, etc.)
-  - Consistent controls across chat and Discord interfaces
-  - Automatic migration from legacy behavior metrics to preset configurations
-- **Personality Profiles**: Customizable AI personalities with core identity and knowledge base configuration
+### AI Integration
+- **Primary AI Service**: Anthropic's Claude API (claude-sonnet-4-5-20250929)
+- **Memory System**: Retrieval-Augmented Generation (RAG), keyword-based retrieval
+- **Unified Personality System**: Preset-based PersonalityControl with 11 profiles
+- **Personality Profiles**: Customizable AI identities and knowledge bases
 
-### Document Processing System
-- **PDF Processing**: pdf-parse library for text extraction
-- **Text Chunking**: Intelligent content segmentation for knowledge base integration
-- **Processing Pipeline**: Async document processing with status tracking
-- **Knowledge Extraction**: Automatic memory entry creation from processed documents
+### Document Processing
+- **PDF Processing**: pdf-parse for text extraction
+- **Text Chunking**: Intelligent segmentation
+- **Knowledge Extraction**: Automatic memory entry creation
 
-### Memory Management System
-- **Memory Types**: Categorized storage (FACT, PREFERENCE, LORE, CONTEXT)
-- **Importance Scoring**: Weighted memory entries with retrieval tracking
-- **Memory Consolidation**: AI-powered knowledge base optimization
-- **Search Functionality**: Keyword-based memory retrieval for context augmentation
+### Memory Management
+- **Memory Types**: FACT, PREFERENCE, LORE, CONTEXT
+- **Importance Scoring**: Weighted entries
+- **Memory Consolidation**: AI-powered optimization
+- **Search**: Keyword-based retrieval
 
 ### Communication Flow
-1. **Voice Input**: Browser speech recognition captures user audio
-2. **Message Queuing**: Sequential processing to prevent overlapping responses
-3. **Context Retrieval**: RAG system finds relevant memories and documents
-4. **AI Processing**: Augmented prompts sent to Claude API with context
-5. **Response Generation**: AI-generated responses with processing time tracking
-6. **Voice Output**: Browser speech synthesis with queue management
-7. **Memory Storage**: Automatic extraction and storage of new information
+1. Voice Input (browser speech recognition)
+2. Message Queuing
+3. Context Retrieval (RAG)
+4. AI Processing (Claude API)
+5. Response Generation
+6. Voice Output (browser speech synthesis)
+7. Memory Storage
 
-### Component Architecture
-- **Dashboard**: Main application container managing state and data flow
-- **Chat Panel**: Message display with real-time updates and formatting
-- **Control Panel**: Voice controls and text input interface
-- **PersonalitySurgePanel**: Unified personality controls with preset selection, intensity, and spice adjustments
-- **Discord Management Panel**: Server-specific personality settings using same unified controls as chat
-- **Profile Management**: AI personality configuration and switching
-- **Memory Panel**: Memory entry management with fixed protected facts deletion functionality
-- **Document Panel**: File upload and processing interface
-- **Voice Visualizer**: Real-time audio activity display
+### Core Components
+- Dashboard, Chat Panel, Control Panel, PersonalitySurgePanel, Discord Management Panel
+- Profile, Memory, Document Panels, Voice Visualizer
 
 ## External Dependencies
 
 ### AI Services
-- **Anthropic Claude API**: Primary conversational AI service for response generation and memory consolidation
-- **ElevenLabs API**: Optional enhanced text-to-speech service for improved voice quality
+- **Anthropic Claude API**: Conversational AI, response generation, memory consolidation
+- **ElevenLabs API**: Enhanced text-to-speech
 
 ### Database Services
-- **Neon Database**: Serverless PostgreSQL hosting with automatic scaling
-- **PostgreSQL**: Primary data storage for all application data
+- **Neon Database**: Serverless PostgreSQL hosting
+- **PostgreSQL**: Primary data storage
 
 ### Development Tools
-- **Vite**: Frontend development server and build tool
-- **Replit Integration**: Development environment integration with error overlay and cartographer plugins
+- **Vite**: Frontend development and build
+- **Replit Integration**: Development environment
 
 ### Browser APIs
-- **Web Speech API**: Speech recognition and synthesis for voice interaction
-- **Web Audio API**: Real-time audio processing and visualization
-- **MediaDevices API**: Microphone access for voice activity detection
+- **Web Speech API**: Speech recognition and synthesis
+- **Web Audio API**: Audio processing and visualization
+- **MediaDevices API**: Microphone access
 
 ### UI Libraries
-- **Radix UI**: Headless UI primitives for accessible components
-- **Tailwind CSS**: Utility-first CSS framework for styling
-- **Lucide React**: Icon library for consistent iconography
+- **Radix UI**: Headless UI components
+- **Tailwind CSS**: Utility-first CSS framework
+- **Lucide React**: Icon library
 
 ### Utility Libraries
-- **Drizzle ORM**: Type-safe database operations and migrations
-- **TanStack React Query**: Server state management and caching
-- **date-fns**: Date manipulation and formatting
-- **nanoid**: Unique ID generation for entities
-- **pdf-parse**: PDF text extraction for document processing
-- **multer**: File upload handling middleware
-
-## Development Roadmap
-
-### ✅ Recently Completed
-- **Discord Conversation Context Awareness**: Complete implementation of channel message awareness for contextual responses
-  - All response types now read recent channel messages before responding (mentions, auto-replies, topic triggers, conversation continuations, proactive messages)
-  - Intelligent message filtering (human messages only, ≤30 minutes old, bot message exclusion)
-  - Context-aware AI prompts that instruct Nicky to join ongoing conversations naturally instead of random interjections
-  - Performance optimized with smart message limits and Discord API rate limit protection
-  - Comprehensive logging for context availability tracking and debugging
-- **Unified Personality Control System**: Complete consolidation of personality management through preset-based PersonalityController
-  - Replaced ChaosMeter with PersonalitySurgePanel for unified chat personality controls
-  - Migrated Discord behavior sliders to preset-aligned controls (preset picker, intensity, spice, DBD lens)
-  - Implemented automatic migration system for existing Discord server configurations
-  - Created advisory-only chaos engine that provides suggestions without mutating controller state
-- **Enhanced Memory Management**: Fixed critical protected facts deletion bug by adding missing DELETE endpoint
-- **Advanced AI Intelligence Systems**: Comprehensive memory evolution and optimization
-  - IntelligenceEngine with fact clustering, personality drift detection, and source reliability analysis
-  - MemoryDeduplicator for identifying and merging similar memories
-  - StoryReconstructor for grouping related facts into coherent narratives
-  - SmartContradictionDetector for resolving conflicting information
-- **Automated Content Generation**: Multiple content creation systems
-  - AdGenerationService with comedic fake sponsor content and Italian-American twist
-  - PodcastFactExtractor for structured fact extraction from episode transcripts
-  - ContentCollectionManager pulling from Reddit, Steam, and YouTube automatically
-- **Discord Bot Advanced Features**: Comprehensive server integration
-  - Proactive messaging system (2-3 automated messages per day maximum)
-  - BehaviorModulator with dynamic personality based on time, server settings, and drift
-  - Server-specific personality controls and trigger systems
-  - Configurable triggers with user-defined keywords and response chances
-  - Direct mention support with priority override system
-- **Smart Voice Credit Management**: Resource-efficient voice synthesis
-  - PODCAST Mode with manual voice generation to conserve credits
-  - STREAMING Mode with auto-voice enabled for real-time interaction
-  - ElevenLabs integration with pause/resume/replay/save functionality
-- **Podcast Content Management System**: Complete episode and segment management
-  - Content organization dashboard with episode planning tools
-  - AI-powered segment parsing and fact extraction from transcripts
-  - Episode metadata tracking (guests, topics, mood, energy levels)
-- **Dynamic Personality System**: 10-facet personality rotation with anti-repetition guards
-- **Cluster-Based Personality Rotation**: Automatic preset switching with time-of-day awareness
-  - Time-based cluster selection: Normal hours (6am-6pm) vs Maniacal hours (6pm-6am)
-  - Conversation-based random preset selection from active cluster
-  - Normal cluster: Chill Nicky, Storytime, Patch Roast
-  - Maniacal cluster: Roast Mode, Unhinged, Caller War
-  - Zero API cost - configuration changes only
-- **Enhanced Reddit Collection**: 9 subreddits across 3 content streams (NNN, Word from Don, DbD)
-- **Anti-Repetition Engine**: N-gram detection, catchphrase limits, automatic regeneration
-- **Character Accuracy**: Little Italy origins, tax-purposes Jersey residence, terrible motivation coaching
-- **Smart Auto-Approval System**: Automated flag review with confidence-based approval
-  - 500 flags per day limit with category-based filtering
-  - Safe categories auto-approved at 75%+ confidence
-  - High confidence categories require 85%+ confidence
-  - Manual review required for risky categories (fourth_wall_break, ooc_behavior)
-
-### 🚀 High Priority Features
-
-#### Content & Personality Enhancements
-- **Expanded Backstory Variety**: Develop more non-DbD stories (target 60-70% DbD, 30-40% other topics)
-  - Newark business ventures and family stories
-  - Italian-American cultural experiences
-  - Street wisdom and neighborhood tales
-- **Content Suggestion System**: Allow Nicky to propose podcast topics when asked
-  - "What should we talk about today?" feature
-  - Topic generation based on recent news and memories
-- **Enhanced Memory Persistence**: Better tracking of podcast topics, stories, and segments
-  - Tag conversations as "podcast content" for better recall
-  - Story completion tracking to avoid repeating same tales
-
-#### Advanced Integration Features
-- **Live Stream Integration**: Real-time Twitch/YouTube chat reaction system
-- **Multi-Platform Sync**: Keep personality consistent across Discord, Twitch, YouTube
-- **Stream Overlay Widget**: Visual Nicky reactions that appear on stream
-- **Content Performance Analytics**: Track what stories/topics get best audience reactions
-
-### 🔧 Technical Optimizations
-
-#### Performance & Resource Management
-- **Response Optimization**: Maintain ~2500 character responses (current sweet spot)
-- **Memory Efficiency**: Optimize RAG retrieval for faster context loading
-- **Intelligence System Optimization**: Further tune fact clustering and story reconstruction algorithms
-
-#### User Experience Enhancements
-- **Mode-Specific Behaviors**: Enhanced streaming vs podcast mode differentiation
-  - Different personality intensity levels
-  - Tailored content suggestions per mode
-- **Live Reaction Support**: Optimized for real-time podcast interaction
-  - Faster response prioritization during live sessions
-  - Context-aware interruption handling
-
-### 📋 Future Considerations
-- **Content Scheduling**: Automated content preparation for upcoming episodes
-- **Audience Integration**: Community feedback incorporation into content streams
-- **Analytics Dashboard**: Track content performance and engagement
-- **Voice Modulation**: Dynamic voice characteristics based on personality facets
-- **Multi-Platform Integration**: Expand beyond Discord for broader reach
-
-### 🎯 Success Metrics
-- **Variety Score**: Reduced repetition in responses and story selection
-- **Content Quality**: Balance between entertainment value and authentic personality
-- **User Engagement**: Sustained conversation quality in both streaming and podcast modes
-- **Resource Efficiency**: Optimized API usage while maintaining response quality
+- **Drizzle ORM**: Type-safe database operations
+- **TanStack React Query**: Server state management
+- **date-fns**: Date manipulation
+- **nanoid**: Unique ID generation
+- **pdf-parse**: PDF text extraction
+- **multer**: File upload handling
