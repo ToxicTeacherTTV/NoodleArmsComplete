@@ -580,6 +580,7 @@ class AnthropicService {
 
     // Build context from memories and documents (moved outside try block for fallback access)
     let contextPrompt = "";
+    let knowledgeGapInfo: any = null; // Store knowledge gap info for later use
     
     try {
       // 💬 NEW: Add recent conversation history for context continuity
@@ -618,23 +619,8 @@ class AnthropicService {
           }
         });
         
-        // 🎯 NEW: Knowledge gap detection and guidance
-        const firstMemory = relevantMemories[0] as any;
-        if (firstMemory?.knowledgeGap?.hasGap) {
-          const missingTopics = firstMemory.knowledgeGap.missingTopics;
-          contextPrompt += `\n⚠️ KNOWLEDGE GAP DETECTED:\n`;
-          contextPrompt += `The user is asking about: ${missingTopics.join(', ')}\n`;
-          contextPrompt += `You don't have specific information about this in your memories.\n\n`;
-          contextPrompt += `INSTRUCTIONS FOR HANDLING UNKNOWN TOPICS:\n`;
-          contextPrompt += `1. Stay in character as Nicky - don't break the fourth wall\n`;
-          contextPrompt += `2. Acknowledge you don't know about "${missingTopics[0]}" specifically\n`;
-          contextPrompt += `3. Options for responding:\n`;
-          contextPrompt += `   - Admit ignorance with personality: "Yo, I ain't heard nothin' about that yet"\n`;
-          contextPrompt += `   - Ask them to fill you in: "Fill me in, what's the deal with that?"\n`;
-          contextPrompt += `   - Make a relevant tangent: Connect to something you DO know about\n`;
-          contextPrompt += `4. DO NOT make up fake information or pretend you know\n`;
-          contextPrompt += `5. DO NOT say "I'm an AI" or reference limitations\n\n`;
-        }
+        // 🎯 Store knowledge gap info for later (we'll add instructions after web search)
+        knowledgeGapInfo = (relevantMemories[0] as any)?.knowledgeGap;
       }
 
       // 🎙️ NEW: Add relevant podcast content to context
@@ -716,6 +702,37 @@ class AnthropicService {
           contextPrompt += `\n`;
         });
         contextPrompt += "\nNOTE: Use this current web information to supplement your knowledge. Cite sources naturally when referencing web information (e.g., 'I just read that...' or 'According to recent info...').\n";
+      }
+
+      // 🎯 NEW: Knowledge gap guidance (after web search, so we know if we have info)
+      if (knowledgeGapInfo?.hasGap) {
+        const missingTopics = knowledgeGapInfo.missingTopics;
+        
+        if (webSearchResults.length > 0) {
+          // We have web search results! Use them to answer
+          contextPrompt += `\n⚠️ KNOWLEDGE GAP FILLED BY WEB SEARCH:\n`;
+          contextPrompt += `The user is asking about: ${missingTopics.join(', ')}\n`;
+          contextPrompt += `You didn't have this in your memories, but web search found current information above.\n\n`;
+          contextPrompt += `INSTRUCTIONS:\n`;
+          contextPrompt += `1. Use the web search results above to answer their question knowledgeably\n`;
+          contextPrompt += `2. Reference the info naturally: "Oh yeah, I just looked that up..." or "From what I'm seeing..."\n`;
+          contextPrompt += `3. Stay in character - act like you just learned about it\n`;
+          contextPrompt += `4. After this conversation, this info will be saved to your memory for next time\n\n`;
+        } else {
+          // No web results found - admit we don't know
+          contextPrompt += `\n⚠️ KNOWLEDGE GAP DETECTED:\n`;
+          contextPrompt += `The user is asking about: ${missingTopics.join(', ')}\n`;
+          contextPrompt += `You don't have specific information about this in your memories, and web search found nothing.\n\n`;
+          contextPrompt += `INSTRUCTIONS FOR HANDLING UNKNOWN TOPICS:\n`;
+          contextPrompt += `1. Stay in character as Nicky - don't break the fourth wall\n`;
+          contextPrompt += `2. Acknowledge you don't know about "${missingTopics[0]}" specifically\n`;
+          contextPrompt += `3. Options for responding:\n`;
+          contextPrompt += `   - Admit ignorance with personality: "Yo, I ain't heard nothin' about that yet"\n`;
+          contextPrompt += `   - Ask them to fill you in: "Fill me in, what's the deal with that?"\n`;
+          contextPrompt += `   - Make a relevant tangent: Connect to something you DO know about\n`;
+          contextPrompt += `4. DO NOT make up fake information or pretend you know\n`;
+          contextPrompt += `5. DO NOT say "I'm an AI" or reference limitations\n\n`;
+        }
       }
 
       // Add lore context for emergent personality
