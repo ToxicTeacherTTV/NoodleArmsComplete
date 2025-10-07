@@ -40,7 +40,15 @@ Preferred communication style: Simple, everyday language.
 
 ### AI Integration
 - **Primary AI Service**: Anthropic's Claude API (claude-sonnet-4-5-20250929)
-- **Memory System**: Retrieval-Augmented Generation (RAG), keyword-based retrieval
+- **Fallback Service**: Google Gemini API (automatic fallback)
+- **Memory System**: Enhanced RAG with intelligent retrieval
+  - **Recency Bias**: Recent conversation context prioritized (exponential decay)
+  - **Thread Awareness**: Prevents repetitive context from same conversation
+  - **Query Intent Detection**: Identifies tell_about, asking_opinion, requesting_story, etc.
+  - **Diversity Scoring**: Prevents similar/duplicate memories in results
+  - **Two-Pass Re-ranking**: 50 candidates → diversity filter → 15 best results
+  - **Knowledge Gap Detection**: Identifies missing information via proper noun analysis
+  - **Performance Optimizations**: LRU cache, batch queries, 6 database indexes
 - **Unified Personality System**: Preset-based PersonalityControl with 11 profiles
 - **Personality Profiles**: Customizable AI identities and knowledge bases
 
