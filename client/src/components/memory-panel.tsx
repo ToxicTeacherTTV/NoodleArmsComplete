@@ -21,6 +21,7 @@ export default function MemoryPanel({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
 
   const { data: memoryEntries, isLoading } = useQuery({
     queryKey: ['/api/memory/entries', { limit: 10000 }],
@@ -32,12 +33,32 @@ export default function MemoryPanel({
     enabled: !!profileId,
   });
 
-  // Filter memory entries based on search term
+  // Filter memory entries based on search term and source filter
   const filteredMemories = useMemo(() => {
     if (!memoryEntries || !Array.isArray(memoryEntries)) return [];
     
-    const memories = memoryEntries as MemoryEntry[];
-    if (!searchTerm.trim()) return memories.slice(0, 10);
+    let memories = memoryEntries as MemoryEntry[];
+    
+    // Apply source filter first
+    if (sourceFilter !== "all") {
+      memories = memories.filter((memory: MemoryEntry) => {
+        if (sourceFilter === "web_search") {
+          return memory.source?.startsWith("web_search");
+        }
+        if (sourceFilter === "conversation") {
+          return !memory.source || memory.source === "conversation";
+        }
+        if (sourceFilter === "document") {
+          return memory.source?.startsWith("document:");
+        }
+        return true;
+      });
+    }
+    
+    // Apply text search filter
+    if (!searchTerm.trim()) {
+      return memories.slice(0, sourceFilter === "all" ? 10 : 50);
+    }
     
     const filtered = memories.filter((memory: MemoryEntry) => 
       memory.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -46,7 +67,7 @@ export default function MemoryPanel({
     );
     
     return filtered.slice(0, 50); // Show more results when searching
-  }, [memoryEntries, searchTerm]);
+  }, [memoryEntries, searchTerm, sourceFilter]);
 
   // Removed redundant mutations - Evolution Panel handles optimization
 
@@ -108,11 +129,51 @@ export default function MemoryPanel({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium text-foreground">Memory Search</h3>
-          {searchTerm && (
+          {(searchTerm || sourceFilter !== "all") && (
             <span className="text-xs text-muted-foreground">
               {filteredMemories.length} results
             </span>
           )}
+        </div>
+        
+        {/* Source Filter Buttons */}
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant={sourceFilter === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSourceFilter("all")}
+            className="text-xs h-7"
+            data-testid="filter-all"
+          >
+            All Sources
+          </Button>
+          <Button
+            variant={sourceFilter === "web_search" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSourceFilter("web_search")}
+            className="text-xs h-7"
+            data-testid="filter-web-search"
+          >
+            🌐 Web Search
+          </Button>
+          <Button
+            variant={sourceFilter === "conversation" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSourceFilter("conversation")}
+            className="text-xs h-7"
+            data-testid="filter-conversation"
+          >
+            💬 Conversation
+          </Button>
+          <Button
+            variant={sourceFilter === "document" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSourceFilter("document")}
+            className="text-xs h-7"
+            data-testid="filter-document"
+          >
+            📄 Document
+          </Button>
         </div>
         
         {/* Search Input */}
