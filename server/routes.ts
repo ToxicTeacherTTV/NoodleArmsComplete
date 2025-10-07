@@ -633,6 +633,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 🎲 ENHANCED: Trigger response-based chaos evolution after successful AI response
       chaosEngine.onResponseGenerated();
 
+      // 📝 Generate conversation title after first exchange
+      const messageCount = (await storage.getConversationMessages(conversationId)).length;
+      if (messageCount === 2) { // First exchange complete (1 user + 1 AI)
+        try {
+          const title = await geminiService.generateConversationTitle(message, response.content);
+          await storage.updateConversationTitle(conversationId, title);
+          console.log(`📝 Generated conversation title: "${title}"`);
+        } catch (error) {
+          console.warn('⚠️ Failed to generate conversation title:', error);
+        }
+      }
+
       res.json(response);
     } catch (error) {
       console.error('Chat error:', error);
