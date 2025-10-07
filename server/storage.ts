@@ -923,29 +923,42 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(limit);
 
-    // Enrich atomic facts with their parent story context
-    const enrichedMemories = await Promise.all(
-      memories.map(async (memory) => {
-        if (memory.isAtomicFact && memory.parentFactId) {
-          try {
-            const parentStory = await db
-              .select()
-              .from(memoryEntries)
-              .where(eq(memoryEntries.id, memory.parentFactId))
-              .limit(1);
-            
-            return {
-              ...memory,
-              parentStory: parentStory[0] || undefined
-            };
-          } catch (error) {
-            console.warn(`⚠️ Failed to fetch parent story for atomic fact ${memory.id}:`, error);
-            return { ...memory };
-          }
-        }
-        return { ...memory };
-      })
-    );
+    // 🚀 OPTIMIZED: Batch fetch parent stories to avoid N+1 queries
+    const parentFactIds = memories
+      .filter(m => m.isAtomicFact && m.parentFactId)
+      .map(m => m.parentFactId!)
+      .filter((id, index, self) => self.indexOf(id) === index); // unique IDs only
+
+    let parentStoriesMap = new Map<string, any>();
+    
+    if (parentFactIds.length > 0) {
+      try {
+        const parentStories = await db
+          .select()
+          .from(memoryEntries)
+          .where(sql`${memoryEntries.id} IN (${sql.join(parentFactIds.map(id => sql`${id}`), sql`, `)})`);
+        
+        parentStories.forEach(story => {
+          parentStoriesMap.set(story.id, story);
+        });
+        
+        console.log(`📦 Batch fetched ${parentStories.length} parent stories for getEnrichedMemoriesForAI`);
+      } catch (error) {
+        console.warn(`⚠️ Failed to batch fetch parent stories:`, error);
+      }
+    }
+
+    // Enrich atomic facts with their parent story context (no additional queries needed)
+    const enrichedMemories = memories.map(memory => {
+      if (memory.isAtomicFact && memory.parentFactId) {
+        const parentStory = parentStoriesMap.get(memory.parentFactId);
+        return {
+          ...memory,
+          parentStory: parentStory || undefined
+        };
+      }
+      return { ...memory };
+    });
 
     return enrichedMemories;
   }
@@ -1001,29 +1014,42 @@ export class DatabaseStorage implements IStorage {
         desc(memoryEntries.retrievalCount) // Finally by usage frequency
       );
 
-    // Enrich atomic facts with their parent story context
-    const enrichedMemories = await Promise.all(
-      memories.map(async (memory) => {
-        if (memory.isAtomicFact && memory.parentFactId) {
-          try {
-            const parentStory = await db
-              .select()
-              .from(memoryEntries)
-              .where(eq(memoryEntries.id, memory.parentFactId))
-              .limit(1);
-            
-            return {
-              ...memory,
-              parentStory: parentStory[0] || undefined
-            };
-          } catch (error) {
-            console.warn(`⚠️ Failed to fetch parent story for atomic fact ${memory.id}:`, error);
-            return { ...memory };
-          }
-        }
-        return { ...memory };
-      })
-    );
+    // 🚀 OPTIMIZED: Batch fetch parent stories to avoid N+1 queries
+    const parentFactIds = memories
+      .filter(m => m.isAtomicFact && m.parentFactId)
+      .map(m => m.parentFactId!)
+      .filter((id, index, self) => self.indexOf(id) === index); // unique IDs only
+
+    let parentStoriesMap = new Map<string, any>();
+    
+    if (parentFactIds.length > 0) {
+      try {
+        const parentStories = await db
+          .select()
+          .from(memoryEntries)
+          .where(sql`${memoryEntries.id} IN (${sql.join(parentFactIds.map(id => sql`${id}`), sql`, `)})`);
+        
+        parentStories.forEach(story => {
+          parentStoriesMap.set(story.id, story);
+        });
+        
+        console.log(`📦 Batch fetched ${parentStories.length} parent stories for searchEnrichedMemoryEntries`);
+      } catch (error) {
+        console.warn(`⚠️ Failed to batch fetch parent stories:`, error);
+      }
+    }
+
+    // Enrich atomic facts with their parent story context (no additional queries needed)
+    const enrichedMemories = memories.map(memory => {
+      if (memory.isAtomicFact && memory.parentFactId) {
+        const parentStory = parentStoriesMap.get(memory.parentFactId);
+        return {
+          ...memory,
+          parentStory: parentStory || undefined
+        };
+      }
+      return { ...memory };
+    });
 
     return enrichedMemories;
   }
