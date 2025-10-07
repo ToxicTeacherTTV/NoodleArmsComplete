@@ -8,6 +8,7 @@ interface ConversationWithMeta {
   profileId: string;
   createdAt: Date | null;
   contentType: string;
+  title?: string;
   messageCount: number;
   firstMessage?: string;
 }
@@ -29,12 +30,18 @@ export default function ChatHistorySidebar({
   });
 
   const generateTitle = (conv: ConversationWithMeta) => {
+    // Use AI-generated title if available
+    if (conv.title) {
+      return conv.title;
+    }
+    // Fall back to first message preview
     if (conv.firstMessage) {
       return conv.firstMessage.length > 40 
         ? conv.firstMessage.substring(0, 40) + "..." 
         : conv.firstMessage;
     }
-    return `Chat ${conv.messageCount === 0 ? '(empty)' : `(${conv.messageCount} msgs)`}`;
+    // Last resort: message count
+    return `Chat (${conv.messageCount} msgs)`;
   };
 
   const getRelativeTime = (date: Date | null) => {

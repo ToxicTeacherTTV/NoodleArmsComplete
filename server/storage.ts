@@ -455,6 +455,7 @@ export class DatabaseStorage implements IStorage {
 
         return {
           ...convo,
+          title: convo.title, // Include AI-generated title
           messageCount: Number(messageCount[0]?.count || 0),
           firstMessage: msgs[0]?.content
         };
