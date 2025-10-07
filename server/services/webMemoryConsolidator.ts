@@ -85,15 +85,17 @@ class WebMemoryConsolidator {
       return candidate;
     }
 
-    // Check if this information might already exist in memory
+    // Check if this information might already exist in memory (relaxed - only skip if very high confidence match)
     try {
       const similarMemories = await storage.searchEnrichedMemoryEntries(profileId, result.snippet.substring(0, 100));
       
       if (similarMemories.length > 0) {
-        const highConfidenceMatches = similarMemories.filter(m => (m.confidence || 0) > 80);
-        if (highConfidenceMatches.length > 0) {
+        const veryHighConfidenceMatches = similarMemories.filter(m => 
+          (m.confidence || 0) > 95 && m.source === 'web_search'
+        );
+        if (veryHighConfidenceMatches.length > 0) {
           candidate.shouldStore = false;
-          candidate.reasoning = 'Similar information already exists in memory';
+          candidate.reasoning = 'Identical web search result already exists in memory';
           return candidate;
         }
       }
@@ -141,6 +143,12 @@ class WebMemoryConsolidator {
       '2024', '2025', 'breaking', 'update', 'new'
     ];
 
+    // Gaming/DbD specific keywords
+    const gamingKeywords = [
+      'killer', 'survivor', 'perk', 'power', 'ability', 'chapter',
+      'dlc', 'ptb', 'dead by daylight', 'dbd'
+    ];
+
     // Check for factual content
     if (factualKeywords.some(keyword => queryLower.includes(keyword) || title.includes(keyword))) {
       return {
@@ -168,6 +176,18 @@ class WebMemoryConsolidator {
         memoryType: 'FACT',
         importance: 2,
         reasoning: 'Contains current/time-sensitive information'
+      };
+    }
+
+    // Check for gaming content (DbD-specific) - check all sources
+    if (gamingKeywords.some(keyword => 
+      queryLower.includes(keyword) || title.includes(keyword) || snippet.includes(keyword)
+    )) {
+      return {
+        shouldStore: true,
+        memoryType: 'FACT',
+        importance: 3,
+        reasoning: 'Contains Dead by Daylight game information'
       };
     }
 
