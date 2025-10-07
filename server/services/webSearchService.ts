@@ -27,16 +27,57 @@ class WebSearchService {
   }
 
   /**
+   * Extract optimized search keywords from a question
+   */
+  private extractSearchKeywords(query: string): string {
+    // Remove question words from the beginning
+    const questionWords = /^(what|how|why|when|where|who|which|do|does|did|can|could|should|would|will|is|are|was|were|tell me|show me|explain|hey|hi)\s+/i;
+    let cleanQuery = query.replace(questionWords, '').trim();
+    
+    // Remove common filler words but preserve proper nouns
+    const words = cleanQuery.split(/\s+/);
+    const fillerWords = new Set(['about', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'from', 'you', 'me', 'know', 'like', 'do', 'does']);
+    
+    const importantWords = words.filter(word => {
+      const lower = word.toLowerCase();
+      // Keep if: it's capitalized (proper noun), or it's not a filler word, or it's long enough
+      return /^[A-Z]/.test(word) || !fillerWords.has(lower) || word.length > 5;
+    });
+    
+    cleanQuery = importantWords.join(' ').trim();
+    
+    // If query is still too long (>8 words), prioritize proper nouns and longer terms
+    if (importantWords.length > 8) {
+      const prioritized = importantWords
+        .sort((a, b) => {
+          const aScore = (/^[A-Z]/.test(a) ? 20 : 0) + a.length;
+          const bScore = (/^[A-Z]/.test(b) ? 20 : 0) + b.length;
+          return bScore - aScore;
+        })
+        .slice(0, 8);
+      cleanQuery = prioritized.join(' ');
+    }
+    
+    // Clean up multiple spaces
+    cleanQuery = cleanQuery.replace(/\s+/g, ' ').trim();
+    
+    return cleanQuery || query; // Fallback to original if cleaning removed everything
+  }
+
+  /**
    * Main search function that tries multiple search strategies
    */
   async search(query: string): Promise<SearchResponse> {
     const startTime = Date.now();
-    console.log(`🔍 Web search query: "${query}"`);
+    
+    // Extract optimized search keywords
+    const searchQuery = this.extractSearchKeywords(query);
+    console.log(`🔍 Web search query: "${query}" → optimized: "${searchQuery}"`);
 
-    // Check cache first
-    const cached = this.getFromCache(query);
+    // Check cache first (use optimized query for cache key)
+    const cached = this.getFromCache(searchQuery);
     if (cached) {
-      console.log(`📚 Using cached result for: "${query}"`);
+      console.log(`📚 Using cached result for: "${searchQuery}"`);
       return cached;
     }
 
@@ -45,24 +86,24 @@ class WebSearchService {
 
     try {
       // Primary search: DuckDuckGo Instant Answer API (free, no key required)
-      let results = await this.searchDuckDuckGo(query);
+      let results = await this.searchDuckDuckGo(searchQuery);
       
       // If DuckDuckGo doesn't return enough results, try web scraping approach
       if (results.length < 3) {
         console.log(`🔄 DuckDuckGo returned ${results.length} results, trying fallback...`);
-        const fallbackResults = await this.searchFallback(query);
+        const fallbackResults = await this.searchFallback(searchQuery);
         results = [...results, ...fallbackResults].slice(0, this.MAX_RESULTS);
       }
 
       const response: SearchResponse = {
         results: results.slice(0, this.MAX_RESULTS),
-        query,
+        query: searchQuery,
         totalResults: results.length,
         searchTime: Date.now() - startTime
       };
 
       // Cache the result
-      this.cache.set(query.toLowerCase(), {
+      this.cache.set(searchQuery.toLowerCase(), {
         data: response,
         timestamp: Date.now()
       });
