@@ -85,14 +85,26 @@ class WebSearchService {
     await this.applyRateLimit();
 
     try {
-      // Primary search: DuckDuckGo Instant Answer API (free, no key required)
-      let results = await this.searchDuckDuckGo(searchQuery);
+      let results: SearchResult[] = [];
       
-      // If DuckDuckGo doesn't return enough results, try web scraping approach
-      if (results.length < 3) {
-        console.log(`🔄 DuckDuckGo returned ${results.length} results, trying fallback...`);
-        const fallbackResults = await this.searchFallback(searchQuery);
-        results = [...results, ...fallbackResults].slice(0, this.MAX_RESULTS);
+      // 🔑 NEW: Try SerpApi first if API key is available
+      const serpApiKey = process.env.SERPAPI_API_KEY;
+      if (serpApiKey) {
+        console.log('🔑 Using SerpApi for web search');
+        results = await this.searchSerpApi(searchQuery, serpApiKey);
+      }
+      
+      // Fallback to DuckDuckGo if SerpApi fails or no key
+      if (results.length === 0) {
+        console.log('🦆 Falling back to DuckDuckGo search');
+        results = await this.searchDuckDuckGo(searchQuery);
+        
+        // If DuckDuckGo doesn't return enough results, try web scraping approach
+        if (results.length < 3) {
+          console.log(`🔄 DuckDuckGo returned ${results.length} results, trying fallback...`);
+          const fallbackResults = await this.searchFallback(searchQuery);
+          results = [...results, ...fallbackResults].slice(0, this.MAX_RESULTS);
+        }
       }
 
       const response: SearchResponse = {
@@ -174,6 +186,57 @@ class WebSearchService {
 
     } catch (error) {
       console.warn('⚠️ DuckDuckGo search failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Search using SerpApi (Google search)
+   */
+  private async searchSerpApi(query: string, apiKey: string): Promise<SearchResult[]> {
+    try {
+      const url = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&api_key=${apiKey}&num=8`;
+      
+      const response = await fetch(url, {
+        timeout: 10000
+      });
+
+      if (!response.ok) {
+        throw new Error(`SerpApi error: ${response.status}`);
+      }
+
+      const data = await response.json() as any;
+      const results: SearchResult[] = [];
+
+      // Parse organic results
+      if (data.organic_results && Array.isArray(data.organic_results)) {
+        data.organic_results.slice(0, this.MAX_RESULTS).forEach((result: any, index: number) => {
+          if (result.link && result.title) {
+            results.push({
+              title: result.title,
+              snippet: result.snippet || result.displayed_link || '',
+              url: result.link,
+              score: 100 - (index * 5)
+            });
+          }
+        });
+      }
+
+      // Also check knowledge graph if available
+      if (data.knowledge_graph && data.knowledge_graph.description && results.length < 3) {
+        results.unshift({
+          title: data.knowledge_graph.title || query,
+          snippet: data.knowledge_graph.description,
+          url: data.knowledge_graph.website || data.knowledge_graph.source?.link || `https://www.google.com/search?q=${encodeURIComponent(query)}`,
+          score: 100
+        });
+      }
+
+      console.log(`🔑 SerpApi returned ${results.length} results`);
+      return results;
+
+    } catch (error) {
+      console.warn('⚠️ SerpApi search failed:', error);
       return [];
     }
   }
