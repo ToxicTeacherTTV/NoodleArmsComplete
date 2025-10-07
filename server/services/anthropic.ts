@@ -207,9 +207,13 @@ class AnthropicService {
     personalityState?: any,
     mode?: string,
     limit: number = 15
-  ): Promise<Array<any & { contextualRelevance?: number, retrievalMethod?: string }>> {
+  ): Promise<Array<any & { contextualRelevance?: number, retrievalMethod?: string; knowledgeGap?: { hasGap: boolean; missingTopics: string[] } }>> {
     try {
       console.log(`🧠 Enhanced contextual memory retrieval for: "${userMessage}"`);
+      
+      // 🎯 Detect query intent
+      const queryIntent = this.detectQueryIntent(userMessage);
+      console.log(`🎯 Query intent detected: ${queryIntent}`);
       
       // Extract enhanced keywords with context
       const { keywords, contextualQuery } = await this.extractContextualKeywords(
@@ -219,20 +223,35 @@ class AnthropicService {
         mode
       );
 
-      // Use the existing embedding service but with enhanced query
+      // 🎯 PHASE 1: Two-pass retrieval - get more candidates first (3x limit)
+      const candidateLimit = limit * 3;
       const { embeddingService } = await import('./embeddingService');
-      const hybridResults = await embeddingService.hybridSearch(contextualQuery, profileId, limit);
+      const hybridResults = await embeddingService.hybridSearch(contextualQuery, profileId, candidateLimit);
       
-      // Extract memories from hybrid search results
+      // Extract memories from hybrid search results with enhanced scoring
       const semanticMemories = hybridResults.semantic.map((result: any) => ({
         ...result,
-        contextualRelevance: this.calculateContextualRelevance(result, personalityState, mode, keywords),
+        contextualRelevance: this.calculateContextualRelevance(
+          result, 
+          personalityState, 
+          mode, 
+          keywords, 
+          conversationId,
+          queryIntent
+        ),
         retrievalMethod: 'semantic_enhanced'
       }));
       
       const keywordMemories = hybridResults.keyword.map((result: any) => ({
         ...result, 
-        contextualRelevance: this.calculateContextualRelevance(result, personalityState, mode, keywords),
+        contextualRelevance: this.calculateContextualRelevance(
+          result, 
+          personalityState, 
+          mode, 
+          keywords,
+          conversationId,
+          queryIntent
+        ),
         retrievalMethod: 'keyword_enhanced'
       }));
       
@@ -246,7 +265,7 @@ class AnthropicService {
           seenIds.add(result.id);
           combinedResults.push({
             ...result,
-            finalScore: result.similarity * 1.2 + (result.contextualRelevance || 0) * 0.3
+            baseScore: result.similarity * 1.2 + (result.contextualRelevance || 0) * 0.3
           });
         }
       }
@@ -257,19 +276,45 @@ class AnthropicService {
           seenIds.add(result.id);
           combinedResults.push({
             ...result,
-            finalScore: 0.7 + (result.contextualRelevance || 0) * 0.3
+            baseScore: 0.7 + (result.contextualRelevance || 0) * 0.3
           });
         }
       }
       
-      // Sort by enhanced final score
-      const sortedResults = combinedResults
-        .sort((a, b) => b.finalScore - a.finalScore)
-        .slice(0, limit);
+      // 🎯 PHASE 2: Dynamic re-ranking with diversity scoring
+      const selectedResults = [];
+      const sortedCandidates = combinedResults.sort((a, b) => b.baseScore - a.baseScore);
       
-      console.log(`🎯 Contextual search: ${semanticMemories.length} semantic + ${keywordMemories.length} keyword = ${sortedResults.length} enhanced results`);
+      for (const candidate of sortedCandidates) {
+        if (selectedResults.length >= limit) break;
+        
+        // Calculate diversity score based on already selected memories
+        const diversityScore = this.calculateDiversityScore(candidate, selectedResults);
+        
+        // Final score = base score * diversity penalty
+        candidate.finalScore = candidate.baseScore * diversityScore;
+        candidate.diversityScore = diversityScore;
+        
+        selectedResults.push(candidate);
+      }
       
-      return sortedResults;
+      // Re-sort by final score after diversity adjustments
+      selectedResults.sort((a, b) => b.finalScore - a.finalScore);
+      
+      // 🎯 PHASE 3: Knowledge gap detection
+      const knowledgeGap = await this.detectKnowledgeGap(userMessage, selectedResults, keywords);
+      
+      if (knowledgeGap.hasGap) {
+        console.log(`⚠️ Knowledge gap detected! Missing topics: ${knowledgeGap.missingTopics.join(', ')}`);
+      }
+      
+      console.log(`🎯 Contextual search: ${semanticMemories.length} semantic + ${keywordMemories.length} keyword → ${selectedResults.length} diverse results (gap: ${knowledgeGap.hasGap})`);
+      
+      // Attach knowledge gap info to results
+      return selectedResults.map(r => ({
+        ...r,
+        knowledgeGap: knowledgeGap.hasGap ? knowledgeGap : undefined
+      }));
       
     } catch (error) {
       console.warn('⚠️ Enhanced contextual memory retrieval failed, falling back to basic retrieval:', error);
@@ -289,9 +334,39 @@ class AnthropicService {
     memory: any,
     personalityState?: any,
     mode?: string,
-    keywords?: string[]
+    keywords?: string[],
+    conversationId?: string,
+    queryIntent?: string
   ): number {
     let relevance = 0.5; // Base relevance
+
+    // 🎯 NEW: Recency bias - boost memories from current conversation
+    if (conversationId && memory.metadata?.conversationId === conversationId) {
+      const ageInDays = memory.createdAt ? 
+        (Date.now() - new Date(memory.createdAt).getTime()) / (1000 * 60 * 60 * 24) : 999;
+      
+      if (ageInDays < 1) relevance += 0.5; // Today's conversation
+      else if (ageInDays < 7) relevance += 0.3; // This week
+      else if (ageInDays < 30) relevance += 0.1; // This month
+    }
+
+    // 🎯 NEW: Query intent matching
+    if (queryIntent) {
+      switch (queryIntent) {
+        case 'tell_about': // "Tell me about X"
+          if (memory.type === 'LORE' || memory.type === 'STORY') relevance += 0.4;
+          break;
+        case 'opinion': // "What do you think about X"
+          if (memory.type === 'PREFERENCE' || memory.type === 'FACT') relevance += 0.4;
+          break;
+        case 'remind': // "Remind me about X"
+          if (memory.type === 'CONTEXT') relevance += 0.5;
+          break;
+        case 'how_to': // "How do I X"
+          if (memory.type === 'FACT') relevance += 0.3;
+          break;
+      }
+    }
 
     // Boost relevance based on memory type and personality
     if (personalityState) {
@@ -341,6 +416,85 @@ class AnthropicService {
     }
 
     return Math.min(relevance, 1.0); // Cap at 1.0
+  }
+
+  // 🎯 NEW: Detect query intent from user message
+  private detectQueryIntent(message: string): string {
+    const lower = message.toLowerCase();
+    
+    if (/^(tell me|what do you know|explain|describe).*(about|regarding)/.test(lower)) {
+      return 'tell_about';
+    }
+    if (/(what do you think|your opinion|how do you feel|what's your take).*(on|about)/.test(lower)) {
+      return 'opinion';
+    }
+    if (/(remind me|what did (we|i)|remember when)/.test(lower)) {
+      return 'remind';
+    }
+    if (/(how (do|can) (i|you)|what's the way to)/.test(lower)) {
+      return 'how_to';
+    }
+    
+    return 'general';
+  }
+
+  // 🎯 NEW: Calculate diversity penalty for similar memories
+  private calculateDiversityScore(memory: any, selectedMemories: any[]): number {
+    if (selectedMemories.length === 0) return 1.0;
+    
+    let similarityPenalty = 0;
+    const memoryKeywords = new Set(memory.keywords || []);
+    const memoryType = memory.type;
+    
+    for (const selected of selectedMemories) {
+      // Type similarity penalty
+      if (selected.type === memoryType) {
+        similarityPenalty += 0.1;
+      }
+      
+      // Keyword overlap penalty
+      const selectedKeywords = new Set(selected.keywords || []);
+      const overlap = [...memoryKeywords].filter(k => selectedKeywords.has(k)).length;
+      const total = Math.max(memoryKeywords.size, selectedKeywords.size);
+      if (total > 0) {
+        similarityPenalty += (overlap / total) * 0.2;
+      }
+    }
+    
+    return Math.max(0, 1.0 - similarityPenalty);
+  }
+
+  // 🎯 NEW: Detect if query is asking about something not in memory
+  private async detectKnowledgeGap(
+    userMessage: string,
+    retrievedMemories: any[],
+    keywords: string[]
+  ): Promise<{ hasGap: boolean; missingTopics: string[] }> {
+    // Extract potential topics from the query
+    const topics = keywords.filter(k => k.length > 4); // Focus on substantive words
+    
+    if (topics.length === 0) {
+      return { hasGap: false, missingTopics: [] };
+    }
+    
+    // Check if ANY memory mentions these topics
+    const missingTopics: string[] = [];
+    for (const topic of topics) {
+      const found = retrievedMemories.some(m => 
+        m.content?.toLowerCase().includes(topic.toLowerCase()) ||
+        m.keywords?.some((k: string) => k.toLowerCase() === topic.toLowerCase())
+      );
+      
+      if (!found && retrievedMemories.length < 3) {
+        // If we found very few memories AND this topic isn't mentioned, it's likely a gap
+        missingTopics.push(topic);
+      }
+    }
+    
+    return {
+      hasGap: missingTopics.length > 0,
+      missingTopics
+    };
   }
 
   // 🎯 PUBLIC: Enhanced memory retrieval method for use by routes
