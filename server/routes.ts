@@ -874,6 +874,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Merge training example patterns into core personality
+  app.post('/api/training-examples/:id/merge-personality', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const trainingExample = await storage.getDocument(id);
+      if (!trainingExample || trainingExample.documentType !== 'TRAINING_EXAMPLE') {
+        return res.status(404).json({ error: 'Training example not found' });
+      }
+
+      if (!trainingExample.extractedContent) {
+        return res.status(400).json({ error: 'Training example has no content to merge' });
+      }
+
+      // Use AI to extract key patterns from the training example
+      const extractedPatterns = await anthropicService.extractPersonalityPatterns(
+        trainingExample.extractedContent
+      );
+
+      // Append patterns to core identity
+      const currentIdentity = activeProfile.coreIdentity || '';
+      const updatedIdentity = currentIdentity + '\n\n🎓 LEARNED BEHAVIORS:\n' + extractedPatterns;
+
+      await storage.updateProfile(activeProfile.id, {
+        coreIdentity: updatedIdentity
+      });
+
+      res.json({ 
+        success: true, 
+        patterns: extractedPatterns,
+        message: 'Training example patterns merged into core personality' 
+      });
+    } catch (error) {
+      console.error('Merge personality error:', error);
+      res.status(500).json({ error: 'Failed to merge training example into personality' });
+    }
+  });
+
   app.get('/api/documents/:id', async (req, res) => {
     try {
       const { id } = req.params;

@@ -1466,6 +1466,58 @@ Return the consolidated memories as a JSON array:`;
   }
 
   /**
+   * Extract personality patterns from training example for merging into core identity
+   */
+  async extractPersonalityPatterns(trainingContent: string): Promise<string> {
+    try {
+      const prompt = `You are analyzing a training example conversation to extract key personality patterns and behavioral tendencies.
+
+Your task: Extract concise, actionable patterns that define how this character thinks and responds.
+
+Focus on:
+1. Response strategies (how they approach different situations)
+2. Recurring verbal patterns (specific phrases, speech styles)
+3. Emotional/tonal patterns (when they escalate, calm down, etc.)
+4. Thematic connections (how they relate topics to their worldview)
+5. Character consistency rules (what they always/never do)
+
+Format as a bulleted list with clear, specific patterns. Each bullet should be a complete behavioral rule or tendency.
+
+Example output:
+- When challenged on inconsistencies, doubles down aggressively and deflects with conspiracy theories
+- Always relates game mechanics to Italian mob business operations
+- Uses emotion tags [furious], [calm], [sarcastic] to guide tone shifts mid-conversation
+- Escalates gradually: starts irritated → builds to manic → explodes into full fury
+- Never breaks character even when called out on absurd claims
+
+Training content to analyze:
+${trainingContent.substring(0, 3000)}
+
+Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
+
+      const response = await anthropic.messages.create({
+        model: DEFAULT_MODEL_STR,
+        max_tokens: 800,
+        temperature: 0.3, // Lower temp for consistent extraction
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+      });
+
+      const content = Array.isArray(response.content) ? response.content[0] : response.content;
+      const patterns = content && 'text' in content ? content.text : '';
+      
+      return patterns.trim();
+    } catch (error) {
+      console.error('Pattern extraction error:', error);
+      throw new Error('Failed to extract personality patterns');
+    }
+  }
+
+  /**
    * Track completed stories for enhanced memory persistence
    */
   private async trackStoryCompletion(
