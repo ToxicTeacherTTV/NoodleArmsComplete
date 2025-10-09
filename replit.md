@@ -56,6 +56,12 @@ Preferred communication style: Simple, everyday language.
 - **PDF Processing**: pdf-parse for text extraction
 - **Text Chunking**: Intelligent segmentation
 - **Knowledge Extraction**: Automatic memory entry creation
+- **Training Examples System**: Meta-learning from conversation samples
+  - **Dual-Mode Learning**: Separates thinking/strategy from conversation style
+  - **Strategy Patterns**: Extracts reasoning blocks (how to think about responses)
+  - **Style Examples**: Pure conversation samples (tone, cadence, personality)
+  - **Smart Parsing**: Auto-detects "Plotted/The user/I need to" thinking patterns
+  - **Token Optimization**: Max 5 strategy examples (800 chars each) + 8 conversation examples (1200 chars each)
 
 ### Memory Management
 - **Memory Types**: FACT, PREFERENCE, LORE, CONTEXT

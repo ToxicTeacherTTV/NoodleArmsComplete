@@ -54,6 +54,46 @@ class AnthropicService {
     this.contentSuggestionService = new ContentSuggestionService();
   }
 
+  // 🧠 Parse training examples to separate thinking/strategy from conversation style
+  private parseTrainingExamples(examples: any[]): { strategies: string[], conversations: string[] } {
+    const strategies: string[] = [];
+    const conversations: string[] = [];
+    
+    examples.forEach(example => {
+      if (!example.extractedContent) return;
+      
+      const content = example.extractedContent;
+      const strategyPattern = /^(Plotted|The user|I need to|I should|Let me|This|Key|Important|Note:|Strategy:|Approach:)[\s\S]*?(?=\n\n[^\n]|\[|User:|AI:|$)/gim;
+      const matches = content.match(strategyPattern);
+      
+      if (matches && matches.length > 0) {
+        // Found thinking blocks - separate them
+        const thinkingText = matches.join('\n\n').substring(0, 800); // Limit strategy length
+        strategies.push(thinkingText);
+        
+        // Remove thinking blocks to get pure conversation
+        let conversationText = content;
+        matches.forEach((match: string) => {
+          conversationText = conversationText.replace(match, '');
+        });
+        
+        // Clean up and add conversation
+        conversationText = conversationText.trim().substring(0, 1200);
+        if (conversationText.length > 50) {
+          conversations.push(conversationText);
+        }
+      } else {
+        // No thinking blocks detected - treat as pure conversation
+        conversations.push(content.substring(0, 1200));
+      }
+    });
+    
+    return { 
+      strategies: strategies.slice(0, 5), // Max 5 strategy examples
+      conversations: conversations.slice(0, 8) // Max 8 conversation examples
+    };
+  }
+
   // 🚀 ENHANCED: Extract keywords from user message with conversation and personality context
   private extractKeywords(message: string): string[] {
     // Remove common stop words and extract meaningful terms
@@ -736,17 +776,31 @@ class AnthropicService {
         }
       }
 
-      // 📚 NEW: Add training examples for response style/cadence
+      // 📚 NEW: Add training examples with separated strategy and style
       if (trainingExamples.length > 0) {
-        contextPrompt += "\n\n📚 RESPONSE STYLE EXAMPLES:\n";
-        contextPrompt += "These are examples of good conversation style and cadence. Study the tone, flow, and personality:\n\n";
-        trainingExamples.forEach((example, index) => {
-          if (example.extractedContent) {
-            const content = example.extractedContent.substring(0, 1500); // Limit to avoid token bloat
-            contextPrompt += `Example ${index + 1}:\n${content}\n\n`;
-          }
-        });
-        contextPrompt += "Use these examples as inspiration for your own responses - match the energy, cadence, and personality style shown above.\n";
+        const parsedExamples = this.parseTrainingExamples(trainingExamples);
+        
+        // Add strategy/thinking patterns if found
+        if (parsedExamples.strategies.length > 0) {
+          contextPrompt += "\n\n🧠 RESPONSE STRATEGY PATTERNS:\n";
+          contextPrompt += "Learn this reasoning approach - how to think about crafting responses:\n\n";
+          parsedExamples.strategies.forEach((strategy, index) => {
+            contextPrompt += `Strategy ${index + 1}:\n${strategy}\n\n`;
+          });
+        }
+        
+        // Add conversation style examples
+        if (parsedExamples.conversations.length > 0) {
+          contextPrompt += "\n\n💬 CONVERSATION STYLE EXAMPLES:\n";
+          contextPrompt += "Study the tone, flow, cadence, and personality in these examples:\n\n";
+          parsedExamples.conversations.forEach((conversation, index) => {
+            contextPrompt += `Example ${index + 1}:\n${conversation}\n\n`;
+          });
+        }
+        
+        if (parsedExamples.strategies.length > 0 || parsedExamples.conversations.length > 0) {
+          contextPrompt += "Combine the strategic thinking patterns with the conversation style to craft your responses.\n";
+        }
       }
 
       // Add lore context for emergent personality
