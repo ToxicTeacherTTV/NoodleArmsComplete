@@ -20,6 +20,9 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
   const [textInput, setTextInput] = useState('');
   const [documentName, setDocumentName] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
+  const [showTrainingInput, setShowTrainingInput] = useState(false);
+  const [trainingInput, setTrainingInput] = useState('');
+  const [trainingName, setTrainingName] = useState('');
   const [viewingDocument, setViewingDocument] = useState<Document | null>(null);
   const [documentContent, setDocumentContent] = useState<string>('');
 
@@ -128,9 +131,9 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
         title: "Training Example Added",
         description: `${displayName} will guide response style`,
       });
-      setTextInput('');
-      setDocumentName('');
-      setShowTextInput(false);
+      setTrainingInput('');
+      setTrainingName('');
+      setShowTrainingInput(false);
       queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
       queryClient.invalidateQueries({ queryKey: ['/api/training-examples'] });
     },
@@ -318,6 +321,28 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
     uploadTextMutation.mutate({ text: textInput, name: documentName });
   };
 
+  const handleTrainingExampleUpload = () => {
+    if (!trainingInput.trim()) {
+      toast({
+        title: "No Conversation",
+        description: "Please paste a conversation example",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (trainingInput.length < 100) {
+      toast({
+        title: "Conversation Too Short",
+        description: "Please paste at least 100 characters (a real conversation example)",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    uploadTrainingExampleMutation.mutate({ text: trainingInput, name: trainingName });
+  };
+
   const getFileIcon = (contentType: string) => {
     if (contentType.includes('pdf')) return 'fas fa-file-pdf text-destructive';
     if (contentType.includes('word')) return 'fas fa-file-word text-accent';
@@ -395,11 +420,25 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
             onClick={(e) => {
               e.stopPropagation(); // Prevent triggering file dialog
               setShowTextInput(!showTextInput);
+              setShowTrainingInput(false); // Close training input if open
             }}
             data-testid="button-toggle-text-input"
           >
             <i className="fas fa-paste mr-2"></i>
             Paste Text
+          </Button>
+          <Button 
+            variant="outline"
+            className="py-2 px-4 rounded-lg text-xs transition-all duration-200 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border-purple-500/30"
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent triggering file dialog
+              setShowTrainingInput(!showTrainingInput);
+              setShowTextInput(false); // Close text input if open
+            }}
+            data-testid="button-toggle-training-input"
+          >
+            <i className="fas fa-graduation-cap mr-2"></i>
+            Training Example
           </Button>
         </div>
         
@@ -455,6 +494,73 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                   <>
                     <i className="fas fa-upload mr-2"></i>
                     Upload Text
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Training Example Input Area */}
+      {showTrainingInput && (
+        <div className="border-2 border-purple-500/30 rounded-lg p-4 space-y-3 bg-purple-500/5">
+          <div className="flex items-center gap-2">
+            <i className="fas fa-graduation-cap text-purple-400"></i>
+            <h3 className="text-sm font-medium text-foreground">Training Example - Conversation Style</h3>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Paste a conversation example from Claude, ChatGPT, or Gemini. Nicky will learn the style, cadence, and tone.
+          </p>
+          <input
+            type="text"
+            value={trainingName}
+            onChange={(e) => setTrainingName(e.target.value)}
+            className="w-full p-2 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            placeholder="Example name (e.g., 'Casual banter style')"
+            data-testid="input-training-name"
+          />
+          <textarea
+            value={trainingInput}
+            onChange={(e) => setTrainingInput(e.target.value)}
+            className="w-full h-48 p-3 text-sm border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground resize-vertical focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono"
+            placeholder="Paste full conversation here... Include both sides of the conversation for best results.&#10;&#10;Example:&#10;User: How's it going?&#10;AI: Yo, what's good! Just chillin', you know how it is...&#10;User: Tell me about pasta&#10;AI: Oh man, you got me started! Pasta's like, the foundation of everything..."
+            data-testid="textarea-training-input"
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {trainingInput.length} characters {trainingInput.length >= 100 ? '✓' : '(minimum 100)'}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setTrainingInput('');
+                  setTrainingName('');
+                  setShowTrainingInput(false);
+                }}
+                disabled={uploadTrainingExampleMutation.isPending}
+                data-testid="button-cancel-training"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="bg-purple-500 hover:bg-purple-600 text-white"
+                onClick={handleTrainingExampleUpload}
+                disabled={uploadTrainingExampleMutation.isPending || trainingInput.length < 100}
+                data-testid="button-upload-training"
+              >
+                {uploadTrainingExampleMutation.isPending ? (
+                  <>
+                    <i className="fas fa-spinner fa-spin mr-2"></i>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-graduation-cap mr-2"></i>
+                    Add Training Example
                   </>
                 )}
               </Button>
