@@ -115,6 +115,7 @@ export interface IStorage {
   createDocument(document: InsertDocument): Promise<Document>;
   getDocument(id: string): Promise<Document | undefined>;
   getProfileDocuments(profileId: string): Promise<Document[]>;
+  getTrainingExamples(profileId: string): Promise<Document[]>;
   updateDocument(id: string, updates: Partial<Document>): Promise<Document>;
   deleteDocument(id: string): Promise<void>;
   incrementDocumentRetrieval(id: string): Promise<void>;
@@ -508,8 +509,10 @@ export class DatabaseStorage implements IStorage {
         name: documents.name,
         filename: documents.filename,
         contentType: documents.contentType,
+        documentType: documents.documentType,
         size: documents.size,
         processingStatus: documents.processingStatus,
+        processingProgress: documents.processingProgress,
         profileId: documents.profileId,
         createdAt: documents.createdAt,
         updatedAt: documents.updatedAt,
@@ -521,6 +524,21 @@ export class DatabaseStorage implements IStorage {
       .where(eq(documents.profileId, profileId))
       .orderBy(desc(documents.createdAt))
       .limit(50); // Limit to most recent 50 documents
+  }
+
+  async getTrainingExamples(profileId: string): Promise<Document[]> {
+    return await db
+      .select()
+      .from(documents)
+      .where(
+        and(
+          eq(documents.profileId, profileId),
+          eq(documents.documentType, 'TRAINING_EXAMPLE'),
+          eq(documents.processingStatus, 'COMPLETED')
+        )
+      )
+      .orderBy(desc(documents.createdAt))
+      .limit(10); // Limit to 10 most recent training examples
   }
 
   async updateDocument(id: string, updates: Partial<Document>): Promise<Document> {

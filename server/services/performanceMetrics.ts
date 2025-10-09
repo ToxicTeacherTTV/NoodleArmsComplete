@@ -16,7 +16,7 @@ class PerformanceMetrics {
   /**
    * Start timing an operation
    */
-  startTimer(operation: string): () => void {
+  startTimer(operation: string): () => number {
     const startTime = Date.now();
     
     return () => {
@@ -80,7 +80,8 @@ class PerformanceMetrics {
    * Get all operation statistics
    */
   getAllStats(): Record<string, any> {
-    const operations = [...new Set(this.logs.map(log => log.operation))];
+    const uniqueOps = new Set(this.logs.map(log => log.operation));
+    const operations = Array.from(uniqueOps);
     const stats: Record<string, any> = {};
 
     operations.forEach(operation => {

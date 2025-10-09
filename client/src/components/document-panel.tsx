@@ -115,10 +115,37 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
     },
   });
 
+  const uploadTrainingExampleMutation = useMutation({
+    mutationFn: async ({text, name}: {text: string, name?: string}) => {
+      return await apiRequest('POST', '/api/training-examples', {
+        text,
+        name: name || 'Training Example'
+      });
+    },
+    onSuccess: (result: any) => {
+      const displayName = result.name || 'Training Example';
+      toast({
+        title: "Training Example Added",
+        description: `${displayName} will guide response style`,
+      });
+      setTextInput('');
+      setDocumentName('');
+      setShowTextInput(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/training-examples'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Upload Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const deleteDocumentMutation = useMutation({
     mutationFn: async (documentId: string) => {
-      const response = await apiRequest('DELETE', `/api/documents/${documentId}`);
-      return response.json();
+      return await apiRequest('DELETE', `/api/documents/${documentId}`);
     },
     onSuccess: () => {
       toast({
@@ -138,10 +165,9 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
 
   const extractAsFactsMutation = useMutation({
     mutationFn: async (documentId: string) => {
-      const response = await apiRequest('POST', `/api/documents/${documentId}/extract-facts`);
-      return response.json();
+      return await apiRequest('POST', `/api/documents/${documentId}/extract-facts`);
     },
-    onSuccess: (result) => {
+    onSuccess: (result: any) => {
       toast({
         title: "Facts Extracted Successfully",
         description: `${result.factsCreated} facts added to Nicky's memory`,
@@ -160,10 +186,9 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
 
   const saveToContentLibraryMutation = useMutation({
     mutationFn: async (documentId: string) => {
-      const response = await apiRequest('POST', `/api/documents/${documentId}/save-to-content-library`);
-      return response.json();
+      return await apiRequest('POST', `/api/documents/${documentId}/save-to-content-library`);
     },
-    onSuccess: (result) => {
+    onSuccess: (result: any) => {
       toast({
         title: "Saved to Content Library",
         description: `Content saved as "${result.title}" in the library`,
@@ -182,10 +207,9 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
 
   const reprocessDocumentMutation = useMutation({
     mutationFn: async (documentId: string) => {
-      const response = await apiRequest('POST', `/api/documents/${documentId}/reprocess`);
-      return response.json();
+      return await apiRequest('POST', `/api/documents/${documentId}/reprocess`);
     },
-    onSuccess: (result) => {
+    onSuccess: (result: any) => {
       toast({
         title: "Document Reprocessed with Enhanced AI",
         description: `Document reprocessed with intelligent chunking and entity extraction. ${result.factsCreated || 'New insights'} extracted.`,

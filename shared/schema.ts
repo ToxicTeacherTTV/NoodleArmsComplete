@@ -64,6 +64,7 @@ export const documents = pgTable("documents", {
   name: text("name"), // Custom name provided by user
   filename: text("filename").notNull(),
   contentType: text("content_type").notNull(),
+  documentType: text("document_type").$type<'DOCUMENT' | 'TRAINING_EXAMPLE'>().default('DOCUMENT'),
   size: integer("size").notNull(),
   chunks: text("chunks").array(),
   extractedContent: text("extracted_content"),

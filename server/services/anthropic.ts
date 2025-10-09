@@ -553,7 +553,8 @@ class AnthropicService {
     conversationId?: string,
     profileId?: string,
     webSearchResults: any[] = [],
-    personalityPrompt?: string
+    personalityPrompt?: string,
+    trainingExamples: any[] = []
   ): Promise<AIResponse> {
     const startTime = Date.now();
 
@@ -733,6 +734,19 @@ class AnthropicService {
           contextPrompt += `4. DO NOT make up fake information or pretend you know\n`;
           contextPrompt += `5. DO NOT say "I'm an AI" or reference limitations\n\n`;
         }
+      }
+
+      // 📚 NEW: Add training examples for response style/cadence
+      if (trainingExamples.length > 0) {
+        contextPrompt += "\n\n📚 RESPONSE STYLE EXAMPLES:\n";
+        contextPrompt += "These are examples of good conversation style and cadence. Study the tone, flow, and personality:\n\n";
+        trainingExamples.forEach((example, index) => {
+          if (example.extractedContent) {
+            const content = example.extractedContent.substring(0, 1500); // Limit to avoid token bloat
+            contextPrompt += `Example ${index + 1}:\n${content}\n\n`;
+          }
+        });
+        contextPrompt += "Use these examples as inspiration for your own responses - match the energy, cadence, and personality style shown above.\n";
       }
 
       // Add lore context for emergent personality

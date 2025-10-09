@@ -496,7 +496,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const debugState = generateDebugState(controls);
       console.log(`🎭 ${debugState}`);
       
-      // Generate AI response with personality controls, lore context, mode awareness, and web search results
+      // 📚 Get training examples for response style/cadence
+      const trainingExamples = await storage.getTrainingExamples(activeProfile.id);
+      if (trainingExamples.length > 0) {
+        console.log(`📚 Using ${trainingExamples.length} training examples for response style guidance`);
+      }
+      
+      // Generate AI response with personality controls, lore context, mode awareness, web search results, and training examples
       const aiResponse = await anthropicService.generateResponse(
         message,
         activeProfile.coreIdentity,
@@ -507,7 +513,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         conversationId,
         activeProfile.id,
         webSearchResults,
-        personalityPrompt
+        personalityPrompt,
+        trainingExamples
       );
 
       // 🎭 Process response: strip debug patterns and add emotion tags
@@ -800,6 +807,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create training example from pasted text
+  app.post('/api/training-examples', async (req: Request, res: Response) => {
+    try {
+      const { text, name } = req.body;
+      
+      if (!text || text.trim().length === 0) {
+        return res.status(400).json({ error: 'Text content is required' });
+      }
+
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const trainingExample = await storage.createDocument({
+        profileId: activeProfile.id,
+        name: name || 'Training Example',
+        filename: `training_${Date.now()}.txt`,
+        contentType: 'text/plain',
+        documentType: 'TRAINING_EXAMPLE',
+        size: Buffer.byteLength(text, 'utf8'),
+        processingStatus: 'PENDING' as const,
+      });
+
+      // Process as training example (store full text, no chunking)
+      const buffer = Buffer.from(text, 'utf8');
+      documentProcessor.processDocument(trainingExample.id, buffer)
+        .catch(error => {
+          console.error('Training example processing error:', error);
+          storage.updateDocument(trainingExample.id, { processingStatus: 'FAILED' as const });
+        });
+
+      res.json(trainingExample);
+    } catch (error) {
+      console.error('Training example creation error:', error);
+      res.status(500).json({ error: 'Failed to create training example' });
+    }
+  });
+
   app.get('/api/documents', async (req, res) => {
     try {
       const activeProfile = await storage.getActiveProfile();
@@ -811,6 +857,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(documents);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch documents' });
+    }
+  });
+
+  app.get('/api/training-examples', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const examples = await storage.getTrainingExamples(activeProfile.id);
+      res.json(examples);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch training examples' });
     }
   });
 
