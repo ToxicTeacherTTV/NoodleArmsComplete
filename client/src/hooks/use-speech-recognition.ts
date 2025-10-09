@@ -47,6 +47,21 @@ export function useSpeechRecognition(
   const isSupported = typeof window !== 'undefined' && 
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
+  // Correct common speech recognition misspellings - defined before hooks
+  const correctTranscript = (text: string): string => {
+    const corrections: [RegExp, string][] = [
+      [/\bNikki\b/gi, 'Nicky'],  // Replace "Nikki" with "Nicky"
+      [/\bNicky's\b/gi, "Nicky's"], // Preserve possessive
+    ];
+
+    let corrected = text;
+    corrections.forEach(([pattern, replacement]) => {
+      corrected = corrected.replace(pattern, replacement);
+    });
+
+    return corrected;
+  };
+
   const resetTranscript = useCallback(() => {
     setTranscript('');
     setInterimTranscript('');
@@ -99,10 +114,11 @@ export function useSpeechRecognition(
       }
 
       console.log('📝 Setting transcripts - interim:', interim, 'final:', final);
-      setInterimTranscript(interim);
+      setInterimTranscript(correctTranscript(interim));
       if (final) {
-        setFinalTranscript(prev => prev + final);
-        setTranscript(final.trim());
+        const correctedFinal = correctTranscript(final);
+        setFinalTranscript(prev => prev + correctedFinal);
+        setTranscript(correctedFinal.trim());
       }
     };
 
@@ -149,7 +165,7 @@ export function useSpeechRecognition(
       setError('Failed to start speech recognition');
       setIsListening(false);
     }
-  }, [isSupported, isListening, continuous, interimResults, lang]);
+  }, [isSupported, isListening, continuous, interimResults, lang, retryCount]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
