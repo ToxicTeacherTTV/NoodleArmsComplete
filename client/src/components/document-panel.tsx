@@ -229,6 +229,27 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
     },
   });
 
+  const mergeIntoPersonalityMutation = useMutation({
+    mutationFn: async (documentId: string) => {
+      return await apiRequest('POST', `/api/training-examples/${documentId}/merge-personality`);
+    },
+    onSuccess: (result: any) => {
+      toast({
+        title: "Merged into Core Personality",
+        description: `Key patterns extracted and added to Nicky's core identity`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/profiles/active'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Merge Failed",
+        description: error.message || "Failed to merge patterns into personality",
+        variant: "destructive",
+      });
+    },
+  });
+
   const viewDocument = async (document: Document) => {
     try {
       // WORKAROUND: Direct access to document content since API is intercepted by Vite
@@ -629,8 +650,37 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                     </div>
                   </div>
                   
-                  {/* Processing Choice Buttons - Only show for completed documents */}
-                  {doc.processingStatus === 'COMPLETED' && (
+                  {/* Training Example Actions - Only show for completed training examples */}
+                  {doc.processingStatus === 'COMPLETED' && doc.documentType === 'TRAINING_EXAMPLE' && (
+                    <div className="mt-3 pt-3 border-t border-purple-500/30">
+                      <div className="text-xs text-purple-400 mb-2">Training Example Actions:</div>
+                      <Button
+                        onClick={() => mergeIntoPersonalityMutation.mutate(doc.id)}
+                        disabled={mergeIntoPersonalityMutation.isPending && mergeIntoPersonalityMutation.variables === doc.id}
+                        size="sm"
+                        className="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-1.5"
+                        data-testid={`button-merge-personality-${doc.id}`}
+                      >
+                        {mergeIntoPersonalityMutation.isPending && mergeIntoPersonalityMutation.variables === doc.id ? (
+                          <>
+                            <i className="fas fa-spinner fa-spin mr-1"></i>
+                            Merging...
+                          </>
+                        ) : (
+                          <>
+                            <i className="fas fa-user-graduate mr-1"></i>
+                            Merge into Core Personality
+                          </>
+                        )}
+                      </Button>
+                      <div className="text-xs text-muted-foreground mt-2">
+                        Extracts key patterns from this example and permanently adds them to Nicky's core identity
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Processing Choice Buttons - Only show for completed documents (not training examples) */}
+                  {doc.processingStatus === 'COMPLETED' && doc.documentType !== 'TRAINING_EXAMPLE' && (
                     <div className="mt-3 pt-3 border-t border-border">
                       <div className="text-xs text-muted-foreground mb-2">Choose how to process this content:</div>
                       <div className="flex gap-2 flex-wrap">
