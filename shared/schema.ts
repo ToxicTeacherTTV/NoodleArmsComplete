@@ -75,6 +75,16 @@ export const documents = pgTable("documents", {
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
 
+export const consolidatedPersonalities = pgTable("consolidated_personalities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  patterns: text("patterns").notNull(), // Consolidated personality patterns
+  trainingExampleIds: text("training_example_ids").array().notNull(), // IDs of training examples used
+  status: text("status").$type<'PENDING' | 'APPROVED' | 'REJECTED'>().default('PENDING'),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
 export const memoryEntries = pgTable("memory_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   profileId: varchar("profile_id").references(() => profiles.id).notNull(),
@@ -307,6 +317,12 @@ export const insertDocumentSchema = createInsertSchema(documents).omit({
   updatedAt: true,
 });
 
+export const insertConsolidatedPersonalitySchema = createInsertSchema(consolidatedPersonalities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertMemoryEntrySchema = createInsertSchema(memoryEntries).omit({
   id: true,
   createdAt: true,
@@ -351,6 +367,8 @@ export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type ConsolidatedPersonality = typeof consolidatedPersonalities.$inferSelect;
+export type InsertConsolidatedPersonality = z.infer<typeof insertConsolidatedPersonalitySchema>;
 export type MemoryEntry = typeof memoryEntries.$inferSelect;
 export type InsertMemoryEntry = z.infer<typeof insertMemoryEntrySchema>;
 export type ChaosState = typeof chaosState.$inferSelect;

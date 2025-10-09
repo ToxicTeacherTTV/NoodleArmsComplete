@@ -4,7 +4,8 @@ import {
   profiles, 
   conversations, 
   messages, 
-  documents, 
+  documents,
+  consolidatedPersonalities,
   memoryEntries,
   contentLibrary,
   chaosState,
@@ -34,6 +35,8 @@ import {
   type InsertMessage,
   type Document,
   type InsertDocument,
+  type ConsolidatedPersonality,
+  type InsertConsolidatedPersonality,
   type MemoryEntry,
   type InsertMemoryEntry,
   type ContentLibraryEntry,
@@ -119,6 +122,13 @@ export interface IStorage {
   updateDocument(id: string, updates: Partial<Document>): Promise<Document>;
   deleteDocument(id: string): Promise<void>;
   incrementDocumentRetrieval(id: string): Promise<void>;
+
+  // Consolidated Personality management
+  createConsolidatedPersonality(consolidation: InsertConsolidatedPersonality): Promise<ConsolidatedPersonality>;
+  getConsolidatedPersonality(id: string): Promise<ConsolidatedPersonality | undefined>;
+  getPendingConsolidations(profileId: string): Promise<ConsolidatedPersonality[]>;
+  updateConsolidationStatus(id: string, status: 'PENDING' | 'APPROVED' | 'REJECTED'): Promise<ConsolidatedPersonality>;
+  deleteConsolidatedPersonality(id: string): Promise<void>;
 
   // Memory management
   addMemoryEntry(entry: InsertMemoryEntry): Promise<MemoryEntry>;
@@ -539,6 +549,45 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(desc(documents.createdAt))
       .limit(10); // Limit to 10 most recent training examples
+  }
+
+  async createConsolidatedPersonality(consolidation: InsertConsolidatedPersonality): Promise<ConsolidatedPersonality> {
+    const [result] = await db.insert(consolidatedPersonalities).values(consolidation).returning();
+    return result;
+  }
+
+  async getConsolidatedPersonality(id: string): Promise<ConsolidatedPersonality | undefined> {
+    const [result] = await db
+      .select()
+      .from(consolidatedPersonalities)
+      .where(eq(consolidatedPersonalities.id, id));
+    return result;
+  }
+
+  async getPendingConsolidations(profileId: string): Promise<ConsolidatedPersonality[]> {
+    return await db
+      .select()
+      .from(consolidatedPersonalities)
+      .where(
+        and(
+          eq(consolidatedPersonalities.profileId, profileId),
+          eq(consolidatedPersonalities.status, 'PENDING')
+        )
+      )
+      .orderBy(desc(consolidatedPersonalities.createdAt));
+  }
+
+  async updateConsolidationStatus(id: string, status: 'PENDING' | 'APPROVED' | 'REJECTED'): Promise<ConsolidatedPersonality> {
+    const [result] = await db
+      .update(consolidatedPersonalities)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(consolidatedPersonalities.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteConsolidatedPersonality(id: string): Promise<void> {
+    await db.delete(consolidatedPersonalities).where(eq(consolidatedPersonalities.id, id));
   }
 
   async updateDocument(id: string, updates: Partial<Document>): Promise<Document> {
