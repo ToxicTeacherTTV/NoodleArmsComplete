@@ -230,9 +230,9 @@ class WebMemoryConsolidator {
 
     for (const memory of storableMemories) {
       try {
-        // Format the memory content with source attribution
-        const domain = memory.url ? new URL(memory.url).hostname.replace('www.', '') : 'web search';
-        const formattedContent = `${memory.snippet} (Source: ${domain} - searched for: "${memory.searchQuery}")`;
+        // Store the clean snippet without source attribution
+        // Source is tracked separately in the 'source' field for internal reference
+        const formattedContent = memory.snippet;
 
         await storage.addMemoryEntry({
           profileId,
