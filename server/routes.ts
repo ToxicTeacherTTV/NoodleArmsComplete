@@ -916,6 +916,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Consolidated personality routes
+  app.post('/api/consolidations/analyze', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { StyleConsolidator } = await import('./services/styleConsolidator.js');
+      const consolidator = new StyleConsolidator(storage);
+      
+      const consolidation = await consolidator.analyzeAndConsolidate(activeProfile.id);
+      
+      // Save to database
+      const saved = await storage.createConsolidatedPersonality({
+        profileId: activeProfile.id,
+        patterns: consolidation.patterns,
+        trainingExampleIds: consolidation.trainingExampleIds,
+        status: 'PENDING'
+      });
+
+      res.json(saved);
+    } catch (error) {
+      console.error('Consolidation analysis error:', error);
+      res.status(500).json({ error: (error as Error).message || 'Failed to analyze training examples' });
+    }
+  });
+
+  app.get('/api/consolidations/pending', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const pending = await storage.getPendingConsolidations(activeProfile.id);
+      res.json(pending);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch pending consolidations' });
+    }
+  });
+
+  app.post('/api/consolidations/:id/approve', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const consolidation = await storage.getConsolidatedPersonality(id);
+      if (!consolidation || consolidation.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Consolidation not found' });
+      }
+
+      // Apply patterns to profile
+      const currentIdentity = activeProfile.coreIdentity || '';
+      const updatedIdentity = currentIdentity + '\n\n🎓 CONSOLIDATED LEARNED BEHAVIORS:\n' + consolidation.patterns;
+
+      await storage.updateProfile(activeProfile.id, {
+        coreIdentity: updatedIdentity
+      });
+
+      // Mark as approved
+      await storage.updateConsolidationStatus(id, 'APPROVED');
+
+      res.json({ success: true, message: 'Consolidation approved and applied' });
+    } catch (error) {
+      console.error('Approve consolidation error:', error);
+      res.status(500).json({ error: 'Failed to approve consolidation' });
+    }
+  });
+
+  app.post('/api/consolidations/:id/reject', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const consolidation = await storage.getConsolidatedPersonality(id);
+      if (!consolidation || consolidation.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Consolidation not found' });
+      }
+
+      await storage.updateConsolidationStatus(id, 'REJECTED');
+      res.json({ success: true, message: 'Consolidation rejected' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to reject consolidation' });
+    }
+  });
+
   app.get('/api/documents/:id', async (req, res) => {
     try {
       const { id } = req.params;

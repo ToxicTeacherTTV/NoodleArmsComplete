@@ -1,4 +1,5 @@
 import type { IStorage } from '../storage.js';
+import Anthropic from '@anthropic-ai/sdk';
 
 export interface ConsolidatedPersonality {
   patterns: string;
@@ -7,18 +8,12 @@ export interface ConsolidatedPersonality {
   status: 'pending' | 'approved' | 'rejected';
 }
 
-interface AnthropicServiceLike {
-  generateResponse(params: {
-    prompt: string;
-    systemPrompt: string;
-    maxTokens: number;
-    temperature: number;
-  }): Promise<{ content: string }>;
-}
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY || '',
+});
 
 export class StyleConsolidator {
   constructor(
-    private anthropicService: AnthropicServiceLike,
     private storage: IStorage
   ) {}
 
@@ -79,14 +74,23 @@ Extract and consolidate:
 Format the output as a clear, organized list of personality traits and behaviors that can be added to the AI's core identity. Be specific and actionable.`;
 
     try {
-      const response = await this.anthropicService.generateResponse({
-        prompt,
-        systemPrompt: 'You are a personality analysis expert. Extract key behavioral patterns and personality traits from training examples.',
-        maxTokens: 2000,
-        temperature: 0.3
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 2000,
+        temperature: 0.3,
+        system: 'You are a personality analysis expert. Extract key behavioral patterns and personality traits from training examples.',
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
       });
 
-      return response.content;
+      const textContent = response.content.find(c => c.type === 'text');
+      if (!textContent || textContent.type !== 'text') {
+        throw new Error('No text content in response');
+      }
+
+      return textContent.text;
     } catch (error) {
       console.error('Error consolidating patterns:', error);
       throw new Error('Failed to consolidate personality patterns');

@@ -552,7 +552,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createConsolidatedPersonality(consolidation: InsertConsolidatedPersonality): Promise<ConsolidatedPersonality> {
-    const [result] = await db.insert(consolidatedPersonalities).values(consolidation).returning();
+    const [result] = await db.insert(consolidatedPersonalities).values([consolidation as any]).returning();
     return result;
   }
 

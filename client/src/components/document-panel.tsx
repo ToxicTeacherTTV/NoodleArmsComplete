@@ -1,11 +1,20 @@
 import { useRef, useState, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import type { Document } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
+
+interface ConsolidatedPersonality {
+  id: string;
+  profileId: string;
+  patterns: string;
+  trainingExampleIds: string[];
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+}
 
 interface DocumentPanelProps {
   profileId?: string;
@@ -245,6 +254,73 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
       toast({
         title: "Merge Failed",
         description: error.message || "Failed to merge patterns into personality",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Consolidation queries and mutations
+  const { data: pendingConsolidations = [] } = useQuery<ConsolidatedPersonality[]>({
+    queryKey: ['/api/consolidations/pending'],
+    refetchInterval: 5000, // Refresh every 5 seconds
+  });
+
+  const analyzeConsolidationMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('POST', '/api/consolidations/analyze');
+    },
+    onSuccess: () => {
+      toast({
+        title: "Analysis Complete",
+        description: "Training examples analyzed. Review the consolidation below.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/consolidations/pending'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Analysis Failed",
+        description: error.message || "Failed to analyze training examples",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const approveConsolidationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest('POST', `/api/consolidations/${id}/approve`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Consolidation Approved",
+        description: "Patterns have been added to core personality",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/consolidations/pending'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/profiles/active'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Approval Failed",
+        description: error.message || "Failed to approve consolidation",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rejectConsolidationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest('POST', `/api/consolidations/${id}/reject`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Consolidation Rejected",
+        description: "Patterns have been discarded",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/consolidations/pending'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Rejection Failed",
+        description: error.message || "Failed to reject consolidation",
         variant: "destructive",
       });
     },
@@ -587,6 +663,93 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Consolidation Review Section */}
+      {pendingConsolidations.length > 0 && (
+        <div className="space-y-3 mb-6">
+          <h3 className="text-sm font-medium text-purple-400">🎓 Personality Consolidation Review</h3>
+          {pendingConsolidations.map((consolidation) => (
+            <Card key={consolidation.id} className="bg-purple-950/20 border-purple-500/30 p-4 rounded-lg">
+              <CardContent className="p-0 space-y-3">
+                <div className="text-sm text-foreground whitespace-pre-wrap">
+                  {consolidation.patterns}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Analyzed {consolidation.trainingExampleIds.length} training examples
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => approveConsolidationMutation.mutate(consolidation.id)}
+                    disabled={approveConsolidationMutation.isPending}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    data-testid={`button-approve-consolidation-${consolidation.id}`}
+                  >
+                    {approveConsolidationMutation.isPending ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin mr-1"></i>
+                        Applying...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-check mr-1"></i>
+                        Approve & Apply
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => rejectConsolidationMutation.mutate(consolidation.id)}
+                    disabled={rejectConsolidationMutation.isPending}
+                    className="border-red-600 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                    data-testid={`button-reject-consolidation-${consolidation.id}`}
+                  >
+                    {rejectConsolidationMutation.isPending ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin mr-1"></i>
+                        Rejecting...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-times mr-1"></i>
+                        Reject
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Analyze Training Examples Button */}
+      {documents && documents.filter(d => d.documentType === 'TRAINING_EXAMPLE').length > 0 && pendingConsolidations.length === 0 && (
+        <div className="mb-4">
+          <Button
+            onClick={() => analyzeConsolidationMutation.mutate()}
+            disabled={analyzeConsolidationMutation.isPending}
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+            data-testid="button-analyze-training"
+          >
+            {analyzeConsolidationMutation.isPending ? (
+              <>
+                <i className="fas fa-spinner fa-spin mr-2"></i>
+                Analyzing Training Examples...
+              </>
+            ) : (
+              <>
+                <i className="fas fa-brain mr-2"></i>
+                Consolidate All Training Examples
+              </>
+            )}
+          </Button>
+          <p className="text-xs text-muted-foreground mt-2 text-center">
+            AI will analyze all training examples and propose consolidated personality patterns
+          </p>
         </div>
       )}
 
