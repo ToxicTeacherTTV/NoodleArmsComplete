@@ -1,5 +1,6 @@
 import type { IStorage } from '../storage.js';
 import Anthropic from '@anthropic-ai/sdk';
+import { geminiService } from './gemini.js';
 
 export interface ConsolidatedPersonality {
   patterns: string;
@@ -74,6 +75,7 @@ Extract and consolidate:
 Format the output as a clear, organized list of personality traits and behaviors that can be added to the AI's core identity. Be specific and actionable.`;
 
     try {
+      // Try Anthropic first
       const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-5-20250929',
         max_tokens: 2000,
@@ -91,7 +93,40 @@ Format the output as a clear, organized list of personality traits and behaviors
       }
 
       return textContent.text;
-    } catch (error) {
+    } catch (error: any) {
+      // Check if error is due to credit/auth issues
+      const isCreditError = error?.status === 400 || 
+                          error?.message?.includes('credit') || 
+                          error?.message?.includes('balance') ||
+                          error?.status === 401 ||
+                          error?.status === 403;
+      
+      if (isCreditError) {
+        console.log('⚠️ Anthropic credits low, falling back to Gemini for consolidation');
+        
+        try {
+          // Fallback to Gemini
+          const systemPrompt = 'You are a personality analysis expert. Extract key behavioral patterns and personality traits from training examples.';
+          const fullPrompt = `${systemPrompt}\n\n${prompt}`;
+          
+          const geminiResponse = await geminiService['ai'].models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+            config: {
+              maxOutputTokens: 2000,
+              temperature: 0.3
+            }
+          });
+          
+          const patterns = geminiResponse.text || '';
+          console.log('✅ Successfully consolidated patterns using Gemini fallback');
+          return patterns.trim();
+        } catch (geminiError) {
+          console.error('Gemini fallback error:', geminiError);
+          throw new Error('Failed to consolidate patterns (both Anthropic and Gemini failed)');
+        }
+      }
+      
       console.error('Error consolidating patterns:', error);
       throw new Error('Failed to consolidate personality patterns');
     }

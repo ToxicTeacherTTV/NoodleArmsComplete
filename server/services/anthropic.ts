@@ -1469,8 +1469,7 @@ Return the consolidated memories as a JSON array:`;
    * Extract personality patterns from training example for merging into core identity
    */
   async extractPersonalityPatterns(trainingContent: string): Promise<string> {
-    try {
-      const prompt = `You are analyzing a training example conversation to extract key personality patterns and behavioral tendencies.
+    const prompt = `You are analyzing a training example conversation to extract key personality patterns and behavioral tendencies.
 
 Your task: Extract concise, actionable patterns that define how this character thinks and responds.
 
@@ -1495,6 +1494,8 @@ ${trainingContent.substring(0, 3000)}
 
 Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
 
+    try {
+      // Try Anthropic first
       const response = await anthropic.messages.create({
         model: DEFAULT_MODEL_STR,
         max_tokens: 800,
@@ -1511,7 +1512,37 @@ Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
       const patterns = content && 'text' in content ? content.text : '';
       
       return patterns.trim();
-    } catch (error) {
+    } catch (error: any) {
+      // Check if error is due to credit/auth issues
+      const isCreditError = error?.status === 400 || 
+                          error?.message?.includes('credit') || 
+                          error?.message?.includes('balance') ||
+                          error?.status === 401 ||
+                          error?.status === 403;
+      
+      if (isCreditError) {
+        console.log('⚠️ Anthropic credits low, falling back to Gemini for pattern extraction');
+        
+        try {
+          // Fallback to Gemini
+          const geminiResponse = await geminiService['ai'].models.generateContent({
+            model: 'gemini-2.5-flash', // Using flash for faster responses
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            config: {
+              maxOutputTokens: 800,
+              temperature: 0.3
+            }
+          });
+          
+          const patterns = geminiResponse.text || '';
+          console.log('✅ Successfully extracted patterns using Gemini fallback');
+          return patterns.trim();
+        } catch (geminiError) {
+          console.error('Gemini fallback error:', geminiError);
+          throw new Error('Failed to extract personality patterns (both Anthropic and Gemini failed)');
+        }
+      }
+      
       console.error('Pattern extraction error:', error);
       throw new Error('Failed to extract personality patterns');
     }
