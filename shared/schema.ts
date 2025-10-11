@@ -179,6 +179,28 @@ export const events = pgTable("events", {
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
 
+// Junction tables for many-to-many memory-entity relationships
+export const memoryPeopleLinks = pgTable("memory_people_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  memoryId: varchar("memory_id").references(() => memoryEntries.id, { onDelete: 'cascade' }).notNull(),
+  personId: varchar("person_id").references(() => people.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+export const memoryPlaceLinks = pgTable("memory_place_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  memoryId: varchar("memory_id").references(() => memoryEntries.id, { onDelete: 'cascade' }).notNull(),
+  placeId: varchar("place_id").references(() => places.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+export const memoryEventLinks = pgTable("memory_event_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  memoryId: varchar("memory_id").references(() => memoryEntries.id, { onDelete: 'cascade' }).notNull(),
+  eventId: varchar("event_id").references(() => events.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
 // Content Library - For stories, AITA posts, entertainment content (separate from facts)
 export const contentLibrary = pgTable("content_library", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -358,6 +380,21 @@ export const insertEventSchema = createInsertSchema(events).omit({
   updatedAt: true,
 });
 
+export const insertMemoryPeopleLinkSchema = createInsertSchema(memoryPeopleLinks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMemoryPlaceLinkSchema = createInsertSchema(memoryPlaceLinks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMemoryEventLinkSchema = createInsertSchema(memoryEventLinks).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type Profile = typeof profiles.$inferSelect;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
@@ -383,6 +420,12 @@ export type Place = typeof places.$inferSelect;
 export type InsertPlace = z.infer<typeof insertPlaceSchema>;
 export type Event = typeof events.$inferSelect;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
+export type MemoryPeopleLink = typeof memoryPeopleLinks.$inferSelect;
+export type InsertMemoryPeopleLink = z.infer<typeof insertMemoryPeopleLinkSchema>;
+export type MemoryPlaceLink = typeof memoryPlaceLinks.$inferSelect;
+export type InsertMemoryPlaceLink = z.infer<typeof insertMemoryPlaceLinkSchema>;
+export type MemoryEventLink = typeof memoryEventLinks.$inferSelect;
+export type InsertMemoryEventLink = z.infer<typeof insertMemoryEventLinkSchema>;
 
 // Emergent Lore System - Nicky's ongoing life events
 export const loreEvents = pgTable("lore_events", {
