@@ -569,20 +569,14 @@ Focus on actionable flags that help maintain Nicky's character consistency.`;
             console.log(`✨ Created ${entityResult.entitiesCreated} new entities for memory ${memoryId}`);
           }
           
-          // Update memory with entity links if any were found
-          if (entityResult.personId || entityResult.placeId || entityResult.eventId) {
-            await db.update(memoryEntries)
-              .set({
-                personId: entityResult.personId || memory.personId,
-                placeId: entityResult.placeId || memory.placeId,
-                eventId: entityResult.eventId || memory.eventId
-              })
-              .where(eq(memoryEntries.id, memoryId));
+          // Link memory to entities if any were found
+          if (entityResult.personIds.length > 0 || entityResult.placeIds.length > 0 || entityResult.eventIds.length > 0) {
+            await storage.linkMemoryToEntities(memoryId, entityResult);
             
             console.log(`🔗 Linked memory ${memoryId} to entities: ${[
-              entityResult.personId ? 'person' : null,
-              entityResult.placeId ? 'place' : null,
-              entityResult.eventId ? 'event' : null
+              entityResult.personIds.length > 0 ? `${entityResult.personIds.length} people` : null,
+              entityResult.placeIds.length > 0 ? `${entityResult.placeIds.length} places` : null,
+              entityResult.eventIds.length > 0 ? `${entityResult.eventIds.length} events` : null
             ].filter(Boolean).join(', ')}`);
           }
         } catch (entityError) {

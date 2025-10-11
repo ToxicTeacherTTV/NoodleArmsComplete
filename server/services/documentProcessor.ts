@@ -526,7 +526,7 @@ class DocumentProcessor {
           storyIds.push(storyFact.id);
           console.log(`📚 Stored story: ${story.content.substring(0, 60)}...`);
           
-          // 🔗 NEW: Extract and link entities for this story
+          // 🔗 Extract and link entities for this story
           try {
             const entityLinks = await entityExtraction.processMemoryForEntityLinking(
               story.content, 
@@ -534,7 +534,7 @@ class DocumentProcessor {
               storage
             );
             
-            if (entityLinks.personId || entityLinks.placeId || entityLinks.eventId) {
+            if (entityLinks.personIds.length > 0 || entityLinks.placeIds.length > 0 || entityLinks.eventIds.length > 0) {
               await storage.linkMemoryToEntities(storyFact.id, entityLinks);
               console.log(`🔗 Linked story to ${entityLinks.entitiesCreated} entities`);
             }
@@ -585,7 +585,7 @@ class DocumentProcessor {
             
             totalAtomicFacts++;
             
-            // 🔗 NEW: Extract and link entities for this atomic fact
+            // 🔗 Extract and link entities for this atomic fact
             if (atomicMemory?.id) {
               try {
                 const entityLinks = await entityExtraction.processMemoryForEntityLinking(
@@ -594,7 +594,7 @@ class DocumentProcessor {
                   storage
                 );
                 
-                if (entityLinks.personId || entityLinks.placeId || entityLinks.eventId) {
+                if (entityLinks.personIds.length > 0 || entityLinks.placeIds.length > 0 || entityLinks.eventIds.length > 0) {
                   await storage.linkMemoryToEntities(atomicMemory.id, entityLinks);
                   console.log(`🔗 Linked atomic fact to ${entityLinks.entitiesCreated} entities`);
                 }
