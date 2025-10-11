@@ -359,15 +359,16 @@ Be conservative with matches - only match if confidence > 0.7`;
   /**
    * Process memory content and return entity IDs for linking
    * This creates new entities if needed and returns the IDs for database linking
+   * UPDATED: Returns arrays of entity IDs to support many-to-many relationships
    */
   async processMemoryForEntityLinking(
     memoryContent: string,
     profileId: string,
     storage: any // Storage interface for creating entities
   ): Promise<{
-    personId?: string;
-    placeId?: string;
-    eventId?: string;
+    personIds: string[];
+    placeIds: string[];
+    eventIds: string[];
     entitiesCreated: number;
   }> {
     try {
@@ -378,26 +379,26 @@ Be conservative with matches - only match if confidence > 0.7`;
       const extraction = await this.extractEntitiesFromMemory(memoryContent, existingEntities);
       
       if (extraction.entities.length === 0) {
-        return { entitiesCreated: 0 };
+        return { personIds: [], placeIds: [], eventIds: [], entitiesCreated: 0 };
       }
 
       // Disambiguate against existing entities
       const disambiguation = await this.disambiguateEntities(extraction.entities, existingEntities);
       
-      let personId: string | undefined;
-      let placeId: string | undefined;  
-      let eventId: string | undefined;
+      const personIds: string[] = [];
+      const placeIds: string[] = [];
+      const eventIds: string[] = [];
       let entitiesCreated = 0;
 
       // Process matches (link to existing entities)
       for (const match of disambiguation.matches) {
         if (match.confidence > 0.7) { // High confidence threshold
-          if (match.matchType === 'PERSON' && !personId) {
-            personId = match.existingEntityId;
-          } else if (match.matchType === 'PLACE' && !placeId) {
-            placeId = match.existingEntityId;
-          } else if (match.matchType === 'EVENT' && !eventId) {
-            eventId = match.existingEntityId;
+          if (match.matchType === 'PERSON' && !personIds.includes(match.existingEntityId)) {
+            personIds.push(match.existingEntityId);
+          } else if (match.matchType === 'PLACE' && !placeIds.includes(match.existingEntityId)) {
+            placeIds.push(match.existingEntityId);
+          } else if (match.matchType === 'EVENT' && !eventIds.includes(match.existingEntityId)) {
+            eventIds.push(match.existingEntityId);
           }
         }
       }
@@ -407,7 +408,7 @@ Be conservative with matches - only match if confidence > 0.7`;
         try {
           let createdEntity;
           
-          if (newEntity.type === 'PERSON' && !personId) {
+          if (newEntity.type === 'PERSON') {
             createdEntity = await storage.createPerson({
               profileId: profileId,
               canonicalName: newEntity.name,
@@ -416,24 +417,24 @@ Be conservative with matches - only match if confidence > 0.7`;
               relationship: '', // Will be filled by AI context
               description: newEntity.context
             });
-            if (createdEntity?.id) {
-              personId = createdEntity.id;
+            if (createdEntity?.id && !personIds.includes(createdEntity.id)) {
+              personIds.push(createdEntity.id);
               entitiesCreated++;
               console.log(`✨ Created new person: ${newEntity.name}`);
             }
-          } else if (newEntity.type === 'PLACE' && !placeId) {
+          } else if (newEntity.type === 'PLACE') {
             createdEntity = await storage.createPlace({
               profileId: profileId,
               canonicalName: newEntity.name,
               locationType: newEntity.disambiguation,
               description: newEntity.context
             });
-            if (createdEntity?.id) {
-              placeId = createdEntity.id;
+            if (createdEntity?.id && !placeIds.includes(createdEntity.id)) {
+              placeIds.push(createdEntity.id);
               entitiesCreated++;
               console.log(`✨ Created new place: ${newEntity.name}`);
             }
-          } else if (newEntity.type === 'EVENT' && !eventId) {
+          } else if (newEntity.type === 'EVENT') {
             createdEntity = await storage.createEvent({
               profileId: profileId,
               canonicalName: newEntity.name,
@@ -441,8 +442,8 @@ Be conservative with matches - only match if confidence > 0.7`;
               description: newEntity.context,
               isCanonical: true
             });
-            if (createdEntity?.id) {
-              eventId = createdEntity.id;
+            if (createdEntity?.id && !eventIds.includes(createdEntity.id)) {
+              eventIds.push(createdEntity.id);
               entitiesCreated++;
               console.log(`✨ Created new event: ${newEntity.name}`);
             }
@@ -453,22 +454,15 @@ Be conservative with matches - only match if confidence > 0.7`;
         }
       }
 
-      // Only return entity IDs that were successfully created
-      const result: {
-        personId?: string;
-        placeId?: string;
-        eventId?: string;
-        entitiesCreated: number;
-      } = { entitiesCreated };
-      
-      if (personId) result.personId = personId;
-      if (placeId) result.placeId = placeId;
-      if (eventId) result.eventId = eventId;
-      
-      return result;
+      return {
+        personIds,
+        placeIds,
+        eventIds,
+        entitiesCreated
+      };
     } catch (error) {
       console.error("Error processing memory for entity linking:", error);
-      return { entitiesCreated: 0 };
+      return { personIds: [], placeIds: [], eventIds: [], entitiesCreated: 0 };
     }
   }
 

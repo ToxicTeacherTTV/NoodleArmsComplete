@@ -27,6 +27,10 @@ import {
   people,
   places,
   events,
+  // Junction tables for many-to-many relationships
+  memoryPeopleLinks,
+  memoryPlaceLinks,
+  memoryEventLinks,
   type Profile, 
   type InsertProfile,
   type Conversation,
@@ -267,16 +271,16 @@ export interface IStorage {
   updateEvent(id: string, updates: Partial<Event>): Promise<Event>;
   deleteEvent(id: string): Promise<void>;
   
-  // Entity linking for memory entries (optional)
+  // Entity linking for memory entries (updated to use junction tables)
   linkMemoryToEntities(memoryId: string, entityLinks: {
-    personId?: string;
-    placeId?: string;
-    eventId?: string;
-  }): Promise<MemoryEntry>;
+    personIds?: string[];
+    placeIds?: string[];
+    eventIds?: string[];
+  }): Promise<void>;
   getMemoryWithEntityLinks(profileId: string, limit?: number): Promise<Array<MemoryEntry & {
-    person?: Person;
-    place?: Place;
-    event?: Event;
+    people?: Person[];
+    places?: Place[];
+    events?: Event[];
   }>>;
   
   // Get memories for specific entities
@@ -2394,66 +2398,67 @@ export class DatabaseStorage implements IStorage {
     };
   }
   
-  // Entity linking for memory entries
+  // Entity linking for memory entries (updated to use junction tables)
   async linkMemoryToEntities(memoryId: string, entityLinks: {
-    personId?: string;
-    placeId?: string;
-    eventId?: string;
-  }): Promise<MemoryEntry> {
-    const updateData: any = { updatedAt: sql`now()` };
-    
-    // Validate that entity IDs exist before linking
-    if (entityLinks.personId) {
-      const person = await this.getPerson(entityLinks.personId);
-      if (person) {
-        updateData.personId = entityLinks.personId;
-      } else {
-        console.warn(`⚠️ Person ID ${entityLinks.personId} not found, skipping link`);
+    personIds?: string[];
+    placeIds?: string[];
+    eventIds?: string[];
+  }): Promise<void> {
+    // Create junction table entries for people
+    if (entityLinks.personIds && entityLinks.personIds.length > 0) {
+      for (const personId of entityLinks.personIds) {
+        const person = await this.getPerson(personId);
+        if (person) {
+          await db.insert(memoryPeopleLinks).values({
+            memoryId,
+            personId
+          }).onConflictDoNothing();
+        } else {
+          console.warn(`⚠️ Person ID ${personId} not found, skipping link`);
+        }
       }
     }
     
-    if (entityLinks.placeId) {
-      const place = await this.getPlace(entityLinks.placeId);
-      if (place) {
-        updateData.placeId = entityLinks.placeId;
-      } else {
-        console.warn(`⚠️ Place ID ${entityLinks.placeId} not found, skipping link`);
+    // Create junction table entries for places
+    if (entityLinks.placeIds && entityLinks.placeIds.length > 0) {
+      for (const placeId of entityLinks.placeIds) {
+        const place = await this.getPlace(placeId);
+        if (place) {
+          await db.insert(memoryPlaceLinks).values({
+            memoryId,
+            placeId
+          }).onConflictDoNothing();
+        } else {
+          console.warn(`⚠️ Place ID ${placeId} not found, skipping link`);
+        }
       }
     }
     
-    if (entityLinks.eventId) {
-      const event = await this.getEvent(entityLinks.eventId);
-      if (event) {
-        updateData.eventId = entityLinks.eventId;
-      } else {
-        console.warn(`⚠️ Event ID ${entityLinks.eventId} not found, skipping link`);
+    // Create junction table entries for events
+    if (entityLinks.eventIds && entityLinks.eventIds.length > 0) {
+      for (const eventId of entityLinks.eventIds) {
+        const event = await this.getEvent(eventId);
+        if (event) {
+          await db.insert(memoryEventLinks).values({
+            memoryId,
+            eventId
+          }).onConflictDoNothing();
+        } else {
+          console.warn(`⚠️ Event ID ${eventId} not found, skipping link`);
+        }
       }
     }
-    
-    const [updatedMemory] = await db
-      .update(memoryEntries)
-      .set(updateData)
-      .where(eq(memoryEntries.id, memoryId))
-      .returning();
-    return updatedMemory;
   }
 
   async getMemoryWithEntityLinks(profileId: string, limit = 50): Promise<Array<MemoryEntry & {
-    person?: Person;
-    place?: Place;
-    event?: Event;
+    people?: Person[];
+    places?: Place[];
+    events?: Event[];
   }>> {
-    const results = await db
-      .select({
-        memory: memoryEntries,
-        person: people,
-        place: places,
-        event: events,
-      })
+    // First, get the memories
+    const memories = await db
+      .select()
       .from(memoryEntries)
-      .leftJoin(people, eq(memoryEntries.personId, people.id))
-      .leftJoin(places, eq(memoryEntries.placeId, places.id))
-      .leftJoin(events, eq(memoryEntries.eventId, events.id))
       .where(
         and(
           eq(memoryEntries.profileId, profileId),
@@ -2463,55 +2468,89 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt))
       .limit(limit);
 
-    return results.map(row => ({
-      ...row.memory,
-      person: row.person || undefined,
-      place: row.place || undefined,
-      event: row.event || undefined,
+    // Then, for each memory, get the linked entities
+    const enrichedMemories = await Promise.all(memories.map(async (memory) => {
+      const [peopleLinks, placeLinks, eventLinks] = await Promise.all([
+        // Get people linked to this memory
+        db.select({ person: people })
+          .from(memoryPeopleLinks)
+          .innerJoin(people, eq(memoryPeopleLinks.personId, people.id))
+          .where(eq(memoryPeopleLinks.memoryId, memory.id)),
+        
+        // Get places linked to this memory
+        db.select({ place: places })
+          .from(memoryPlaceLinks)
+          .innerJoin(places, eq(memoryPlaceLinks.placeId, places.id))
+          .where(eq(memoryPlaceLinks.memoryId, memory.id)),
+        
+        // Get events linked to this memory
+        db.select({ event: events })
+          .from(memoryEventLinks)
+          .innerJoin(events, eq(memoryEventLinks.eventId, events.id))
+          .where(eq(memoryEventLinks.memoryId, memory.id)),
+      ]);
+
+      return {
+        ...memory,
+        people: peopleLinks.map(link => link.person),
+        places: placeLinks.map(link => link.place),
+        events: eventLinks.map(link => link.event),
+      };
     }));
+
+    return enrichedMemories;
   }
 
-  // Get memories for specific entities
+  // Get memories for specific entities (updated to use junction tables)
   async getMemoriesForPerson(personId: string, profileId: string): Promise<MemoryEntry[]> {
-    return await db
-      .select()
-      .from(memoryEntries)
+    const results = await db
+      .select({ memory: memoryEntries })
+      .from(memoryPeopleLinks)
+      .innerJoin(memoryEntries, eq(memoryPeopleLinks.memoryId, memoryEntries.id))
       .where(
         and(
-          eq(memoryEntries.personId, personId),
+          eq(memoryPeopleLinks.personId, personId),
           eq(memoryEntries.profileId, profileId),
           eq(memoryEntries.status, 'ACTIVE')
         )
       )
       .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
+    
+    return results.map(row => row.memory);
   }
 
   async getMemoriesForPlace(placeId: string, profileId: string): Promise<MemoryEntry[]> {
-    return await db
-      .select()
-      .from(memoryEntries)
+    const results = await db
+      .select({ memory: memoryEntries })
+      .from(memoryPlaceLinks)
+      .innerJoin(memoryEntries, eq(memoryPlaceLinks.memoryId, memoryEntries.id))
       .where(
         and(
-          eq(memoryEntries.placeId, placeId),
+          eq(memoryPlaceLinks.placeId, placeId),
           eq(memoryEntries.profileId, profileId),
           eq(memoryEntries.status, 'ACTIVE')
         )
       )
       .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
+    
+    return results.map(row => row.memory);
   }
 
   async getMemoriesForEvent(eventId: string, profileId: string): Promise<MemoryEntry[]> {
-    return await db
-      .select()
-      .from(memoryEntries)
+    const results = await db
+      .select({ memory: memoryEntries })
+      .from(memoryEventLinks)
+      .innerJoin(memoryEntries, eq(memoryEventLinks.memoryId, memoryEntries.id))
       .where(
         and(
-          eq(memoryEntries.eventId, eventId),
+          eq(memoryEventLinks.eventId, eventId),
           eq(memoryEntries.profileId, profileId),
           eq(memoryEntries.status, 'ACTIVE')
         )
       )
       .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
+    
+    return results.map(row => row.memory);
   }
 }
 
