@@ -68,6 +68,11 @@ Preferred communication style: Simple, everyday language.
 - **Importance Scoring**: Weighted entries
 - **Memory Consolidation**: AI-powered optimization
 - **Search**: Keyword-based retrieval
+- **Entity Linking System**: Many-to-many relationships between memories and entities
+  - **Junction Tables**: memory_people_links, memory_place_links, memory_event_links
+  - **Multi-Entity Support**: Each memory can link to multiple people, places, and events
+  - **Automatic Extraction**: AI extracts all entities from memory content
+  - **Deduplication**: Prevents duplicate entity creation through disambiguation
 
 ### Communication Flow
 1. Voice Input (browser speech recognition)
