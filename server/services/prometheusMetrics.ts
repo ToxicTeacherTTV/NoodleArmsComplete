@@ -172,15 +172,20 @@ class PrometheusMetrics {
   }): void {
     const { provider, model, type, inputTokens, outputTokens, durationSeconds, error } = params;
 
+    // Always track call and latency (even for errors)
+    this.llmCallsTotal.inc({ provider, model, type });
+    if (durationSeconds > 0) {
+      this.llmLatency.observe({ provider, model }, durationSeconds);
+    }
+
     if (error) {
       this.llmErrorsTotal.inc({ provider, model, error_type: error });
       return;
     }
 
-    this.llmCallsTotal.inc({ provider, model, type });
+    // Track tokens and costs only for successful calls
     this.llmTokensTotal.inc({ provider, model, direction: 'input' }, inputTokens);
     this.llmTokensTotal.inc({ provider, model, direction: 'output' }, outputTokens);
-    this.llmLatency.observe({ provider, model }, durationSeconds);
 
     // Cost estimation (rough approximations)
     const costPerMillionInputTokens = this.getInputCost(provider, model);
@@ -320,12 +325,12 @@ class PrometheusMetrics {
   /**
    * Get metrics summary for logging
    */
-  getSummary(): string {
-    const metrics = this.register.getMetricsAsJSON();
+  async getSummary(): Promise<string> {
+    const metrics = await this.register.getMetricsAsJSON();
     
     let summary = '\n📊 PROMETHEUS METRICS SUMMARY\n' + '='.repeat(50) + '\n\n';
     
-    metrics.forEach((metric) => {
+    metrics.forEach((metric: any) => {
       summary += `${metric.name}:\n`;
       if (metric.values && metric.values.length > 0) {
         metric.values.forEach((value: any) => {

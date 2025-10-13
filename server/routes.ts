@@ -106,9 +106,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Prometheus metrics endpoint
-  app.get('/metrics', async (req, res) => {
+  // Prometheus metrics endpoint (with optional security)
+  app.get('/api/metrics', async (req, res) => {
     try {
+      // Optional: Require auth token if METRICS_TOKEN is set
+      const metricsToken = process.env.METRICS_TOKEN;
+      if (metricsToken) {
+        const providedToken = req.headers.authorization?.replace('Bearer ', '');
+        if (providedToken !== metricsToken) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      }
+      
       res.set('Content-Type', prometheusMetrics.register.contentType);
       const metrics = await prometheusMetrics.getMetrics();
       res.send(metrics);

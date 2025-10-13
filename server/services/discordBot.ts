@@ -260,7 +260,7 @@ export class DiscordBotService {
             await message.reply(response);
             
             // 📊 Track Discord reply message
-            prometheusMetrics.trackDiscordMessage('reply', 'name' in message.channel ? message.channel.name : undefined, shouldRespond.triggerType);
+            prometheusMetrics.trackDiscordMessage('reply', 'name' in message.channel ? message.channel.name || undefined : undefined, shouldRespond.triggerType);
           } catch (discordError) {
             console.error(`❌ Discord API error sending message:`, discordError);
             

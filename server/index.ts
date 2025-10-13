@@ -4,10 +4,29 @@ import { setupVite, serveStatic, log } from "./vite";
 import { storage } from "./storage";
 import { elevenlabsService } from "./services/elevenlabs";
 import { discordBotService } from "./services/discordBot";
+import { prometheusMetrics } from "./services/prometheusMetrics.js";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Normalize route to prevent cardinality explosion in metrics
+function normalizeRoute(path: string): string {
+  if (!path.startsWith("/api")) return "/";
+  
+  // Replace UUIDs and numeric IDs with placeholders
+  let normalized = path
+    .replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '/:id')
+    .replace(/\/\d+/g, '/:id');
+  
+  // Remove query strings
+  const queryIndex = normalized.indexOf('?');
+  if (queryIndex !== -1) {
+    normalized = normalized.substring(0, queryIndex);
+  }
+  
+  return normalized;
+}
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -22,6 +41,16 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
+    
+    // 📊 Track HTTP metrics with normalized route (prevent cardinality explosion)
+    const normalizedRoute = normalizeRoute(path);
+    prometheusMetrics.trackHttpRequest({
+      method: req.method,
+      route: normalizedRoute,
+      status: res.statusCode,
+      durationSeconds: duration / 1000
+    });
+    
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {

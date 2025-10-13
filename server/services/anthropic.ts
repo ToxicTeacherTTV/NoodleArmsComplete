@@ -1003,13 +1003,14 @@ ${coreIdentity}`;
       console.log(`🔄 Error classified as: ${errorInfo.type} (retryable: ${errorInfo.retryable})`);
       
       // 📊 Track error
+      const errorDuration = (Date.now() - startTime) / 1000;
       prometheusMetrics.trackLLMCall({
         provider: 'claude',
         model: DEFAULT_MODEL_STR,
         type: 'chat',
         inputTokens: 0,
         outputTokens: 0,
-        durationSeconds: 0,
+        durationSeconds: errorDuration,
         error: errorInfo.type
       });
       
