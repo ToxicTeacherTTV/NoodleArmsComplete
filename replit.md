@@ -93,6 +93,17 @@ Preferred communication style: Simple, everyday language.
   - Most features already implemented: pgvector, deduplication, Discord triggers, personality presets, entity linking, Gemini fallback
   - Added 6 new valuable items to PROJECT_ROADMAP.md: Prometheus metrics, DecisionTrace expansion, panic mode, testing infrastructure, Dockerization, OpenAPI docs
 
+### Metrics & Observability
+- **Prometheus Metrics**: Comprehensive cost and usage tracking (Oct 2025)
+  - **Endpoint**: `/api/metrics` (standard `/metrics` blocked by Vite in dev mode)
+  - **Security**: Optional `METRICS_TOKEN` environment variable for bearer token auth
+  - **LLM Metrics**: Calls, tokens, estimated costs, errors, latency (Claude/Gemini)
+  - **Discord Metrics**: Reply messages, proactive messages
+  - **HTTP Metrics**: Request count, duration histograms, status codes
+  - **Cardinality Control**: Route normalization prevents metric explosion (UUIDs → `:id`)
+  - **Error Tracking**: Failed LLM calls counted in totals before recording errors
+  - **Cost Estimation**: Built-in pricing for claude-sonnet-4-5 and gemini-1.5-flash
+
 ### Communication Flow
 1. Voice Input (browser speech recognition)
 2. Message Queuing
