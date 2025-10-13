@@ -1,8 +1,9 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { memoryCaches } from "./services/memoryCache";
 import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, insertDiscordServerSchema, insertDiscordMemberSchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags } from "@shared/schema";
-import { eq, and, sql, or, inArray } from "drizzle-orm";
+import { eq, and, sql, or, inArray, desc } from "drizzle-orm";
 import { db } from "./db";
 import { anthropicService } from "./services/anthropic";
 import { elevenlabsService } from "./services/elevenlabs";
@@ -3398,6 +3399,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Cleanup exact canonical key duplicates
+  app.post('/api/memory/cleanup-canonical-duplicates', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      console.log('🧹 Starting canonical key duplicate cleanup for profile:', profile.id);
+
+      // Find all memories grouped by canonical key
+      const duplicateGroups = await db
+        .select({
+          canonicalKey: memoryEntries.canonicalKey,
+          ids: sql<string[]>`array_agg(${memoryEntries.id})`,
+          count: sql<number>`count(*)::int`
+        })
+        .from(memoryEntries)
+        .where(
+          and(
+            eq(memoryEntries.profileId, profile.id),
+            sql`${memoryEntries.canonicalKey} IS NOT NULL`
+          )
+        )
+        .groupBy(memoryEntries.canonicalKey)
+        .having(sql`count(*) > 1`);
+
+      console.log(`Found ${duplicateGroups.length} duplicate groups to clean up`);
+
+      let mergedCount = 0;
+      let deletedCount = 0;
+
+      for (const group of duplicateGroups) {
+        try {
+          // Get all memories in this duplicate group
+          const memories = await db
+            .select()
+            .from(memoryEntries)
+            .where(inArray(memoryEntries.id, group.ids))
+            .orderBy(
+              desc(memoryEntries.confidence),
+              desc(memoryEntries.supportCount),
+              desc(memoryEntries.createdAt)
+            );
+
+          if (memories.length < 2) continue;
+
+          // Keep the one with highest confidence/support/newest
+          const master = memories[0];
+          const duplicates = memories.slice(1);
+
+          // Calculate combined stats
+          const totalSupportCount = memories.reduce((sum, m) => sum + (m.supportCount || 1), 0);
+          const totalRetrievalCount = memories.reduce((sum, m) => sum + (m.retrievalCount || 0), 0);
+          const maxConfidence = Math.max(...memories.map(m => m.confidence || 50));
+          const allKeywords = Array.from(new Set(memories.flatMap(m => m.keywords || [])));
+          const allRelationships = Array.from(new Set(memories.flatMap(m => m.relationships || [])));
+
+          // Update master with combined stats
+          await db
+            .update(memoryEntries)
+            .set({
+              confidence: Math.min(100, maxConfidence + 5), // Boost confidence slightly
+              supportCount: totalSupportCount,
+              retrievalCount: totalRetrievalCount,
+              keywords: allKeywords,
+              relationships: allRelationships,
+              updatedAt: sql`now()`
+            })
+            .where(eq(memoryEntries.id, master.id));
+
+          // Delete duplicates
+          await db
+            .delete(memoryEntries)
+            .where(inArray(memoryEntries.id, duplicates.map(d => d.id)));
+
+          mergedCount++;
+          deletedCount += duplicates.length;
+
+          console.log(`✅ Merged group ${group.canonicalKey}: kept ${master.id}, deleted ${duplicates.length} duplicates`);
+        } catch (error) {
+          console.error(`❌ Error processing group ${group.canonicalKey}:`, error);
+        }
+      }
+
+      // Invalidate caches
+      memoryCaches.warm.invalidatePattern(`enriched_memories:${profile.id}`);
+      memoryCaches.warm.invalidatePattern(`search_memories:${profile.id}`);
+
+      res.json({
+        success: true,
+        mergedGroups: mergedCount,
+        deletedDuplicates: deletedCount,
+        message: `Successfully cleaned up ${deletedCount} duplicates across ${mergedCount} groups`
+      });
+    } catch (error) {
+      console.error('❌ Canonical duplicate cleanup failed:', error);
+      res.status(500).json({ error: 'Failed to cleanup canonical duplicates' });
+    }
+  });
+
   // Story reconstruction endpoints
   app.post('/api/memory/reconstruct', async (req, res) => {
     try {
@@ -3934,9 +4036,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updatedMemory = await storage.linkMemoryToEntities(memoryId, {
-        personId: personId || undefined,
-        placeId: placeId || undefined,
-        eventId: eventId || undefined
+        personIds: personId ? [personId] : undefined,
+        placeIds: placeId ? [placeId] : undefined,
+        eventIds: eventId ? [eventId] : undefined
       });
 
       res.json(updatedMemory);

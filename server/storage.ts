@@ -624,26 +624,86 @@ export class DatabaseStorage implements IStorage {
     if (!finalEntry.canonicalKey && finalEntry.content) {
       const { generateCanonicalKey } = await import('./utils/canonical.js');
       finalEntry.canonicalKey = generateCanonicalKey(finalEntry.content);
-      console.warn(`🔧 Backfilled missing canonicalKey for content: "${finalEntry.content.substring(0, 50)}..."`);
     }
     
-    const [newEntry] = await db
+    // 🔒 ATOMIC UPSERT: Insert or update on conflict (prevents race conditions)
+    const [upsertedEntry] = await db
       .insert(memoryEntries)
       .values([finalEntry as any])
+      .onConflictDoUpdate({
+        target: [memoryEntries.profileId, memoryEntries.canonicalKey],
+        set: {
+          // === Counter updates ===
+          // Increment confidence (max 100)
+          confidence: sql`LEAST(100, COALESCE(${memoryEntries.confidence}, 50) + 10)`,
+          // Increment support count
+          supportCount: sql`COALESCE(${memoryEntries.supportCount}, 1) + 1`,
+          
+          // === Metadata updates (preserve existing values if new ones are null) ===
+          type: sql`COALESCE(EXCLUDED.type, ${memoryEntries.type})`,
+          content: sql`COALESCE(EXCLUDED.content, ${memoryEntries.content})`,
+          importance: sql`GREATEST(COALESCE(${memoryEntries.importance}, 0), COALESCE(EXCLUDED.importance, 0))`,
+          source: sql`COALESCE(EXCLUDED.source, ${memoryEntries.source})`,
+          sourceId: sql`COALESCE(EXCLUDED.source_id, ${memoryEntries.sourceId})`,
+          status: sql`COALESCE(EXCLUDED.status, ${memoryEntries.status})`,
+          isProtected: sql`COALESCE(EXCLUDED.is_protected, ${memoryEntries.isProtected})`,
+          
+          // === Quality & clustering metadata ===
+          qualityScore: sql`COALESCE(EXCLUDED.quality_score, ${memoryEntries.qualityScore})`,
+          temporalContext: sql`COALESCE(EXCLUDED.temporal_context, ${memoryEntries.temporalContext})`,
+          clusterId: sql`COALESCE(EXCLUDED.cluster_id, ${memoryEntries.clusterId})`,
+          contradictionGroupId: sql`COALESCE(EXCLUDED.contradiction_group_id, ${memoryEntries.contradictionGroupId})`,
+          
+          // === Usage metrics (cumulative - don't overwrite with new values) ===
+          retrievalCount: sql`${memoryEntries.retrievalCount}`, // Keep existing count, don't reset
+          successRate: sql`COALESCE(${memoryEntries.successRate}, EXCLUDED.success_rate)`, // Preserve existing rate
+          lastUsed: sql`COALESCE(${memoryEntries.lastUsed}, EXCLUDED.last_used)`, // Keep most recent usage
+          
+          // === Hierarchical fact fields (preserve existing if new is null) ===
+          parentFactId: sql`COALESCE(EXCLUDED.parent_fact_id, ${memoryEntries.parentFactId})`,
+          isAtomicFact: sql`COALESCE(EXCLUDED.is_atomic_fact, ${memoryEntries.isAtomicFact})`,
+          storyContext: sql`COALESCE(EXCLUDED.story_context, ${memoryEntries.storyContext})`,
+          
+          // === Semantic/embedding fields (preserve existing if new is null) ===
+          embedding: sql`COALESCE(EXCLUDED.embedding, ${memoryEntries.embedding})`,
+          embeddingModel: sql`COALESCE(EXCLUDED.embedding_model, ${memoryEntries.embeddingModel})`,
+          embeddingUpdatedAt: sql`COALESCE(EXCLUDED.embedding_updated_at, ${memoryEntries.embeddingUpdatedAt})`,
+          
+          // === Legacy entity linking (deprecated, but preserve if present) ===
+          personId: sql`COALESCE(EXCLUDED.person_id, ${memoryEntries.personId})`,
+          placeId: sql`COALESCE(EXCLUDED.place_id, ${memoryEntries.placeId})`,
+          eventId: sql`COALESCE(EXCLUDED.event_id, ${memoryEntries.eventId})`,
+          
+          // === Array merging (keywords, relationships) ===
+          keywords: sql`ARRAY(SELECT DISTINCT unnest(COALESCE(${memoryEntries.keywords}, ARRAY[]::text[]) || COALESCE(EXCLUDED.keywords, ARRAY[]::text[])))`,
+          relationships: sql`ARRAY(SELECT DISTINCT unnest(COALESCE(${memoryEntries.relationships}, ARRAY[]::text[]) || COALESCE(EXCLUDED.relationships, ARRAY[]::text[])))`,
+          
+          // === Temporal fields (preserve firstSeenAt, update others) ===
+          lastSeenAt: sql`now()`,
+          updatedAt: sql`now()`,
+          // Note: firstSeenAt is preserved from original entry
+        }
+      })
       .returning();
 
-    // 🚀 CACHE: Invalidate caches for this profile since new memory added
+    // 🚀 CACHE: Invalidate caches for this profile
     memoryCaches.warm.invalidatePattern(`enriched_memories:${entry.profileId}`);
     memoryCaches.warm.invalidatePattern(`search_memories:${entry.profileId}`);
-    console.log(`🗑️ Invalidated memory caches for profile ${entry.profileId}`);
-
-    // AI-Assisted Flagging: Analyze new memory content in background
-    if (newEntry.content && newEntry.profileId) {
-      // Run flagging as background task to avoid slowing down memory creation
-      this.flagMemoryContentBackground(newEntry);
+    
+    // Log what happened
+    if (upsertedEntry.supportCount && upsertedEntry.supportCount > 1) {
+      console.log(`🔄 Updated existing memory: "${upsertedEntry.content.substring(0, 50)}..." (support: ${upsertedEntry.supportCount}, confidence: ${upsertedEntry.confidence})`);
+    } else {
+      console.log(`✅ Created new memory: "${upsertedEntry.content.substring(0, 50)}..." (canonical: ${upsertedEntry.canonicalKey})`);
     }
 
-    return newEntry;
+    // AI-Assisted Flagging: Analyze new memory content in background (only for truly new entries)
+    if (upsertedEntry.content && upsertedEntry.profileId && (!upsertedEntry.supportCount || upsertedEntry.supportCount === 1)) {
+      // Run flagging as background task to avoid slowing down memory creation
+      this.flagMemoryContentBackground(upsertedEntry);
+    }
+
+    return upsertedEntry;
   }
 
   /**

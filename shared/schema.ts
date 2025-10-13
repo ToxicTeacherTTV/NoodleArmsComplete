@@ -128,7 +128,10 @@ export const memoryEntries = pgTable("memory_entries", {
   
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
-});
+}, (table) => ({
+  // Unique constraint to prevent duplicate canonical keys per profile
+  uniqueCanonicalKey: uniqueIndex("unique_profile_canonical_key_idx").on(table.profileId, table.canonicalKey),
+}));
 
 // === NEW: Entity Disambiguation System ===
 // Feature flag to enable/disable the entity disambiguation system
