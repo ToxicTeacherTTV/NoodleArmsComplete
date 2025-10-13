@@ -95,6 +95,7 @@ export function MemoryAnalytics({ profileId }: MemoryAnalyticsProps) {
   }
 
   const maxCategoryCount = Math.max(...Object.values(analytics.byCategory));
+  const maxImportanceCount = Math.max(...Object.values(analytics.byImportance));
   const maxSourceCount = Math.max(...Object.values(analytics.bySource));
   const maxGrowthCount = Math.max(...analytics.recentGrowth.map(d => d.count), 1);
 
@@ -161,7 +162,7 @@ export function MemoryAnalytics({ profileId }: MemoryAnalyticsProps) {
           </div>
           <div className="flex items-end justify-between gap-1 h-24">
             {Object.entries(analytics.byImportance).map(([level, count]) => {
-              const percentage = maxCategoryCount > 0 ? (count / maxCategoryCount) * 100 : 0;
+              const percentage = maxImportanceCount > 0 ? (count / maxImportanceCount) * 100 : 0;
               return (
                 <div key={level} className="flex-1 flex flex-col items-center gap-1">
                   <div className="relative flex-1 w-full flex items-end justify-center">
