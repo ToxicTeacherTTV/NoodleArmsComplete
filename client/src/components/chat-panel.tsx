@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Message, AppMode } from "@/types";
@@ -11,6 +12,8 @@ interface ChatPanelProps {
   sessionDuration: string;
   messageCount: number;
   appMode?: AppMode;
+  isDebugMode?: boolean;
+  onToggleDebugMode?: () => void;
   onPlayAudio?: (content: string) => void;
   onReplayAudio?: () => void;
   onSaveAudio?: (filename?: string) => void;
@@ -21,7 +24,7 @@ interface ChatPanelProps {
   onTextSelection?: () => void;
 }
 
-export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', onPlayAudio, onReplayAudio, onSaveAudio, isPlayingAudio = false, isPausedAudio = false, canReplay = false, canSave = false, onTextSelection }: ChatPanelProps) {
+export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', isDebugMode = false, onToggleDebugMode, onPlayAudio, onReplayAudio, onSaveAudio, isPlayingAudio = false, isPausedAudio = false, canReplay = false, canSave = false, onTextSelection }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -124,16 +127,31 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
             </div>
           </div>
           
-          <div className="flex items-center space-x-2">
-            <div className="flex items-center space-x-1 text-xs">
-              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              <span className="text-muted-foreground">Claude API</span>
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1 text-xs">
+                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                <span className="text-muted-foreground">Claude API</span>
+              </div>
+              
+              <div className="flex items-center space-x-1 text-xs">
+                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                <span className="text-muted-foreground">ElevenLabs</span>
+              </div>
             </div>
             
-            <div className="flex items-center space-x-1 text-xs">
-              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              <span className="text-muted-foreground">ElevenLabs</span>
-            </div>
+            {onToggleDebugMode && (
+              <Button
+                onClick={onToggleDebugMode}
+                variant={isDebugMode ? "default" : "outline"}
+                size="sm"
+                className="text-xs"
+                data-testid="button-toggle-debug"
+              >
+                <i className="fas fa-bug mr-1"></i>
+                Debug
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -277,6 +295,40 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
           </>
         )}
       </div>
+
+      {/* Memory Debug Panel */}
+      {isDebugMode && (
+        <div className="border-t border-border bg-muted/30 p-4 max-h-64 overflow-y-auto">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-2">
+              <i className="fas fa-bug text-orange-600"></i>
+              <h3 className="font-semibold text-sm">Retrieved Memories</h3>
+              <Badge variant="secondary" className="text-xs">Debug Mode</Badge>
+            </div>
+            
+            {messages
+              .filter(m => m.type === 'AI' && m.metadata?.retrieved_context)
+              .map(msg => (
+                <div key={msg.id} className="bg-card border border-border rounded-lg p-3">
+                  <div className="text-xs text-muted-foreground mb-2">
+                    {new Date(msg.createdAt).toLocaleTimeString()} • 
+                    {msg.metadata?.processingTime ? ` ${msg.metadata.processingTime}ms` : ''}
+                  </div>
+                  <div className="text-sm bg-muted/50 rounded p-2 font-mono whitespace-pre-wrap">
+                    {msg.metadata?.retrieved_context || 'No context'}
+                  </div>
+                </div>
+              ))}
+            
+            {messages.filter(m => m.type === 'AI' && m.metadata?.retrieved_context).length === 0 && (
+              <div className="text-center text-sm text-muted-foreground py-4">
+                <i className="fas fa-info-circle mb-2"></i>
+                <p>No retrieved memories yet. Start chatting to see debug info!</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

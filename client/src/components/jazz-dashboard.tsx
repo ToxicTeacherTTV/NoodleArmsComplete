@@ -13,6 +13,7 @@ import VoiceVisualizer from "@/components/voice-visualizer";
 import ProfileModal from "@/components/profile-modal";
 import PersonalitySurgePanel from "@/components/personality-surge-panel";
 import { MemoryChecker } from "@/components/memory-checker";
+import { MemoryDebugPanel } from "@/components/memory-debug-panel";
 import NotesModal from "@/components/notes-modal";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useSpeechSynthesis } from "@/hooks/use-speech-synthesis";
@@ -62,6 +63,7 @@ export default function JazzDashboard() {
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   const [isControlsCollapsed, setIsControlsCollapsed] = useState(true); // Start collapsed on mobile
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Chat history sidebar
+  const [isDebugMode, setIsDebugMode] = useState(false); // Memory debug panel
 
   // Refs for queue management
   const messageQueueRef = useRef<Message[]>([]);
@@ -407,6 +409,8 @@ export default function JazzDashboard() {
                 sessionDuration={getSessionDuration()}
                 messageCount={messages.length}
                 appMode={appMode}
+                isDebugMode={isDebugMode}
+                onToggleDebugMode={() => setIsDebugMode(!isDebugMode)}
                 onPlayAudio={(content: string) => {
                   if (appMode === 'PODCAST') {
                     if (isSpeakingElevenLabs && !isPausedElevenLabs) {

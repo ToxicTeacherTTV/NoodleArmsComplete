@@ -18,6 +18,7 @@ import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDow
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ProtectedFactsManager } from "@/components/protected-facts-manager";
+import { MemoryAnalytics } from "@/components/memory-analytics";
 import MemoryPanel from "@/components/memory-panel";
 import DocumentPanel from "@/components/document-panel";
 import PersonalityPanel from "@/components/personality-panel";
@@ -1480,9 +1481,12 @@ export default function BrainManagement() {
 
         {/* Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 2xl:grid-cols-9 gap-1 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 2xl:grid-cols-10 gap-1 h-auto p-1">
             <TabsTrigger value="recent-memories" data-testid="tab-recent-memories" className="text-xs">
               📝 Recent
+            </TabsTrigger>
+            <TabsTrigger value="analytics" data-testid="tab-analytics" className="text-xs">
+              📊 Analytics
             </TabsTrigger>
             <TabsTrigger value="documents" data-testid="tab-documents" className="text-xs">
               📁 Docs
@@ -1550,6 +1554,11 @@ export default function BrainManagement() {
                 />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Memory Analytics */}
+          <TabsContent value="analytics" className="mt-6">
+            <MemoryAnalytics profileId={activeProfile?.id} />
           </TabsContent>
 
           {/* Documents */}
