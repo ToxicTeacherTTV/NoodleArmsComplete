@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Message, Events, TextChannel } from 'discord
 import { storage } from '../storage';
 import { anthropicService } from './anthropic';
 import type { DiscordServer, DiscordMember, DiscordTopicTrigger } from '@shared/schema';
+import { prometheusMetrics } from './prometheusMetrics.js';
 
 export class DiscordBotService {
   private client: Client;
@@ -257,8 +258,15 @@ export class DiscordBotService {
           // Send response to Discord with single send method
           try {
             await message.reply(response);
+            
+            // 📊 Track Discord reply message
+            prometheusMetrics.trackDiscordMessage('reply', 'name' in message.channel ? message.channel.name : undefined, shouldRespond.triggerType);
           } catch (discordError) {
             console.error(`❌ Discord API error sending message:`, discordError);
+            
+            // 📊 Track Discord error
+            prometheusMetrics.trackDiscordMessage('error', undefined, 'send_failed');
+            
             // Don't try fallback to prevent duplicate messages
             // Log the failure but don't crash
             return;
@@ -1085,6 +1093,9 @@ export class DiscordBotService {
         
         console.log(`🎲 Sending proactive message to ${guild.name} (${currentCount + 1}/2 today): ${proactiveMessage.substring(0, 50)}...`);
         await channel.send(proactiveMessage);
+        
+        // 📊 Track proactive message
+        prometheusMetrics.trackDiscordMessage('proactive', channel.name, 'scheduled');
 
         // Log this as a conversation
         await storage.logDiscordConversation({
