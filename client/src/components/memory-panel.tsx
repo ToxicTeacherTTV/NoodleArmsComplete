@@ -3,11 +3,14 @@ import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import type { MemoryEntry, MemoryStats } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
 import EvolutionPanel from "./evolution-panel";
-import { Search, X } from "lucide-react";
+import { Search, X, RefreshCw, Filter } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface MemoryPanelProps {
   profileId?: string;
@@ -22,6 +25,9 @@ export default function MemoryPanel({
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [importanceRange, setImportanceRange] = useState<[number, number]>([0, 5]);
+  const [showFilters, setShowFilters] = useState(false);
 
   const { data: memoryEntries, isLoading } = useQuery({
     queryKey: ['/api/memory/entries', { limit: 10000 }],
@@ -33,13 +39,36 @@ export default function MemoryPanel({
     enabled: !!profileId,
   });
 
-  // Filter memory entries based on search term and source filter
+  // Find duplicates mutation
+  const findDuplicatesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/memory/cleanup-duplicates', {});
+      return response;
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/stats'] });
+      toast({
+        title: "Duplicates Cleaned",
+        description: `Removed ${data.duplicatesRemoved || 0} duplicate memories`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to clean duplicates",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Filter memory entries based on all filters
   const filteredMemories = useMemo(() => {
     if (!memoryEntries || !Array.isArray(memoryEntries)) return [];
     
     let memories = memoryEntries as MemoryEntry[];
     
-    // Apply source filter first
+    // Apply source filter
     if (sourceFilter !== "all") {
       memories = memories.filter((memory: MemoryEntry) => {
         if (sourceFilter === "web_search") {
@@ -55,21 +84,38 @@ export default function MemoryPanel({
       });
     }
     
-    // Apply text search filter
-    if (!searchTerm.trim()) {
-      return memories.slice(0, sourceFilter === "all" ? 10 : 50);
+    // Apply category filter
+    if (categoryFilter !== "all") {
+      memories = memories.filter((memory: MemoryEntry) => 
+        memory.type === categoryFilter
+      );
     }
     
-    const filtered = memories.filter((memory: MemoryEntry) => 
-      memory.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      memory.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      memory.source?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Apply importance filter
+    memories = memories.filter((memory: MemoryEntry) => {
+      const importance = memory.importance || 0;
+      return importance >= importanceRange[0] && importance <= importanceRange[1];
+    });
     
-    return filtered.slice(0, 50); // Show more results when searching
-  }, [memoryEntries, searchTerm, sourceFilter]);
-
-  // Removed redundant mutations - Evolution Panel handles optimization
+    // Apply text search filter
+    if (searchTerm.trim()) {
+      memories = memories.filter((memory: MemoryEntry) => 
+        memory.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        memory.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        memory.source?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        memory.keywords?.some(k => k.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    }
+    
+    // Sort by importance and recency
+    memories.sort((a, b) => {
+      const importanceDiff = (b.importance || 0) - (a.importance || 0);
+      if (importanceDiff !== 0) return importanceDiff;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+    
+    return memories.slice(0, 50);
+  }, [memoryEntries, searchTerm, sourceFilter, categoryFilter, importanceRange]);
 
   const formatTimeAgo = (timestamp: string) => {
     const now = new Date();
@@ -101,12 +147,29 @@ export default function MemoryPanel({
     }
   };
 
+  const activeFilterCount = 
+    (sourceFilter !== "all" ? 1 : 0) +
+    (categoryFilter !== "all" ? 1 : 0) +
+    (importanceRange[0] !== 0 || importanceRange[1] !== 5 ? 1 : 0);
+
   return (
     <div className="flex-1 p-4 space-y-4">
       {/* Memory Stats */}
       <Card className="glass-effect p-4 rounded-lg">
         <CardContent className="p-0">
-          <h3 className="text-sm font-medium text-foreground mb-3">Memory Statistics</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-foreground">Memory Statistics</h3>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => findDuplicatesMutation.mutate()}
+              disabled={findDuplicatesMutation.isPending}
+              data-testid="button-find-duplicates"
+            >
+              <RefreshCw className={`h-3 w-3 mr-1 ${findDuplicatesMutation.isPending ? 'animate-spin' : ''}`} />
+              Find Duplicates
+            </Button>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-primary" data-testid="memory-total-facts">
@@ -121,59 +184,35 @@ export default function MemoryPanel({
               <div className="text-xs text-muted-foreground">Conversations</div>
             </div>
           </div>
-          
         </CardContent>
       </Card>
 
-      {/* Recent Memories */}
+      {/* Memory Search & Filters */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium text-foreground">Memory Search</h3>
-          {(searchTerm || sourceFilter !== "all") && (
-            <span className="text-xs text-muted-foreground">
-              {filteredMemories.length} results
-            </span>
-          )}
-        </div>
-        
-        {/* Source Filter Buttons */}
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            variant={sourceFilter === "all" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSourceFilter("all")}
-            className="text-xs h-7"
-            data-testid="filter-all"
-          >
-            All Sources
-          </Button>
-          <Button
-            variant={sourceFilter === "web_search" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSourceFilter("web_search")}
-            className="text-xs h-7"
-            data-testid="filter-web-search"
-          >
-            🌐 Web Search
-          </Button>
-          <Button
-            variant={sourceFilter === "conversation" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSourceFilter("conversation")}
-            className="text-xs h-7"
-            data-testid="filter-conversation"
-          >
-            💬 Conversation
-          </Button>
-          <Button
-            variant={sourceFilter === "document" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSourceFilter("document")}
-            className="text-xs h-7"
-            data-testid="filter-document"
-          >
-            📄 Document
-          </Button>
+          <div className="flex items-center gap-2">
+            {filteredMemories.length > 0 && (
+              <span className="text-xs text-muted-foreground">
+                {filteredMemories.length} results
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className="text-xs h-7"
+              data-testid="toggle-filters"
+            >
+              <Filter className="h-3 w-3 mr-1" />
+              Filters
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="ml-1 h-4 px-1 text-xs">
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
+          </div>
         </div>
         
         {/* Search Input */}
@@ -181,7 +220,7 @@ export default function MemoryPanel({
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search memories... (try 'bensonhurst')"
+            placeholder="Search memories... (content, keywords, type, source)"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 pr-10 bg-background/50 border-muted-foreground/20 focus:border-accent"
@@ -199,7 +238,89 @@ export default function MemoryPanel({
             </Button>
           )}
         </div>
+
+        {/* Advanced Filters */}
+        {showFilters && (
+          <Card className="p-4 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              {/* Category Filter */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Category</label>
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger data-testid="select-category-filter">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="FACT">📌 Facts</SelectItem>
+                    <SelectItem value="PREFERENCE">💙 Preferences</SelectItem>
+                    <SelectItem value="LORE">📖 Lore</SelectItem>
+                    <SelectItem value="CONTEXT">💬 Context</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Source Filter */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Source</label>
+                <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                  <SelectTrigger data-testid="select-source-filter">
+                    <SelectValue placeholder="All Sources" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sources</SelectItem>
+                    <SelectItem value="web_search">🌐 Web Search</SelectItem>
+                    <SelectItem value="conversation">💬 Conversation</SelectItem>
+                    <SelectItem value="document">📄 Document</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Importance Range Slider */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-muted-foreground">Importance Range</label>
+                <span className="text-xs text-foreground font-mono">
+                  {importanceRange[0]} - {importanceRange[1]}
+                </span>
+              </div>
+              <Slider
+                value={importanceRange}
+                onValueChange={(value) => setImportanceRange(value as [number, number])}
+                min={0}
+                max={5}
+                step={1}
+                className="w-full"
+                data-testid="slider-importance-range"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Low (0)</span>
+                <span>High (5)</span>
+              </div>
+            </div>
+
+            {/* Clear Filters Button */}
+            {activeFilterCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSourceFilter("all");
+                  setCategoryFilter("all");
+                  setImportanceRange([0, 5]);
+                }}
+                className="w-full"
+                data-testid="button-clear-filters"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Clear All Filters
+              </Button>
+            )}
+          </Card>
+        )}
         
+        {/* Memory Results */}
         <div className="space-y-2 max-h-60 overflow-y-auto chat-scroll" data-testid="memory-entries-list">
           {isLoading ? (
             <div className="text-center text-muted-foreground py-4">
@@ -215,17 +336,31 @@ export default function MemoryPanel({
           ) : filteredMemories.length === 0 ? (
             <div className="text-center text-muted-foreground py-4">
               <i className="fas fa-search mb-2 text-2xl opacity-50"></i>
-              <p>No memories match your search</p>
-              <p className="text-xs">Try different keywords</p>
+              <p>No memories match your filters</p>
+              <p className="text-xs">Try adjusting your search or filters</p>
             </div>
           ) : (
             filteredMemories.map((memory: MemoryEntry) => (
               <Card key={memory.id} className="bg-muted/30 p-3 rounded-lg">
                 <CardContent className="p-0">
-                  <div className={`text-xs font-medium mb-1 ${getTypeColor(memory.type)}`}>
-                    {memory.type.charAt(0) + memory.type.slice(1).toLowerCase()} Knowledge
+                  <div className="flex items-center justify-between mb-1">
+                    <div className={`text-xs font-medium ${getTypeColor(memory.type)}`}>
+                      {memory.type.charAt(0) + memory.type.slice(1).toLowerCase()} Knowledge
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      Importance: {memory.importance}/5
+                    </Badge>
                   </div>
                   <div className="text-sm text-foreground mb-2">{memory.content}</div>
+                  {memory.keywords && memory.keywords.length > 0 && (
+                    <div className="flex gap-1 mb-2 flex-wrap">
+                      {memory.keywords.slice(0, 5).map((keyword, idx) => (
+                        <Badge key={idx} variant="secondary" className="text-xs">
+                          {keyword}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                   {memory.source && (
                     <div className="text-xs text-secondary bg-secondary/10 px-2 py-1 rounded mb-2">
                       <strong>Source:</strong> {memory.source}
@@ -233,12 +368,9 @@ export default function MemoryPanel({
                   )}
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>Stored {formatTimeAgo(memory.createdAt)}</span>
-                    <div className="flex items-center space-x-2">
-                      <span>Importance: {memory.importance}/5</span>
-                      {memory.retrievalCount > 0 && (
-                        <span className="text-accent">{memory.retrievalCount} uses</span>
-                      )}
-                    </div>
+                    {memory.retrievalCount && memory.retrievalCount > 0 && (
+                      <span className="text-accent">{memory.retrievalCount} uses</span>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -249,8 +381,6 @@ export default function MemoryPanel({
 
       {/* EVOLUTIONARY AI PANEL */}
       <EvolutionPanel profileId={profileId} />
-
-      {/* All memory management now handled by Evolution Panel above */}
     </div>
   );
 }
