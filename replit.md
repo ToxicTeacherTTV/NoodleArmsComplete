@@ -85,9 +85,13 @@ Preferred communication style: Simple, everyday language.
   - **Deduplication**: Prevents duplicate entity creation through disambiguation
 - **UI Enhancements** (Oct 2025):
   - **Enhanced Memory Panel**: Category filter, importance slider (0-5), source filter, Find Duplicates button, active filter count badge
-  - **Memory Debug Panel**: Debug mode toggle, query tracking, retrieved memories display with relevance scores, collapsible entries
-  - **Memory Analytics Dashboard**: Category distribution chart, importance histogram, source breakdown, 7-day growth graph, top 5 most-retrieved memories
+  - **Memory Debug Panel**: Debug mode toggle in chat header, query tracking, retrieved memories display with relevance scores, collapsible entries, integrated into chat interface
+  - **Memory Analytics Dashboard**: Category distribution chart, importance histogram, source breakdown, 7-day growth graph, top 5 most-retrieved memories, accessible via Brain Management "📊 Analytics" tab
   - **Protected Facts Manager**: Full CRUD interface for high-importance memories
+- **Architecture Review Completed** (Oct 2025):
+  - Evaluated external recommendations against existing implementation
+  - Most features already implemented: pgvector, deduplication, Discord triggers, personality presets, entity linking, Gemini fallback
+  - Added 6 new valuable items to PROJECT_ROADMAP.md: Prometheus metrics, DecisionTrace expansion, panic mode, testing infrastructure, Dockerization, OpenAPI docs
 
 ### Communication Flow
 1. Voice Input (browser speech recognition)

@@ -362,6 +362,132 @@ Delete unused ones, keep 3-4 favorites
 
 ---
 
+## 🔬 OBSERVABILITY & TESTING (New Suggestions - Oct 2025)
+
+### 1. Prometheus Metrics Endpoint
+**Priority:** MEDIUM - Better monitoring
+**Status:** Not implemented
+
+**Add `/metrics` endpoint with:**
+```typescript
+// Metrics to track:
+- llm_calls_total{provider, model}
+- llm_tokens_total{direction: "input"|"output"}
+- discord_messages_total{type: "proactive"|"reply"}
+- http_requests_duration_ms_bucket{route}
+- memory_retrievals_total{query_type}
+```
+
+**Why:** Proper monitoring beats guessing; can track costs and usage patterns.
+
+**Files to create:** `server/services/metrics.ts`
+
+### 2. Expand DecisionTrace System
+**Priority:** MEDIUM - Enhanced debugging
+**Status:** Partial (debug panel exists)
+
+**Expand current debug panel to include:**
+```typescript
+export type DecisionTrace = {
+  requestId: string;
+  topMemories: Array<{id:string, score:number, why:string}>;
+  knobs: {wiseguy:number; unhinged:number; classy:number};
+  modelChosen: string; // "claude" | "gemini"
+  rulesFired: string[]; // e.g., "topic:Twins", "discord:cooldown_ok"
+  safety: {redactions:number};
+  cost: {inputTokens:number; outputTokens:number; provider:string};
+};
+```
+
+**Why:** See EXACTLY why the AI made each decision; invaluable for tuning.
+
+**Files to update:** `server/routes.ts`, debug panel component
+
+### 3. Panic Mode Switch
+**Priority:** HIGH - Budget protection
+**Status:** Not implemented
+
+**Add emergency budget control:**
+```typescript
+// In .env:
+PANIC_MODE=1  // Routes everything to "sorry I'm off-budget" template
+
+// Check before any LLM call:
+if (process.env.PANIC_MODE === "1") {
+  return "Ay, I'm currently on a budget freeze. Check back later!";
+}
+```
+
+**Why:** One-click way to stop ALL paid API calls when budget is tight.
+
+**Files to update:** `server/services/aiService.ts`, add UI toggle
+
+### 4. Testing Infrastructure
+**Priority:** MEDIUM - Confidence in changes
+**Status:** Minimal testing exists
+
+**Add targeted tests:**
+```typescript
+// Unit tests (small, surgical):
+- memory dedupe/merge thresholds
+- retrieval ranking weights
+- variety knob → prompt preamble conversion
+
+// Contract tests:
+- Zod schemas → OpenAPI spec → validate with actual requests
+- Use Bruno/Postman for smoke testing
+
+// E2E (happy path only):
+- "Discord msg → routed LLM → memory write → trace recorded"
+- NO flaky screenshot tests, keep it fast
+```
+
+**Why:** Test what matters; avoid breaking existing features during updates.
+
+**Files to create:** `tests/` directory structure
+
+### 5. Dockerization & Deployment
+**Priority:** LOW - Better deployment story
+**Status:** Currently VM-deployed manually
+
+**Create Docker setup:**
+```yaml
+# docker-compose.yml
+services:
+  api:
+    image: nicky/noodlearms:latest
+    env_file: .env
+    depends_on: [db]
+  db:
+    image: pgvector/pgvector:pg16
+    volumes: [dbdata:/var/lib/postgresql/data]
+  caddy:
+    image: caddy:alpine
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile]
+    ports: ["80:80","443:443"]
+```
+
+**Why:** One-command deploy; easier to manage than manual VM setup.
+
+**Files to create:** `Dockerfile`, `docker-compose.yml`, `.dockerignore`
+
+### 6. OpenAPI Documentation
+**Priority:** LOW - Better API docs
+**Status:** No formal API docs
+
+**Auto-generate from Zod schemas:**
+```typescript
+// Use existing Zod schemas to generate OpenAPI spec
+// Tools: zod-to-openapi or similar
+// Serve at /api/docs with Swagger UI
+```
+
+**Why:** Always-up-to-date API documentation; helps debugging and integration.
+
+**Files to create:** `server/docs/openapi.ts`
+
+---
+
 ## 📝 NOTES
 
 - Original suggestions document: `attached_assets/Pasted--CRITICAL-FIXES-Do-These-First-1-PERSONALITY-FEELS-OFF-The-Big-Problem-Why-it-s-happening--1760370251101_1760370251102.txt`
