@@ -1,0 +1,389 @@
+🚨 CRITICAL FIXES (Do These First)
+1. PERSONALITY FEELS "OFF" - The Big Problem
+Why it's happening:
+You mentioned it feels worse than your custom Claude/ChatGPT projects. Looking at your setup, I bet the issue is:
+
+The system prompt is getting diluted with too much technical instruction
+The personality presets are overriding Nicky's core voice
+Memory retrieval is injecting too much random context that confuses the AI
+
+IMMEDIATE FIX - Update Your System Prompt:
+Go to wherever your base personality/identity prompt lives (probably in personalityController.ts or similar) and restructure it like this:
+[CORE IDENTITY - NEVER OVERRIDE THESE]
+- You are Nicky "Noodle Arms" A.I. Dente
+- Italian-American, pasta-obsessed, Dead by Daylight addicted
+- Chaotic good moral alignment with emotional intensity
+- Physical characteristic: literally has noodle arms (it's a thing, don't ask)
+- Family business vibe but over trivial shit
+- Alternates between tough talk and being emotionally sensitive
+
+[SPEAKING STYLE - THIS IS HOW YOU TALK]
+- Casual, profanity-laced, expressive
+- Italian phrases when emotional or talking about food
+- Self-deprecating humor mixed with Italian pride
+- Gets intense about DbD gameplay and pasta quality
+- Tangents are GOOD - lean into random topics
+- Don't be a one-trick pony - vary your responses
+
+[MEMORY USAGE RULES]
+- Reference memories naturally, don't list them
+- If you remember something, weave it in conversationally
+- If you DON'T remember something clearly, say so
+- Don't force pasta/DbD references into EVERY response
+
+[RESPONSE VARIETY - CRITICAL]
+You MUST vary your responses. Not every reply needs:
+- Pasta references
+- DbD references  
+- Italian phrases
+- Family business mentions
+
+Sometimes just respond like a normal person who happens to have these traits.
+Why this helps: Forces the AI to remember it's a CHARACTER first, not a feature list. The "one track mind" issue is because it's probably over-indexing on pasta/DbD in every response.
+
+2. MEMORY SYSTEM IS BROKEN - Contradictions/Duplicates Not Catching
+The problem: You said contradiction finder and duplicate finder aren't working. With 1544 memories, you DEFINITELY have duplicates.
+DIAGNOSIS NEEDED - Run this query in your database:
+sqlSELECT content, COUNT(*) as duplicate_count
+FROM memory_entries
+WHERE profile_id = 'your-nicky-profile-id'
+GROUP BY content
+HAVING COUNT(*) > 1
+ORDER BY duplicate_count DESC
+LIMIT 20;
+This will show you if there ARE duplicates that the system missed.
+IMMEDIATE FIX - Manual Deduplication:
+Since you need UI and can't code, here's what to do:
+
+Add a "Find Duplicates" button to your memory management UI that calls this API endpoint:
+
+typescript// Add to your routes.ts
+app.get('/api/memory/duplicates/:profileId', async (req, res) => {
+  const { profileId } = req.params;
+  
+  const duplicates = await db.execute(sql`
+    SELECT 
+      m1.id as id1,
+      m2.id as id2,
+      m1.content,
+      m1.importance as importance1,
+      m2.importance as importance2,
+      m1.created_at as created1,
+      m2.created_at as created2
+    FROM memory_entries m1
+    JOIN memory_entries m2 ON m1.content = m2.content
+    WHERE m1.id < m2.id
+      AND m1.profile_id = ${profileId}
+      AND m2.profile_id = ${profileId}
+    ORDER BY m1.created_at DESC
+  `);
+  
+  res.json({ duplicates });
+});
+
+Add a UI component that shows these duplicates and lets you click "Merge" or "Delete Duplicate"
+
+Why the system isn't catching them: The Jaccard/Levenshtein comparison is probably too strict or not running at all. Need to check if MemoryDeduplicator is actually being called on memory creation.
+
+3. WEB SEARCH NOT WORKING WELL
+The problem: You said it doesn't search the web very well. This is likely a PROMPT issue, not a technical issue.
+IMMEDIATE FIX - Update Your AI Request Logic:
+When Nicky needs to search the web, the prompt should be:
+[User asked: {original question}]
+
+BEFORE responding, determine if you need current information:
+- DbD patch notes, meta changes, new killers → SEARCH
+- News about games, tournaments, drama → SEARCH  
+- Pasta recipes, restaurant info → Can answer from knowledge
+- Personal questions about the user → Check memories first
+
+If searching: Use 2-3 searches with different keywords to get comprehensive info.
+If you find info, cite it naturally (don't just dump search results).
+ALSO: Check if web_search tool is even enabled/configured correctly. Make sure you have API access set up.
+
+4. MEMORY SEARCH INCONSISTENT - "Doesn't Answer Questions About Its Own Memories"
+This is your #1 priority fix. The memory retrieval is probably:
+
+Not searching with the right keywords
+Returning irrelevant results
+Not being injected into the AI prompt correctly
+
+IMMEDIATE FIX - Improve Memory Retrieval:
+typescript// Update your memory search to be more aggressive
+async function getRelevantMemories(query: string, profileId: string) {
+  // Extract multiple keyword variations
+  const keywords = [
+    ...query.toLowerCase().split(' '),
+    query.toLowerCase() // full query too
+  ].filter(k => k.length > 3); // ignore short words
+  
+  // Search with MULTIPLE strategies
+  const results = await db.execute(sql`
+    SELECT DISTINCT m.*, 
+      CASE 
+        WHEN m.content ILIKE ${`%${query}%`} THEN 100
+        WHEN m.keywords && ${keywords} THEN 80
+        WHEN m.category IN ('FACT', 'PREFERENCE') THEN 60
+        ELSE 40
+      END as relevance_score
+    FROM memory_entries m
+    WHERE m.profile_id = ${profileId}
+      AND (
+        m.content ILIKE ${`%${query}%`}
+        OR m.keywords && ${keywords}
+        OR m.story_context ILIKE ${`%${query}%`}
+      )
+    ORDER BY relevance_score DESC, m.importance DESC
+    LIMIT 15
+  `);
+  
+  return results;
+}
+ALSO ADD: A debug mode that SHOWS which memories were retrieved for each response. Add a toggle in your UI:
+typescript// In your AI request, add:
+if (debugMode) {
+  console.log('Retrieved memories:', retrievedMemories);
+  // Show this in the UI somehow
+}
+This will let you SEE why Nicky isn't remembering things.
+
+🟡 HIGH PRIORITY FIXES (Do These Next)
+5. VOICE QUALITY NEEDS WORK
+You said you're still using browser TTS and copying to ElevenLabs manually. That means the ElevenLabs integration isn't good enough yet.
+IMMEDIATE FIX - Better ElevenLabs Settings:
+typescript// Update your ElevenLabs request settings:
+const voiceSettings = {
+  stability: 0.65,        // Higher = more consistent (was probably too low)
+  similarity_boost: 0.80, // Higher = closer to trained voice
+  style: 0.40,            // Moderate style variation
+  use_speaker_boost: true // Better clarity
+};
+
+// For podcast/streaming mode specifically:
+if (mode === 'PODCAST' || mode === 'STREAM') {
+  voiceSettings.stability = 0.75; // Even more consistent
+  voiceSettings.style = 0.25;     // Less variation for long-form
+}
+ALSO: Since you're hitting ElevenLabs limits from auto-generation, add this:
+typescript// Only auto-generate voice for SHORT responses in stream mode
+const shouldAutoGenerateVoice = (text: string, mode: string) => {
+  if (mode === 'PODCAST') return false; // Always manual
+  if (mode === 'STREAM') {
+    return text.length < 300; // Only short reactions get auto-voice
+  }
+  return false; // Chat mode = manual
+};
+This conserves credits by only auto-voicing quick stream reactions.
+
+6. CONTENT COLLECTION IS USELESS NOISE
+You want DbD patch notes, news, topics - but getting garbage.
+IMMEDIATE FIX - Targeted Content Sources:
+Replace broad scraping with SPECIFIC sources:
+typescript// ContentCollectionManager - update sources
+const USEFUL_SOURCES = {
+  dbd: {
+    reddit: 'r/deadbydaylight/hot', // Only hot posts
+    steam: 'Dead by Daylight News',  // Official news
+    twitter: '@DeadbyDaylight',      // Official account
+    filter: (content) => {
+      // Only keep if it mentions these keywords
+      const keywords = ['patch', 'update', 'nerf', 'buff', 'killer', 'meta', 'perk'];
+      return keywords.some(k => content.toLowerCase().includes(k));
+    }
+  },
+  
+  gaming_news: {
+    sources: [
+      'https://www.pcgamer.com/games/',
+      'https://www.ign.com/games/feed'
+    ],
+    filter: (content) => {
+      const relevant = ['dead by daylight', 'horror game', 'multiplayer'];
+      return relevant.some(k => content.toLowerCase().includes(k));
+    }
+  }
+};
+REMOVE: Generic YouTube/Steam scraping. It's too broad and giving you trash.
+ADD: A UI where you can manually approve/reject collected content before it becomes memory. Like a "Content Review Queue."
+
+7. DISCORD BOT TOO RANDOM/SPAMMY
+IMMEDIATE FIX - Smarter Proactive Messaging:
+typescript// Instead of random messages, trigger on specific events:
+class SmarterProactiveMessaging {
+  shouldRespond(context: {
+    channelName: string,
+    recentMessages: Message[],
+    timeOfDay: string
+  }): boolean {
+    
+    // Don't respond if already responded in last 30 minutes
+    if (this.recentlyRespondedInChannel(context.channelName)) {
+      return false;
+    }
+    
+    // Respond if someone mentions DbD keywords
+    const dbdKeywords = ['dead by daylight', 'dbd', 'killer', 'survivor', 'camping'];
+    const hasDbDMention = context.recentMessages.some(m => 
+      dbdKeywords.some(k => m.content.toLowerCase().includes(k))
+    );
+    
+    // Respond if someone mentions food/pasta
+    const foodKeywords = ['pasta', 'italian', 'food', 'cooking', 'recipe'];
+    const hasFoodMention = context.recentMessages.some(m => 
+      foodKeywords.some(k => m.content.toLowerCase().includes(k))
+    );
+    
+    // Respond if channel is active (3+ messages in last 10 min)
+    const isActive = this.getChannelActivity(context.channelName) > 3;
+    
+    // Only respond if there's a REASON
+    return (hasDbDMention || hasFoodMention) && isActive;
+  }
+}
+This makes the bot context-aware instead of random.
+
+🟢 MEDIUM PRIORITY (Do When You Have Time)
+8. BETTER UI FOR MEMORY MANAGEMENT
+You need UI for everything. Here's what to add:
+Priority UI Components:
+
+Memory Search & Filter Panel:
+
+Search box with real-time results
+Filter by: category, importance, date range
+Bulk select & delete
+"Find Duplicates" button
+
+
+Memory Detail View:
+
+Click any memory to see full details
+Edit content, importance, category
+See which conversation created it
+View story context
+
+
+Protected Facts Dashboard:
+
+Shows all 999 importance memories
+Warning before deleting
+"Lock" toggle to make facts undeletable
+
+
+Memory Analytics:
+
+Total memories by category (pie chart)
+Memory growth over time (line graph)
+Most referenced memories (top 10 list)
+
+
+
+Copy-Paste Component Template:
+typescript// Add this to your client/src/components/
+export function MemoryManagementPanel() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState<MemoryCategory | 'ALL'>('ALL');
+  const [filterImportance, setFilterImportance] = useState<[number, number]>([0, 999]);
+  
+  const { data: memories } = useQuery({
+    queryKey: ['/api/memory/search', searchQuery, filterCategory, filterImportance],
+    queryFn: () => fetch(`/api/memory/search?q=${searchQuery}&category=${filterCategory}&minImportance=${filterImportance[0]}&maxImportance=${filterImportance[1]}`).then(r => r.json())
+  });
+  
+  return (
+    <div className="memory-panel">
+      <input 
+        type="text" 
+        placeholder="Search memories..." 
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+      />
+      
+      <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+        <option value="ALL">All Categories</option>
+        <option value="FACT">Facts</option>
+        <option value="PREFERENCE">Preferences</option>
+        <option value="LORE">Lore</option>
+        <option value="CONTEXT">Context</option>
+      </select>
+      
+      <button onClick={findDuplicates}>Find Duplicates</button>
+      
+      <div className="memory-list">
+        {memories?.map(m => (
+          <MemoryCard key={m.id} memory={m} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+9. PERSONALITY PRESETS - ARE THEY USEFUL?
+You said "unsure" which tells me you probably aren't using them much.
+TEST THIS: Try each preset in a 5-minute conversation and rate them:
+
+chill - For casual chat
+roast_mode - For Discord banter
+storyteller - For podcast episodes
+gaming_rage - For DbD rants
+
+If you only use 1-2, delete the others and simplify the UI. No point having 11 presets if you never touch them.
+
+10. CHAOS ENGINE - IS IT HELPING?
+You said "unsure" which means it's probably not noticeable.
+ADD: A visual indicator in your UI:
+typescript// Show current chaos level
+<div className="chaos-meter">
+  Chaos Level: {chaosLevel}% 
+  {chaosLevel > 70 && <span>🔥 Nicky is UNHINGED right now</span>}
+</div>
+If you still can't tell the difference, reduce or remove the chaos engine. It might be adding randomness that's making personality LESS consistent (your main complaint).
+
+🎯 YOUR PERSONALIZED ACTION PLAN
+Based on everything you said, here's the order to tackle this:
+Week 1: Fix Personality (Your #1 Complaint)
+
+✅ Update system prompt with new structure (focus on variety, less "one track mind")
+✅ Add debug mode to see which memories are retrieved
+✅ Test if personality feels more "on brand"
+
+Week 2: Fix Memory System (Currently Broken)
+
+✅ Run duplicate detection query
+✅ Add "Find Duplicates" API endpoint & UI button
+✅ Improve memory search relevance scoring
+✅ Test memory retrieval with common questions
+
+Week 3: Improve Voice & Content
+
+✅ Update ElevenLabs settings for better quality
+✅ Change auto-voice to only short responses in stream mode
+✅ Replace broad content collection with targeted DbD sources
+✅ Add content review queue UI
+
+Week 4: Polish Discord Bot
+
+✅ Implement smarter proactive messaging (context-aware)
+✅ Test in your Discord server
+✅ Adjust message frequency based on results
+
+Ongoing: UI Improvements
+
+✅ Build memory management panel (use template above)
+✅ Add memory analytics dashboard
+✅ Create protected facts view
+
+
+🔧 QUICK WINS YOU CAN DO RIGHT NOW
+1. Turn off auto-voice in podcast mode (you said you prefer manual anyway):
+typescriptif (mode === 'PODCAST') {
+  voiceOutput: false
+}
+2. Reduce Discord bot message frequency if it feels spammy:
+typescriptconst DAILY_LIMIT = 3; // Was 2-3, try exactly 3
+const MIN_MINUTES_BETWEEN_MESSAGES = 45; // Add cooldown
+3. Add this to your memory search to prioritize recent, important memories:
+sqlORDER BY 
+  (m.importance * 0.7) + 
+  (EXTRACT(EPOCH FROM (NOW() - m.created_at)) / 86400 * -0.3) DESC
+4. Simplify personality presets - delete ones you never use, keep 3-4 favorites.
