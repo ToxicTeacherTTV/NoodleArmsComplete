@@ -83,6 +83,11 @@ Preferred communication style: Simple, everyday language.
   - **Multi-Entity Support**: Each memory can link to multiple people, places, and events
   - **Automatic Extraction**: AI extracts all entities from memory content
   - **Deduplication**: Prevents duplicate entity creation through disambiguation
+- **UI Enhancements** (Oct 2025):
+  - **Enhanced Memory Panel**: Category filter, importance slider (0-5), source filter, Find Duplicates button, active filter count badge
+  - **Memory Debug Panel**: Debug mode toggle, query tracking, retrieved memories display with relevance scores, collapsible entries
+  - **Memory Analytics Dashboard**: Category distribution chart, importance histogram, source breakdown, 7-day growth graph, top 5 most-retrieved memories
+  - **Protected Facts Manager**: Full CRUD interface for high-importance memories
 
 ### Communication Flow
 1. Voice Input (browser speech recognition)
@@ -96,6 +101,7 @@ Preferred communication style: Simple, everyday language.
 ### Core Components
 - Dashboard, Chat Panel, Control Panel, PersonalitySurgePanel, Discord Management Panel
 - Profile, Memory, Document Panels, Voice Visualizer
+- **Memory UI Suite**: Enhanced Memory Panel (filters, search), Memory Debug Panel (retrieval tracking), Memory Analytics Dashboard (charts & insights), Protected Facts Manager
 
 ## External Dependencies
 
