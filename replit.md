@@ -68,6 +68,16 @@ Preferred communication style: Simple, everyday language.
 - **Importance Scoring**: Weighted entries
 - **Memory Consolidation**: AI-powered optimization
 - **Search**: Keyword-based retrieval
+- **Deduplication System**: Atomic UPSERT-based duplicate prevention (Oct 2025)
+  - **Canonical Key Matching**: Normalizes content for duplicate detection
+  - **Unique Database Constraint**: (profileId, canonicalKey) prevents race conditions
+  - **Comprehensive Metadata Merging**: Preserves richest data on conflicts
+    - Counters: confidence +10 (max 100), supportCount +1
+    - Metadata: Uses COALESCE to preserve existing values when new ones are null
+    - Arrays: Merges and deduplicates keywords/relationships
+    - Quality fields: Preserves contradictionGroupId, temporalContext, qualityScore, clusterId
+    - Temporal: Preserves firstSeenAt, updates lastSeenAt/updatedAt
+  - **Cleanup Tooling**: Removed 39 duplicates (1544 → 1505 unique memories)
 - **Entity Linking System**: Many-to-many relationships between memories and entities
   - **Junction Tables**: memory_people_links, memory_place_links, memory_event_links
   - **Multi-Entity Support**: Each memory can link to multiple people, places, and events
