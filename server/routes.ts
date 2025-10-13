@@ -28,6 +28,7 @@ import multer from "multer";
 import { z } from "zod";
 import { promises as fs } from "fs";
 import path from "path";
+import { prometheusMetrics } from "./services/prometheusMetrics.js";
 
 // CRITICAL SECURITY: Add file size limits and type validation to prevent DoS attacks
 const SUPPORTED_FILE_TYPES = [
@@ -102,6 +103,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timestamp: new Date().toISOString(),
         error: 'Internal server error'
       });
+    }
+  });
+
+  // Prometheus metrics endpoint
+  app.get('/metrics', async (req, res) => {
+    try {
+      res.set('Content-Type', prometheusMetrics.register.contentType);
+      const metrics = await prometheusMetrics.getMetrics();
+      res.send(metrics);
+    } catch (error) {
+      console.error('Error generating metrics:', error);
+      res.status(500).send('Error generating metrics');
     }
   });
 
