@@ -1,0 +1,281 @@
+Got it. Reframing for your AI architect, with your actual constraints baked in: **Gemini as the free default, Claude only sometimes; single user; VM-hosted; dev on Replit.** No fluff—just the system you can build and run without getting nickeled to death.
+
+# Architecture Review & Upgrade Plan (Single-User, VM, Replit)
+
+## 0) Context & Non-Goals
+
+* **Context:** One operator (you), low concurrency, **Gemini = default**, **Claude = optional/fallback**. You develop on **Replit**, deploy to a **single VM**.
+* **Non-Goals:** Multi-tenant auth, complex RBAC, enterprise SSO. Keep it lean, observable, and controllable live.
+
+---
+
+## 1) Target System Topology (clean and small)
+
+**Process split (3 services, 2 if you merge FE+API):**
+
+1. **Web App (React + Vite, TanStack Query)**
+
+   * Purpose: Control plane + operator UI (your on-air knobs).
+   * Deploy: Static behind the same reverse proxy or embedded via Express static.
+2. **API/Brain (Node/Express, TypeScript)**
+
+   * Endpoints: `/chat`, `/memory/*`, `/discord/*`, `/tts/*`, `/intelligence/*`
+   * Internal modules: `ModelRouter`, `MemoryEngine`, `DecisionTrace`, `VarietyController`, `DiscordAgent`
+3. **Postgres (+ pgvector)**
+
+   * Drizzle for schema & migrations.
+   * Single DB, one role. You’re the only user; keep perms tight.
+
+**Edge:**
+
+* **Reverse proxy:** Caddy or Traefik (TLS, gzip, basic rate cap).
+* **Secrets:** `.env` on VM (not in repo). Replit uses its Secrets panel during dev.
+
+**Why this shape works for you:** everything stays debuggable, single binary deploy (API + static FE), DB external but simple, one proxy to rule it.
+
+---
+
+## 2) Model Routing (Gemini-first with Claude “spikes”)
+
+**Design goal:** predictable cost and predictable behavior.
+
+```ts
+// pseudo
+type LLMTask = "chat"|"rewrite"|"fact_extract"|"contradiction"|"long_form_plan";
+
+export async function routeLLM(task: LLMTask, input: Payload){
+  const primary = "gemini-2.0-flash"; // free default
+  const spike   = "claude-3.7" // only when needed
+
+  const preferClaude = (task === "contradiction" || task === "long_form_plan");
+  const model = preferClaude && process.env.USE_CLAUDE === "1"
+    ? spike
+    : primary;
+
+  return callModel(model, input, {temperature: task === "chat" ? 0.8 : 0.2});
+}
+```
+
+* **Default Gemini** for chat, rewrites, short reasoning, variety flips.
+* **Claude on demand** for: contradiction resolution, complex “long plan” drafts, or when you flip a **“Use Claude”** toggle in the UI.
+* Add a per-day **hard cap counter** for Claude calls (single user = trivial integer counter in Redis or DB).
+
+---
+
+## 3) Memory Engine v2 (simple, durable, fast)
+
+**Storage:** Postgres + **pgvector**.
+**Tables:**
+
+* `memories(id, subject, type, text, ts, importance, ttl, deleted_at)`
+* `memory_embeddings(memory_id, embedding vector)`
+* `memory_links(memory_id, related_id, weight)`
+* `facts(id, source, key, value, ts)` (for transcript facts / body count)
+* `discord_topic_triggers(id, topic, pattern, prob, cooldown_s)`
+
+**Operations:**
+
+* **Write:** Normalize → embed → upsert by (subject, hash(text)).
+* **Retrieve:** Hybrid search (BM25-ish keyword via `tsvector`) **+** vector ANN; weight by `importance`, `recency`, and `subject match`.
+* **Dedupe/Merge:** Local Jaccard/Levenshtein + embedding cosine > threshold ⇒ consolidate into the older `id`, bump `importance`.
+* **Contradiction pass (optional/Claude):** Only when a new memory conflicts by entity keys; store a `DecisionTrace` record.
+
+**TTL & Delete:** You’re single-user, so keep everything by default; add `ttl` for junk. Implement **hard delete** that also purges embeddings.
+
+---
+
+## 4) Kill the “Black Box”: DecisionTrace + Explainability
+
+**Every response** should carry a developer-visible “why.”
+
+```ts
+export type DecisionTrace = {
+  requestId: string;
+  topMemories: Array<{id:string, score:number, why:string}>;
+  knobs: {wiseguy:number; unhinged:number; classy:number; insultGuard:number};
+  modelChosen: string;
+  rulesFired: string[];         // e.g., "topic:Twins", "discord:cooldown_ok"
+  safety: {redactions:number};
+  cost: {inputTokens:number; outputTokens:number; provider:string};
+};
+```
+
+* Log it (Pino JSON) and optionally return it when `?trace=1`.
+* In the UI, add a collapsible **“Trace”** pane while you’re live.
+
+---
+
+## 5) Variety Controller = a few explicit knobs
+
+Backed by URL-safe state (**you can set it during a stream**):
+
+```ts
+type Flavor = { wiseguy:0..1; unhinged:0..1; classy:0..1; roastLevel:0..1; pg13:boolean };
+```
+
+* Convert knobs → prompt preamble deltas (short, deterministic).
+* Store last used knobs per “mode” (podcast/discord/tts) in DB.
+
+---
+
+## 6) Discord Triggers (won’t get you muted)
+
+For each `discord_topic_triggers` row:
+
+* Enforce **per-channel cooldown** and **daily max replies**.
+* Gate on `prob` AND a cheap backoff if last 3 replies <threshold engagement.
+* Operator toggle “Behave” switch in the UI (global mute without shutting bot down).
+
+---
+
+## 7) Observability (enough for one operator)
+
+* **Logs:** Pino JSON with `requestId`, `route`, `model`, `latencyMs`, `tokens`.
+* **Error tracking:** Sentry (DSN via env).
+* **Metrics:** Tiny Prometheus endpoint `/metrics`:
+
+  * `llm_calls_total{provider,model}`
+  * `llm_tokens_total{direction}`
+  * `discord_messages_total{type}`
+  * `http_requests_duration_ms_bucket{route}`
+
+You don’t need full OpenTelemetry; keep it light.
+
+---
+
+## 8) Security Posture (single user, still sane)
+
+* **Auth:** one **operator token** (long random) sent as `Authorization: Bearer …`.
+* **CORS:** exact origin; no `*` with creds.
+* **Cookies:** avoid unless you need sessions; bearer is fine for you.
+* **Secrets:** `.env` on VM; Replit Secrets in dev; never in git.
+* **PII:** if you ever store Discord user text, tag by `subject = 'discord:<id>'` to enable hard delete.
+
+---
+
+## 9) Dev → Deploy (Replit-friendly, VM-simple)
+
+**Local/Replit dev**
+
+* Run Postgres in the VM (or Neon) and point Replit to it with a dev user.
+* `npm run dev:api`, `npm run dev:web` (Vite proxy to `/api`).
+* Drizzle CLI: `db:generate`, `db:migrate`, `db:seed`.
+
+**Build & Ship**
+
+* **Docker** two stages (api builds FE and serves static):
+
+  * Stage 1: `node:20` build.
+  * Stage 2: `gcr.io/distroless/nodejs20` run with `node server/dist/index.js`.
+* **Caddy** handles TLS, redirects, gzip.
+* **GitHub Actions:** typecheck + build image → push to your VM via SSH or container registry pull + `docker compose up -d`.
+
+**docker-compose.yml** (sketch)
+
+```yaml
+services:
+  api:
+    image: toxic/noodlearms:latest
+    env_file: .env
+    depends_on: [db]
+  db:
+    image: pgvector/pgvector:pg16
+    volumes: [dbdata:/var/lib/postgresql/data]
+    environment: [POSTGRES_PASSWORD=...]
+  caddy:
+    image: caddy:alpine
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile]
+    ports: ["80:80","443:443"]
+    depends_on: [api]
+volumes: { dbdata: {} }
+```
+
+---
+
+## 10) Testing that matters (small, surgical)
+
+* **Unit:**
+
+  * memory dedupe/merge thresholds
+  * retrieval ranking weights
+  * variety knob → prompt preamble
+* **Contract:** API zod schemas -> generate OpenAPI -> smoke with Bruno/Postman.
+* **E2E (happy path):** “Discord msg → routed LLM → memory write → trace recorded.”
+* **No flaky screenshot tests, no browser farm.** Keep it fast.
+
+---
+
+## 11) Minimal Wallet/Rate Protections (single user)
+
+* **Limiter:** global sliding window (e.g., 60 LLM calls/5m) and **Claude daily cap** (e.g., 30 calls/day).
+* **Panic switch:** `PANIC_MODE=1` → route everything to a local “sorry I’m off-budget” template.
+* **Token accounting:** increment counters per call; show totals in the UI footer.
+
+---
+
+## 12) Docs that future-you will bless
+
+* `README` quickstart (5 commands, copy-paste)
+* `.env.example` with comments
+* `ARCHITECTURE.md` (this outline)
+* `API.md` (OpenAPI link)
+* `OPERATIONS.md` (backup/restore DB, rotate operator token, renew TLS)
+
+---
+
+## 13) 7-Day Concrete Backlog (do in order)
+
+1. **pgvector & retrieval hybrid** (schema + migration + embed write path).
+2. **DecisionTrace** object + `?trace=1` plumbing, log it.
+3. **Variety knobs** (UI + prompt preamble adapter).
+4. **Claude cap + panic switch** (two env flags + counters).
+5. **Discord cooldowns** (per-channel, per-day; probabilistic gate).
+6. **Pino + Sentry + /metrics** endpoint.
+7. **Dockerize + Caddy** and deploy on the VM; add GH Action for build.
+
+---
+
+## 14) Small Code Patterns to Steal
+
+**Spend/Cap guard:**
+
+```ts
+export const spend = { claudeToday: 0, lastReset: Date.now() };
+export function canUseClaude(maxPerDay=30){
+  const now = Date.now();
+  if (now - spend.lastReset > 86_400_000){ spend.claudeToday = 0; spend.lastReset = now; }
+  return spend.claudeToday < maxPerDay && process.env.USE_CLAUDE==="1" && !process.env.PANIC_MODE;
+}
+export function noteClaudeUse(){ spend.claudeToday++; }
+```
+
+**Retrieval rank (hybrid weight):**
+
+```ts
+score = 0.55*cosine + 0.25*bm25 + 0.10*recencyBoost + 0.10*importanceBoost;
+```
+
+**Prompt preamble from knobs:**
+
+```ts
+function flavorPreamble(f: Flavor){
+  const bits = [];
+  if (f.wiseguy>0.5) bits.push("mob-style sarcasm dialed up");
+  if (f.unhinged>0.5) bits.push("unpredictable outbursts allowed");
+  if (f.classy>0.5) bits.push("patronizing, theatrical cadence");
+  if (f.pg13) bits.push("reduce profanity; insinuation ok");
+  return `Tone directives: ${bits.join("; ")}. Keep sentences short for TTS.`;
+}
+```
+
+---
+
+## TL;DR for the architect
+
+* Keep the system **small but observable**: API(+static FE) + Postgres/pgvector + Caddy.
+* **Gemini by default**, **Claude only on switch** (contradictions/plans) with a **hard daily cap**.
+* Implement **DecisionTrace** and **live knobs** so you can **steer on air** without guessing what the “brain” did.
+* Add **pgvector hybrid retrieval**, **Discord cooldowns**, and **panic mode**.
+* Dockerize, one-click deploy to the VM, Replit stays your dev pad.
+
+If you want, toss me the current `MemoryEngine`/`ModelRouter`/`DiscordAgent` files and I’ll mark them up to this spec—ruthless, tight, and stage-ready.
