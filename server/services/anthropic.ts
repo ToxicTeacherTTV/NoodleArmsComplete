@@ -9,6 +9,7 @@ import { storyCompletionTracker } from './storyCompletionTracker.js';
 import { intrusiveThoughts } from './intrusiveThoughts.js';
 import { storage } from '../storage.js';
 import { z } from 'zod';
+import { prometheusMetrics } from './prometheusMetrics.js';
 
 /*
 <important_code_snippet_instructions>
@@ -926,6 +927,7 @@ ${coreIdentity}`;
       
       enhancedCoreIdentity += `\n\n${chaosModifier}\n\n${varietyPrompt}`;
 
+      const apiCallStart = Date.now();
       const response = await anthropic.messages.create({
         // "claude-sonnet-4-20250514"
         model: DEFAULT_MODEL_STR,
@@ -938,6 +940,17 @@ ${coreIdentity}`;
             content: fullPrompt
           }
         ],
+      });
+      const apiCallDuration = (Date.now() - apiCallStart) / 1000;
+
+      // 📊 Track metrics
+      prometheusMetrics.trackLLMCall({
+        provider: 'claude',
+        model: DEFAULT_MODEL_STR,
+        type: 'chat',
+        inputTokens: response.usage?.input_tokens || 0,
+        outputTokens: response.usage?.output_tokens || 0,
+        durationSeconds: apiCallDuration
       });
 
       const processingTime = Date.now() - startTime;
@@ -988,6 +1001,17 @@ ${coreIdentity}`;
       // Classify error for appropriate handling
       const errorInfo = this.classifyError(error);
       console.log(`🔄 Error classified as: ${errorInfo.type} (retryable: ${errorInfo.retryable})`);
+      
+      // 📊 Track error
+      prometheusMetrics.trackLLMCall({
+        provider: 'claude',
+        model: DEFAULT_MODEL_STR,
+        type: 'chat',
+        inputTokens: 0,
+        outputTokens: 0,
+        durationSeconds: 0,
+        error: errorInfo.type
+      });
       
       // Attempt retry for retryable errors
       if (errorInfo.retryable && errorInfo.retryCount < 3) {
