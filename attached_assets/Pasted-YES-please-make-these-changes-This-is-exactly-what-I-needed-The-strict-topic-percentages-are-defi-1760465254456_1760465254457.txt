@@ -1,0 +1,38 @@
+YES, please make these changes! This is exactly what I needed. The strict topic percentages are definitely the problem. A few questions before I implement:
+Implementation Questions:
+
+Can you make the actual code changes for me? I'd like you to:
+
+Update the coreIdentity in client/src/lib/constants.ts with the new version you provided
+Show me the exact before/after so I can verify what changed
+Make sure I'm not breaking anything else that references this
+
+
+Chaos Engine - Let's fix this now too. You mentioned I'm at 100% FULL_PSYCHO mode which is making things inconsistent. Can you:
+
+Show me where the chaos level is set (what file?)
+Give me the exact code to set it to 30-50% instead
+Or better yet, show me how to DISABLE chaos entirely while I test the personality changes
+Explain how to re-enable it later if I want it
+
+
+Testing workflow: After you make these changes, what's my process?
+
+Do I need to restart the Replit server?
+Will existing conversations be affected, or only new ones?
+Should I clear any caches or reset anything?
+
+
+The "ALWAYS ANSWER THE QUESTION" rule you added - I LOVE this. That's exactly what was missing. Will this work with the personality presets, or do I need to adjust those too?
+Memory injection - You said memories come AFTER the personality prompt. Is there a way to LIMIT how many memories get injected so they don't bloat the prompt? Like, can I set it to only inject the top 5-10 most relevant memories?
+
+What I want you to do:
+Please provide me with:
+
+✅ The exact file changes (show me the full updated sections)
+✅ Where to find and adjust the chaos engine settings
+✅ A checklist of steps to implement and test
+✅ The 5 test prompts you listed so I can verify it's working
+
+Once you give me these, I'll implement immediately and report back with results. This is my #1 priority fix.
+One more thing: Should I adjust the personality presets at all, or will they work fine with the new base personality? I'm mainly using this for podcast/streaming, so I care most about those modes.

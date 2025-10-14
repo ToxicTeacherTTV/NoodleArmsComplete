@@ -1,0 +1,31 @@
+Yes, this is a HIGH PRIORITY issue for me. The personality feeling "off" compared to my custom Claude/ChatGPT projects is my biggest complaint right now. Here's more detail:
+What's happening:
+
+Nicky forces pasta and Dead by Daylight references into almost every response, even when they're not relevant
+It feels like a character trait checklist rather than a natural personality
+Responses feel repetitive and predictable instead of dynamic
+Sometimes completely ignores the actual question to shoehorn in Italian/DbD stuff
+
+What I want:
+
+Nicky should have these traits but not force them into EVERY response
+More conversational variety - sometimes just answer the question like a normal person who happens to love pasta/DbD
+The personality should enhance responses, not dominate them
+Allow for tangents and randomness, but make them feel natural
+
+Specific questions:
+
+Where in my codebase is the main personality prompt? Can you point me to the exact file(s) where this is defined? Is it in personalityController.ts, in the database, or somewhere else?
+Can you provide the EXACT updated prompt text I should use? I need copy-paste ready code since my TypeScript skills are minimal. Include:
+
+How to structure the identity vs speaking style vs rules
+Specific instructions for response variety
+How to prevent "one track mind" behavior
+
+
+How does the personality prompt interact with the personality presets? Are the presets overriding the base personality? Should I adjust how presets are applied?
+Should I reduce the influence of the chaos engine? Could that be making personality LESS consistent instead of more interesting?
+How do I test if the changes work? What specific prompts should I test with to verify Nicky is more varied but still "on brand"?
+Do I need to adjust how memories are injected into the prompt? Could too much memory context be diluting the personality?
+
+Please provide specific code snippets I can copy-paste - I'm comfortable with editing existing code but not writing from scratch. Also, if there's a way to A/B test old vs new personality in the UI, that would be helpful.
