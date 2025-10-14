@@ -1555,9 +1555,9 @@ Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
         console.log('⚠️ Anthropic credits low, falling back to Gemini for pattern extraction');
         
         try {
-          // Fallback to Gemini
+          // Fallback to Gemini Pro (NEVER Flash - pattern extraction affects core identity)
           const geminiResponse = await geminiService['ai'].models.generateContent({
-            model: 'gemini-2.5-flash', // Using flash for faster responses
+            model: 'gemini-2.5-pro', // 🚫 NEVER Flash - corrupts personality patterns
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: {
               maxOutputTokens: 800,
