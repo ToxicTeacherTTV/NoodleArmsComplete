@@ -41,6 +41,25 @@ Preferred communication style: Simple, everyday language.
 ### AI Integration
 - **Primary AI Service**: Anthropic's Claude API (claude-sonnet-4-5-20250929)
 - **Fallback Service**: Google Gemini API (automatic fallback)
+
+#### 🚫 Model Usage Policy
+**Approved Models:**
+- **Primary AI**: Claude Sonnet 4.5 (`claude-sonnet-4-5-20250929`)
+- **Fallback AI**: Gemini Pro (`gemini-2.5-pro`)
+
+**BANNED Models:**
+- ❌ ALL Gemini Flash variants (1.5-flash, 2.0-flash, 2.5-flash, flash-exp)
+- **Reason**: Flash models hallucinate facts and create false memories (269 corrupted memories in Oct 2025 incident)
+- **Enforcement**: Runtime checks in geminiService constructor will throw errors if Flash is used
+
+**Enforcement Mechanisms:**
+1. **Constructor-level override**: geminiService blocks any Flash model at runtime
+2. **APPROVED_MODELS constant**: Whitelist of allowed models
+3. **validateModel() guards**: 12 validation points across all Gemini methods
+4. **Stack trace logging**: Any Flash attempt logs full call stack for debugging
+
+Last updated: October 14, 2025
+
 - **Memory System**: Enhanced RAG with intelligent retrieval
   - **Recency Bias**: Recent conversation context prioritized (exponential decay)
   - **Thread Awareness**: Prevents repetitive context from same conversation
