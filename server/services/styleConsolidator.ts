@@ -105,12 +105,12 @@ Format the output as a clear, organized list of personality traits and behaviors
         console.log('⚠️ Anthropic credits low, falling back to Gemini for consolidation');
         
         try {
-          // Fallback to Gemini
+          // Fallback to Gemini Pro (NEVER Flash - pattern consolidation affects core identity)
           const systemPrompt = 'You are a personality analysis expert. Extract key behavioral patterns and personality traits from training examples.';
           const fullPrompt = `${systemPrompt}\n\n${prompt}`;
           
           const geminiResponse = await geminiService['ai'].models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.5-pro', // 🚫 NEVER Flash - corrupts personality consolidation
             contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
             config: {
               maxOutputTokens: 2000,
