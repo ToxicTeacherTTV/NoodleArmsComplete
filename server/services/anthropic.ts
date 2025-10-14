@@ -1033,7 +1033,13 @@ ${coreIdentity}`;
       
       // Fallback to Gemini for credits, rate limits, or after retry exhaustion
       if ((errorInfo.type === 'CREDITS_EXHAUSTED' || errorInfo.type === 'RATE_LIMIT' || errorInfo.retryCount >= 3) && process.env.GEMINI_API_KEY) {
-        console.warn(`🔄 Falling back to Gemini due to ${errorInfo.type}...`);
+        console.error(`\n${'='.repeat(80)}`);
+        console.error(`🚨 ANTHROPIC CREDITS EXHAUSTED - FALLING BACK TO GEMINI PRO`);
+        console.error(`   Error Type: ${errorInfo.type}`);
+        console.error(`   ⚠️  WARNING: This fallback uses Gemini Pro (NOT Flash - Flash is banned)`);
+        console.error(`   💡 TIP: Add more Anthropic credits to restore full quality`);
+        console.error(`${'='.repeat(80)}\n`);
+        console.warn(`🔄 Falling back to Gemini Pro...`);
         
         try {
           const chaosModifier = this.chaosEngine.getPersonalityModifier();

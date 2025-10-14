@@ -530,7 +530,7 @@ ${coreIdentity}`;
 
       // Try multiple times with different models to handle server overload
       let response;
-      const models = ["gemini-2.5-flash", "gemini-2.5-pro"]; // Try flash first (less busy)
+      const models = ["gemini-2.5-pro"]; // ❌ NEVER USE FLASH - it hallucinates and gives wrong answers
       
       for (let attempt = 0; attempt < 3; attempt++) {
         for (const modelName of models) {
