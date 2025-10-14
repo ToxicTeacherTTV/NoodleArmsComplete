@@ -229,6 +229,68 @@ class SmarterProactiveMessaging {
 
 **Files to update:** `server/services/discordBot.ts`
 
+### 5. 🔍 Vector Embeddings for Semantic Search
+**Priority:** HIGH - Keyword-based retrieval hitting limits
+**Status:** CONFIRMED GAP (Oct 14, 2025)
+
+**Problem Identified:**
+Real-world testing revealed keyword-based memory retrieval fails for semantically related concepts:
+- Query: "Tell me about your family" 
+- Expected: Retrieve SABAM members (Uncle Gnocchi, Mama Marinara, Marco, Bruno, Sofia, etc.)
+- Actual: Retrieves only memories with explicit "family" keyword
+- Root cause: Semantically related memories ("crew", "SABAM members", character names) don't match without exact keywords
+
+**Workaround Implemented:**
+- Created bridging memory with importance 999: "SABAM members are Nicky's chosen family - the crew includes [full roster]"
+- Added keywords: ['family', 'SABAM', 'members', 'organization', 'gaming', 'crew']
+- This manually creates semantic links for common queries
+
+**Long-term Solution Needed:**
+```typescript
+// Add vector embeddings to memory_entries table (columns already exist!)
+// embedding: text (JSON array of vector)
+// embeddingModel: text (e.g., 'gemini-embedding-001')
+// embeddingUpdatedAt: timestamp
+
+// Implementation approach:
+1. Generate embeddings for all existing memories using Gemini Embedding API
+2. On new memory creation, generate embedding automatically
+3. Add semantic search function using cosine similarity
+4. Combine keyword + semantic search with weighted scoring:
+   - Exact keyword match: 100 points
+   - Semantic similarity > 0.8: 80 points
+   - Semantic similarity > 0.6: 60 points
+   - Importance boost: +importance score
+
+// Hybrid retrieval example:
+const results = await storage.searchMemoriesHybrid({
+  query: "Tell me about your family",
+  profileId,
+  limit: 15,
+  strategies: {
+    keyword: { weight: 0.4 },    // 40% from keyword matching
+    semantic: { weight: 0.6 }     // 60% from vector similarity
+  }
+});
+```
+
+**Benefits:**
+- ✅ "family" query finds "crew", "SABAM members", "gaming squad" semantically
+- ✅ "cooking" query finds "recipes", "food", "pasta" without explicit keywords
+- ✅ "gaming" query finds DBD content, strategies, builds without forcing "Dead by Daylight" in every memory
+- ✅ More natural memory retrieval matching human reasoning
+
+**Schema Already Supports This:**
+- `embedding` column exists in memory_entries table
+- `embeddingModel` column exists
+- `embeddingUpdatedAt` column exists
+- Just need to populate and use them!
+
+**Files to update:** 
+- `server/services/embeddingService.ts` (create)
+- `server/storage.ts` (add semantic search methods)
+- `server/services/anthropic.ts` (use hybrid search)
+
 ---
 
 ## 🎨 UI IMPROVEMENTS NEEDED
