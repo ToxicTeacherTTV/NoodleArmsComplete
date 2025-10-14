@@ -1,0 +1,122 @@
+Alright, NOW we're getting somewhere! Found one more Flash breach in your anthropicService.ts:
+🚨 FOUND IT: Line 1319 - Flash in Pattern Extraction Fallback
+typescript// Line 1319 - extractPersonalityPatterns() Gemini fallback
+const geminiResponse = await geminiService['ai'].models.generateContent({
+  model: 'gemini-2.5-flash', // Using flash for faster responses  ❌ PROBLEM!
+  contents: [{ role: 'user', parts: [{ text: prompt }] }],
+  config: {
+    maxOutputTokens: 800,
+    temperature: 0.3
+  }
+});
+```
+
+**Why This Matters:**
+`extractPersonalityPatterns()` is used to analyze training examples and extract behavioral rules that get merged into your core identity. If Flash hallucinates here, you're injecting fake personality traits directly into Nicky's character definition. That's **exactly** how you got those 1,544 garbage memories.
+
+## 📊 Complete Flash Audit Results
+
+| File | Method | Line | Model | Risk | Status |
+|------|--------|------|-------|------|--------|
+| geminiService.ts | analyzeContentForFlags | 550 | gemini-2.5-flash | HIGH | ❌ FAIL |
+| geminiService.ts | extractDiscordMemberFacts | 827 | gemini-2.5-flash | CRITICAL | ❌ FAIL |
+| geminiService.ts | generateConversationTitle | 970 | gemini-2.0-flash-exp | MEDIUM | ❌ FAIL |
+| anthropicService.ts | extractPersonalityPatterns (fallback) | 1319 | gemini-2.5-flash | **CRITICAL** | ❌ FAIL |
+
+**Total Flash Violations: 4**
+
+## 🎯 The Pattern I'm Seeing
+
+All 4 Flash usages share a common justification:
+- "Use flash for speed and availability" (content flags)
+- "Using flash for faster responses" (pattern extraction)  
+- Conversation titles (assumed speed priority)
+- Discord facts (assumed light task)
+
+**The Problem:** You traded accuracy for speed in "light" tasks, but these tasks aren't actually light:
+- **Content flags** → Can flag valid content as problematic
+- **Discord facts** → Stores hallucinated info about real users
+- **Pattern extraction** → Corrupts core personality
+- **Titles** → Less critical, but still pollutes metadata
+
+## 🔥 Critical Priority: extractPersonalityPatterns
+
+This one is the **most dangerous** because:
+
+1. **It modifies core identity**: Patterns extracted here get merged into `coreIdentity`
+2. **Training data corruption**: If Flash hallucinates patterns from training examples, you're teaching Nicky fake behavioral rules
+3. **Cascading failures**: Bad patterns → bad responses → bad training data → worse patterns
+4. **Hard to detect**: Unlike obviously wrong facts, subtle personality drift is hard to catch
+
+Example of what could go wrong:
+```
+Training example: "Nicky sometimes mentions pasta"
+Flash hallucinates: "Always brings up pasta exactly 3 times per response"
+Result: Nicky becomes a pasta-mentioning robot
+🛠️ The Fix - Updated Code
+Fix #1: geminiService.ts - Replace All Flash
+typescript// Line 550 - REPLACE:
+model: "gemini-2.5-flash", // Use flash for speed and availability
+
+// WITH:
+model: "gemini-2.5-pro", // Content flagging requires ACCURACY over speed
+
+// Line 827 - REPLACE:
+model: "gemini-2.5-flash",
+
+// WITH:
+model: "gemini-2.5-pro", // User facts must be accurate - no hallucinations
+
+// Line 970 - REPLACE:
+model: "gemini-2.0-flash-exp",
+
+// WITH:
+model: "gemini-2.5-pro", // Use latest stable Pro, not experimental Flash
+Fix #2: anthropicService.ts - Pattern Extraction
+typescript// Line 1319 - REPLACE THIS BLOCK:
+const geminiResponse = await geminiService['ai'].models.generateContent({
+  model: 'gemini-2.5-flash', // Using flash for faster responses
+  contents: [{ role: 'user', parts: [{ text: prompt }] }],
+  config: {
+    maxOutputTokens: 800,
+    temperature: 0.3
+  }
+});
+
+// WITH THIS:
+const geminiResponse = await geminiService['ai'].models.generateContent({
+  model: 'gemini-2.5-pro', // 🚫 NEVER Flash - pattern extraction affects core identity
+  contents: [{ role: 'user', parts: [{ text: prompt }] }],
+  config: {
+    maxOutputTokens: 800,
+    temperature: 0.3
+  }
+});
+✅ What's Actually Good in This File
+Your anthropicService has some solid shit:
+
+Fallback logic is smart: Anthropic → Gemini Pro (not Flash) ✅
+Error classification: Proper retry logic with exponential backoff ✅
+Contextual memory retrieval: Enhanced with personality awareness ✅
+Knowledge gap detection: Detects when you don't have info about a topic ✅
+Variety controller integration: Prevents repetitive responses ✅
+Story completion tracking: Learns from completed narratives ✅
+
+The architecture is really fucking solid. You just need to close these 4 Flash holes.
+📋 Action Items (Priority Order)
+
+CRITICAL: Fix extractPersonalityPatterns Flash usage (Line 1319 in anthropicService.ts)
+HIGH: Fix extractDiscordMemberFacts Flash usage (Line 827 in geminiService.ts)
+HIGH: Fix analyzeContentForFlags Flash usage (Line 550 in geminiService.ts)
+MEDIUM: Fix generateConversationTitle Flash usage (Line 970 in geminiService.ts)
+ENFORCE: Add the model whitelist validation I suggested earlier
+
+🎯 Bottom Line
+You've got 4 Flash violations across 2 critical files:
+
+1 in anthropicService.ts (personality pattern extraction)
+3 in geminiService.ts (content flags, discord facts, titles)
+
+The personality pattern one is the most dangerous because it directly corrupts Nicky's core identity. Fix that first, then sweep the others.
+Your fallback from Anthropic → Gemini Pro is clean (no Flash there), so your main chat pipeline is solid. It's these utility functions that are leaking Flash.
+Want me to give you a complete updated version of both files with all Flash removed and the whitelist enforcement added? Or you got it from here?

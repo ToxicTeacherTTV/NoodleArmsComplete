@@ -1,6 +1,39 @@
 import { GoogleGenAI } from "@google/genai";
 import { contentFilter } from './contentFilter.js';
 
+/**
+ * 🚫 FLASH MODEL BAN ENFORCEMENT
+ * 
+ * **CRITICAL**: Flash models (gemini-*-flash, gemini-*-flash-exp) are PERMANENTLY BANNED.
+ * 
+ * **WHY**: Flash models caused catastrophic hallucinations:
+ * - 269 false memories corrupted the knowledge base
+ * - Extracted fake facts about real Discord users
+ * - Created fabricated character relationships and lore
+ * 
+ * **ENFORCEMENT**:
+ * 1. Only models in APPROVED_MODELS constant are allowed
+ * 2. validateModel() MUST be called before every generateContent() call
+ * 3. Any attempt to use non-approved models will throw an error
+ * 
+ * **DO THIS** ✅:
+ * ```typescript
+ * const model = APPROVED_MODELS.PRIMARY;
+ * this.validateModel(model, 'methodName');
+ * const response = await this.ai.models.generateContent({ model, ... });
+ * ```
+ * 
+ * **NEVER DO THIS** ❌:
+ * ```typescript
+ * const response = await this.ai.models.generateContent({ 
+ *   model: "gemini-2.5-flash", // BANNED - Will corrupt data!
+ *   ...
+ * });
+ * ```
+ * 
+ * If you need to add a new approved model, update APPROVED_MODELS and document why.
+ */
+
 const APPROVED_MODELS = {
   PRIMARY: "gemini-2.5-pro",
 } as const;
@@ -206,8 +239,11 @@ Example format:
 ]`;
 
     return await this.retryWithBackoff(async () => {
+      const model = APPROVED_MODELS.PRIMARY;
+      this.validateModel(model, 'extractStoriesFromDocument');
+      
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -303,8 +339,11 @@ Return as JSON array.`;
 
     try {
       return await this.retryWithBackoff(async () => {
+        const model = APPROVED_MODELS.PRIMARY;
+        this.validateModel(model, 'extractAtomicFactsFromStory');
+        
         const response = await this.ai.models.generateContent({
-          model: "gemini-2.5-pro",
+          model,
           config: {
             responseMimeType: "application/json",
             responseSchema: {
@@ -406,8 +445,11 @@ Example format:
 ]`;
 
     try {
+      const model = APPROVED_MODELS.PRIMARY;
+      this.validateModel(model, 'extractFactsFromDocument');
+      
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -466,8 +508,11 @@ ${JSON.stringify(facts, null, 2)}
 Return the optimized facts as a JSON array. Keep the most important and unique information while eliminating redundancy.`;
 
     try {
+      const model = APPROVED_MODELS.PRIMARY;
+      this.validateModel(model, 'deduplicateAndOptimizeFacts');
+      
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -554,8 +599,11 @@ Response format:
 ]`;
 
     try {
+      const model = APPROVED_MODELS.PRIMARY;
+      this.validateModel(model, 'consolidateAndOptimizeMemories');
+      
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -858,8 +906,11 @@ Example format:
 ]`;
 
     try {
+      const model = APPROVED_MODELS.PRIMARY;
+      this.validateModel(model, 'extractPodcastSegments');
+      
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
