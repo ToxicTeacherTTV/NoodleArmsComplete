@@ -49,6 +49,24 @@ class GeminiService {
     this.ai = new GoogleGenAI({ 
       apiKey: process.env.GEMINI_API_KEY || "" 
     });
+    
+    // 🚫 CONSTRUCTOR-LEVEL FLASH BAN: Override generateContent to block Flash at runtime
+    const originalGenerate = this.ai.models.generateContent.bind(this.ai.models);
+    this.ai.models.generateContent = ((config: any) => {
+      if (config.model && /flash/i.test(config.model)) {
+        const error = new Error(
+          `🚫 FLASH MODEL BLOCKED: "${config.model}" is permanently banned.\n` +
+          `Reason: Flash models hallucinate facts and corrupt memory.\n` +
+          `Only gemini-2.5-pro is approved for use.\n` +
+          `Stack trace will show where this was called from.`
+        );
+        console.error(error.message);
+        throw error;
+      }
+      return originalGenerate(config);
+    }) as typeof originalGenerate;
+    
+    console.log('✅ Gemini service initialized with Flash ban enforcement');
   }
 
   private validateModel(model: string, context: string): void {
