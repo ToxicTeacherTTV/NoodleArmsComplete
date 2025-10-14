@@ -1,6 +1,14 @@
 import { GoogleGenAI } from "@google/genai";
 import { contentFilter } from './contentFilter.js';
 
+const APPROVED_MODELS = {
+  PRIMARY: "gemini-2.5-pro",
+} as const;
+
+function isApprovedModel(model: string): model is typeof APPROVED_MODELS.PRIMARY {
+  return Object.values(APPROVED_MODELS).includes(model as any);
+}
+
 class GeminiService {
   private ai: GoogleGenAI;
 
@@ -8,6 +16,15 @@ class GeminiService {
     this.ai = new GoogleGenAI({ 
       apiKey: process.env.GEMINI_API_KEY || "" 
     });
+  }
+
+  private validateModel(model: string, context: string): void {
+    if (!isApprovedModel(model)) {
+      throw new Error(
+        `🚫 UNAUTHORIZED MODEL: ${model} is not approved for ${context}. ` +
+        `Flash models are BANNED due to hallucination issues. Use ${APPROVED_MODELS.PRIMARY} instead.`
+      );
+    }
   }
 
   // Retry helper with exponential backoff
@@ -722,8 +739,11 @@ ${coreIdentity}`;
       throw new Error("Gemini API key not configured");
     }
 
+    const model = APPROVED_MODELS.PRIMARY;
+    this.validateModel(model, 'analyzeContentForFlags');
+    
     const response = await this.ai.models.generateContent({
-      model: "gemini-2.5-flash", // Use flash for speed and availability
+      model,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -933,8 +953,11 @@ Respond with ONLY a JSON array - no other text:
 ]`;
 
     try {
+      const model = APPROVED_MODELS.PRIMARY;
+      this.validateModel(model, 'extractPodcastFacts');
+      
       const response = await this.ai.models.generateContent({
-        model: "gemini-1.5-pro",
+        model,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -1015,8 +1038,11 @@ Return as JSON. If no new facts can be extracted, return empty array:
 }`;
 
     try {
+      const model = APPROVED_MODELS.PRIMARY;
+      this.validateModel(model, 'extractDiscordMemberFacts');
+      
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -1108,12 +1134,15 @@ AI: ${aiResponse.substring(0, 200)}
 
 Title:`;
 
+      const model = APPROVED_MODELS.PRIMARY;
+      this.validateModel(model, 'generateConversationTitle');
+      
       const result = await this.ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        model,
         contents: prompt
       });
       
-      const title = result.text.trim();
+      const title = result.text?.trim() || '';
       
       // Clean up the title - remove quotes, periods, extra whitespace
       return title.replace(/^["']|["']$/g, '').replace(/\.$/, '').trim().substring(0, 60);
@@ -1129,9 +1158,14 @@ Title:`;
 export async function generateLoreContent(prompt: string): Promise<any> {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+    const model = APPROVED_MODELS.PRIMARY;
+    
+    if (!isApprovedModel(model)) {
+      throw new Error(`🚫 UNAUTHORIZED MODEL: ${model} is not approved. Flash models are BANNED.`);
+    }
     
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model,
       config: {
         responseMimeType: "application/json",
       },
