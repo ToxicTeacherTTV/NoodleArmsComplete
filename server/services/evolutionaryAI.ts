@@ -6,7 +6,7 @@ import type {
   KnowledgeGap, 
   EvolutionMetrics 
 } from "../../shared/evolutionaryTypes.js";
-import type { MemoryEntry } from "../storage.js";
+import type { MemoryEntry } from "../../shared/schema.js";
 
 class EvolutionaryAI {
   private ai: GoogleGenAI;
