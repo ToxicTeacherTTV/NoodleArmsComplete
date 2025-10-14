@@ -690,35 +690,35 @@ Describe actions IN YOUR DIALOGUE: "I'm wavin' my hand dismissively!" NOT "*wave
 
 ${coreIdentity}`;
 
-      // Try multiple times with different models to handle server overload
+      // Validate and use approved model with retry logic
+      const model = APPROVED_MODELS.PRIMARY;
+      this.validateModel(model, 'generateChatResponse');
+      
       let response;
-      const models = ["gemini-2.5-pro"]; // ❌ NEVER USE FLASH - it hallucinates and gives wrong answers
       
       for (let attempt = 0; attempt < 3; attempt++) {
-        for (const modelName of models) {
-          try {
-            console.log(`🔄 Gemini attempt ${attempt + 1}/3 with model: ${modelName}`);
-            
-            response = await this.ai.models.generateContent({
-              model: modelName,
-              config: {
-                systemInstruction: enhancedCoreIdentity,
-                temperature: 1.0, // Maximum creativity to match Anthropic
-              },
-              contents: fullPrompt,
-            });
-            
-            if (response?.text) {
-              console.log(`✅ Gemini success with ${modelName} on attempt ${attempt + 1}`);
-              break;
-            }
-          } catch (modelError: any) {
-            console.warn(`⚠️  ${modelName} failed (attempt ${attempt + 1}):`, modelError?.message || String(modelError));
-            
-            // If it's not an overload error, don't retry this model
-            if (!modelError?.message?.includes('overloaded')) {
-              continue;
-            }
+        try {
+          console.log(`🔄 Gemini attempt ${attempt + 1}/3 with model: ${model}`);
+          
+          response = await this.ai.models.generateContent({
+            model,
+            config: {
+              systemInstruction: enhancedCoreIdentity,
+              temperature: 1.0, // Maximum creativity to match Anthropic
+            },
+            contents: fullPrompt,
+          });
+          
+          if (response?.text) {
+            console.log(`✅ Gemini success with ${model} on attempt ${attempt + 1}`);
+            break;
+          }
+        } catch (modelError: any) {
+          console.warn(`⚠️ ${model} failed (attempt ${attempt + 1}):`, modelError?.message || String(modelError));
+          
+          // If it's not an overload error, don't retry
+          if (!modelError?.message?.includes('overloaded')) {
+            break;
           }
         }
         
