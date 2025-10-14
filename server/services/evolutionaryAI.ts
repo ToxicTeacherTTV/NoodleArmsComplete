@@ -15,6 +15,21 @@ class EvolutionaryAI {
     this.ai = new GoogleGenAI({ 
       apiKey: process.env.GEMINI_API_KEY || "" 
     });
+    
+    // 🚫 FLASH BAN ENFORCEMENT: Block Flash models at runtime
+    const originalGenerate = this.ai.models.generateContent.bind(this.ai.models);
+    this.ai.models.generateContent = ((config: any) => {
+      if (config.model && /flash/i.test(config.model)) {
+        const error = new Error(
+          `🚫 FLASH MODEL BLOCKED in EvolutionaryAI: "${config.model}" is permanently banned.\n` +
+          `Reason: Flash models hallucinate facts and corrupt memory.\n` +
+          `Only gemini-2.5-pro is approved for use.`
+        );
+        console.error(error.message);
+        throw error;
+      }
+      return originalGenerate(config);
+    }) as typeof originalGenerate;
   }
 
   // 1. RELATIONSHIP MAPPING - Build knowledge graphs

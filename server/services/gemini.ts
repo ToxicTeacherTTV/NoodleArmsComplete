@@ -1227,6 +1227,22 @@ Title:`;
 export async function generateLoreContent(prompt: string): Promise<any> {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+    
+    // 🚫 FLASH BAN ENFORCEMENT: Block Flash models at runtime
+    const originalGenerate = ai.models.generateContent.bind(ai.models);
+    ai.models.generateContent = ((config: any) => {
+      if (config.model && /flash/i.test(config.model)) {
+        const error = new Error(
+          `🚫 FLASH MODEL BLOCKED in generateLoreContent: "${config.model}" is permanently banned.\n` +
+          `Reason: Flash models hallucinate facts and corrupt memory.\n` +
+          `Only gemini-2.5-pro is approved for use.`
+        );
+        console.error(error.message);
+        throw error;
+      }
+      return originalGenerate(config);
+    }) as typeof originalGenerate;
+    
     const model = APPROVED_MODELS.PRIMARY;
     
     if (!isApprovedModel(model)) {
