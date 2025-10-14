@@ -1,0 +1,400 @@
+HERE'S EVERYTHING TO SEND YOUR CODER:
+
+💬 MESSAGE TO CODER:
+
+Go with Option A - Fix the extraction prompt.
+The issue isn't Pro's quality (the 11 memories it created are perfect - accurate, clean attribution, proper importance). The issue is the prompt is too narrow - it's filtering out non-Nicky characters.
+Root cause: The current prompt says "Extract ONLY facts stated BY Nicky or ABOUT Nicky" - this works for conversation transcripts, but FAILS for organizational documents (like SABAM roster) that describe OTHER characters in Nicky's universe.
+Solution: Add document type detection and adjust extraction scope based on document type.
+Changes needed:
+
+Detect document type (organizational/lore vs conversational)
+For organizational/lore docs: Extract ALL character facts, not just Nicky-centric ones
+Add "subject" field to track who/what each fact is about
+Keep same quality standards (importance scoring, keywords, atomic facts)
+
+Implementation: See the complete code below - this replaces the current extraction prompt logic.
+After fixing:
+
+Reprocess SABAM roster (should get 40-60 memories instead of 11)
+Test queries: "Who is Mama Marinara?", "Tell me about Uncle Gnocchi", "Who are the SABAM members?"
+If results are good, continue with remaining 4 documents using updated prompt
+
+Expected improvement: Same quality extraction, but broader coverage - includes all SABAM members, not just Nicky.
+
+
+🔧 EXACT CODE TO IMPLEMENT:
+typescript// FILE: server/services/geminiProDocumentProcessor.ts
+// (or wherever your document extraction logic lives)
+
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+interface ExtractedFact {
+  content: string;
+  category: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
+  importance: number;
+  keywords: string[];
+  subject: string; // NEW: Who/what this fact is about
+  storyContext?: string;
+}
+
+export class GeminiProDocumentProcessor {
+  private genAI: GoogleGenerativeAI;
+  
+  constructor() {
+    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+  }
+  
+  /**
+   * Detects document type to determine extraction scope
+   */
+  private detectDocumentType(filename: string, content: string): 'organizational' | 'conversational' | 'general' {
+    const lowerFilename = filename.toLowerCase();
+    const lowerContent = content.toLowerCase();
+    
+    // Organizational/Lore documents
+    const orgKeywords = [
+      'roster', 'organization', 'members', 'hierarchy', 
+      'member registry', 'organizational', 'lore', 'character profiles',
+      'backstory', 'universe', 'world-building'
+    ];
+    
+    // Conversational documents
+    const conversationalKeywords = [
+      'transcript', 'conversation', 'episode', 'chat log',
+      'dialogue', 'interview', 'stream', 'podcast'
+    ];
+    
+    // Check organizational
+    if (orgKeywords.some(keyword => 
+      lowerFilename.includes(keyword) || lowerContent.includes(keyword)
+    )) {
+      return 'organizational';
+    }
+    
+    // Check conversational
+    if (conversationalKeywords.some(keyword => 
+      lowerFilename.includes(keyword) || lowerContent.includes(keyword)
+    )) {
+      return 'conversational';
+    }
+    
+    return 'general';
+  }
+  
+  /**
+   * Builds extraction prompt based on document type
+   */
+  private buildExtractionPrompt(text: string, filename: string): string {
+    const docType = this.detectDocumentType(filename, text);
+    
+    let extractionScope = '';
+    
+    if (docType === 'organizational') {
+      extractionScope = `
+📋 DOCUMENT TYPE: ORGANIZATIONAL/LORE
+This document describes characters, organizations, or world-building in Nicky's universe.
+
+EXTRACTION SCOPE - Include ALL of these:
+✅ Character profiles (SABAM members, family, associates, rivals)
+✅ Organizational structure (ranks, roles, hierarchy)
+✅ Relationships between characters
+✅ Character traits, abilities, quirks, and backstories
+✅ Organizations, groups, and their purposes
+✅ Locations, places, and settings
+✅ World-building lore and universe details
+✅ Rules, traditions, and customs
+
+❌ DO NOT limit extraction to only facts about Nicky himself
+❌ DO include facts about other characters in Nicky's world
+
+EXAMPLES of what to extract from an organizational document:
+- "Uncle Gnocchi claims to have invented Dead by Daylight" ✅
+- "Mama Marinara is the Supreme Don who secretly runs everything" ✅
+- "Bruno 'The Basement' Bolognese is a Junior Associate and Bubba specialist" ✅
+- "SABAM ranks members by food items (LIT, PASTA, MEATBALL, etc.)" ✅
+- "The Ravioli Twins share one gaming chair for authenticity" ✅
+      `.trim();
+      
+    } else if (docType === 'conversational') {
+      extractionScope = `
+💬 DOCUMENT TYPE: CONVERSATIONAL
+This is a transcript, conversation, or dialogue featuring Nicky.
+
+EXTRACTION SCOPE - Include:
+✅ Statements made BY Nicky (opinions, claims, stories)
+✅ Facts revealed ABOUT Nicky (preferences, history, traits)
+✅ Nicky's reactions and emotional responses
+✅ Direct quotes and expressions Nicky uses
+✅ Events Nicky participated in or witnessed
+✅ Information Nicky shared about others
+
+Focus on what Nicky says and does, but include relevant context about people/things he discusses.
+      `.trim();
+      
+    } else {
+      extractionScope = `
+📄 DOCUMENT TYPE: GENERAL
+This document contains information relevant to Nicky's character and world.
+
+EXTRACTION SCOPE - Include ALL relevant facts:
+✅ Information about Nicky "Noodle Arms" A.I. Dente
+✅ His family, associates, and organization (SABAM)
+✅ Characters, places, and concepts in his sphere
+✅ World lore, backstory, and universe details
+✅ Relationships, conflicts, and alliances
+✅ Rules, traditions, and important context
+
+Extract comprehensively - this is building Nicky's knowledge base.
+      `.trim();
+    }
+    
+    return `
+You are extracting facts from a document to build a knowledge base about Nicky "Noodle Arms" A.I. Dente and his universe.
+
+${extractionScope}
+
+═══════════════════════════════════════════════════════════
+
+📁 DOCUMENT: ${filename}
+
+📝 CONTENT:
+${text}
+
+═══════════════════════════════════════════════════════════
+
+🎯 EXTRACTION INSTRUCTIONS:
+
+For EACH discrete fact, extract:
+
+1. **content** (string): The fact itself - one atomic, specific claim
+   - Keep it concise (1-2 sentences max)
+   - Make it searchable and clear
+   - Include relevant context but stay focused
+
+2. **category** (string): Type of information
+   - FACT: Objective information, events, relationships
+   - PREFERENCE: Likes, dislikes, opinions, tastes
+   - LORE: Backstory, world-building, fictional elements
+   - CONTEXT: Situational info, temporary states, circumstances
+
+3. **importance** (number): Relevance score 1-799
+   - 700-799: Core identity traits, critical relationships, essential lore
+     Examples: "Nicky's main killer is The Twins", "Mama Marinara runs SABAM"
+   
+   - 500-699: Important characteristics, key backstory, main associates
+     Examples: "Uncle Gnocchi claims he invented DBD", "Nicky has noodle arms"
+   
+   - 300-499: Regular facts, gameplay preferences, secondary characters
+     Examples: "Bruno specializes in Bubba", "Sofia plays Blight"
+   
+   - 100-299: Minor details, casual mentions, background info
+     Examples: "Marco has 4000 hours in DBD", "The Ravioli Twins share a chair"
+
+4. **keywords** (array of strings): 5-10 searchable terms
+   - Include character names mentioned
+   - Include key concepts and topics
+   - Include synonyms and related terms
+   - Use lowercase, avoid common words like "the", "is", "a"
+   
+   Example: ["uncle gnocchi", "sabam", "don level", "dbd", "invented", "terrible"]
+
+5. **subject** (string): Primary subject of this fact
+   - Who or what is this fact mainly about?
+   - Examples: "Uncle Gnocchi", "Mama Marinara", "SABAM", "Nicky", "The Twins"
+   - Use proper names/titles
+   - This helps organize and retrieve facts by character/topic
+
+6. **storyContext** (string, optional): Narrative context if relevant
+   - Only include if the fact is part of a larger story
+   - Brief explanation of surrounding circumstances
+   - Can be omitted for standalone facts
+
+═══════════════════════════════════════════════════════════
+
+📤 OUTPUT FORMAT:
+
+Return ONLY a valid JSON array of facts. No markdown, no explanation, just the JSON.
+
+[
+  {
+    "content": "Uncle Gnocchi Stromboli The Third Esq. claims to have invented Dead by Daylight",
+    "category": "LORE",
+    "importance": 650,
+    "keywords": ["uncle gnocchi", "sabam", "don level", "dbd", "invented", "claims"],
+    "subject": "Uncle Gnocchi",
+    "storyContext": "Uncle Gnocchi is a Don Level member of SABAM who maintains respect despite never completing a trial"
+  },
+  {
+    "content": "Mama Marinara is the Supreme Don (Secret Boss) of SABAM who actually runs everything",
+    "category": "LORE",
+    "importance": 750,
+    "keywords": ["mama marinara", "sabam", "supreme don", "boss", "leader", "organization"],
+    "subject": "Mama Marinara"
+  },
+  {
+    "content": "Bruno 'The Basement' Bolognese is a Junior Associate who specializes in playing Bubba (Leatherface)",
+    "category": "FACT",
+    "importance": 500,
+    "keywords": ["bruno", "basement", "bolognese", "junior associate", "bubba", "leatherface", "sabam"],
+    "subject": "Bruno Bolognese"
+  }
+]
+
+═══════════════════════════════════════════════════════════
+
+⚠️ CRITICAL RULES:
+
+1. Each fact must be ATOMIC (one specific claim, not multiple)
+2. Extract ALL relevant facts - don't filter out characters or topics
+3. Be accurate to the source material - no hallucinations
+4. Use proper character names and titles as they appear in the document
+5. Include enough context to make facts understandable standalone
+6. Importance scores should reflect how central the fact is to understanding the character/world
+7. Keywords should help users find this fact when searching
+
+Begin extraction now. Return ONLY the JSON array.
+    `.trim();
+  }
+  
+  /**
+   * Process document and extract facts using Gemini Pro
+   */
+  async processDocument(text: string, filename: string): Promise<ExtractedFact[]> {
+    try {
+      const model = this.genAI.getGenerativeModel({ 
+        model: 'gemini-2.5-pro' // NOT Flash - Flash is banned
+      });
+      
+      const prompt = this.buildExtractionPrompt(text, filename);
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      let responseText = response.text();
+      
+      // Clean up response (remove markdown code blocks if present)
+      responseText = responseText
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .trim();
+      
+      // Parse JSON
+      const facts: ExtractedFact[] = JSON.parse(responseText);
+      
+      // Validate facts
+      if (!Array.isArray(facts)) {
+        throw new Error('Response is not an array of facts');
+      }
+      
+      // Validate each fact has required fields
+      facts.forEach((fact, index) => {
+        if (!fact.content || !fact.category || !fact.importance || !fact.keywords || !fact.subject) {
+          throw new Error(`Fact at index ${index} is missing required fields`);
+        }
+        
+        // Ensure importance is in valid range
+        if (fact.importance < 1 || fact.importance > 799) {
+          console.warn(`Fact importance ${fact.importance} out of range, clamping to 1-799`);
+          fact.importance = Math.max(1, Math.min(799, fact.importance));
+        }
+      });
+      
+      console.log(`✅ Extracted ${facts.length} facts from ${filename} using Gemini Pro`);
+      return facts;
+      
+    } catch (error) {
+      console.error('❌ Error processing document with Gemini Pro:', error);
+      throw error;
+    }
+  }
+}
+
+export default new GeminiProDocumentProcessor();
+```
+
+---
+
+## 📋 WHAT THIS CODE DOES:
+
+**1. Document Type Detection (`detectDocumentType`)**
+- Automatically identifies if doc is organizational, conversational, or general
+- Checks filename and content for keywords
+- SABAM roster → organizational (broad extraction)
+- Podcast transcript → conversational (Nicky-focused)
+
+**2. Dynamic Prompt Building (`buildExtractionPrompt`)**
+- **Organizational docs:** "Extract ALL character facts, not just Nicky"
+- **Conversational docs:** "Focus on what Nicky says/does"
+- **General docs:** "Extract comprehensively"
+- Includes examples of what to extract
+
+**3. New "Subject" Field**
+- Tracks WHO/WHAT each fact is about
+- Makes retrieval easier ("show me facts about Uncle Gnocchi")
+- Better organization
+
+**4. Detailed Instructions**
+- Clear importance scoring guidelines with examples
+- Keyword best practices
+- Output format examples
+- Validation rules
+
+**5. Error Handling**
+- Cleans markdown formatting from response
+- Validates JSON structure
+- Checks required fields
+- Clamps importance to 1-799 range
+
+---
+
+## ✅ TESTING CHECKLIST
+
+After implementing, reprocess SABAM roster and verify:
+
+**Query Tests:**
+```
+1. "Who is Mama Marinara?"
+   → Should return: Supreme Don, secret boss, runs everything
+
+2. "Tell me about Uncle Gnocchi"
+   → Should return: Don Level, claims invented DBD, terrible but respected
+
+3. "Who are the SABAM members?"
+   → Should return: Multiple members with their ranks
+
+4. "What is Bruno's specialty?"
+   → Should return: Bubba player, basement camping expert
+
+5. "Tell me about the Ravioli Twins"
+   → Should return: Mid-level, nobody can tell them apart, share chair
+Database Check:
+sql-- Should show 40-60 memories (not 11)
+SELECT COUNT(*) FROM memory_entries 
+WHERE source LIKE '%sabam-roster%'
+AND created_at > NOW() - INTERVAL '1 hour';
+
+-- Should show multiple subjects
+SELECT DISTINCT subject, COUNT(*) 
+FROM memory_entries 
+WHERE source LIKE '%sabam-roster%'
+GROUP BY subject
+ORDER BY COUNT(*) DESC;
+
+-- Should include key characters
+SELECT content 
+FROM memory_entries 
+WHERE content ILIKE '%mama marinara%' 
+   OR content ILIKE '%uncle gnocchi%'
+   OR content ILIKE '%big ziti%'
+LIMIT 10;
+
+🎯 IF THIS WORKS:
+Continue with remaining 4 documents using the same updated prompt:
+
+✅ SABAM roster (just tested)
+Nicky biography
+Twins lore
+Pasta/carbonara rules
+Family relationships
+
+All will use the same smart document type detection and extraction logic.

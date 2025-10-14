@@ -50,7 +50,45 @@ class GeminiService {
     throw new Error(`Unexpected retry loop exit for ${operationName}`);
   }
 
-  // Enhanced hierarchical extraction methods
+  // 🎯 Detect document type to determine extraction scope
+  private detectDocumentType(filename: string, content: string): 'organizational' | 'conversational' | 'general' {
+    const lowerFilename = filename.toLowerCase();
+    const lowerContent = content.toLowerCase();
+    
+    // Organizational/Lore documents
+    const orgKeywords = [
+      'roster', 'organization', 'members', 'hierarchy', 
+      'member registry', 'organizational', 'lore', 'character profiles',
+      'backstory', 'universe', 'world-building', 'family tree'
+    ];
+    
+    // Conversational documents
+    const conversationalKeywords = [
+      'transcript', 'conversation', 'episode', 'chat log',
+      'dialogue', 'interview', 'stream', 'podcast'
+    ];
+    
+    // Check organizational
+    if (orgKeywords.some(keyword => 
+      lowerFilename.includes(keyword) || lowerContent.includes(keyword)
+    )) {
+      console.log(`📋 Detected ORGANIZATIONAL document: ${filename}`);
+      return 'organizational';
+    }
+    
+    // Check conversational
+    if (conversationalKeywords.some(keyword => 
+      lowerFilename.includes(keyword) || lowerContent.includes(keyword)
+    )) {
+      console.log(`💬 Detected CONVERSATIONAL document: ${filename}`);
+      return 'conversational';
+    }
+    
+    console.log(`📄 Detected GENERAL document: ${filename}`);
+    return 'general';
+  }
+
+  // Enhanced hierarchical extraction methods with document-type awareness
   async extractStoriesFromDocument(content: string, filename: string): Promise<Array<{
     content: string;
     type: 'STORY' | 'LORE' | 'CONTEXT';
@@ -61,40 +99,92 @@ class GeminiService {
       throw new Error("Gemini API key not configured");
     }
 
-    const prompt = `You are analyzing NICKY'S CONTENT ONLY from document: "${filename}"
+    const docType = this.detectDocumentType(filename, content);
+    
+    let extractionScope = '';
+    
+    if (docType === 'organizational') {
+      extractionScope = `📋 DOCUMENT TYPE: ORGANIZATIONAL/LORE
+This document describes characters, organizations, or world-building in Nicky's universe.
 
-CRITICAL INSTRUCTIONS:
-- This content has been pre-filtered to contain ONLY Nicky's statements, responses, and attributions
-- Do NOT include user questions or prompts in extracted stories
-- Focus ONLY on what Nicky said, did, experienced, or expressed
-- If content seems to contain both sides of conversation, extract only Nicky's parts
+EXTRACTION SCOPE - Include ALL of these:
+✅ Character profiles (SABAM members, family, associates, rivals)
+✅ Organizational structure (ranks, roles, hierarchy)
+✅ Relationships between characters
+✅ Character traits, abilities, quirks, and backstories
+✅ Organizations, groups, and their purposes
+✅ Locations, places, and settings
+✅ World-building lore and universe details
+✅ Rules, traditions, and customs
 
-Content (Nicky's responses only):
+❌ DO NOT limit extraction to only facts about Nicky himself
+✅ DO include facts about other characters in Nicky's world
+
+EXAMPLES of what to extract from an organizational document:
+- "Uncle Gnocchi claims to have invented Dead by Daylight" ✅
+- "Mama Marinara is the Supreme Don who secretly runs everything" ✅
+- "Bruno 'The Basement' Bolognese is a Junior Associate and Bubba specialist" ✅
+- "SABAM ranks members by food items (LIT, PASTA, MEATBALL, etc.)" ✅
+- "The Ravioli Twins share one gaming chair for authenticity" ✅`;
+      
+    } else if (docType === 'conversational') {
+      extractionScope = `💬 DOCUMENT TYPE: CONVERSATIONAL
+This content has been pre-filtered to contain ONLY Nicky's statements, responses, and attributions.
+
+EXTRACTION SCOPE - Include:
+✅ Statements made BY Nicky (opinions, claims, stories)
+✅ Facts revealed ABOUT Nicky (preferences, history, traits)
+✅ Nicky's reactions and emotional responses
+✅ Direct quotes and expressions Nicky uses
+✅ Events Nicky participated in or witnessed
+✅ Information Nicky shared about others
+
+Focus on what Nicky says and does, but include relevant context about people/things he discusses.`;
+      
+    } else {
+      extractionScope = `📄 DOCUMENT TYPE: GENERAL
+This document contains information relevant to Nicky's character and world.
+
+EXTRACTION SCOPE - Include ALL relevant facts:
+✅ Information about Nicky "Noodle Arms" A.I. Dente
+✅ His family, associates, and organization (SABAM)
+✅ Characters, places, and concepts in his sphere
+✅ World lore, backstory, and universe details
+✅ Relationships, conflicts, and alliances
+✅ Rules, traditions, and important context
+
+Extract comprehensively - this is building Nicky's knowledge base.`;
+    }
+
+    const prompt = `You are extracting facts from "${filename}" to build a knowledge base about Nicky "Noodle Arms" A.I. Dente and his universe.
+
+${extractionScope}
+
+Content:
 ${content}
 
-Extract COMPLETE STORIES, ANECDOTES, and RICH CONTEXTS that Nicky shared about himself. Focus on:
-- Nicky's backstory narratives 
-- Incidents Nicky described
-- Nicky's character interactions
-- Relationships Nicky explained
-- Experiences Nicky shared
-- Background context Nicky provided
+Extract COMPLETE STORIES, ANECDOTES, and RICH CONTEXTS. Focus on:
+- Character backstory narratives 
+- Incidents and events described
+- Character interactions and relationships
+- Experiences and background context
+- Organizational details and hierarchy
 
 For each story/narrative, provide:
-- content: The COMPLETE story/context from Nicky's perspective (1-3 sentences max)
+- content: The COMPLETE story/context (1-3 sentences max)
 - type: STORY (incidents/events), LORE (backstory), or CONTEXT (situational background)
 - importance: 1-5 (5 being most important for character understanding)
 - keywords: 3-5 relevant keywords for retrieval
 
-Return as JSON array. Only include substantial narrative content BY or ABOUT Nicky.
+Return as JSON array.
 
 Example format:
 [
   {
-    "content": "The 2005 incident where Nicky first clashed with Earl in World of Warcraft began when Nicky was playing his orc warrior PastaEnforcer on the Tichondrius server. Earl, playing a human mage named Teadiculous, kept repeatedly killing Nicky in contested zones. This escalated when Earl started camping Nicky's corpse for hours, leading to Nicky's first recorded threat to 'call his digital guys.' The feud continued for months, with both players recruiting their guilds into elaborate revenge schemes that eventually got both temporarily banned. This incident established their competitive dynamic that continues today.",
-    "type": "STORY",
-    "importance": 4,
-    "keywords": ["earl", "warcraft", "feud", "origin", "tichondrius"]
+    "content": "Uncle Gnocchi Stromboli The Third Esq. is a Don Level member of SABAM who claims to have invented Dead by Daylight. Despite being terrible at the game, everyone pretends he's amazing out of respect.",
+    "type": "LORE",
+    "importance": 5,
+    "keywords": ["uncle gnocchi", "sabam", "don level", "dbd", "respect"]
   }
 ]`;
 
@@ -140,48 +230,55 @@ Example format:
       throw new Error("Gemini API key not configured");
     }
 
-    const prompt = `You are breaking down a narrative about Nicky "Noodle Arms" A.I. Dente into ATOMIC FACTS.
+    const prompt = `You are breaking down a narrative into ATOMIC FACTS about Nicky "Noodle Arms" A.I. Dente and his universe.
 
 Story Context: ${storyContext}
 
-Full Story (Nicky's content only):
+Full Story:
 ${storyContent}
 
-CRITICAL RULES:
-- Extract ONLY facts stated BY Nicky or ABOUT Nicky
-- Ignore any user questions or prompts that may be mixed in
+EXTRACTION RULES:
+- Extract ALL discrete, verifiable facts from this story
+- Include facts about ANY character, place, or concept mentioned
 - Each fact must be 1-2 sentences MAXIMUM
 - Focus on specific, verifiable claims
 - Clear about WHO did WHAT
 
 Extract individual, verifiable claims from this story. Each atomic fact should be:
-- A single, specific claim about Nicky
+- A single, specific claim
 - Independently verifiable
 - 1-2 sentences maximum (HARD LIMIT)
-- Clear about WHO did WHAT
+- Clear about WHO/WHAT and WHAT happened
 
 For each atomic fact, provide:
 - content: The specific atomic claim (max 2 sentences)
 - type: "ATOMIC" (always)
 - importance: 1-5 based on how critical this detail is
-- keywords: 2-4 keywords for retrieval
+- keywords: 3-5 keywords for retrieval (include character names)
 - storyContext: Brief note about which part of the story this relates to
 
-Example - from story about WoW incident:
+Examples from various stories:
 [
   {
-    "content": "Nicky played an orc warrior named PastaEnforcer",
+    "content": "Uncle Gnocchi claims to have invented Dead by Daylight",
     "type": "ATOMIC",
-    "importance": 3,
-    "keywords": ["character", "warrior", "PastaEnforcer"],
-    "storyContext": "WoW character details"
+    "importance": 4,
+    "keywords": ["uncle gnocchi", "dbd", "invented", "claims"],
+    "storyContext": "Uncle Gnocchi's legendary status"
   },
   {
-    "content": "Earl played human mage named Teadiculous", 
+    "content": "Mama Marinara is the Supreme Don who secretly runs SABAM", 
+    "type": "ATOMIC",
+    "importance": 5,
+    "keywords": ["mama marinara", "supreme don", "sabam", "leader"],
+    "storyContext": "SABAM leadership structure"
+  },
+  {
+    "content": "Bruno Bolognese is actually one of the best Bubba players in DBD",
     "type": "ATOMIC",
     "importance": 3,
-    "keywords": ["earl", "mage", "Teadiculous"],
-    "storyContext": "Earl's character details"
+    "keywords": ["bruno", "bolognese", "bubba", "skill", "dbd"],
+    "storyContext": "Bruno's gaming ability"
   }
 ]
 
