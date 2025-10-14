@@ -1,0 +1,139 @@
+🎯 Complete Task List for Your AI Coder
+Copy/paste this to your Replit AI:
+
+TASK: Complete Flash Model Ban & Enforcement
+Context: We're banning gemini-flash models due to hallucinations that corrupted 1,544 memories. Only gemini-2.5-pro is allowed.
+Phase 1: Fix Known Flash Violations (CRITICAL - Do First)
+File 1: server/services/gemini.ts
+Replace these 3 model strings:
+
+Line 550: model: "gemini-2.5-flash" → model: "gemini-2.5-pro"
+Line 827: model: "gemini-2.5-flash" → model: "gemini-2.5-pro"
+Line 970: model: "gemini-2.0-flash-exp" → model: "gemini-2.5-pro"
+
+File 2: server/services/anthropicService.ts
+Line 1319: Replace this:
+typescriptmodel: 'gemini-2.5-flash', // Using flash for faster responses
+With:
+typescriptmodel: 'gemini-2.5-pro', // 🚫 NEVER Flash - pattern extraction affects core identity
+Phase 2: Add Flash Ban Enforcement (CRITICAL)
+In server/services/gemini.ts constructor (around line 11):
+Add this model validation after the GoogleGenAI initialization:
+typescriptconstructor() {
+  this.ai = new GoogleGenAI({ 
+    apiKey: process.env.GEMINI_API_KEY || "" 
+  });
+  
+  // 🚫 FLASH BAN ENFORCEMENT: Override generateContent to block Flash models
+  const originalGenerate = this.ai.models.generateContent.bind(this.ai.models);
+  this.ai.models.generateContent = ((config: any) => {
+    if (config.model && /flash/i.test(config.model)) {
+      const error = new Error(
+        `🚫 FLASH MODEL BLOCKED: "${config.model}" is permanently banned.\n` +
+        `Reason: Flash models hallucinate facts and corrupt memory.\n` +
+        `Only gemini-2.5-pro is approved for use.\n` +
+        `Stack trace will show where this was called from.`
+      );
+      console.error(error.message);
+      throw error;
+    }
+    return originalGenerate(config);
+  }) as typeof originalGenerate;
+  
+  console.log('✅ Gemini service initialized with Flash ban enforcement');
+}
+Phase 3: Comprehensive Codebase Audit
+Task 3.1: Find ALL Gemini Usage
+Run these searches in server/ directory and report results:
+bash# Find all files with Gemini imports or usage
+grep -rn "GoogleGenAI" server/ --include="*.ts" --include="*.js"
+grep -rn "generateContent" server/ --include="*.ts" --include="*.js"
+grep -rn "flash" server/ --include="*.ts" --include="*.js"
+grep -rn "gemini.*1\\.5\\|gemini.*2\\.0" server/ --include="*.ts" --include="*.js"
+For each file found, verify the model being used.
+Task 3.2: Check These Specific Files (if they exist)
+
+server/services/conversationParser.ts
+server/services/intelligenceEngine.ts
+server/services/memoryDeduplicator.ts
+server/services/storyReconstructor.ts
+server/services/varietyController.ts
+server/services/contentSuggestionService.ts
+server/services/behaviorModulator.ts
+
+For each file: Check if it uses Gemini. If yes, verify it uses gemini-2.5-pro only.
+Phase 4: Update Documentation
+File: README.md or project docs
+Add this section:
+markdown## 🚫 Model Usage Policy
+
+### Approved Models
+- **Primary AI**: Claude Sonnet 4.5 (`claude-sonnet-4-5-20250929`)
+- **Fallback AI**: Gemini Pro (`gemini-2.5-pro`)
+
+### BANNED Models
+- ❌ ALL Gemini Flash variants (1.5-flash, 2.0-flash, 2.5-flash, flash-exp)
+- **Reason**: Flash models hallucinate facts and create false memories
+- **Enforcement**: Runtime checks will throw errors if Flash is used
+
+### Enforcement
+Flash ban is enforced at the `geminiService` constructor level. Any attempt to use Flash will:
+1. Log an error with stack trace
+2. Throw an exception immediately
+3. Prevent the hallucinated response from being stored
+
+Last updated: [Current Date]
+Phase 5: Test & Verify
+Create test file: server/services/__tests__/flashBan.test.ts
+typescriptimport { geminiService } from '../gemini';
+
+describe('Flash Model Ban Enforcement', () => {
+  it('should block gemini-2.5-flash', async () => {
+    await expect(async () => {
+      await geminiService['ai'].models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: 'test'
+      });
+    }).rejects.toThrow(/FLASH MODEL BLOCKED/);
+  });
+
+  it('should allow gemini-2.5-pro', async () => {
+    // Should not throw
+    const result = await geminiService['ai'].models.generateContent({
+      model: 'gemini-2.5-pro',
+      contents: 'test'
+    });
+    expect(result).toBeDefined();
+  });
+});
+Phase 6: Report Back
+After completing all tasks, provide:
+
+List of all files modified with line numbers changed
+List of all Gemini usage found in codebase (file + line + model used)
+Confirmation that Flash ban enforcement is active
+Test results showing Flash is blocked
+Any warnings about files that couldn't be checked
+
+
+Additional Instructions for AI Coder
+Priority order:
+
+Phase 1 (fix 4 violations) - Do immediately
+Phase 2 (add enforcement) - Do immediately
+Phase 3 (audit) - Do within 1 hour
+Phase 4-6 (docs/tests) - Do when convenient
+
+Quality checks:
+
+Don't just find/replace "flash" globally - check context
+Preserve all comments explaining why Pro is used
+Keep retry logic and error handling intact
+Don't break any working functionality
+
+Safety rules:
+
+Always use gemini-2.5-pro (latest stable Pro)
+Never use Flash, Flash-exp, or any Flash variant
+Keep Anthropic as primary, Gemini as fallback only
+Maintain all existing error handling
