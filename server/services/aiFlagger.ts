@@ -36,7 +36,23 @@ export class AIFlaggerService {
 
   /**
    * Main flagging method - analyzes content and returns flags
-   * Uses Anthropic first, then Gemini fallback if credits are low
+   * 
+   * 🚫 COST OPTIMIZATION: Uses Gemini Pro ONLY (skips expensive Claude)
+   * 
+   * **Why Gemini-only?**
+   * - Content flags are metadata (not personality-critical)
+   * - Gemini Pro is free and 77% accurate on flags
+   * - Saves ~$0.0015 per flag vs Claude ($4 per 2,645 flags)
+   * - 23% false positive rate is acceptable for metadata
+   * 
+   * **What uses this?**
+   * - Personality drift detection
+   * - Relationship tracking
+   * - Fourth wall breaks
+   * - Pattern analysis
+   * - All non-critical metadata tracking
+   * 
+   * Last updated: October 14, 2025 (Flash ban implementation)
    */
   async analyzeContent(
     content: string,
@@ -48,19 +64,13 @@ export class AIFlaggerService {
     }
   ): Promise<FlaggingAnalysis> {
     try {
-      // Try Anthropic first
-      return await this.analyzeWithAnthropic(content, contentType, context);
-    } catch (anthropicError: any) {
-      console.log('🌟 Anthropic flagging failed, trying Gemini fallback:', anthropicError?.message);
-      
-      try {
-        // Fallback to Gemini if Anthropic fails
-        return await this.analyzeWithGemini(content, contentType, context);
-      } catch (geminiError) {
-        console.error('🚨 Both Anthropic and Gemini flagging failed:', geminiError);
-        // Return basic pattern matching as final fallback
-        return this.generateFallbackFlags(content, contentType);
-      }
+      // 💚 Skip Claude, go straight to free Gemini Pro
+      console.log('💚 Using free Gemini Pro for content flagging (77% accuracy on metadata is sufficient)');
+      return await this.analyzeWithGemini(content, contentType, context);
+    } catch (geminiError) {
+      console.error('❌ Gemini flagging failed, using pattern matching fallback:', geminiError);
+      // Return basic pattern matching as final fallback
+      return this.generateFallbackFlags(content, contentType);
     }
   }
 
