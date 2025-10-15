@@ -1,4 +1,4 @@
-import { db } from '../db/index.js';
+import { db } from '../db.js';
 import { contentFlags, memoryEntries } from '../../shared/schema.js';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { aiFlagger } from '../services/aiFlagger.js';
@@ -135,7 +135,7 @@ async function reanalyzeCriticalFlags(profileId: string) {
 }
 
 // Get profile ID from command line or use default
-const profileId = process.argv[2] || '3a3fe4fc-9187-4ca0-a21b-75077889e12a'; // Nicky's profile
+const profileId = process.argv[2] || '3a3fe4fc-9187-4ca0-a21b-75077885e128'; // Nicky's profile (correct ID)
 
 console.log(`\n🚀 Starting Flash hallucination cleanup for profile: ${profileId}\n`);
 
