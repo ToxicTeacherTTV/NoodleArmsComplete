@@ -372,6 +372,70 @@ Be conservative with matches - only match if confidence > 0.7`;
   }
 
   /**
+   * 🔍 HELPER: Find matching entity by name or aliases
+   * Used to prevent duplicate entities when processing new memories
+   */
+  private findMatchingEntity(
+    entities: Array<{ id: string; canonicalName: string; aliases?: string[]; description?: string }>,
+    targetName: string,
+    targetAliases: string[]
+  ): { id: string; canonicalName: string; aliases?: string[]; description?: string } | null {
+    const normalizedTarget = targetName.toLowerCase().trim();
+    const normalizedAliases = targetAliases.map(a => a.toLowerCase().trim());
+    
+    for (const entity of entities) {
+      const normalizedEntityName = entity.canonicalName.toLowerCase().trim();
+      const normalizedEntityAliases = (entity.aliases || []).map(a => a.toLowerCase().trim());
+      
+      // Check if names match
+      if (normalizedEntityName === normalizedTarget) {
+        return entity;
+      }
+      
+      // Check if target name matches any entity alias
+      if (normalizedEntityAliases.includes(normalizedTarget)) {
+        return entity;
+      }
+      
+      // Check if any target alias matches entity name
+      if (normalizedAliases.includes(normalizedEntityName)) {
+        return entity;
+      }
+      
+      // Check if any target alias matches any entity alias
+      for (const targetAlias of normalizedAliases) {
+        if (normalizedEntityAliases.includes(targetAlias)) {
+          return entity;
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * 📝 HELPER: Merge new context into existing entity description
+   * Prevents duplicate information while preserving new details
+   */
+  private mergeEntityContext(existingContext: string, newContext: string): string {
+    if (!existingContext || existingContext.trim() === '') {
+      return newContext;
+    }
+    
+    if (!newContext || newContext.trim() === '') {
+      return existingContext;
+    }
+    
+    // Check if new context is already in existing (avoid exact duplicates)
+    if (existingContext.toLowerCase().includes(newContext.toLowerCase())) {
+      return existingContext;
+    }
+    
+    // Append new context with clear separator
+    return `${existingContext}\n\n[Updated]: ${newContext}`;
+  }
+
+  /**
    * Process memory content and return entity IDs for linking
    * This creates new entities if needed and returns the IDs for database linking
    * UPDATED: Returns arrays of entity IDs to support many-to-many relationships
@@ -418,53 +482,134 @@ Be conservative with matches - only match if confidence > 0.7`;
         }
       }
 
-      // Process new entities (create them in database)
+      // Process new entities (check if exists, update context or create new)
       for (const newEntity of disambiguation.newEntities) {
         try {
-          let createdEntity;
+          // 🔍 ENTITY UPDATE LOGIC: Check if entity already exists before creating duplicate
+          let existingEntity = null;
           
           if (newEntity.type === 'PERSON') {
-            createdEntity = await storage.createPerson({
-              profileId: profileId,
-              canonicalName: newEntity.name,
-              disambiguation: newEntity.disambiguation,
-              aliases: newEntity.aliases,
-              relationship: '', // Will be filled by AI context
-              description: newEntity.context
-            });
-            if (createdEntity?.id && !personIds.includes(createdEntity.id)) {
-              personIds.push(createdEntity.id);
-              entitiesCreated++;
-              console.log(`✨ Created new person: ${newEntity.name}`);
+            // Search for existing person by name or aliases
+            existingEntity = this.findMatchingEntity(
+              existingEntities.people,
+              newEntity.name,
+              newEntity.aliases
+            );
+            
+            if (existingEntity) {
+              // ✏️ UPDATE existing entity context instead of creating duplicate
+              const updatedDescription = this.mergeEntityContext(
+                existingEntity.description || '',
+                newEntity.context
+              );
+              const mergedAliases = Array.from(new Set([
+                ...(existingEntity.aliases || []),
+                ...newEntity.aliases
+              ]));
+              
+              await storage.updatePerson(existingEntity.id, {
+                description: updatedDescription,
+                aliases: mergedAliases
+              });
+              
+              if (!personIds.includes(existingEntity.id)) {
+                personIds.push(existingEntity.id);
+              }
+              console.log(`📝 Updated existing person: ${newEntity.name} (${existingEntity.id})`);
+            } else {
+              // ✨ CREATE new entity (doesn't exist yet)
+              const createdEntity = await storage.createPerson({
+                profileId: profileId,
+                canonicalName: newEntity.name,
+                disambiguation: newEntity.disambiguation,
+                aliases: newEntity.aliases,
+                relationship: '', // Will be filled by AI context
+                description: newEntity.context
+              });
+              if (createdEntity?.id && !personIds.includes(createdEntity.id)) {
+                personIds.push(createdEntity.id);
+                entitiesCreated++;
+                console.log(`✨ Created new person: ${newEntity.name}`);
+              }
             }
           } else if (newEntity.type === 'PLACE') {
-            createdEntity = await storage.createPlace({
-              profileId: profileId,
-              canonicalName: newEntity.name,
-              locationType: newEntity.disambiguation,
-              description: newEntity.context
-            });
-            if (createdEntity?.id && !placeIds.includes(createdEntity.id)) {
-              placeIds.push(createdEntity.id);
-              entitiesCreated++;
-              console.log(`✨ Created new place: ${newEntity.name}`);
+            // Search for existing place by name
+            existingEntity = this.findMatchingEntity(
+              existingEntities.places,
+              newEntity.name,
+              []
+            );
+            
+            if (existingEntity) {
+              // ✏️ UPDATE existing place context
+              const updatedDescription = this.mergeEntityContext(
+                existingEntity.description || '',
+                newEntity.context
+              );
+              
+              await storage.updatePlace(existingEntity.id, {
+                description: updatedDescription
+              });
+              
+              if (!placeIds.includes(existingEntity.id)) {
+                placeIds.push(existingEntity.id);
+              }
+              console.log(`📝 Updated existing place: ${newEntity.name} (${existingEntity.id})`);
+            } else {
+              // ✨ CREATE new place
+              const createdEntity = await storage.createPlace({
+                profileId: profileId,
+                canonicalName: newEntity.name,
+                locationType: newEntity.disambiguation,
+                description: newEntity.context
+              });
+              if (createdEntity?.id && !placeIds.includes(createdEntity.id)) {
+                placeIds.push(createdEntity.id);
+                entitiesCreated++;
+                console.log(`✨ Created new place: ${newEntity.name}`);
+              }
             }
           } else if (newEntity.type === 'EVENT') {
-            createdEntity = await storage.createEvent({
-              profileId: profileId,
-              canonicalName: newEntity.name,
-              eventDate: newEntity.disambiguation,
-              description: newEntity.context,
-              isCanonical: true
-            });
-            if (createdEntity?.id && !eventIds.includes(createdEntity.id)) {
-              eventIds.push(createdEntity.id);
-              entitiesCreated++;
-              console.log(`✨ Created new event: ${newEntity.name}`);
+            // Search for existing event by name
+            existingEntity = this.findMatchingEntity(
+              existingEntities.events,
+              newEntity.name,
+              []
+            );
+            
+            if (existingEntity) {
+              // ✏️ UPDATE existing event context
+              const updatedDescription = this.mergeEntityContext(
+                existingEntity.description || '',
+                newEntity.context
+              );
+              
+              await storage.updateEvent(existingEntity.id, {
+                description: updatedDescription
+              });
+              
+              if (!eventIds.includes(existingEntity.id)) {
+                eventIds.push(existingEntity.id);
+              }
+              console.log(`📝 Updated existing event: ${newEntity.name} (${existingEntity.id})`);
+            } else {
+              // ✨ CREATE new event
+              const createdEntity = await storage.createEvent({
+                profileId: profileId,
+                canonicalName: newEntity.name,
+                eventDate: newEntity.disambiguation,
+                description: newEntity.context,
+                isCanonical: true
+              });
+              if (createdEntity?.id && !eventIds.includes(createdEntity.id)) {
+                eventIds.push(createdEntity.id);
+                entitiesCreated++;
+                console.log(`✨ Created new event: ${newEntity.name}`);
+              }
             }
           }
         } catch (error) {
-          console.error(`Error creating ${newEntity.type} entity:`, error);
+          console.error(`Error processing ${newEntity.type} entity:`, error);
           // Don't let entity creation failures break the whole process
         }
       }

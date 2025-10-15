@@ -107,6 +107,10 @@ Last updated: October 14, 2025
   - **Multi-Entity Support**: Each memory can link to multiple people, places, and events
   - **Automatic Extraction**: AI extracts all entities from memory content
   - **Deduplication**: Prevents duplicate entity creation through disambiguation
+  - **Smart Updates** (Oct 2025): Instead of creating duplicates, updates existing entity context when new information is found
+    - Matches by name and aliases (case-insensitive)
+    - Merges context intelligently (avoids duplicate text)
+    - Preserves and combines aliases from both sources
 - **UI Enhancements** (Oct 2025):
   - **Enhanced Memory Panel**: Category filter, importance slider (0-5), source filter, Find Duplicates button, active filter count badge
   - **Memory Debug Panel**: Debug mode toggle in chat header, query tracking, retrieved memories display with relevance scores, collapsible entries, integrated into chat interface

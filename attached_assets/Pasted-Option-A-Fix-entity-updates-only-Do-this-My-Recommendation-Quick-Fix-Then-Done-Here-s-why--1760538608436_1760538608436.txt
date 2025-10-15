@@ -1,0 +1,74 @@
+Option A: Fix entity updates only ✅ (Do this)
+🎯 My Recommendation: Quick Fix, Then Done
+Here's why:
+Fix Entity Updates NOW (30 mins max)
+Why it's critical:
+
+Only issue that causes permanent damage
+Duplicates accumulate every day
+Gets exponentially harder to fix later (would need massive deduplication script)
+Right now you have clean data - keep it that way
+
+Why it's quick:
+typescript// Add this single check before creating new entity
+const existingPerson = await storage.findPersonByName(
+  profileId, 
+  newEntity.name, 
+  newEntity.aliases
+);
+
+if (existingPerson) {
+  // UPDATE existing entity context instead of creating duplicate
+  await storage.updatePerson(existingPerson.id, {
+    context: `${existingPerson.description}\n\n[New]: ${newEntity.context}`,
+    aliases: [...new Set([...existingPerson.aliases, ...newEntity.aliases])]
+  });
+  return existingPerson.id;
+} else {
+  // CREATE new entity
+  return await storage.createPerson({...});
+}
+That's literally 10 lines of code, 30 minutes of work.
+Leave the Rest for Later
+Why?
+
+You've done enough today - Flash ban + cost optimization + audits = solid day's work
+The other issues are just efficiency - They don't corrupt data
+Gemini Pro is free - Double API calls are annoying but not costing money
+8.5/10 is good enough - Don't chase perfection when you're already good
+
+The Optimization Backlog (Do Later)
+Put these in your "nice to have" list:
+
+🟡 Merge two phases (saves API calls) - Do when you're bored or hit rate limits
+🟡 Add deduplication (prevents noise) - Do if entity catalog gets messy
+🟡 Add caching (performance) - Do when you have 1000+ entities
+
+📋 Action Plan
+TODAY:
+bash# Tell your AI coder:
+"Fix Priority 3 only (entity updates). 
+Add the existingEntity check before creating new entities.
+Test with a sample memory that mentions an existing person.
+Then we're done for today."
+Time: 30 minutes
+Benefit: Prevents permanent data corruption
+Risk: None (just adds a check before creation)
+LATER (Optional):
+
+When you hit rate limits → Merge the two phases
+When entity catalog is huge → Add caching
+When you're bored → Add deduplication
+
+🎯 Why This Is The Right Call
+You've already accomplished:
+
+✅ Banned Flash (5-layer enforcement)
+✅ Cost optimized (free Gemini for volume)
+✅ Data audited (core memories clean)
+✅ Architecture reviewed (8.5/10 is solid)
+
+Don't chase 10/10. Fix the one thing that causes permanent damage, then ship it.
+Perfect is the enemy of good. 8.5/10 + no duplicates = 9.5/10 in practice.
+
+Tell your coder: Option A, then we're calling it a day. 🎉
