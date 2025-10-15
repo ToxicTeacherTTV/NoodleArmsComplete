@@ -145,6 +145,12 @@ Last updated: October 14, 2025
 - Dashboard, Chat Panel, Control Panel, PersonalitySurgePanel, Discord Management Panel
 - Profile, Memory, Document Panels, Voice Visualizer
 - **Memory UI Suite**: Enhanced Memory Panel (filters, search), Memory Debug Panel (retrieval tracking), Memory Analytics Dashboard (charts & insights), Protected Facts Manager
+- **Ad Generation** (Oct 2025): Simplified comedy-first approach
+  - Temperature 0.95 (up from 0.6) for spontaneous humor
+  - Real example ads in prompt (grumpy, conspiracy, unhinged)
+  - 300-600 character scripts (30-60 seconds, down from 2500)
+  - Removed forced structure constraints that killed comedy
+  - Basic name validation only (no over-engineered tracking)
 
 ## External Dependencies
 

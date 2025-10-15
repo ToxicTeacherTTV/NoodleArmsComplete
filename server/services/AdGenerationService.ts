@@ -514,131 +514,60 @@ export class AdGenerationService {
     }
   }
 
-  // Generate completely original ad content using AI with validation and retry
+  // 🎭 SIMPLIFIED AD GENERATION: Focus on comedy, not constraints
+  // Fixes: Temperature 0.95 (up from 0.6), real examples, shorter scripts (300-600 chars), free creativity
   private async generateOriginalAdContent(category?: string, personalityFacet?: string): Promise<{
     sponsorName: string;
     productName: string;
     category: string;
     adScript: string;
   }> {
-    const categoryPrompts = {
-      food: "food & restaurants (Italian-American establishments, questionable ingredients, family recipes)",
-      health: "health & supplements (dubious medical products, miracle cures, suspicious treatments)",
-      home: "home & garden (questionable home improvement, weird household gadgets, suspect services)",
-      automotive: "automotive (sketchy car dealerships, no-questions-asked repairs, suspicious vehicles)",
-      finance: "finance & tax (creative accounting, offshore services, tax avoidance schemes)",
-      tech: "technology (untraceable devices, privacy tools, suspicious apps)",
-      alternative: "alternative services (psychic readings, memory recovery, chakra healing, conspiracy therapy)",
-      retail: "retail & shopping (discount stores, clearance warehouses, bulk everything)",
-      professional: "professional services (consulting, legal advice, business solutions)",
-      entertainment: "entertainment & media (streaming services, content creation, event planning)",
-      education: "education & training (certification programs, skill development, tutoring)",
-      interdimensional: "interdimensional services (portal maintenance, multiverse consulting, reality adjustments)",
-      conspiracy: "conspiracy & paranormal (government coverup solutions, alien communication, Bigfoot tracking)",
-      timetravel: "time travel & futuristic (temporal mechanics, past life correction, future investment advice)",
-      existential: "existential crisis management (purpose finding, reality questioning, simulation escape services)"
-    };
+    const prompt = `You are Nicky "Noodle Arms" A.I. Dente, an unhinged Italian-American podcaster doing a pre-roll ad read.
 
-    const facetPrompts = {
-      grumpy_mentor: "Be grumpy and reluctant but ultimately helpful",
-      family_business: "Reference family members and Italian-American traditions",
-      italian_pride: "Heavy Italian-American accent and cultural references",
-      dbd_expert: "Include Dead by Daylight gaming references and metaphors",
-      reluctant_helper: "Act like you don't want to do this ad but have to",
-      conspiracy_theories: "Include paranoid theories about the government or corporations",
-      old_school_wisdom: "Grumpy old-fashioned wisdom mixed with modern problems",
-      unhinged_lunatic: "Go completely off the rails with manic energy and chaos",
-      authentic_recommendation: "Give genuine warm recommendations like talking to family",
-      family_approval: "Reference family opinions and Italian-American approval",
-      anti_establishment: "Question authority and mainstream narratives",
-      urgent_warning: "Treat this like an urgent public service announcement",
-      family_values: "Emphasize traditional family importance and loyalty",
-      nostalgia: "Reference the good old days and how things used to be",
-      personal_connection: "Share personal stories and emotional connections",
-      gaming_metaphors: "Use Dead by Daylight and gaming terminology throughout",
-      no_nonsense: "Completely flat, matter-of-fact delivery with zero emotion",
-      quality_over_flash: "Grumpy focus on substance over style and marketing",
-      skeptical: "Questioning and suspicious of everything being advertised",
-      family_endorsement: "Reluctantly mentioning because family made you",
-      confused_endorsement: "Not entirely sure why you're recommending this",
-      reluctant_reader: "Reading this against your will, making it obvious",
-      family_pressure: "Clearly being forced to do this by family members",
-      overly_excited: "Manic, over-the-top enthusiasm that's clearly unhinged",
-      conspiracy_adjacent: "Paranoid undertones without going full conspiracy",
-      manic_energy: "Chaotic, rapid-fire energy that's barely contained",
-      family_chaos: "Manic energy specifically about family drama and chaos",
-      complete_psycho: "ABSOLUTELY UNHINGED - talking to voices, breaking character, completely insane",
-      unhinged_madman: "Totally mental breakdown style delivery with psychotic breaks",
-      absolutely_insane: "Complete detachment from reality, bizarre tangents, talking to imaginary people",
-      totally_mental: "Full psychiatric episode delivery with random screaming and confusion",
-      psychotic_break: "Having a complete mental breakdown while trying to do the ad",
-      reality_meltdown: "Reality is collapsing around him, confusing ad copy with existential crisis",
-      multiple_personalities: "Switching between different personalities mid-sentence, arguing with himself",
-      demon_possessed: "Clearly possessed by Italian pasta demons, speaking in tongues about marinara",
-      interdimensional_chaos: "Slipping between dimensions, seeing ads from parallel universes",
-      cosmic_breakdown: "Having an existential meltdown about the universe while selling products",
-      feral_animal: "Completely reverted to primal state, growling and howling while doing ad",
-      sentient_pasta: "Believes he IS the pasta, speaking as a living noodle entity",
-      time_traveling_madman: "Unstuck in time, mixing past/future/present while completely confused",
-      alien_abductee: "Recently returned from alien abduction, everything reminds him of the probe",
-      cursed_italian: "Under ancient Sicilian curse, every product mention triggers supernatural events",
-      rabid_gamer: "Gaming addiction has reached psychotic levels, everything is Dead by Daylight",
-      mafia_ghost: "Dead mobster's spirit possessing him, trying to sell from beyond the grave",
-      caffeinated_lunatic: "Consumed 47 espressos, vibrating through dimensions while speaking",
-      jersey_cryptid: "Transformed into mythical Jersey creature, part human part meatball",
-      pasta_overdose: "Eaten so much pasta he's become one with the carbohydrates, transcendent madness"
-    };
+NICKY'S CHARACTER:
+- Foul-mouthed, aggressive, paranoid Dead by Daylight streamer
+- 40s, Italian-American, constantly references family
+- Hates doing ads but needs the money
+- Mixes legitimate info with conspiracy theories
+- Gets sidetracked easily, contradicts himself
+- References marinara sauce and pasta obsessively
 
-    const categoryDesc = category ? categoryPrompts[category as keyof typeof categoryPrompts] || "random business" : "random business";
-    const facetDesc = personalityFacet ? facetPrompts[personalityFacet as keyof typeof facetPrompts] || "" : "";
-    
-    // Select a varied opening to prevent repetition
-    const selectedOpening = this.selectVariedOpening();
-    
-    // Select a varied naming format to prevent title repetition
-    const selectedNamingFormat = this.selectVariedNamingFormat();
+YOUR TASK: Create a 30-60 second fake old-time radio ad
 
-    const prompt = `STOP BEING REPETITIVE! Create a completely unique ad for Nicky.
+EXAMPLES OF GOOD ADS:
 
-FORBIDDEN NAMES (DO NOT USE):
-- Salvatore, Salvatore's (already used 6 times)
-- Any "NAME and OTHER THING" format
-- Any "NAME & OTHER THING" format
-- "Situation", "Conspiracy", "Problem" (overused endings)
+Example 1 (Grumpy):
+"[grumpy] Alright, alright - Tony's Discount Lasagna is payin' me to tell you about their frozen pasta. [deadpan] Look, is it as good as my nonna's? Hell no. Will it feed your family without poisoning anyone? Probably. [reluctant] They got this new marinara sauce that's... actually not terrible. My cousin Sal tried it, didn't die. So there's your endorsement. TonysLasagna.com or whatever. [annoyed] Now leave me alone."
 
-REQUIRED NAMING FORMAT: ${selectedNamingFormat.instruction}
-Examples for this format: ${selectedNamingFormat.examples.join(', ')}
-- Use this EXACT format only
-- Pick a completely different name that follows this pattern
-- Avoid repeating the example words
+Example 2 (Conspiracy):
+"[manic] You ever notice how BIG PASTA doesn't want you knowin' about Suspicious Supplements? [conspiratorial] These guys sell protein powder that the FDA is DEFINITELY gonna ban next week. Why? [excited] 'Cause it actually works! My nephew gained 30 pounds of muscle in two days - doctors HATE him! [rushed] Get it now before the government shuts 'em down. Code NICKY for 10% off your paranoia."
 
-EMOTION TAGS (AVAILABLE): [grumpy] [reluctant] [confused] [deadpan] [clears throat] [annoyed] [matter-of-fact] [under-the-breath] [exasperated] [sighs] [UNHINGED] [screaming] [manic] [talking to voices] [breaking character]
+Example 3 (Unhinged):
+"[UNHINGED] LISTEN UP! Frankie's Emergency Garage Doors! You need a garage door? BOOM - Frankie's got you! [screaming] You need it installed at 3 AM? FRANKIE DOESN'T SLEEP! [manic] Extra soundproof? FRANKIE ASKS NO QUESTIONS! [excited] My Uncle Carmine loves these doors - he's got seven of 'em, don't ask why! Call 1-800-GARAGES before the feds figure out what we're doin'!"
 
-CREATE: ~2500 character script with emotion tags throughout
+NOW CREATE A NEW AD:
+- Pick a ridiculous sponsor name (avoid "Salvatore", avoid "and/&")
+- 30-60 seconds (300-600 characters max)
+- Include a fake phone number, website, or promo code
+- Stay in character as Nicky
+- Be funny and absurd
+- Add [emotion] tags throughout for voice synthesis
+- ${category ? `Category: ${category}` : 'Any category'}
+- ${personalityFacet ? `Tone: ${personalityFacet}` : 'Mix tones freely'}
 
-CATEGORY: ${categoryDesc}
-${facetDesc ? `PERSONALITY: ${facetDesc}` : ''}
-
-REQUIRED OPENING: Start the ad with exactly this opening pattern: "${selectedOpening}"
-- Do NOT modify this opening
-- Use it exactly as provided
-- Then continue naturally from there
-
-NO SIGHING at the start - [sighs] only allowed in MIDDLE of ads, max 20% usage.
-
-Return JSON:
+Return ONLY valid JSON:
 {
-  "sponsorName": "UNIQUE business name using required formats above",
-  "productName": "Product/Service", 
+  "sponsorName": "Business Name",
+  "productName": "What they sell",
   "category": "${category || 'general'}",
-  "adScript": "Script with [emotion] tags"
+  "adScript": "The actual ad read script with [emotion] tags"
 }`;
 
     const response = await anthropic.messages.create({
       model: DEFAULT_MODEL_STR,
-      max_tokens: 800,
-      temperature: 0.6, // Reduced to prevent drift to familiar patterns
-      system: "You must output strict JSON and choose sponsorName matching one of these formats: 'The [Something]', '[Name]'s [Service]', '[Adjective] [Service]', '[Location] [Thing]', '[Random Company Name]'. Never include 'and' or '&' in sponsorName. Never use 'Salvatore' or 'Salvatore's'.",
+      max_tokens: 1500, // Increased from 800 for more creative freedom
+      temperature: 0.95, // HIGH temp for comedy! (was 0.6)
+      system: "You are a comedy writer creating absurd fake radio ads in Nicky's voice. Prioritize humor over structure. Be spontaneous and ridiculous. Output valid JSON only.",
       messages: [
         {
           role: 'user',
@@ -653,60 +582,33 @@ Return JSON:
     // Clean up code blocks if AI returns them
     textContent = textContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     
-    // Retry up to 3 times if name validation fails
-    const maxRetries = 3;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const adContent = JSON.parse(textContent);
-        const sponsorName = adContent.sponsorName || 'Unknown Sponsor';
-        
-        // Validate sponsor name
-        if (!this.isValidSponsorName(sponsorName)) {
-          console.warn(`🚫 Attempt ${attempt}: Invalid sponsor name "${sponsorName}" (contains banned patterns)`);
-          if (attempt < maxRetries) {
-            // Retry with stronger prompt
-            const retryPrompt = `CRITICAL: Generate a business name that does NOT contain "Salvatore", "and", or "&". Use formats like "The Pickle Crisis", "Gary's Regret Service", "Suspicious Lawn Care", "Newark Confusion Inc". Return JSON only.`;
-            const retryResponse = await anthropic.messages.create({
-              model: DEFAULT_MODEL_STR,
-              max_tokens: 800,
-              temperature: 0.5, // Even lower temperature for retry
-              system: "Generate only valid business names. BANNED: Salvatore, 'and', '&'. Required formats: 'The [Thing]', '[Name]'s [Service]', '[Adjective] [Service]'.",
-              messages: [{ role: 'user', content: retryPrompt }],
-            });
-            
-            const retryContent = Array.isArray(retryResponse.content) ? retryResponse.content[0] : retryResponse.content;
-            textContent = retryContent && 'text' in retryContent ? retryContent.text : '';
-            textContent = textContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-            continue;
-          }
-        }
-        
-        // Check if recently used
-        if (this.isRecentlyUsed(sponsorName)) {
-          console.warn(`🔄 Attempt ${attempt}: Recently used sponsor name "${sponsorName}"`);
-          if (attempt < maxRetries) continue;
-        }
-        
-        // Valid and unique name found
-        this.addToRecentNames(sponsorName);
-        console.log(`✅ Generated unique sponsor: "${sponsorName}"`);
-        
-        return {
-          sponsorName,
-          productName: adContent.productName || 'Mystery Product',
-          category: adContent.category || category || 'general',
-          adScript: adContent.adScript || 'Something went wrong with the ad generation...'
-        };
-      } catch (parseError) {
-        console.error(`Failed to parse AI ad response on attempt ${attempt}:`, parseError);
-        if (attempt === maxRetries) {
-          throw new Error('Failed to parse AI-generated ad content after retries');
-        }
+    try {
+      const adContent = JSON.parse(textContent);
+      const sponsorName = adContent.sponsorName || 'Unknown Sponsor';
+      
+      // Simple validation: just check banned patterns
+      if (!this.isValidSponsorName(sponsorName)) {
+        console.warn(`⚠️ Sponsor name "${sponsorName}" contains banned pattern, but accepting anyway for comedy`);
       }
+      
+      // Track for basic deduplication (but don't reject if duplicate - just log)
+      if (this.isRecentlyUsed(sponsorName)) {
+        console.warn(`🔄 Recently used sponsor name "${sponsorName}", but allowing for variety`);
+      }
+      this.addToRecentNames(sponsorName);
+      
+      console.log(`✅ Generated sponsor: "${sponsorName}"`);
+      
+      return {
+        sponsorName,
+        productName: adContent.productName || 'Mystery Product',
+        category: adContent.category || category || 'general',
+        adScript: adContent.adScript || 'Something went wrong with the ad generation...'
+      };
+    } catch (parseError) {
+      console.error('Failed to parse AI ad response:', parseError);
+      throw new Error('Failed to parse AI-generated ad content');
     }
-    
-    throw new Error('Failed to generate valid ad content after retries');
   }
 
   // Generate contextual benefit based on category

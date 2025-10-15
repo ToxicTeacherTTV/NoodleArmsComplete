@@ -1,0 +1,127 @@
+OH, I SEE THE PROBLEM. Your code is over-engineered and killing the comedy. Let me break down what's wrong:
+❌ Issues Killing the Funny
+1. Too Many Constraints
+typescript// You have like 10 different anti-repetition systems
+- recentSponsorNames (50 max)
+- recentPersonalityFacets (5 max)  
+- recentOpenings (6 max)
+- recentNameFormats (6 max)
+- Banned patterns (Salvatore, "and", "&")
+- Required naming format
+- Required opening pattern
+Problem: The AI is spending all its energy following rules instead of being funny.
+2. Temperature Too Low
+typescripttemperature: 0.6, // ← TOO LOW FOR COMEDY
+Comedy needs randomness. 0.6 is for factual accuracy, not jokes.
+3. No Examples of Good Output
+Your prompt says "Create a completely unique ad" but doesn't show what a GOOD ad looks like. The AI doesn't know what "old-time radio funny" means.
+4. Forced Structure Kills Spontaneity
+typescriptREQUIRED OPENING: Start with exactly: "${selectedOpening}"
+REQUIRED NAMING FORMAT: ${selectedNamingFormat.instruction}
+This is like telling a comedian "You MUST start with this exact joke and use this exact punchline format." No room for creativity.
+5. Script Too Long
+typescriptCREATE: ~2500 character script
+Old radio ads were 30-60 seconds = 300-600 characters max. You're making Nicky do a TED talk.
+6. Emotion Tags as Afterthought
+The AI has to generate comedy AND remember to insert [emotion] tags. Should be separate passes.
+
+✅ Here's What You Should Do
+Option 1: Complete Rewrite (Recommended)
+typescriptprivate async generateOriginalAdContent(category?: string, personalityFacet?: string): Promise<{
+  sponsorName: string;
+  productName: string;
+  category: string;
+  adScript: string;
+}> {
+  
+  const prompt = `You are Nicky "Noodle Arms" A.I. Dente, an unhinged Italian-American podcaster doing a pre-roll ad read.
+
+NICKY'S CHARACTER:
+- Foul-mouthed, aggressive, paranoid Dead by Daylight streamer
+- 40s, Italian-American, constantly references family
+- Hates doing ads but needs the money
+- Mixes legitimate info with conspiracy theories
+- Gets sidetracked easily, contradicts himself
+- References marinara sauce and pasta obsessively
+
+YOUR TASK: Create a 30-60 second fake radio-style ad read
+
+EXAMPLES OF GOOD ADS:
+
+Example 1 (Grumpy):
+"Alright, alright - Tony's Discount Lasagna is payin' me to tell you about their frozen pasta. Look, is it as good as my nonna's? Hell no. Will it feed your family without poisoning anyone? Probably. They got this new marinara sauce that's... actually not terrible. My cousin Sal tried it, didn't die. So there's your endorsement. TonysLasagna.com or whatever. Now leave me alone."
+
+Example 2 (Conspiracy):
+"You ever notice how BIG PASTA doesn't want you knowin' about Suspicious Supplements? These guys sell protein powder that the FDA is DEFINITELY gonna ban next week. Why? 'Cause it actually works! My nephew gained 30 pounds of muscle in two days - doctors HATE him! Get it now before the government shuts 'em down. Code NICKY for 10% off your paranoia."
+
+Example 3 (Unhinged):
+"LISTEN UP! Frankie's Emergency Garage Doors! You need a garage door? BOOM - Frankie's got you! You need it installed at 3 AM? FRANKIE DOESN'T SLEEP! Extra soundproof? FRANKIE ASKS NO QUESTIONS! My Uncle Carmine loves these doors - he's got seven of 'em, don't ask why! Call 1-800-GARAGES before the feds figure out what we're doin'!"
+
+NOW CREATE A NEW AD:
+- Pick a ridiculous sponsor name (avoid "Salvatore", avoid "and/&")
+- 30-60 seconds (300-600 characters)
+- Include a fake phone number, website, or promo code
+- Stay in character as Nicky
+- Be funny and absurd
+- ${category ? `Category: ${category}` : 'Any category'}
+- ${personalityFacet ? `Tone: ${personalityFacet}` : 'Mix tones freely'}
+
+Return ONLY valid JSON:
+{
+  "sponsorName": "Business Name",
+  "productName": "What they sell",
+  "category": "${category || 'general'}",
+  "adScript": "The actual ad read script"
+}`;
+
+  const response = await anthropic.messages.create({
+    model: DEFAULT_MODEL_STR,
+    max_tokens: 1000,
+    temperature: 0.95, // HIGH for comedy!
+    system: "You are a comedy writer creating absurd fake radio ads. Prioritize humor over structure. Output valid JSON only.",
+    messages: [{ role: 'user', content: prompt }]
+  });
+
+  // Parse response
+  const content = Array.isArray(response.content) ? response.content[0] : response.content;
+  let textContent = content && 'text' in content ? content.text : '';
+  textContent = textContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  
+  const adContent = JSON.parse(textContent);
+  
+  // Validate against banned patterns only (don't overthink it)
+  if (this.isValidSponsorName(adContent.sponsorName)) {
+    this.addToRecentNames(adContent.sponsorName);
+    return adContent;
+  }
+  
+  // One retry if name is invalid
+  console.warn('Invalid sponsor name, retrying...');
+  // ... retry logic ...
+}
+Option 2: Use Extended Thinking (Better Comedy)
+typescriptconst response = await anthropic.messages.create({
+  model: DEFAULT_MODEL_STR,
+  max_tokens: 2000,
+  temperature: 0.95,
+  thinking: {
+    type: "enabled",
+    budget_tokens: 5000 // Let Claude think about comedy timing
+  },
+  messages: [{ role: 'user', content: prompt }]
+});
+Extended thinking helps Claude:
+
+Plan the joke structure
+Think about comedic timing
+Build to punchlines naturally
+
+Option 3: Two-Pass Generation (Separate Emotion Tags)
+typescript// Pass 1: Generate funny ad
+const adScript = await this.generateFunnyAd(category);
+
+// Pass 2: Add emotion tags
+const taggedScript = await this.addEmotionTags(adScript);
+
+🎯 Key Changes Summary
+CurrentShould Be10 anti-repetition systems1 simple banned names checkTemperature 0.6Temperature 0.952500 characters300-600 charactersNo examples3 great examplesForced formatsFree creativityEmotion tags requiredSeparate pass (optional)Strict JSON system promptComedy-focused system prompt
