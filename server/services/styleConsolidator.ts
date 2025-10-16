@@ -75,60 +75,51 @@ Extract and consolidate:
 Format the output as a clear, organized list of personality traits and behaviors that can be added to the AI's core identity. Be specific and actionable.`;
 
     try {
-      // Try Anthropic first
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 2000,
-        temperature: 0.3,
-        system: 'You are a personality analysis expert. Extract key behavioral patterns and personality traits from training examples.',
-        messages: [{
-          role: 'user',
-          content: prompt
-        }]
-      });
-
-      const textContent = response.content.find(c => c.type === 'text');
-      if (!textContent || textContent.type !== 'text') {
-        throw new Error('No text content in response');
-      }
-
-      return textContent.text;
-    } catch (error: any) {
-      // Check if error is due to credit/auth issues
-      const isCreditError = error?.status === 400 || 
-                          error?.message?.includes('credit') || 
-                          error?.message?.includes('balance') ||
-                          error?.status === 401 ||
-                          error?.status === 403;
+      // 🎯 PRIMARY: Try Gemini first (free tier)
+      const systemPrompt = 'You are a personality analysis expert. Extract key behavioral patterns and personality traits from training examples.';
+      const fullPrompt = `${systemPrompt}\n\n${prompt}`;
       
-      if (isCreditError) {
-        console.log('⚠️ Anthropic credits low, falling back to Gemini for consolidation');
-        
-        try {
-          // Fallback to Gemini Pro (NEVER Flash - pattern consolidation affects core identity)
-          const systemPrompt = 'You are a personality analysis expert. Extract key behavioral patterns and personality traits from training examples.';
-          const fullPrompt = `${systemPrompt}\n\n${prompt}`;
-          
-          const geminiResponse = await geminiService['ai'].models.generateContent({
-            model: 'gemini-2.5-pro', // 🚫 NEVER Flash - corrupts personality consolidation
-            contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-            config: {
-              maxOutputTokens: 2000,
-              temperature: 0.3
-            }
-          });
-          
-          const patterns = geminiResponse.text || '';
-          console.log('✅ Successfully consolidated patterns using Gemini fallback');
-          return patterns.trim();
-        } catch (geminiError) {
-          console.error('Gemini fallback error:', geminiError);
-          throw new Error('Failed to consolidate patterns (both Anthropic and Gemini failed)');
+      const geminiResponse = await geminiService['ai'].models.generateContent({
+        model: 'gemini-2.5-pro', // 🚫 NEVER Flash - corrupts personality consolidation
+        contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+        config: {
+          maxOutputTokens: 2000,
+          temperature: 0.3
         }
-      }
+      });
       
-      console.error('Error consolidating patterns:', error);
-      throw new Error('Failed to consolidate personality patterns');
+      const patterns = geminiResponse.text || '';
+      console.log('✅ Successfully consolidated patterns using Gemini');
+      return patterns.trim();
+      
+    } catch (geminiError) {
+      // 🔄 FALLBACK: Use Claude if Gemini fails
+      console.log('❌ Gemini consolidation failed, falling back to Claude:', geminiError);
+      
+      try {
+        const response = await anthropic.messages.create({
+          model: 'claude-sonnet-4-5-20250929',
+          max_tokens: 2000,
+          temperature: 0.3,
+          system: 'You are a personality analysis expert. Extract key behavioral patterns and personality traits from training examples.',
+          messages: [{
+            role: 'user',
+            content: prompt
+          }]
+        });
+
+        const textContent = response.content.find(c => c.type === 'text');
+        if (!textContent || textContent.type !== 'text') {
+          throw new Error('No text content in response');
+        }
+
+        console.log('✅ Successfully consolidated patterns using Claude (fallback)');
+        return textContent.text;
+        
+      } catch (claudeError) {
+        console.error('❌ Both Gemini and Claude failed:', claudeError);
+        throw new Error('Failed to consolidate patterns (both Gemini and Claude failed)');
+      }
     }
   }
 

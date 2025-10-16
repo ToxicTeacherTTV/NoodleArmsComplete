@@ -927,135 +927,151 @@ ${coreIdentity}`;
       
       enhancedCoreIdentity += `\n\n${chaosModifier}\n\n${varietyPrompt}`;
 
+      // 🎯 PRIMARY: Try Gemini 2.5 Pro first (free, fast, proven quality)
+      console.log('🌟 Using Gemini 2.5 Pro as primary AI provider');
       const apiCallStart = Date.now();
-      const response = await anthropic.messages.create({
-        // "claude-sonnet-4-20250514"
-        model: DEFAULT_MODEL_STR,
-        max_tokens: 1024,
-        temperature: 1.0, // Maximum creativity (valid range: 0-1)
-        system: enhancedCoreIdentity,
-        messages: [
-          {
-            role: 'user',
-            content: fullPrompt
-          }
-        ],
-      });
-      const apiCallDuration = (Date.now() - apiCallStart) / 1000;
-
-      // 📊 Track metrics
-      prometheusMetrics.trackLLMCall({
-        provider: 'claude',
-        model: DEFAULT_MODEL_STR,
-        type: 'chat',
-        inputTokens: response.usage?.input_tokens || 0,
-        outputTokens: response.usage?.output_tokens || 0,
-        durationSeconds: apiCallDuration
-      });
-
-      const processingTime = Date.now() - startTime;
-      const content = Array.isArray(response.content) 
-        ? (response.content[0] as any).text 
-        : (response.content as any);
-
-      // 🚫 Filter content to prevent cancel-worthy language while keeping profanity
-      const rawContent = typeof content === 'string' ? content : '';
-      const { filtered: filteredContent, wasFiltered } = contentFilter.filterContent(rawContent);
       
-      if (wasFiltered) {
-        console.warn(`🚫 Content filtered to prevent cancel-worthy language`);
-      }
-
-      // 🚫 CRITICAL: Strip asterisk actions post-processing (last resort enforcement)
-      const asteriskPattern = /\*[^*]+\*/g;
-      const strippedContent = filteredContent.replace(asteriskPattern, (match) => {
-        console.warn(`🚫 Stripped asterisk action from response: ${match}`);
-        return ''; // Remove the asterisk action entirely
-      }).replace(/\s{2,}/g, ' ').trim(); // Clean up extra spaces
-
-      // ✨ NEW: Post-generation repetition filter
-      let finalContent = strippedContent;
-      if (conversationId) {
-        const repetitionCheck = await this.checkForRepetition(conversationId, strippedContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
-        finalContent = repetitionCheck.content;
+      try {
+        const geminiResponse = await geminiService.generateChatResponse(
+          userMessage,
+          enhancedCoreIdentity,
+          contextPrompt
+        );
         
-        // 📖 NEW: Story completion tracking for enhanced memory persistence
-        await this.trackStoryCompletion(conversationId, finalContent, profileId, mode);
-      }
-
-      // 🎭 NEW: Generate debug metrics for logging (not user-facing)
-      if (personalityPrompt) {
-        const { generateMetricsFooter } = await import('../types/personalityControl');
-        const metricsFooter = generateMetricsFooter(finalContent);
-        console.log(`📊 Response Metrics: ${metricsFooter.replace('<!-- METRICS ', '').replace(' -->', '')}`);
-      }
-
-      return {
-        content: finalContent,
-        processingTime,
-        retrievedContext: contextPrompt || undefined,
-      };
-    } catch (error) {
-      console.error('❌ Anthropic API error:', error);
-      
-      // Classify error for appropriate handling
-      const errorInfo = this.classifyError(error);
-      console.log(`🔄 Error classified as: ${errorInfo.type} (retryable: ${errorInfo.retryable})`);
-      
-      // 📊 Track error
-      const errorDuration = (Date.now() - startTime) / 1000;
-      prometheusMetrics.trackLLMCall({
-        provider: 'claude',
-        model: DEFAULT_MODEL_STR,
-        type: 'chat',
-        inputTokens: 0,
-        outputTokens: 0,
-        durationSeconds: errorDuration,
-        error: errorInfo.type
-      });
-      
-      // Attempt retry for retryable errors
-      if (errorInfo.retryable && errorInfo.retryCount < 3) {
-        const delay = Math.min(1000 * Math.pow(2, errorInfo.retryCount), 10000); // Exponential backoff, max 10s
-        console.log(`⏳ Retrying Anthropic API in ${delay}ms... (attempt ${errorInfo.retryCount + 1}/3)`);
+        const apiCallDuration = (Date.now() - apiCallStart) / 1000;
         
-        await new Promise(resolve => setTimeout(resolve, delay));
+        // 📊 Track metrics for successful Gemini call
+        prometheusMetrics.trackLLMCall({
+          provider: 'gemini',
+          model: 'gemini-2.5-pro',
+          type: 'chat',
+          inputTokens: 0, // Gemini doesn't expose token counts
+          outputTokens: 0,
+          durationSeconds: apiCallDuration
+        });
         
-        // Recursive retry with incremented count
-        try {
-          return await this.generateResponseWithRetry(
-            userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, errorInfo.retryCount + 1, mode, conversationId
-          );
-        } catch (retryError) {
-          console.error(`❌ Retry ${errorInfo.retryCount + 1} failed:`, retryError);
+        console.log('✅ Gemini 2.5 Pro successfully generated response');
+        const processingTime = Date.now() - startTime;
+        const content = geminiResponse.content;
+        
+        // 🚫 Filter content to prevent cancel-worthy language while keeping profanity
+        const rawContent = typeof content === 'string' ? content : '';
+        const { filtered: filteredContent, wasFiltered } = contentFilter.filterContent(rawContent);
+        
+        if (wasFiltered) {
+          console.warn(`🚫 Content filtered to prevent cancel-worthy language`);
         }
-      }
-      
-      // Fallback to Gemini for credits, rate limits, or after retry exhaustion
-      if ((errorInfo.type === 'CREDITS_EXHAUSTED' || errorInfo.type === 'RATE_LIMIT' || errorInfo.retryCount >= 3) && process.env.GEMINI_API_KEY) {
+
+        // 🚫 CRITICAL: Strip asterisk actions post-processing (last resort enforcement)
+        const asteriskPattern = /\*[^*]+\*/g;
+        const strippedContent = filteredContent.replace(asteriskPattern, (match) => {
+          console.warn(`🚫 Stripped asterisk action from response: ${match}`);
+          return ''; // Remove the asterisk action entirely
+        }).replace(/\s{2,}/g, ' ').trim(); // Clean up extra spaces
+
+        // ✨ NEW: Post-generation repetition filter
+        let finalContent = strippedContent;
+        if (conversationId) {
+          const repetitionCheck = await this.checkForRepetition(conversationId, strippedContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
+          finalContent = repetitionCheck.content;
+          
+          // 📖 NEW: Story completion tracking for enhanced memory persistence
+          await this.trackStoryCompletion(conversationId, finalContent, profileId, mode);
+        }
+
+        // 🎭 NEW: Generate debug metrics for logging (not user-facing)
+        if (personalityPrompt) {
+          const { generateMetricsFooter } = await import('../types/personalityControl');
+          const metricsFooter = generateMetricsFooter(finalContent);
+          console.log(`📊 Response Metrics: ${metricsFooter.replace('<!-- METRICS ', '').replace(' -->', '')}`);
+        }
+
+        return {
+          content: finalContent,
+          processingTime,
+          retrievedContext: contextPrompt || undefined,
+        };
+        
+      } catch (geminiError) {
+        // 🔄 FALLBACK: Gemini failed, fall back to Claude Sonnet (premium failsafe)
+        console.error('❌ Gemini API error:', geminiError);
         console.error(`\n${'='.repeat(80)}`);
-        console.error(`🚨 ANTHROPIC CREDITS EXHAUSTED - FALLING BACK TO GEMINI PRO`);
-        console.error(`   Error Type: ${errorInfo.type}`);
-        console.error(`   ⚠️  WARNING: This fallback uses Gemini Pro (NOT Flash - Flash is banned)`);
-        console.error(`   💡 TIP: Add more Anthropic credits to restore full quality`);
+        console.error(`🚨 GEMINI FAILED - FALLING BACK TO CLAUDE SONNET (PREMIUM FAILSAFE)`);
+        console.error(`   Error: ${geminiError instanceof Error ? geminiError.message : String(geminiError)}`);
+        console.error(`   💰 Note: Claude Sonnet is a paid service - Gemini is preferred when available`);
         console.error(`${'='.repeat(80)}\n`);
-        console.warn(`🔄 Falling back to Gemini Pro...`);
         
         try {
-          const chaosModifier = this.chaosEngine.getPersonalityModifier();
-          const enhancedCoreIdentity = `${coreIdentity}\n\n${chaosModifier}`;
+          const claudeCallStart = Date.now();
+          const response = await anthropic.messages.create({
+            model: DEFAULT_MODEL_STR,
+            max_tokens: 1024,
+            temperature: 1.0,
+            system: enhancedCoreIdentity,
+            messages: [
+              {
+                role: 'user',
+                content: fullPrompt
+              }
+            ],
+          });
           
-          const fallbackResponse = await geminiService.generateChatResponse(
-            userMessage,
-            enhancedCoreIdentity,
-            contextPrompt
-          );
+          const claudeCallDuration = (Date.now() - claudeCallStart) / 1000;
           
-          console.log('✅ Successfully generated response using Gemini fallback');
-          return fallbackResponse;
+          // 📊 Track metrics for Claude fallback
+          prometheusMetrics.trackLLMCall({
+            provider: 'claude',
+            model: DEFAULT_MODEL_STR,
+            type: 'chat',
+            inputTokens: response.usage?.input_tokens || 0,
+            outputTokens: response.usage?.output_tokens || 0,
+            durationSeconds: claudeCallDuration
+          });
           
-        } catch (geminiError) {
-          console.error('❌ Gemini fallback failed:', geminiError);
+          console.log('✅ Claude Sonnet successfully generated fallback response');
+          const processingTime = Date.now() - startTime;
+          const content = Array.isArray(response.content) 
+            ? (response.content[0] as any).text 
+            : (response.content as any);
+          
+          // 🚫 Filter content
+          const rawContent = typeof content === 'string' ? content : '';
+          const { filtered: filteredContent, wasFiltered } = contentFilter.filterContent(rawContent);
+          
+          if (wasFiltered) {
+            console.warn(`🚫 Content filtered to prevent cancel-worthy language`);
+          }
+
+          // 🚫 Strip asterisk actions
+          const asteriskPattern = /\*[^*]+\*/g;
+          const strippedContent = filteredContent.replace(asteriskPattern, (match) => {
+            console.warn(`🚫 Stripped asterisk action from response: ${match}`);
+            return '';
+          }).replace(/\s{2,}/g, ' ').trim();
+
+          // ✨ Repetition filter
+          let finalContent = strippedContent;
+          if (conversationId) {
+            const repetitionCheck = await this.checkForRepetition(conversationId, strippedContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
+            finalContent = repetitionCheck.content;
+            await this.trackStoryCompletion(conversationId, finalContent, profileId, mode);
+          }
+
+          // 🎭 Debug metrics
+          if (personalityPrompt) {
+            const { generateMetricsFooter } = await import('../types/personalityControl');
+            const metricsFooter = generateMetricsFooter(finalContent);
+            console.log(`📊 Response Metrics: ${metricsFooter.replace('<!-- METRICS ', '').replace(' -->', '')}`);
+          }
+
+          return {
+            content: finalContent,
+            processingTime,
+            retrievedContext: contextPrompt || undefined,
+          };
+            
+        } catch (claudeError) {
+          console.error('❌ Claude fallback also failed:', claudeError);
           
           // Last resort: provide a meaningful error response
           return {
@@ -1065,8 +1081,10 @@ ${coreIdentity}`;
           };
         }
       }
+    } catch (error) {
+      // This catch is for context building errors (before AI is called)
+      console.error('❌ Context building error:', error);
       
-      // For non-retryable errors without fallback, provide graceful degradation
       return {
         content: "Ay, something's not working right in my digital noggin! Try asking me again in a moment! 🤯",
         processingTime: Date.now() - startTime,
@@ -1287,21 +1305,34 @@ If no significant information is found, return an empty array: []
 Conversation:
 ${conversationHistory}`;
 
-      const response = await anthropic.messages.create({
-        // "claude-sonnet-4-20250514"
-        model: DEFAULT_MODEL_STR,
-        max_tokens: 1024,
-        temperature: 0.8, // Moderate creativity for memory consolidation
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-      });
+      // 🎯 PRIMARY: Try Gemini first for memory consolidation
+      let textContent: string;
+      
+      try {
+        console.log('🌟 Using Gemini for memory consolidation');
+        const geminiResponse = await geminiService.generateChatResponse(prompt, '', '');
+        textContent = geminiResponse.content;
+        console.log('✅ Gemini successfully consolidated memories');
+      } catch (geminiError) {
+        // 🔄 FALLBACK: Use Claude if Gemini fails
+        console.warn('❌ Gemini consolidation failed, falling back to Claude:', geminiError);
+        
+        const response = await anthropic.messages.create({
+          model: DEFAULT_MODEL_STR,
+          max_tokens: 1024,
+          temperature: 0.8,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+        });
 
-      const content = Array.isArray(response.content) ? response.content[0] : response.content;
-      const textContent = content && 'text' in content ? content.text : '';
+        const content = Array.isArray(response.content) ? response.content[0] : response.content;
+        textContent = content && 'text' in content ? content.text : '';
+        console.log('✅ Claude successfully consolidated memories (fallback)');
+      }
       
       try {
         const rawMemories = JSON.parse(textContent);

@@ -1262,68 +1262,9 @@ export class DiscordBotService {
       const { generatePersonalityPrompt } = await import('../types/personalityControl');
       const personalityPrompt = generatePersonalityPrompt(controls);
       
-      // First try Anthropic
-      const anthropic = new (await import('@anthropic-ai/sdk')).Anthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-      });
-
-      const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-5-20250929",
-        max_tokens: 200, // Reasonable limit for 3-4 sentences
-        temperature: 1.0,
-        system: `${coreIdentity}
-
-${personalityPrompt}
-
-DISCORD MODE: You are chatting on Discord. Your responses MUST be:
-- 3-4 sentences maximum 
-- Conversational and casual like texting
-- No action descriptions (*laughs*, etc.)
-- No long rants or essays
-- Natural Discord chat style, not walls of text`,
-        messages: [{
-          role: 'user',
-          content: prompt
-        }],
-      });
-
-      const content = Array.isArray(response.content) 
-        ? (response.content[0] as any).text 
-        : (response.content as any);
-
-      if (!content) return null;
-
-      // Strip emotion tags AND debug state from Anthropic response
-      let cleanContent = this.stripEmotionTags(content);
-      
-      // Remove any debug headers that might appear in Discord responses
-      cleanContent = cleanContent
-        .replace(/\[NICKY STATE\][^\n]*/gi, '') // Remove debug state header
-        .replace(/preset=[^|]+(?:\s*\|\s*intensity=[^|]+)?(?:\s*\|\s*(?:dbd_lens|dbdsafe)=[^|\s]*)?(?:\s*\|\s*spice=[^|\s]+)?/gi, '') // Remove any preset info variations
-        .replace(/<!--\s*METRICS[^>]*-->/gi, '') // Remove metrics footer
-        .replace(/<-\s*METRICS[^>]*->/gi, '') // Remove alternative metrics format
-        .replace(/^\s*\|\s*/g, '') // Remove leading pipes
-        .trim();
-
-      // Ensure it stays reasonable length
-      if (cleanContent.length > 500) {
-        cleanContent = cleanContent.substring(0, 497) + "...";
-      }
-
-      return cleanContent;
-    } catch (error) {
-      console.error('Error in Discord-specific response generation:', error);
-      
-      // Fallback to Gemini with Discord-specific constraints
+      // 🎯 PRIMARY: Try Gemini first (free tier)
       try {
-        console.log('🔄 Anthropic failed, using Gemini for Discord response...');
         const { geminiService } = await import('./gemini');
-        
-        // Get personality controls (already loaded above, reuse them)
-        const { personalityController } = await import('./personalityController');
-        const controls = await personalityController.getEffectivePersonality();
-        const { generatePersonalityPrompt } = await import('../types/personalityControl');
-        const personalityPrompt = generatePersonalityPrompt(controls);
         
         const discordIdentity = `${coreIdentity}
 
@@ -1363,21 +1304,80 @@ DISCORD CHAT MODE - CRITICAL CONSTRAINTS:
         console.log('✅ Gemini Discord response generated successfully');
         return content;
       } catch (geminiError) {
-        console.error('Gemini Discord fallback also failed:', geminiError);
+        // 🔄 FALLBACK: Try Claude if Gemini fails
+        console.error('❌ Gemini Discord failed, falling back to Claude:', geminiError);
         
-        // Last resort: simple responses
-        const fallbackResponses = [
-          "What's good?",
-          "Sup?",
-          "Hey there!",
-          "Yo!",
-          "What's up?",
-          "Madonna mia...",
-          "Oof...",
-          "Bruh"
-        ];
-        return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+        try {
+          const anthropic = new (await import('@anthropic-ai/sdk')).Anthropic({
+            apiKey: process.env.ANTHROPIC_API_KEY,
+          });
+
+          const response = await anthropic.messages.create({
+            model: "claude-sonnet-4-5-20250929",
+            max_tokens: 200,
+            temperature: 1.0,
+            system: `${coreIdentity}
+
+${personalityPrompt}
+
+DISCORD MODE: You are chatting on Discord. Your responses MUST be:
+- 3-4 sentences maximum 
+- Conversational and casual like texting
+- No action descriptions (*laughs*, etc.)
+- No long rants or essays
+- Natural Discord chat style, not walls of text`,
+            messages: [{
+              role: 'user',
+              content: prompt
+            }],
+          });
+
+          const content = Array.isArray(response.content) 
+            ? (response.content[0] as any).text 
+            : (response.content as any);
+
+          if (!content) return null;
+
+          // Strip emotion tags AND debug state from Claude response
+          let cleanContent = this.stripEmotionTags(content);
+          
+          // Remove any debug headers
+          cleanContent = cleanContent
+            .replace(/\[NICKY STATE\][^\n]*/gi, '')
+            .replace(/preset=[^|]+(?:\s*\|\s*intensity=[^|]+)?(?:\s*\|\s*(?:dbd_lens|dbdsafe)=[^|\s]*)?(?:\s*\|\s*spice=[^|\s]+)?/gi, '')
+            .replace(/<!--\s*METRICS[^>]*-->/gi, '')
+            .replace(/<-\s*METRICS[^>]*->/gi, '')
+            .replace(/^\s*\|\s*/g, '')
+            .trim();
+
+          // Ensure reasonable length
+          if (cleanContent.length > 500) {
+            cleanContent = cleanContent.substring(0, 497) + "...";
+          }
+
+          console.log('✅ Claude Discord response generated successfully (fallback)');
+          return cleanContent;
+        } catch (claudeError) {
+          console.error('❌ Both Gemini and Claude failed for Discord:', claudeError);
+          
+          // Last resort: simple responses
+          const fallbackResponses = [
+            "What's good?",
+            "Sup?",
+            "Hey there!",
+            "Yo!",
+            "What's up?",
+            "Madonna mia...",
+            "Oof...",
+            "Bruh"
+          ];
+          return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+        }
       }
+    } catch (error) {
+      // Outer catch for personality control loading errors
+      console.error('Error loading personality controls for Discord:', error);
+      return null;
     }
   }
 

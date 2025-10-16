@@ -171,16 +171,18 @@ Return a JSON array:
 If no clusters found, return: []`;
 
     try {
-      // Try Anthropic first
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 3000,
-        temperature: 0.3,
-        messages: [{ role: 'user', content: prompt }]
+      // 🎯 PRIMARY: Try Gemini first (free tier)
+      const geminiResponse = await this.gemini.ai.models.generateContent({
+        model: "gemini-2.5-pro",
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.3
+        },
+        contents: prompt,
       });
 
-      const content = response.content.find(c => c.type === 'text')?.text || '';
-      console.log(`📝 Anthropic raw response (first 200 chars): ${content.slice(0, 200)}...`);
+      const content = geminiResponse.text || '';
+      console.log(`📝 Gemini raw response (first 200 chars): ${content.slice(0, 200)}...`);
       
       const analysis = this.extractJSON(content);
 
@@ -197,26 +199,24 @@ If no clusters found, return: []`;
         }
       }
 
-      console.log(`🎯 Anthropic found ${clusters.length} fact clusters from ${facts.length} candidate facts`);
+      console.log(`✅ Gemini found ${clusters.length} fact clusters from ${facts.length} candidate facts`);
       return clusters;
 
-    } catch (anthropicError) {
-      console.error('❌ Anthropic fact clustering failed:', anthropicError);
-      console.log('🔄 Falling back to Gemini for fact clustering...');
+    } catch (geminiError) {
+      console.error('❌ Gemini fact clustering failed:', geminiError);
+      console.log('🔄 Falling back to Claude for fact clustering...');
       
-      // Fallback to Gemini
+      // 🔄 FALLBACK: Use Claude if Gemini fails (paid)
       try {
-        const geminiResponse = await this.gemini.ai.models.generateContent({
-          model: "gemini-2.5-pro",
-          config: {
-            responseMimeType: "application/json",
-            temperature: 0.3
-          },
-          contents: prompt,
+        const response = await this.anthropic.messages.create({
+          model: 'claude-sonnet-4-5-20250929',
+          max_tokens: 3000,
+          temperature: 0.3,
+          messages: [{ role: 'user', content: prompt }]
         });
 
-        const content = geminiResponse.text || '';
-        console.log(`📝 Gemini raw response (first 200 chars): ${content.slice(0, 200)}...`);
+        const content = response.content.find(c => c.type === 'text')?.text || '';
+        console.log(`📝 Claude raw response (first 200 chars): ${content.slice(0, 200)}...`);
         
         const analysis = this.extractJSON(content);
 
@@ -233,11 +233,11 @@ If no clusters found, return: []`;
           }
         }
 
-        console.log(`✅ Gemini found ${clusters.length} fact clusters from ${facts.length} candidate facts`);
+        console.log(`🎯 Claude found ${clusters.length} fact clusters from ${facts.length} candidate facts (fallback)`);
         return clusters;
         
-      } catch (geminiError) {
-        console.error('❌ Gemini fact clustering also failed:', geminiError);
+      } catch (claudeError) {
+        console.error('❌ Claude fact clustering also failed:', claudeError);
         return [];
       }
     }
@@ -377,47 +377,47 @@ Return JSON array:
 If no drift detected, return: []`;
 
     try {
-      // Try Anthropic first
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 2000,
-        temperature: 0.3,
-        messages: [{ role: 'user', content: prompt }]
+      // 🎯 PRIMARY: Try Gemini first (free tier)
+      const geminiResponse = await this.gemini.ai.models.generateContent({
+        model: "gemini-2.5-pro",
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.3
+        },
+        contents: prompt,
       });
 
-      const content = response.content.find(c => c.type === 'text')?.text || '';
-      console.log(`📝 Anthropic drift raw response (first 200 chars): ${content.slice(0, 200)}...`);
+      const content = geminiResponse.text || '';
+      console.log(`📝 Gemini drift raw response (first 200 chars): ${content.slice(0, 200)}...`);
       
       const drifts = this.extractJSON(content);
 
-      console.log(`🎯 Anthropic detected ${Array.isArray(drifts) ? drifts.length : 0} personality drifts from ${recentFacts.length} facts`);
+      console.log(`✅ Gemini detected ${Array.isArray(drifts) ? drifts.length : 0} personality drifts from ${recentFacts.length} facts`);
       return Array.isArray(drifts) ? drifts : [];
 
-    } catch (anthropicError) {
-      console.error('❌ Anthropic personality drift analysis failed:', anthropicError);
-      console.log('🔄 Falling back to Gemini for personality drift analysis...');
+    } catch (geminiError) {
+      console.error('❌ Gemini personality drift analysis failed:', geminiError);
+      console.log('🔄 Falling back to Claude for personality drift analysis...');
       
-      // Fallback to Gemini
+      // 🔄 FALLBACK: Use Claude if Gemini fails (paid)
       try {
-        const geminiResponse = await this.gemini.ai.models.generateContent({
-          model: "gemini-2.5-pro",
-          config: {
-            responseMimeType: "application/json",
-            temperature: 0.3
-          },
-          contents: prompt,
+        const response = await this.anthropic.messages.create({
+          model: 'claude-sonnet-4-5-20250929',
+          max_tokens: 2000,
+          temperature: 0.3,
+          messages: [{ role: 'user', content: prompt }]
         });
 
-        const content = geminiResponse.text || '';
-        console.log(`📝 Gemini drift raw response (first 200 chars): ${content.slice(0, 200)}...`);
+        const content = response.content.find(c => c.type === 'text')?.text || '';
+        console.log(`📝 Claude drift raw response (first 200 chars): ${content.slice(0, 200)}...`);
         
         const drifts = this.extractJSON(content);
 
-        console.log(`✅ Gemini detected ${Array.isArray(drifts) ? drifts.length : 0} personality drifts from ${recentFacts.length} facts`);
+        console.log(`🎯 Claude detected ${Array.isArray(drifts) ? drifts.length : 0} personality drifts from ${recentFacts.length} facts (fallback)`);
         return Array.isArray(drifts) ? drifts : [];
         
-      } catch (geminiError) {
-        console.error('❌ Gemini personality drift analysis also failed:', geminiError);
+      } catch (claudeError) {
+        console.error('❌ Claude personality drift analysis also failed:', claudeError);
         return [];
       }
     }

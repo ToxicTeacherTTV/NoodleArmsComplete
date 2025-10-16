@@ -1,6 +1,7 @@
 import { storage } from '../storage.js';
 import { AdTemplate, PrerollAd, InsertAdTemplate, InsertPrerollAd } from '@shared/schema.js';
 import Anthropic from '@anthropic-ai/sdk';
+import { geminiService } from './gemini.js';
 
 interface FakeSponsor {
   name: string;
@@ -563,21 +564,38 @@ Return ONLY valid JSON:
   "adScript": "The actual ad read script with [emotion] tags"
 }`;
 
-    const response = await anthropic.messages.create({
-      model: DEFAULT_MODEL_STR,
-      max_tokens: 1500, // Increased from 800 for more creative freedom
-      temperature: 0.95, // HIGH temp for comedy! (was 0.6)
-      system: "You are a comedy writer creating absurd fake radio ads in Nicky's voice. Prioritize humor over structure. Be spontaneous and ridiculous. Output valid JSON only.",
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-    });
+    // 🎯 PRIMARY: Try Gemini first for ad generation
+    let textContent: string;
+    
+    try {
+      const geminiResponse = await geminiService.generateChatResponse(
+        prompt,
+        "You are a comedy writer creating absurd fake radio ads in Nicky's voice. Prioritize humor over structure. Be spontaneous and ridiculous. Output valid JSON only.",
+        ''
+      );
+      textContent = geminiResponse.content;
+      console.log('✅ Gemini successfully generated ad content');
+    } catch (geminiError) {
+      // 🔄 FALLBACK: Use Claude if Gemini fails
+      console.warn('❌ Gemini ad generation failed, falling back to Claude:', geminiError);
+      
+      const response = await anthropic.messages.create({
+        model: DEFAULT_MODEL_STR,
+        max_tokens: 1500,
+        temperature: 0.95,
+        system: "You are a comedy writer creating absurd fake radio ads in Nicky's voice. Prioritize humor over structure. Be spontaneous and ridiculous. Output valid JSON only.",
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+      });
 
-    const content = Array.isArray(response.content) ? response.content[0] : response.content;
-    let textContent = content && 'text' in content ? content.text : '';
+      const content = Array.isArray(response.content) ? response.content[0] : response.content;
+      textContent = content && 'text' in content ? content.text : '';
+      console.log('✅ Claude successfully generated ad content (fallback)');
+    }
     
     // Clean up code blocks if AI returns them
     textContent = textContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
