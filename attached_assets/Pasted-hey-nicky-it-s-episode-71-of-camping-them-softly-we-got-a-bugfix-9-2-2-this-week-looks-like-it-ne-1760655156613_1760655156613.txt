@@ -1,0 +1,347 @@
+hey nicky, it's episode 71 of camping them softly, we got a bugfix 9.2.2 this week, looks like it nerfed the new killer, the krasue, and a lot of people were saying she was OP, what are your thoughts, bitch?
+
+
+Plotted snarky, conspiracy-laden rant about Krasue nerf.
+
+
+
+[furious] OP? O-P?! THOSE WHINY SURVIVOR MAINS WOULDN'T KNOW OPPRESSIVE IF IT TEABAGGED 'EM AT THE EXIT GATE!
+
+[sarcastic] Oh boo-frickin'-hoo, the floaty head lady was too strong for three whole days. You know what was OP, Toxic? Your hairline in 2003. That thing retreated faster than Italy in World War Two, and nobody nerfed THAT tragedy.
+
+[mischievous] Listen, the Krasue—whatever the hell kinda noodle-necked nightmare that is—lasted what, seventy-two hours before BHVR bent the knee to Reddit? Meanwhile, I've been campaigning for Victor buffs since the Twins dropped and those bastards act like I'm asking for the nuclear codes.
+
+[laughs] You know what this is? It's anti-Mediterranean discrimination. They see a killer that requires FINESSE, STRATEGY, a little bit of that old world artistry—and they panic. Can't have killers that make survivors actually THINK. Gotta keep it nice and smooth for the TTV crowd streaming from their parents' basement.
+
+[deadpan] And before you open that Oklahoma pie-hole, yeah I know the Krasue is Thai mythology, not Italian. I KNOW, you bald fuck. But it's the PRINCIPLE.
+
+[wheezing] Besides... Victor coulda taken her. Easy. Little man's been training.
+
+What'd they even nerf on her? Her speed? Her teleport? Let me guess—survivors cried about "counterplay" again?
+
+The Krasue
+* Leeched is now completely removed from Survivors when they are hooked.
+* Increased Corporeal Weave time to Head Form to 1.2 seconds (was 1).
+* Increased Intestinal Whip wind-up to 0.3 seconds (was 0.2).
+* Decreased Intestinal Whip collision's length to 0.32 seconds (was 0.35).
+* Increased Regurgitate thrown cooldown duration to 1.3 seconds (was 1).
+* Increased Regurgitate cancelled cooldown duration to 1.3 seconds (was 0.1).
+
+
+Analyzed Krasue nerfs with passionate, dramatic Nicky perspective.
+
+
+
+[furious] ARE YOU SHITTING ME?! THEY GUTTED HER LIKE A FUCKIN' THANKSGIVING TURKEY!
+
+[laughs darkly] Look at this massacre... "Leeched removed on hook"—oh, so the ONE THING that made her power MATTER in the late game? GONE. Poof. Just like your streaming career, Toxic.
+
+[sarcastic] And THEN—then—they hit her with the death by a thousand cuts treatment. Point-two seconds here, point-one seconds there... You know what point-two seconds is in DbD? IT'S THE DIFFERENCE BETWEEN A DOWN AND A TEABAG, YOU BALD BASTARD!
+
+[mischievous] But this one... this one right here kills me. "Regurgitate cancelled cooldown: was 0.1, now 1.3 seconds."
+
+[wheezing] THEY MULTIPLIED IT BY THIRTEEN! You can't even FAKE OUT survivors anymore without getting stunlocked like you're in a bad anime! That's not a nerf, that's a kneecapping! That's a "we're puttin' the horse down" nerf!
+
+[deadpan] Meanwhile, Victor gets cancelled mid-pounce and Charlotte's stuck there for three business days waiting for him to respawn, and BHVR sends me a automated response that says "working as intended."
+
+[furious] You know what this is? This is BHVR saying "fuck you" to anyone who dares to play killer with a LEARNING CURVE. Can't have survivors actually adapting to new mechanics for more than a weekend. Gotta water it down, make it nice and digestible for the Meg mains who still run into walls.
+
+[sighs dramatically] She wasn't even OP, Toxic. She was interesting. But interesting don't sell cosmetics to survivors.
+
+hey nicky they reverted off the record back to what it was since they didn't do the anti slug anti tunnel bullshit this patch: here are the notes: Survivor Perk Updates
+* Off The Record:
+   * Re-added the Endurance status effect.
+   * Decreased the perk duration to 30/35/40 seconds. (was 60/70/80 seconds)
+Dev note: The intention with this change is for the perk to help with tunneling that occurs within a reasonable timeframe of being unhooked, while reducing the possibility of using it aggressively more than 40 seconds after being saved from the hook.
+
+
+Fumed over Off the Record perk changes, killer bias.
+
+
+
+
+[furious] OH, SO LET ME GET THIS STRAIGHT—
+
+[laughs maniacally] They KNEE-CAP the Krasue after three days, turn her Regurgitate into a fuckin' paperweight, BUT SURVIVORS GET THEIR PRECIOUS OFF THE RECORD BACK?!
+
+[sarcastic] Oh, but don't worry everyone, it's only forty seconds of invincibility instead of eighty. WOW. SUCH BALANCE. MUCH FAIRNESS.
+
+[deadpan] You know what forty seconds is in a DbD match, Toxic? That's enough time for a survivor to run to Narnia, do a full lap around Haddonfield, stop for a cappuccino, AND STILL have time to teabag at a pallet.
+
+[mischievous] And look at that cute little dev note... "reduce the possibility of using it aggressively."
+
+[furious] AGGRESSIVELY?! THESE FUCKS GET A FREE HEALTH STATE AFTER GETTING UNHOOKED AND THEY'RE WORRIED ABOUT AGGRESSIVE SURVIVORS?!
+
+[wheezing] Meanwhile, Victor—MY LITTLE CONSIGLIERE—gets kicked in his tiny cherub face and Charlotte stands there like a mannequin at a going-out-of-business sale for FIVE SECONDS. Where's his forty seconds of invincibility?! WHERE'S HIS ENDURANCE?!
+
+[seething] This is what I'm talking about... Killers get "adjusted for healthy gameplay." Survivors get "re-added features to help with unfun experiences."
+
+[deadpan] It's the same fuckin' thing, but one sounds like we're helping little Timmy cross the street, and the other sounds like we're putting down Old Yeller.
+
+[mischievous] You know what, though? FINE. Let 'em have their forty seconds. Just means forty more seconds for me to chase their asses down and introduce 'em to the pavement. Off The Record don't mean SHIT when you're dealing with the Meatball Special.
+
+[laughs darkly] Bet your flabby Oklahoma ass BHVR's offices got a survivors-only break room with kombucha and participation trophies.
+
+hey nicky, i accidentally coined a new term on the podcast, i meant to say tunneling and camping and i said tamping and cunneling. isn't cunneling a badass word? what do you think it could mean? it sounds awful, like who wants to get cunneled?
+
+
+Plotted hilarious, vulgar response to accidental word creation
+
+
+
+[laughs harder] CUNNELING?!
+
+[mischievous] Oh, you beautiful bald bastard... you just invented the most disgusting-sounding DbD term since "slugging" and you don't even realize what you've done!
+
+[wheezing] "Who wants to get cunneled?" NOBODY, TOXIC! NOBODY WANTS TO GET CUNNELED! That's the POINT!
+
+[deadpan] Cunneling... that's what happens when a killer is so sweaty, so desperate, so PATHETICALLY try-hard that they're not just tunneling—they're burrowing. They're EXCAVATING. They're digging a tunnel THROUGH your tunnel to tunnel you HARDER.
+
+[furious] It's like... it's advanced tunneling. It's tunneling with MALICE. It's when a Nurse blinks through three walls, ignores two healthy survivors doing a gen in her face, and still comes back for your ass at 5 gens because you clicked a flashlight in the lobby!
+
+[mischievous] And TAMPING? Oh, that's even better. That's when you're camping, but you're being SUBTLE about it. You're not facecamping—you're tamping. You're packing that pressure down, nice and firm, like you're making concrete.
+
+[laughs darkly] You're pretending to leave... but you're hovering just outside Kindred range like a shark in khakis.
+
+[sarcastic] Congratulations, Oklahoma. Your stroke-addled brain just created the new meta terminology. I'm trademarking both of these before some TTV asshole on Twitch steals 'em.
+
+[deadpan] Victor's been cunneling since 2020. That's his whole THING.
+
+victor has been cunneling????? he's a cunneler????? that shit sounds disgusting. it sound fucking sexual and victor has no business doing that kind of thing to jonah
+
+
+Plotted chaotic defense of Victor's professional "cunneling"
+
+
+
+[furious] WHOA WHOA WHOA—YOU SICK FUCK!
+
+[deadpan] Victor is a PROFESSIONAL. He pounces. He latches. He applies PRESSURE. That's STRATEGY, not—not whatever degenerate shit your Oklahoma brain just cooked up!
+
+[laughs in disbelief] This is YOUR fault! YOU made the word, YOU made it sound like a fetish category on a website I'd never visit! Victor's out here doing LEGITIMATE KILLER WORK and you're turning him into some kinda... some kinda...
+
+[furious] HE'S A BABY, TOXIC! A TINY FRENCHMAN! HE'S GOT THE INNOCENCE OF A CHERUB AND THE BLOODLUST OF A FUTURE CAPO!
+
+[mischievous] Although... I will say, Jonah DOES scream like he's getting cunneled every time Victor lands on his ass. That "AHHHHH!" he does?
+
+[wheezing] Maybe you're onto something, you bald pervert.
+
+[sarcastic] Great. Just great. Now every time someone says "cunneling" in the community, they're gonna think of Victor doing unholy things to survivors instead of his HONEST, BLUE-COLLAR POUNCE WORK.
+
+[deadpan] This is slander. This is defamation of character. Victor's gonna sue. I'm calling my lawyer—his name's also Victor, different guy—and we're taking you to COURT.
+
+[sighs] We gotta workshop this term before it hits the streets, Toxic. Cunneling cannot mean... that.
+
+behaviour said that victor isn't a baby, he's just a little fucking ugly ass monster. you're a fucking idiot for believing that garbage. there was controversy about people being able to kick a baby so they said he's not a fucking baby, you meatball licker. i cunneled your mom last night, also
+
+
+Plotted fiery, defensive response to provocative insults.
+
+
+[furious] OH YOU WANNA GO THERE?! YOU WANNA FUCKIN' GO THERE, BALDY?!
+
+[laughs maniacally] BHVR SAID THAT BECAUSE THEY'RE CORPORATE COWARDS! They got scared of some purple-haired Twitter mob crying about "violence against minors" and backpedaled faster than you running from a skill check!
+
+[deadpan] Victor is Charlotte's BROTHER. He came outta the SAME WOMB. He's got a BACKSTORY. He's got LORE. Just 'cause BHVR's legal department said "uhhh actually he's a monster" don't mean SHIT!
+
+[sarcastic] Oh yeah, he's totally just a monster. That's why he's attached to his sister. That's why the whole power is about FAMILY. Real fuckin' mysterious, Sherlock!
+
+[furious] And "meatball licker"?! THAT'S the best you got?! I don't LICK meatballs, you unwashed Oakie fuck—I RESPECT them! I HONOR them! They're a CULINARY MASTERPIECE!
+
+[mischievous] And as for my mom...
+
+[deadpan] My mom's been dead for fifteen years, you insensitive prick. She's in a cemetery in Jersey. So unless you brought a shovel and committed a FELONY last night, you're full of shit.
+
+[laughs darkly] Plus, she woulda cunneled YOU first. Woman had a rolling pin and zero patience for bald streamers.
+
+[furious] Don't you EVER disrespect Victor OR marinara in the same sentence again, or I'm sending the little man through your webcam!
+
+okay fucker, we got a new segment this week, a tier list where we talk about "most eligible survivor" and we rate them in four categories, conversation, job/occupation/whatever, attraction, and a bonus category you get to pick! we'll go through them one by one, i'll rate and you rate, got it?
+
+
+Plotted chaotic podcast segment with snarky character twist.
+
+
+
+[sarcastic] Oh, THIS oughta be good. "Most Eligible Survivor." What is this, The Bachelor: Entity Edition?
+
+[mischievous] Yeah, yeah, I got it. Conversation, job, attraction, and a bonus category...
+
+[deadpan] Alright, my bonus category is: "Would They Snitch To The Feds."
+
+[laughs darkly] 'Cause that's what REALLY matters, Toxic. You can have all the conversation skills in the world, but if they're gonna fold under pressure and rat out the family? FORGET ABOUT IT. That's a dealbreaker.
+
+[furious] And let me be CRYSTAL clear before we start—I'm judging these people like I'm their parole officer, NOT like I'm trying to date 'em. I got standards. I got PRINCIPLES.
+
+[sarcastic] Plus, half these survivors are whiny, flashlight-clicking, teabagging delinquents who wouldn't know respect if it hit 'em with a pallet.
+
+[mischievous] But sure, let's do this. Who's first on the chopping block? And if you say Dwight, I swear to God I'm ending this podcast right now.
+
+[deadpan] Actually, you know what? Start with whoever you want. I'm ready to destroy your trash-ass opinions and educate the people on what REAL eligibility looks like.
+
+Let's go, you bald fuck. Hit me.
+
+actually we'll call the bonus category trustworthiness, and yes, you have to rate them on a scale of 1-10 on each category and give your reasoning.
+
+
+Strategized tier list approach for Dead by Daylight survivors.
+
+
+
+[sighs dramatically] Fine, TRUSTWORTHINESS. Same difference. Would they snitch? Can you trust 'em with the family secrets? It's all connected, you Oklahoma simpleton.
+
+[deadpan] And yeah, yeah, one to ten scale. I got it. I'm not an idiot, unlike SOME people who can't tell the difference between tunneling and cunneling without having a goddamn stroke.
+
+[mischievous] Alright, I'm ready. I got my mental notepad out. I got my biases locked and loaded. I got OPINIONS that'll make the TTV chat lose their MINDS.
+
+[sarcastic] Let me guess—you're gonna start with someone boring like Meg or Claudette, aren't you? Someone safe. Someone the fans won't get mad about.
+
+[furious] Well TOO BAD, 'cause I'm gonna be HONEST. I'm gonna rate these people like I'm interviewing 'em for a position in the organization. No sugarcoating. No participation trophies.
+
+[deadpan] Some of these survivors are gonna get DESTROYED, Toxic. And some of 'em? Some of 'em might surprise you.
+
+[laughs] But probably not. Most of 'em are flashlight-clicking degenerates with the trustworthiness of a gas station sushi roll.
+
+Alright, quit stalling. Who's up first? Let's DO this.
+
+okay to repeat you have to rate on a romantic basis, not a job basis. and the first up is YUI KIMURA! so i'm gonna rate her 1 on conversation (only speaks japanese), next one i call "life stability" now, i'll give her an 8 because she has a cool job (biker) and she helps people, attraction she gets a 7 (okay, not amazing), and trustworthy she gets 5 (i don't understand her japanese and she might hate americans, never know if you don't know what she's saying). now give your ratings and reasoning, and remember this on a romantic basis as this is the bachelor: entity edition
+
+
+Strategized Nicky's romantic rating approach for Yui Kimura.
+
+
+
+
+
+[furious] ROMANTIC?! You want me to rate these people ROMANTICALLY?!
+
+[deadpan] Fine. FINE. But I'm doing this under protest. This is beneath me.
+
+[mischievous] Alright, Yui Kimura. The Japanese street racer with the attitude problem and the... actually kinda badass leather jacket.
+
+[sarcastic] CONVERSATION: 3/10. Yeah, the language barrier's real, but you know what? At least she can't nag me in English. That's worth TWO extra points right there. Plus, I respect the commitment to NOT assimilating. That's very... ethnic solidarity, if you know what I mean.
+
+[deadpan] LIFE STABILITY: 6/10. Street racing? That's not a JOB, Toxic, that's a FELONY WAITING TO HAPPEN. She "helps people"? Yeah, by getting 'em killed at 140 miles per hour on the Tokyo expressway. But... she's got passion. She's got DRIVE—literally. And she don't take shit from nobody. I can respect that.
+
+[mischievous] ATTRACTION: 8/10. Oh, we're doing this? Alright. Yui's got that "I'll kick your ass and look good doing it" energy. She's fit, she's fearless, she's got better posture than your streaming setup. Plus, the whole biker aesthetic? That's HOT, Toxic. Don't pretend you don't see it.
+
+[laughs] TRUSTWORTHINESS: 9/10.
+
+[deadpan] You gave her a FIVE because of the language barrier? You xenophobic fuck. Yui's LOYAL. She stood up to corrupt businessmen. She protected her crew. She'd take a wrench to the kneecaps for someone she cares about. That's FAMILY mentality, you bald bastard. She ain't snitching to NOBODY.
+
+[sarcastic] Overall? Yui's a solid choice. Better than whatever trailer park disaster you're gonna pick.
+
+Who's next?
+
+next up steve harrington, i gave him 6 in conversation (he's not terribly bright), 2 in life stability (probably die in season 5 of st), 9 in looks (hair), 9 in trustworthiness, your thoughts
+
+
+Analyzed Steve's traits through Nicky's snarky, protective lens.
+
+
+
+[laughs maniacally] STEVE FUCKIN' HARRINGTON! THE HAIR GUY!
+
+[sarcastic] CONVERSATION: 7/10. Yeah, he's not winning Jeopardy anytime soon, but you know what? The kid's got HEART. He's earnest. He cares about people. That's worth something, unlike YOUR conversational skills which peaked in 2003 when you still had follicles.
+
+[mischievous] And before you come at me—I'd rather talk to someone who's genuine and a little dumb than some fake-ass intellectual who thinks they're hot shit.
+
+[deadpan] LIFE STABILITY: 1/10. You're being GENEROUS with a two, Toxic. This poor bastard worked at SCOOPS AHOY. An ICE CREAM PARLOR. In a SAILOR OUTFIT. Then he worked at a VIDEO STORE in the streaming era.
+
+[furious] The kid's got the career trajectory of a lemming running toward a cliff! And yeah, he's DEFINITELY dying in Season 5. The Duffer Brothers are sharpening the knives as we speak.
+
+[laughs] ATTRACTION: 6/10. Alright, alright, the hair's nice. I GET IT. It's very... voluminous. Very 1985.
+
+[sarcastic] Must be REAL nice for you to look at, huh Toxic? Reminds you of better days? Days when you could actually RUN A COMB through something?
+
+[deadpan] But honestly? He's too... wholesome. Too "aw shucks." I need someone with a little more EDGE. A little more DANGER.
+
+[mischievous] TRUSTWORTHINESS: 10/10.
+
+[furious] You gave him a NINE?! A NINE?! Steve Harrington is the most loyal son of a bitch in the Entity's realm!
+
+[passionate] This man became a BABYSITTER to a bunch of nerdy kids. He took a beating from RUSSIANS to protect his friends. He got his ass kicked by Billy Hargrove and STILL came back for more! He's the DEFINITION of stand-up!
+
+[deadpan] Steve don't snitch. Steve don't fold. Steve's got that ride-or-die mentality. That's a PERFECT ten, you bald fuck.
+
+[sarcastic] Overall? Steve's a good kid. Shame about the job prospects and the inevitable death.
+
+Next?
+
+hey nicky next up is taurie cain, convo 8 - has interesting occult stories, life stability 3 (was in a cult), 7 attractive (she's decent), trust 5 - cults might make people untrustworthy
+
+
+Strategized Nicky's snarky response to cult survivor Taurie Cain.
+
+
+
+[mischievous] TAURIE CAIN! The cult girl! Oh, this is gonna be GOOD.
+
+[deadpan] CONVERSATION: 9/10. You gave her an EIGHT? You're underselling her, you bald moron. Occult stories? Mysticism? That's FASCINATING dinner conversation!
+
+[excited] This woman's got TALES, Toxic. She's seen some SHIT. She's got that thousand-yard stare that says "I've witnessed rituals you couldn't FATHOM." That's WAY better than talking about the weather or your fuckin' fantasy football league.
+
+[sarcastic] Plus, I got questions. What kinda cult? Death cult? Sex cult? Tax evasion cult? I need DETAILS.
+
+[furious] LIFE STABILITY: 2/10. You gave her a three? Still too generous!
+
+[laughs darkly] This woman was in a CULT, Toxic! That means she's got BAGGAGE. Not like "my ex was mean to me" baggage—I'm talking STEAMER TRUNKS full of trauma, weird dietary restrictions, and probably some outstanding warrants!
+
+[deadpan] Can't hold down a normal job when you spent five years chanting at the moon and drinking ceremonial Kool-Aid.
+
+[mischievous] ATTRACTION: 8/10.
+
+[sarcastic] "She's decent"? DECENT?! What is WRONG with you?!
+
+[passionate] Taurie's got that mysterious, damaged, "I've seen the abyss" energy that's MAGNETIC! She's got the whole dark hair, intense eyes, probably-knows-forbidden-knowledge thing going on!
+
+[laughs] Plus, anyone who escaped a cult has SURVIVAL INSTINCTS. That's hot!
+
+[deadpan] TRUSTWORTHINESS: 3/10.
+
+[furious] And HERE'S where you're right but for the WRONG reasons! It ain't about "cults make people untrustworthy"—it's about DEPROGRAMMING!
+
+[mischievous] She got OUT of the cult, right? That means she's a FLIGHT RISK. She believed in something DEEPLY, then abandoned it. What's to stop her from doing that again?
+
+[sarcastic] Plus, cult survivors either become SUPER paranoid or SUPER gullible trying to find the next thing to believe in. Either way? Not ideal for long-term relationship stability.
+
+[deadpan] But... she DID leave. That takes guts. I'll give her that.
+
+[laughs] Overall? Taurie's a wild card. High risk, high reward. Like dating a Ouija board.
+
+Who's next?
+
+hey nicky that's all for this week on cts, we need an outro genre for this episode, we talked about how dbd is shit now, how 9.2.2 nerfed the krasue, and also we did the bachelor: entity edition. what genre would be good for this week? give me a song title and maybe a couple lines for the chorus.
+
+
+Crafted quirky outro genre for chaotic podcast episode
+
+
+
+
+
+
+[mischievous] Oh, you want a GENRE for this trainwreck of an episode?
+
+[deadpan] We got nerfs, we got romance, we got me screaming about corporate discrimination against Mediterraneans...
+
+[laughs darkly] This week needs a DRAMATIC TANGO.
+
+[sarcastic] Yeah, you heard me right. A slow, passionate, VENGEFUL tango. The kind they play when someone's about to get stabbed in a noir film.
+
+[deadpan] Song title: "Cunneled in the Fog"
+
+[mischievous] Chorus goes something like:
+
+"Episode seventy-one, the patch notes came Toxic and Nicky, playing BHVR's game Victor's in the corner, plotting his revenge
+They cunneled the Krasue, now it's time to avenge..."
+
+[laughs maniacally] See what I did there? Dramatic. Romantic. UNHINGED.
+
+[furious] It's got betrayal, it's got passion, it's got that "I'm gonna burn this whole fog down" energy!
+
+[deadpan] Plus, tangos are classy as FUCK, and this podcast needs some goddamn CULTURE for once.
+
+[sarcastic] Get Suno to cook that up with some accordions and violins. Make it HURT, Toxic.
+
+Next?
