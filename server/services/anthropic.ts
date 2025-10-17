@@ -965,19 +965,26 @@ ${coreIdentity}`;
         }
 
         // 🚫 CRITICAL: Strip asterisk actions post-processing (last resort enforcement)
-        // Only remove multi-word phrases or action verbs, keep single emphasized words
+        // Remove action descriptions, keep emphasized words/phrases
         const asteriskPattern = /\*[^*]+\*/g;
+        const actionVerbs = ['waves', 'wave', 'winks', 'wink', 'leans', 'lean', 'gestures', 'gesture', 
+                            'nods', 'nod', 'shrugs', 'shrug', 'points', 'point', 'laughs', 'laugh',
+                            'sighs', 'sigh', 'smirks', 'smirk', 'grins', 'grin', 'rolls eyes', 
+                            'crosses arms', 'snaps fingers', 'adjusts'];
+        
         const strippedContent = filteredContent.replace(asteriskPattern, (match) => {
-          const content = match.slice(1, -1); // Remove asterisks
+          const content = match.slice(1, -1).toLowerCase();
           
-          // Keep it if it's a single word (emphasis, not an action)
-          if (!content.includes(' ') && !content.includes('-')) {
-            return match; // Keep the emphasized word
+          // Check if it contains action verbs - if so, remove it
+          const isAction = actionVerbs.some(verb => content.includes(verb));
+          
+          if (isAction) {
+            console.warn(`🚫 Stripped asterisk action from response: ${match}`);
+            return ''; // Remove action descriptions
           }
           
-          // Remove multi-word phrases (likely actions like "waves hand")
-          console.warn(`🚫 Stripped asterisk action from response: ${match}`);
-          return ''; // Remove the asterisk action entirely
+          // Keep emphasized words/phrases (including catchphrases)
+          return match;
         }).replace(/\s{2,}/g, ' ').trim(); // Clean up extra spaces
 
         // ✨ NEW: Post-generation repetition filter
@@ -1053,19 +1060,26 @@ ${coreIdentity}`;
             console.warn(`🚫 Content filtered to prevent cancel-worthy language`);
           }
 
-          // 🚫 Strip asterisk actions (keep single emphasized words)
+          // 🚫 Strip asterisk actions (keep emphasized words/phrases)
           const asteriskPattern = /\*[^*]+\*/g;
+          const actionVerbs = ['waves', 'wave', 'winks', 'wink', 'leans', 'lean', 'gestures', 'gesture', 
+                              'nods', 'nod', 'shrugs', 'shrug', 'points', 'point', 'laughs', 'laugh',
+                              'sighs', 'sigh', 'smirks', 'smirk', 'grins', 'grin', 'rolls eyes', 
+                              'crosses arms', 'snaps fingers', 'adjusts'];
+          
           const strippedContent = filteredContent.replace(asteriskPattern, (match) => {
-            const content = match.slice(1, -1); // Remove asterisks
+            const content = match.slice(1, -1).toLowerCase();
             
-            // Keep it if it's a single word (emphasis, not an action)
-            if (!content.includes(' ') && !content.includes('-')) {
-              return match; // Keep the emphasized word
+            // Check if it contains action verbs - if so, remove it
+            const isAction = actionVerbs.some(verb => content.includes(verb));
+            
+            if (isAction) {
+              console.warn(`🚫 Stripped asterisk action from response: ${match}`);
+              return ''; // Remove action descriptions
             }
             
-            // Remove multi-word phrases (likely actions like "waves hand")
-            console.warn(`🚫 Stripped asterisk action from response: ${match}`);
-            return '';
+            // Keep emphasized words/phrases (including catchphrases)
+            return match;
           }).replace(/\s{2,}/g, ' ').trim();
 
           // ✨ Repetition filter
