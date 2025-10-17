@@ -525,6 +525,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`📚 Using ${trainingExamples.length} training examples for response style guidance`);
       }
       
+      // 💾 CRITICAL: Store the USER message first (was missing, causing history bug)
+      await storage.addMessage({
+        conversationId,
+        type: 'USER' as const,
+        content: message,
+        metadata: req.body.metadata || null,
+      });
+      console.log(`💾 Saved user message to database`);
+
       // Generate AI response with personality controls, lore context, mode awareness, web search results, and training examples
       const aiResponse = await anthropicService.generateResponse(
         message,
