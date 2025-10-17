@@ -7,7 +7,8 @@
 - **Backend**: Node.js + Express.js with TypeScript, session-based storage
 - **Frontend**: React 19 + TypeScript with Vite, TanStack Query for state management
 - **External APIs**: 
-  - Anthropic Claude (claude-sonnet-4-5-20250929 / Sonnet 4.5) for AI conversation
+  - Google Gemini 2.5 Pro (PRIMARY - free tier) for all AI operations
+  - Anthropic Claude Sonnet 4.5 (FALLBACK - paid) for user-facing failsafe
   - ElevenLabs for enhanced voice synthesis
   - Discord.js for Discord bot integration
   - Web Speech API for browser-based voice recognition
@@ -112,7 +113,8 @@ const consolidatedFacts = await memoryService.consolidateMemories(profileId, {
 - **Session Management**: Express sessions with PostgreSQL storage
 
 #### Backend ↔ External APIs
-- **Anthropic Service**: Centralized AI request handling with fallback to Gemini
+- **Gemini Service (PRIMARY)**: All AI operations use Gemini 2.5 Pro first (free tier)
+- **Claude Service (FALLBACK)**: User-facing features fallback to Claude Sonnet 4.5 on Gemini failures (paid failsafe)
 - **ElevenLabs Integration**: Voice synthesis with queue management and credit conservation modes
 - **Discord Bot Service**: Event-driven message processing with advanced behavior modulation and proactive messaging
 - **Content Ingestion**: Automated collection from multiple external sources with rate limiting
@@ -458,16 +460,21 @@ describe('Character Consistency', () => {
 
 ### Error Handling for External API Failures
 
-#### Anthropic Service Fallback
+#### AI Service Fallback Chain (Gemini → Claude)
 ```typescript
 try {
-  return await anthropic.messages.create(request);
-} catch (error) {
-  if (error.message.includes('insufficient credits')) {
-    console.log('🔄 Falling back to Gemini due to Anthropic credit exhaustion');
-    return await geminiService.generateText(prompt);
+  // PRIMARY: Try Gemini 2.5 Pro first (free tier)
+  return await geminiService.generateResponse(prompt);
+} catch (geminiError) {
+  console.log('🔄 Gemini failed, falling back to Claude Sonnet 4.5');
+  try {
+    // FALLBACK: Claude Sonnet 4.5 (paid failsafe)
+    return await anthropic.messages.create(request);
+  } catch (claudeError) {
+    // GRACEFUL DEGRADATION: Return fallback response
+    console.error('Both AI services failed');
+    return fallbackResponse;
   }
-  throw error;
 }
 ```
 
