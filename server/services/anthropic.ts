@@ -965,8 +965,17 @@ ${coreIdentity}`;
         }
 
         // 🚫 CRITICAL: Strip asterisk actions post-processing (last resort enforcement)
+        // Only remove multi-word phrases or action verbs, keep single emphasized words
         const asteriskPattern = /\*[^*]+\*/g;
         const strippedContent = filteredContent.replace(asteriskPattern, (match) => {
+          const content = match.slice(1, -1); // Remove asterisks
+          
+          // Keep it if it's a single word (emphasis, not an action)
+          if (!content.includes(' ') && !content.includes('-')) {
+            return match; // Keep the emphasized word
+          }
+          
+          // Remove multi-word phrases (likely actions like "waves hand")
           console.warn(`🚫 Stripped asterisk action from response: ${match}`);
           return ''; // Remove the asterisk action entirely
         }).replace(/\s{2,}/g, ' ').trim(); // Clean up extra spaces
@@ -1044,9 +1053,17 @@ ${coreIdentity}`;
             console.warn(`🚫 Content filtered to prevent cancel-worthy language`);
           }
 
-          // 🚫 Strip asterisk actions
+          // 🚫 Strip asterisk actions (keep single emphasized words)
           const asteriskPattern = /\*[^*]+\*/g;
           const strippedContent = filteredContent.replace(asteriskPattern, (match) => {
+            const content = match.slice(1, -1); // Remove asterisks
+            
+            // Keep it if it's a single word (emphasis, not an action)
+            if (!content.includes(' ') && !content.includes('-')) {
+              return match; // Keep the emphasized word
+            }
+            
+            // Remove multi-word phrases (likely actions like "waves hand")
             console.warn(`🚫 Stripped asterisk action from response: ${match}`);
             return '';
           }).replace(/\s{2,}/g, ' ').trim();
