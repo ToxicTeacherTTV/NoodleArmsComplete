@@ -902,12 +902,14 @@ class AnthropicService {
         }
       }
       
-      // 💭 Apply intrusive thought if one was generated
+      // 💭 DISABLED: Intrusive thoughts were breaking response flow
+      // Keeping the intrusive thought system active for tracking, but NOT injecting mid-response
+      // If we want tangents, they should come naturally from personality, not forced injections
       let promptWithIntrusion = `The Toxic Teacher says: "${userMessage}"`;
-      if (intrusiveThought) {
-        // Inject the intrusive thought as an interruption in Nicky's inner monologue
-        promptWithIntrusion += `\n\n💭 INTRUSIVE THOUGHT: While they're talking, you suddenly think: "${intrusiveThought.thought}" - inject this random thought naturally into your response as if it just popped into your head.`;
-      }
+      // REMOVED: Mid-response injection that broke coherent responses
+      // if (intrusiveThought) {
+      //   promptWithIntrusion += `\n\n💭 INTRUSIVE THOUGHT: While they're talking, you suddenly think: "${intrusiveThought.thought}" - inject this random thought naturally into your response as if it just popped into your head.`;
+      // }
       
       const fullPrompt = `${promptWithIntrusion}${contextPrompt}${modeContext}${escalationPrompt}${sceneCard}`;
 
