@@ -703,6 +703,12 @@ export class DatabaseStorage implements IStorage {
       this.flagMemoryContentBackground(upsertedEntry);
     }
 
+    // 🔢 AUTO-GENERATE EMBEDDINGS: Create vector embeddings in background
+    if (upsertedEntry.content && !upsertedEntry.embedding) {
+      // Generate embedding asynchronously (don't block memory creation)
+      this.generateEmbeddingBackground(upsertedEntry.id, upsertedEntry.content);
+    }
+
     return upsertedEntry;
   }
 
@@ -738,6 +744,25 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       // Don't throw - this is a background task and shouldn't fail memory creation
       console.error(`❌ Error flagging memory ${memory.id}:`, error);
+    }
+  }
+
+  /**
+   * Background task to generate vector embeddings for new memories
+   */
+  private async generateEmbeddingBackground(memoryId: string, content: string): Promise<void> {
+    try {
+      console.log(`🔢 Auto-generating embedding for memory: ${memoryId}`);
+      
+      const { embeddingService } = await import('./services/embeddingService.js');
+      const success = await embeddingService.embedMemoryEntry(memoryId, content);
+      
+      if (success) {
+        console.log(`✅ Embedding generated successfully for memory ${memoryId}`);
+      }
+    } catch (error) {
+      // Don't throw - this is a background task and shouldn't fail memory creation
+      console.error(`❌ Error generating embedding for memory ${memoryId}:`, error);
     }
   }
 
