@@ -145,6 +145,7 @@ export interface IStorage {
   
   // Embedding support for memory entries
   getMemoryEntriesWithEmbeddings(profileId: string): Promise<MemoryEntry[]>;
+  getRecentMemoriesWithEmbeddings(profileId: string, limit: number): Promise<MemoryEntry[]>;
   getMemoryEntriesWithoutEmbeddings(profileId: string): Promise<MemoryEntry[]>;
   updateMemoryEmbedding(id: string, embedding: {embedding: string, embeddingModel: string, embeddingUpdatedAt: Date}): Promise<void>;
   searchMemoriesByKeywords(profileId: string, keywords: string[], limit?: number): Promise<MemoryEntry[]>;
@@ -624,6 +625,51 @@ export class DatabaseStorage implements IStorage {
     if (!finalEntry.canonicalKey && finalEntry.content) {
       const { generateCanonicalKey } = await import('./utils/canonical.js');
       finalEntry.canonicalKey = generateCanonicalKey(finalEntry.content);
+    }
+    
+    // 🌟 NEW: Vector-based duplicate detection (BEFORE insert)
+    // This catches semantic duplicates that text-based canonicalKey misses
+    if (finalEntry.content && finalEntry.profileId) {
+      try {
+        const { memoryDeduplicator } = await import('./services/memoryDeduplicator.js');
+        const duplicateCheck = await memoryDeduplicator.handleDuplicateDetection(
+          finalEntry.profileId,
+          finalEntry.content
+        );
+        
+        if (duplicateCheck.action === 'block') {
+          // Near-exact duplicate (95%+) - don't create, just update existing
+          console.log(`🚫 ${duplicateCheck.reason} - skipping creation`);
+          const existingId = duplicateCheck.duplicates[0].id;
+          const existing = await db.select().from(memoryEntries).where(eq(memoryEntries.id, existingId)).limit(1);
+          if (existing.length > 0) {
+            // Update confidence and support count on existing memory
+            const [updated] = await db
+              .update(memoryEntries)
+              .set({
+                confidence: sql`LEAST(100, ${existing[0].confidence || 50} + 10)`,
+                supportCount: sql`${existing[0].supportCount || 1} + 1`,
+                lastSeenAt: sql`now()`,
+                updatedAt: sql`now()`
+              })
+              .where(eq(memoryEntries.id, existingId))
+              .returning();
+            
+            console.log(`🔄 Boosted existing memory instead: confidence ${updated.confidence}, support ${updated.supportCount}`);
+            return updated;
+          }
+        } else if (duplicateCheck.action === 'flag') {
+          // Very similar (90-95%) - log warning but allow creation
+          console.log(`⚠️ ${duplicateCheck.reason}`);
+          console.log(`  Existing: "${duplicateCheck.duplicates[0].content.substring(0, 60)}..."`);
+          console.log(`  New:      "${finalEntry.content.substring(0, 60)}..."`);
+          // Continue with normal insert but note the similarity
+        }
+        // If action === 'allow', continue normally
+      } catch (error) {
+        // Don't block memory creation if duplicate detection fails
+        console.warn('⚠️ Vector duplicate detection failed, continuing with insert:', error);
+      }
     }
     
     // 🔒 ATOMIC UPSERT: Insert or update on conflict (prevents race conditions)
@@ -1946,7 +1992,21 @@ export class DatabaseStorage implements IStorage {
           eq(memoryEntries.status, 'ACTIVE')
         )
       )
-      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.confidence));
+  }
+
+  async getRecentMemoriesWithEmbeddings(profileId: string, limit: number): Promise<MemoryEntry[]> {
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          sql`${memoryEntries.embedding} IS NOT NULL`,
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.createdAt))
+      .limit(limit);
   }
 
   async getMemoryEntriesWithoutEmbeddings(profileId: string): Promise<MemoryEntry[]> {

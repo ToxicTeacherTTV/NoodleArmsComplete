@@ -1,6 +1,7 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { memoryEntries } from "@shared/schema";
+import { embeddingService } from "./embeddingService";
 
 // Use the actual database schema type
 type MemoryEntry = typeof memoryEntries.$inferSelect;
@@ -366,7 +367,7 @@ export class MemoryDeduplicator {
   }
   
   /**
-   * Check if a new memory is a duplicate of existing memories
+   * Check if a new memory is a duplicate of existing memories (LEGACY: text-based)
    */
   async checkForDuplicates(
     db: PostgresJsDatabase<any>,
@@ -389,6 +390,99 @@ export class MemoryDeduplicator {
     }
     
     return duplicates;
+  }
+
+  /**
+   * 🌟 NEW: Check for duplicates using vector embeddings
+   * This catches semantic duplicates that text-based methods miss
+   * 
+   * Similarity thresholds:
+   * - 0.95-1.0: Exact/near duplicate (auto-merge or block)
+   * - 0.90-0.95: Very similar (flag for review)
+   * - 0.80-0.90: Related topic (check for contradiction)
+   */
+  async checkForDuplicatesUsingVectors(
+    profileId: string,
+    newContent: string,
+    similarityThreshold: number = 0.90
+  ): Promise<Array<{ id: string; content: string; similarity: number }>> {
+    try {
+      console.log(`🔍 Vector duplicate check: "${newContent.substring(0, 50)}..." (threshold: ${similarityThreshold})`);
+      
+      const duplicates = await embeddingService.findDuplicatesByEmbedding(
+        newContent,
+        profileId,
+        similarityThreshold
+      );
+      
+      if (duplicates.length > 0) {
+        console.log(`⚠️ Found ${duplicates.length} potential duplicates:`);
+        duplicates.forEach(dup => {
+          console.log(`  - ${(dup.similarity * 100).toFixed(1)}% similar: "${dup.content.substring(0, 50)}..."`);
+        });
+      } else {
+        console.log(`✅ No duplicates found above ${(similarityThreshold * 100).toFixed(0)}% similarity`);
+      }
+      
+      return duplicates;
+      
+    } catch (error) {
+      console.error('❌ Vector duplicate detection failed:', error);
+      // Fallback to empty array rather than crashing
+      return [];
+    }
+  }
+
+  /**
+   * 🌟 NEW: Smart duplicate handling with automatic decisions
+   * - similarity >= 0.95: Exact duplicate, block creation
+   * - similarity >= 0.90: Very similar, flag for user review
+   * - similarity < 0.90: Not a duplicate, allow creation
+   */
+  async handleDuplicateDetection(
+    profileId: string,
+    newContent: string
+  ): Promise<{
+    isDuplicate: boolean;
+    action: 'block' | 'flag' | 'allow';
+    duplicates: Array<{ id: string; content: string; similarity: number }>;
+    reason: string;
+  }> {
+    const duplicates = await this.checkForDuplicatesUsingVectors(profileId, newContent, 0.90);
+    
+    if (duplicates.length === 0) {
+      return {
+        isDuplicate: false,
+        action: 'allow',
+        duplicates: [],
+        reason: 'No similar memories found'
+      };
+    }
+    
+    const highestSimilarity = duplicates[0].similarity;
+    
+    if (highestSimilarity >= 0.95) {
+      return {
+        isDuplicate: true,
+        action: 'block',
+        duplicates,
+        reason: `Near-exact duplicate detected (${(highestSimilarity * 100).toFixed(1)}% similar)`
+      };
+    } else if (highestSimilarity >= 0.90) {
+      return {
+        isDuplicate: true,
+        action: 'flag',
+        duplicates,
+        reason: `Very similar memory exists (${(highestSimilarity * 100).toFixed(1)}% similar) - review recommended`
+      };
+    } else {
+      return {
+        isDuplicate: false,
+        action: 'allow',
+        duplicates,
+        reason: 'Similar memories found but not duplicates'
+      };
+    }
   }
 }
 

@@ -104,8 +104,9 @@ class EmbeddingService {
 
   /**
    * Calculate cosine similarity between two embedding vectors
+   * Made public for use in duplicate/contradiction detection
    */
-  private cosineSimilarity(vecA: number[], vecB: number[]): number {
+  cosineSimilarity(vecA: number[], vecB: number[]): number {
     if (vecA.length !== vecB.length) {
       throw new Error("Vectors must have the same dimension");
     }
@@ -440,6 +441,126 @@ class EmbeddingService {
         keyword: [],
         combined: []
       };
+    }
+  }
+
+  /**
+   * Find duplicate memories using vector similarity (NEW: for duplicate detection)
+   * This catches semantic duplicates that text-based methods miss
+   * OPTIMIZED: Only checks top N most recent memories for performance
+   */
+  async findDuplicatesByEmbedding(
+    newMemoryContent: string,
+    profileId: string,
+    similarityThreshold: number = 0.90,
+    scanLimit: number = 100 // Only scan 100 most recent memories for duplicates
+  ): Promise<Array<{ id: string; content: string; similarity: number }>> {
+    try {
+      // Generate embedding for new memory
+      const newEmbedding = await this.generateEmbedding(newMemoryContent);
+      
+      // 🚀 PERFORMANCE FIX: Only get recent memories (limit 100) instead of ALL
+      const existingMemories = await storage.getRecentMemoriesWithEmbeddings(profileId, scanLimit);
+      
+      if (!existingMemories || existingMemories.length === 0) {
+        return [];
+      }
+      
+      // Find similar memories above threshold (early exit when we find top 5)
+      const duplicates: Array<{ id: string; content: string; similarity: number }> = [];
+      
+      for (const memory of existingMemories) {
+        if (!memory.embedding) continue;
+        
+        try {
+          const memoryEmbedding = JSON.parse(memory.embedding as string);
+          const similarity = this.cosineSimilarity(newEmbedding.embedding, memoryEmbedding);
+          
+          if (similarity >= similarityThreshold) {
+            duplicates.push({
+              id: memory.id,
+              content: memory.content,
+              similarity
+            });
+            
+            // Early exit if we found enough high-confidence duplicates
+            if (duplicates.length >= 5) break;
+          }
+        } catch (error) {
+          console.error(`Failed to parse embedding for memory ${memory.id}:`, error);
+        }
+      }
+      
+      // Sort by similarity (highest first) and limit to top 5
+      return duplicates.sort((a, b) => b.similarity - a.similarity).slice(0, 5);
+      
+    } catch (error) {
+      console.error("Vector duplicate detection error:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Find related memories using vector similarity (NEW: for contradiction detection stage 1)
+   * Lower threshold than duplicate detection - finds semantically related content
+   * OPTIMIZED: Enforces limit during scan, not after
+   */
+  async findRelatedMemoriesByEmbedding(
+    newMemoryContent: string,
+    profileId: string,
+    similarityThreshold: number = 0.75,
+    limit: number = 20
+  ): Promise<Array<{ id: string; content: string; similarity: number; memory: any }>> {
+    try {
+      // Generate embedding for new memory
+      const newEmbedding = await this.generateEmbedding(newMemoryContent);
+      
+      // 🚀 PERFORMANCE FIX: Only get recent memories (limit 200) instead of ALL
+      // Most contradictions happen with recent facts, not ancient ones
+      const existingMemories = await storage.getRecentMemoriesWithEmbeddings(profileId, 200);
+      
+      if (!existingMemories || existingMemories.length === 0) {
+        return [];
+      }
+      
+      // Find related memories above threshold with HARD LIMIT
+      const related: Array<{ id: string; content: string; similarity: number; memory: any }> = [];
+      let scannedCount = 0;
+      
+      for (const memory of existingMemories) {
+        if (!memory.embedding) continue;
+        
+        scannedCount++;
+        
+        try {
+          const memoryEmbedding = JSON.parse(memory.embedding as string);
+          const similarity = this.cosineSimilarity(newEmbedding.embedding, memoryEmbedding);
+          
+          if (similarity >= similarityThreshold) {
+            related.push({
+              id: memory.id,
+              content: memory.content,
+              similarity,
+              memory // Include full memory object for contradiction checks
+            });
+            
+            // 🚀 CRITICAL FIX: Enforce limit during scan, not after
+            if (related.length >= limit) {
+              console.log(`✅ Found ${limit} related memories, stopping scan early (scanned ${scannedCount}/${existingMemories.length})`);
+              break;
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to parse embedding for memory ${memory.id}:`, error);
+        }
+      }
+      
+      // Sort by similarity (already limited to max `limit` items)
+      return related.sort((a, b) => b.similarity - a.similarity);
+      
+    } catch (error) {
+      console.error("Vector related memory search error:", error);
+      return [];
     }
   }
 

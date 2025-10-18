@@ -2,6 +2,7 @@ import { geminiService } from './gemini';
 import { storage } from '../storage';
 import { MemoryEntry } from '@shared/schema';
 import { randomUUID } from 'crypto';
+import { embeddingService } from './embeddingService';
 
 // 🔒 Job state management to prevent infinite loops
 interface ScanJob {
@@ -121,43 +122,56 @@ class SmartContradictionDetector {
   }
 
   /**
-   * 🚀 SMART APPROACH: Only check facts that could actually contradict
-   * Instead of N x N comparisons, we:
-   * 1. Extract structure from new fact
-   * 2. Find candidate facts (same subject+predicate)  
-   * 3. Apply fast rule-based checks
-   * 4. Use AI only for ambiguous cases (max 5-10 calls)
+   * 🌟 NEW TWO-STAGE APPROACH: Vector embeddings + LLM verification
+   * Stage 1: Use vector similarity to find semantically related memories (FAST)
+   * Stage 2: Use AI to verify if they actually contradict (ACCURATE)
+   * 
+   * This is MUCH better than the old approach:
+   * - Old: Check ALL memories with keywords (slow, misses semantic matches)
+   * - New: Vector search finds 10-20 related memories, then LLM checks those
    */
   private async _doDetectContradictions(profileId: string, newFact: MemoryEntry): Promise<ContradictionResult> {
     try {
-      console.log(`🧠 Smart contradiction check for: "${newFact.content.substring(0, 50)}..."`);
+      console.log(`🧠 Two-stage contradiction check for: "${newFact.content.substring(0, 50)}..."`);
       
-      // Step 1: Extract structure from the new fact
+      // 🌟 STAGE 1: VECTOR SEARCH - Find semantically related memories (FAST!)
+      console.log(`🔍 Stage 1: Vector search for related memories...`);
+      const relatedMemories = await embeddingService.findRelatedMemoriesByEmbedding(
+        newFact.content,
+        profileId,
+        0.75, // Lower threshold - find anything semantically related
+        20    // Limit to top 20 most similar
+      );
+      
+      if (relatedMemories.length === 0) {
+        console.log(`✅ No semantically related memories found - no contradictions possible`);
+        return this.noContradiction('No related memories to compare against');
+      }
+      
+      console.log(`🎯 Stage 1 complete: Found ${relatedMemories.length} related memories (0.75+ similarity)`);
+      relatedMemories.slice(0, 5).forEach(m => {
+        console.log(`  - ${(m.similarity * 100).toFixed(1)}% similar: "${m.content.substring(0, 50)}..."`);
+      });
+
+      // Extract the actual memory entries from the results
+      const candidates = relatedMemories.map(r => r.memory);
+      
+      // Step 2: Extract structure from the new fact (for rule-based checks)
       const structuredNewFact = await this.extractStructuredFact(newFact);
       if (!structuredNewFact) {
         return this.noContradiction('Unable to analyze fact structure');
-      }
-
-      console.log(`📊 Extracted: Subject="${structuredNewFact.subject}", Predicate="${structuredNewFact.predicate}", Polarity="${structuredNewFact.polarity}"`);
-
-      // Step 2: Find relevant candidate facts (smart filtering!)
-      const candidates = await this.findRelevantCandidates(profileId, structuredNewFact);
-      
-      console.log(`🎯 Found ${candidates.length} relevant candidates (vs ${1000}+ total facts)`);
-      
-      if (candidates.length === 0) {
-        return this.noContradiction('No relevant facts to compare against');
       }
 
       // Step 3: Fast rule-based contradiction detection first
       const ruleBasedConflicts = this.detectRuleBasedContradictions(structuredNewFact, candidates);
       console.log(`⚡ Rule-based detection found ${ruleBasedConflicts.length} conflicts`);
 
-      // Step 4: AI analysis only for remaining ambiguous cases (BUDGET LIMITED!)
+      // 🌟 STAGE 2: LLM VERIFICATION - Only check top candidates (ACCURATE!)
+      console.log(`🔍 Stage 2: LLM verification on top candidates...`);
       const aiCandidates = candidates.filter(c => !ruleBasedConflicts.some(r => r.id === c.id));
       const aiConflicts = await this.detectAIContradictions(structuredNewFact, aiCandidates.slice(0, 10)); // Max 10 AI calls!
       
-      console.log(`🤖 AI analysis checked ${Math.min(aiCandidates.length, 10)} facts, found ${aiConflicts.length} conflicts`);
+      console.log(`🤖 Stage 2 complete: AI checked ${Math.min(aiCandidates.length, 10)} facts, found ${aiConflicts.length} conflicts`);
 
       // Combine results
       const allConflicts = [...ruleBasedConflicts, ...aiConflicts];
@@ -170,15 +184,16 @@ class SmartContradictionDetector {
           isContradiction: true,
           conflictingFacts: allConflicts,
           severity,
-          explanation: `Found ${allConflicts.length} conflicting facts using smart analysis`
+          explanation: `Found ${allConflicts.length} conflicting facts using two-stage vector+AI analysis`
         };
       }
 
+      console.log(`✅ No contradictions detected (checked ${relatedMemories.length} related memories)`);
       return this.noContradiction('No contradictions detected');
 
     } catch (error) {
-      console.error('❌ Smart contradiction detection error:', error);
-      return this.noContradiction('Error during smart contradiction detection');
+      console.error('❌ Two-stage contradiction detection error:', error);
+      return this.noContradiction('Error during contradiction detection');
     }
   }
 
