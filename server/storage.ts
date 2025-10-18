@@ -704,9 +704,13 @@ export class DatabaseStorage implements IStorage {
     }
 
     // 🔢 AUTO-GENERATE EMBEDDINGS: Create vector embeddings in background
+    console.log(`🔍 Embedding check: content=${!!upsertedEntry.content}, embedding=${upsertedEntry.embedding ? 'EXISTS' : 'NULL'}, id=${upsertedEntry.id}`);
     if (upsertedEntry.content && !upsertedEntry.embedding) {
+      console.log(`🔢 Auto-generating embedding for memory: ${upsertedEntry.id}`);
       // Generate embedding asynchronously (don't block memory creation)
       this.generateEmbeddingBackground(upsertedEntry.id, upsertedEntry.content);
+    } else {
+      console.log(`⏭️ Skipping embedding generation: ${!upsertedEntry.content ? 'no content' : 'embedding already exists'}`);
     }
 
     return upsertedEntry;
