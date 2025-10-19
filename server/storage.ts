@@ -150,6 +150,9 @@ export interface IStorage {
   updateMemoryEmbedding(id: string, embedding: {embedding: string, embeddingModel: string, embeddingUpdatedAt: Date}): Promise<void>;
   searchMemoriesByKeywords(profileId: string, keywords: string[], limit?: number): Promise<MemoryEntry[]>;
   
+  // Query memories by source (e.g., podcast episode, document)
+  getMemoriesBySource(profileId: string, sourceId: string, source?: string): Promise<MemoryEntry[]>;
+  
   // Confidence tracking methods
   findMemoryByCanonicalKey(profileId: string, canonicalKey: string): Promise<MemoryEntry | undefined>;
   updateMemoryConfidence(id: string, confidence: number, supportCount?: number): Promise<MemoryEntry>;
@@ -2696,6 +2699,33 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
     
     return results.map(row => row.memory);
+  }
+
+  /**
+   * Get all memories from a specific source (e.g., podcast episode, document)
+   * Useful for querying "What did we learn from Episode 68?" or "What's in this document?"
+   */
+  async getMemoriesBySource(profileId: string, sourceId: string, source?: string): Promise<MemoryEntry[]> {
+    const conditions = [
+      eq(memoryEntries.profileId, profileId),
+      eq(memoryEntries.sourceId, sourceId),
+      eq(memoryEntries.status, 'ACTIVE')
+    ];
+
+    // Optionally filter by source type (e.g., 'podcast_episode', 'document')
+    if (source) {
+      conditions.push(eq(memoryEntries.source, source));
+    }
+
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(and(...conditions))
+      .orderBy(
+        desc(memoryEntries.importance),
+        desc(memoryEntries.confidence),
+        desc(memoryEntries.createdAt)
+      );
   }
 }
 
