@@ -468,7 +468,7 @@ Focus on actionable flags that help maintain Nicky's character consistency.`;
           targetId,
           flagType: flag.flagType as any,
           priority: flag.priority as any,
-          confidence: flag.confidence,
+          confidence: Math.round(flag.confidence),
           flagReason: flag.reason,
           extractedData: flag.extractedData,
           reviewStatus: 'PENDING'
