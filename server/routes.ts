@@ -5314,15 +5314,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!result.success) {
         return res.status(400).json({ 
           error: result.error || 'Failed to extract facts',
-          factsCreated: 0
+          factsCreated: 0,
+          entitiesCreated: 0
         });
       }
 
-      console.log(`✅ Successfully extracted ${result.factsCreated} facts from Episode ${episode.episodeNumber}`);
+      console.log(`✅ Successfully extracted ${result.factsCreated} facts and ${result.entitiesCreated} entities from Episode ${episode.episodeNumber}`);
 
       res.json({
-        message: `Successfully extracted ${result.factsCreated} facts and stored them in Nicky's memory`,
+        message: `Successfully extracted ${result.factsCreated} facts and ${result.entitiesCreated} entities and stored them in Nicky's memory`,
         factsCreated: result.factsCreated,
+        entitiesCreated: result.entitiesCreated,
         episodeNumber: episode.episodeNumber,
         episodeTitle: episode.title
       });

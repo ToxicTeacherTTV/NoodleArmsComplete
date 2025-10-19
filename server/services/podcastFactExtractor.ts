@@ -1,10 +1,12 @@
 import { InsertMemoryEntry } from '@shared/schema';
 import { IStorage } from '../storage.js';
+import { entityExtraction } from './entityExtraction.js';
 
 export class PodcastFactExtractor {
   
   /**
-   * Extract structured facts from a podcast episode transcript and store them as memory entries
+   * Extract structured facts AND entities from a podcast episode transcript
+   * Stores facts as memory entries and automatically extracts/links entities (people, places, events)
    */
   async extractAndStoreFacts(
     storage: IStorage,
@@ -15,13 +17,13 @@ export class PodcastFactExtractor {
     transcript: string,
     guestNames: string[] = [],
     topics: string[] = []
-  ): Promise<{success: boolean, factsCreated: number, error?: string}> {
+  ): Promise<{success: boolean, factsCreated: number, entitiesCreated: number, error?: string}> {
     
     try {
       console.log(`🎙️ Starting fact extraction for Episode ${episodeNumber}: ${title}`);
       
       if (!transcript || transcript.trim().length < 100) {
-        return { success: false, factsCreated: 0, error: 'Transcript too short or empty' };
+        return { success: false, factsCreated: 0, entitiesCreated: 0, error: 'Transcript too short or empty' };
       }
 
       // NOTE: AI extraction is now handled by Gemini service
@@ -84,7 +86,7 @@ export class PodcastFactExtractor {
       }
 
       if (extractedFacts.length === 0) {
-        return { success: false, factsCreated: 0, error: 'No facts extracted' };
+        return { success: false, factsCreated: 0, entitiesCreated: 0, error: 'No facts extracted' };
       }
 
       console.log(`✅ Extracted ${extractedFacts.length} facts from Episode ${episodeNumber}`);
@@ -130,11 +132,39 @@ export class PodcastFactExtractor {
 
       console.log(`🎉 Successfully stored ${factsCreated} facts from Episode ${episodeNumber} into memory!`);
       
-      return { success: true, factsCreated };
+      // 🔍 ENTITY EXTRACTION: Extract people, places, and events from the transcript
+      let entitiesCreated = 0;
+      try {
+        console.log(`🔍 Extracting entities from Episode ${episodeNumber} transcript...`);
+        
+        // Build context from transcript for better entity extraction
+        const contextualTranscript = `Episode ${episodeNumber}: ${title}\n\n${transcript}`;
+        
+        const entityResult = await entityExtraction.processMemoryForEntityLinking(
+          contextualTranscript,
+          profileId,
+          storage
+        );
+        
+        entitiesCreated = entityResult.entitiesCreated;
+        
+        if (entitiesCreated > 0) {
+          console.log(`✨ Extracted ${entitiesCreated} new entities from Episode ${episodeNumber}`);
+          console.log(`   📊 Entity breakdown: ${entityResult.personIds.length} people, ${entityResult.placeIds.length} places, ${entityResult.eventIds.length} events`);
+        } else {
+          console.log(`ℹ️ No new entities found in Episode ${episodeNumber} (may have matched existing entities)`);
+        }
+        
+      } catch (entityError) {
+        console.warn(`⚠️ Entity extraction failed for Episode ${episodeNumber}, continuing with facts only:`, entityError);
+        // Don't fail the whole operation if entity extraction fails
+      }
+      
+      return { success: true, factsCreated, entitiesCreated };
       
     } catch (error) {
       console.error(`❌ Error extracting facts from Episode ${episodeNumber}:`, error);
-      return { success: false, factsCreated: 0, error: error instanceof Error ? error.message : 'Unknown error' };
+      return { success: false, factsCreated: 0, entitiesCreated: 0, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 }
