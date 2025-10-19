@@ -2,6 +2,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { memoryEntries } from "@shared/schema";
 import { embeddingService } from "./embeddingService";
+import { storage } from "../storage";
 
 // Use the actual database schema type
 type MemoryEntry = typeof memoryEntries.$inferSelect;
@@ -483,6 +484,89 @@ export class MemoryDeduplicator {
         reason: 'Similar memories found but not duplicates'
       };
     }
+  }
+
+  /**
+   * 🔍 DEEP SCAN: Find all duplicate groups across the entire memory corpus
+   * Configurable scan depth: 100, 500, 1000, or ALL memories
+   */
+  async deepScanDuplicates(
+    profileId: string,
+    scanDepth: number | 'ALL' = 100,
+    similarityThreshold: number = 0.90
+  ): Promise<{
+    scannedCount: number;
+    duplicateGroups: Array<{
+      masterId: string;
+      masterContent: string;
+      duplicates: Array<{ id: string; content: string; similarity: number }>;
+    }>;
+    totalDuplicates: number;
+  }> {
+    console.log(`🔍 Starting deep duplicate scan (depth: ${scanDepth}, threshold: ${similarityThreshold})`);
+    
+    // Get memories to scan
+    const limit = scanDepth === 'ALL' ? 999999 : scanDepth;
+    const memories = await storage.getRecentMemoriesWithEmbeddings(profileId, limit);
+    
+    console.log(`📊 Scanning ${memories.length} memories for duplicates...`);
+    
+    const duplicateGroups: Array<{
+      masterId: string;
+      masterContent: string;
+      duplicates: Array<{ id: string; content: string; similarity: number }>;
+    }> = [];
+    
+    const processedIds = new Set<string>();
+    let totalDuplicates = 0;
+    
+    // Check each memory against all others
+    for (let i = 0; i < memories.length; i++) {
+      const memory = memories[i];
+      
+      // Skip if already processed as a duplicate
+      if (processedIds.has(memory.id)) continue;
+      
+      // Find duplicates for this memory
+      const duplicates = await embeddingService.findDuplicatesByEmbedding(
+        memory.content,
+        profileId,
+        similarityThreshold,
+        scanDepth === 'ALL' ? 999999 : scanDepth
+      );
+      
+      // Filter out self and already processed
+      const actualDuplicates = duplicates.filter(
+        dup => dup.id !== memory.id && !processedIds.has(dup.id)
+      );
+      
+      if (actualDuplicates.length > 0) {
+        duplicateGroups.push({
+          masterId: memory.id,
+          masterContent: memory.content,
+          duplicates: actualDuplicates
+        });
+        
+        // Mark all duplicates as processed
+        actualDuplicates.forEach(dup => processedIds.add(dup.id));
+        totalDuplicates += actualDuplicates.length;
+        
+        console.log(`  Found group: "${memory.content.substring(0, 40)}..." has ${actualDuplicates.length} duplicates`);
+      }
+      
+      // Progress update every 50 memories
+      if ((i + 1) % 50 === 0) {
+        console.log(`  Progress: ${i + 1}/${memories.length} memories scanned...`);
+      }
+    }
+    
+    console.log(`✅ Deep scan complete: Found ${duplicateGroups.length} groups with ${totalDuplicates} total duplicates`);
+    
+    return {
+      scannedCount: memories.length,
+      duplicateGroups,
+      totalDuplicates
+    };
   }
 }
 

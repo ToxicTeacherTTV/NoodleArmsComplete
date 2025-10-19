@@ -1524,6 +1524,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/memory/deep-scan-duplicates', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { scanDepth = 100, similarityThreshold = 0.90 } = req.body;
+      
+      // Validate scanDepth
+      const validDepths = [100, 500, 1000, 'ALL'];
+      if (!validDepths.includes(scanDepth)) {
+        return res.status(400).json({ 
+          error: `Invalid scan depth. Must be one of: ${validDepths.join(', ')}` 
+        });
+      }
+
+      console.log(`🔍 Starting deep duplicate scan: depth=${scanDepth}, threshold=${similarityThreshold}`);
+
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator.js');
+      const results = await memoryDeduplicator.deepScanDuplicates(
+        activeProfile.id,
+        scanDepth,
+        similarityThreshold
+      );
+
+      res.json({
+        success: true,
+        message: `Scanned ${results.scannedCount} memories, found ${results.duplicateGroups.length} duplicate groups (${results.totalDuplicates} total duplicates)`,
+        ...results
+      });
+    } catch (error) {
+      console.error('Deep duplicate scan error:', error);
+      res.status(500).json({ error: 'Failed to perform deep duplicate scan' });
+    }
+  });
+
   app.post('/api/memory/optimize', async (req, res) => {
     try {
       const activeProfile = await storage.getActiveProfile();
