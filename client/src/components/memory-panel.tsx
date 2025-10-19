@@ -9,8 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 import type { MemoryEntry, MemoryStats } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
 import EvolutionPanel from "./evolution-panel";
-import { Search, X, RefreshCw, Filter } from "lucide-react";
+import { Search, X, RefreshCw, Filter, Scan } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
 interface MemoryPanelProps {
   profileId?: string;
@@ -57,6 +58,31 @@ export default function MemoryPanel({
       toast({
         title: "Error",
         description: "Failed to clean duplicates",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Deep scan duplicates mutation
+  const deepScanMutation = useMutation({
+    mutationFn: async (scanDepth: number | 'ALL') => {
+      const response = await apiRequest('POST', '/api/memory/deep-scan-duplicates', {
+        scanDepth,
+        similarityThreshold: 0.90
+      });
+      return response;
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Deep Scan Complete",
+        description: `Scanned ${data.scannedCount} memories, found ${data.duplicateGroups?.length || 0} duplicate groups (${data.totalDuplicates || 0} total duplicates)`,
+        duration: 8000,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to perform deep duplicate scan",
         variant: "destructive",
       });
     },
@@ -159,16 +185,65 @@ export default function MemoryPanel({
         <CardContent className="p-0">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-foreground">Memory Statistics</h3>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => findDuplicatesMutation.mutate()}
-              disabled={findDuplicatesMutation.isPending}
-              data-testid="button-find-duplicates"
-            >
-              <RefreshCw className={`h-3 w-3 mr-1 ${findDuplicatesMutation.isPending ? 'animate-spin' : ''}`} />
-              Find Duplicates
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => findDuplicatesMutation.mutate()}
+                disabled={findDuplicatesMutation.isPending}
+                data-testid="button-find-duplicates"
+              >
+                <RefreshCw className={`h-3 w-3 mr-1 ${findDuplicatesMutation.isPending ? 'animate-spin' : ''}`} />
+                Quick Clean
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    disabled={deepScanMutation.isPending}
+                    data-testid="button-deep-scan"
+                  >
+                    <Scan className={`h-3 w-3 mr-1 ${deepScanMutation.isPending ? 'animate-spin' : ''}`} />
+                    Deep Scan
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Scan Depth</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => deepScanMutation.mutate(100)}
+                    data-testid="scan-depth-100"
+                  >
+                    <span className="font-medium">100</span>
+                    <span className="text-xs text-muted-foreground ml-2">Recent memories</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => deepScanMutation.mutate(500)}
+                    data-testid="scan-depth-500"
+                  >
+                    <span className="font-medium">500</span>
+                    <span className="text-xs text-muted-foreground ml-2">Extended scan</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => deepScanMutation.mutate(1000)}
+                    data-testid="scan-depth-1000"
+                  >
+                    <span className="font-medium">1,000</span>
+                    <span className="text-xs text-muted-foreground ml-2">Comprehensive scan</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => deepScanMutation.mutate('ALL')}
+                    className="text-accent font-medium"
+                    data-testid="scan-depth-all"
+                  >
+                    <span>ALL</span>
+                    <span className="text-xs text-muted-foreground ml-2">Full memory scan</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center">
