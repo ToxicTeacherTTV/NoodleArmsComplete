@@ -10,11 +10,12 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield, Copy, Merge, Users, MapPin, Calendar, Plus, Trash2, Sparkles, Zap } from "lucide-react";
+import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield, Copy, Merge, Users, MapPin, Calendar, Plus, Trash2, Sparkles, Zap, Scan } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ProtectedFactsManager } from "@/components/protected-facts-manager";
@@ -540,6 +541,7 @@ export default function BrainManagement() {
   const [duplicateGroups, setDuplicateGroups] = useState<any[]>([]);
   const [isLoadingDuplicates, setIsLoadingDuplicates] = useState(false);
   const [autoMergeInProgress, setAutoMergeInProgress] = useState(false);
+  const [deepScanInProgress, setDeepScanInProgress] = useState(false);
 
   // Entity editing state
   const [editingEntity, setEditingEntity] = useState<{type: 'person' | 'place' | 'event', data: any} | null>(null);
@@ -834,6 +836,36 @@ export default function BrainManagement() {
       setIsLoadingDuplicates(false);
       toast({
         title: "Error Finding Duplicates",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Deep scan duplicates mutation
+  const deepScanDuplicatesMutation = useMutation({
+    mutationFn: async ({ scanDepth, threshold }: { scanDepth: number | 'ALL'; threshold: number }) => {
+      const response = await fetch('/api/memory/deep-scan-duplicates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scanDepth, similarityThreshold: threshold }),
+      });
+      if (!response.ok) throw new Error('Failed to perform deep scan');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setDeepScanInProgress(false);
+      setDuplicateGroups(data.duplicateGroups || []);
+      toast({
+        title: "Deep Scan Complete",
+        description: `Scanned ${data.scannedCount} memories, found ${data.duplicateGroups?.length || 0} duplicate groups (${data.totalDuplicates || 0} total duplicates)`,
+        duration: 8000,
+      });
+    },
+    onError: (error) => {
+      setDeepScanInProgress(false);
+      toast({
+        title: "Deep Scan Failed",
         description: error.message,
         variant: "destructive",
       });
@@ -2613,6 +2645,68 @@ export default function BrainManagement() {
                       )}
                       Find Duplicates
                     </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="default"
+                          disabled={deepScanInProgress || deepScanDuplicatesMutation.isPending}
+                          data-testid="button-deep-scan"
+                        >
+                          {deepScanInProgress || deepScanDuplicatesMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Scan className="h-4 w-4 mr-2" />
+                          )}
+                          Deep Scan
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Scan Depth</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setDeepScanInProgress(true);
+                            deepScanDuplicatesMutation.mutate({ scanDepth: 100, threshold: similarityThreshold });
+                          }}
+                          data-testid="scan-depth-100"
+                        >
+                          <span className="font-medium">100</span>
+                          <span className="text-xs text-muted-foreground ml-2">Recent memories</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setDeepScanInProgress(true);
+                            deepScanDuplicatesMutation.mutate({ scanDepth: 500, threshold: similarityThreshold });
+                          }}
+                          data-testid="scan-depth-500"
+                        >
+                          <span className="font-medium">500</span>
+                          <span className="text-xs text-muted-foreground ml-2">Extended scan</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setDeepScanInProgress(true);
+                            deepScanDuplicatesMutation.mutate({ scanDepth: 1000, threshold: similarityThreshold });
+                          }}
+                          data-testid="scan-depth-1000"
+                        >
+                          <span className="font-medium">1,000</span>
+                          <span className="text-xs text-muted-foreground ml-2">Comprehensive scan</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setDeepScanInProgress(true);
+                            deepScanDuplicatesMutation.mutate({ scanDepth: 'ALL', threshold: similarityThreshold });
+                          }}
+                          className="text-accent font-medium"
+                          data-testid="scan-depth-all"
+                        >
+                          <span>ALL</span>
+                          <span className="text-xs text-muted-foreground ml-2">Full memory scan</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <Button
                       onClick={() => {
                         setAutoMergeInProgress(true);
