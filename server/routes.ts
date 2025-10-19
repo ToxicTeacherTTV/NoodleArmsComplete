@@ -2828,6 +2828,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get memories by source (e.g., episode ID, document ID)
+  app.get('/api/memory/by-source/:sourceId', async (req, res) => {
+    try {
+      const { sourceId } = req.params;
+      const { source } = req.query; // Optional: filter by source type
+      
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const memories = await storage.getMemoriesBySource(
+        profile.id, 
+        sourceId, 
+        source as string | undefined
+      );
+      
+      res.json({
+        sourceId,
+        source: source || 'any',
+        count: memories.length,
+        memories
+      });
+    } catch (error) {
+      console.error('Error getting memories by source:', error);
+      res.status(500).json({ error: 'Failed to get memories by source' });
+    }
+  });
+
   // Embedding Management Routes
   app.post('/api/memory/embeddings/generate', async (req, res) => {
     try {
@@ -5332,6 +5361,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error extracting podcast facts:', error);
       res.status(500).json({ error: 'Failed to extract podcast facts' });
+    }
+  });
+
+  // Get memories extracted from a specific podcast episode
+  app.get('/api/podcast/episodes/:id/memories', async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const episode = await storage.getPodcastEpisode(id);
+      if (!episode) {
+        return res.status(404).json({ error: 'Episode not found' });
+      }
+
+      const memories = await storage.getMemoriesBySource(
+        episode.profileId, 
+        id, 
+        'podcast_episode'
+      );
+      
+      res.json({
+        episodeId: id,
+        episodeNumber: episode.episodeNumber,
+        episodeTitle: episode.title,
+        memoriesCount: memories.length,
+        memories
+      });
+    } catch (error) {
+      console.error('Error getting episode memories:', error);
+      res.status(500).json({ error: 'Failed to get episode memories' });
     }
   });
 
