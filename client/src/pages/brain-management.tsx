@@ -2781,7 +2781,8 @@ export default function BrainManagement() {
                                   PRIMARY
                                 </Badge>
                                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  Confidence: {group.masterEntry.confidence}% | Importance: {group.masterEntry.importance}
+                                  {group.masterEntry.confidence != null && `Confidence: ${group.masterEntry.confidence}% | `}
+                                  Importance: {group.masterEntry.importance || 0}
                                 </div>
                               </div>
                               <p className="text-sm text-gray-900 dark:text-gray-100">
@@ -2800,7 +2801,8 @@ export default function BrainManagement() {
                                     SIMILAR ({Math.round(memory.similarity * 100)}%)
                                   </Badge>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    Confidence: {memory.confidence}% | Importance: {memory.importance}
+                                    {memory.confidence != null && `Confidence: ${memory.confidence}% | `}
+                                    Importance: {memory.importance || 0}
                                   </div>
                                 </div>
                                 <p className="text-sm text-gray-900 dark:text-gray-100">
