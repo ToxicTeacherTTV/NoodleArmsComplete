@@ -2777,23 +2777,25 @@ export default function BrainManagement() {
                           </CardHeader>
                           <CardContent className="space-y-4">
                             {/* Primary Memory */}
-                            <div className="border border-green-200 dark:border-green-700 rounded p-4 bg-green-50 dark:bg-green-900/20">
-                              <div className="flex items-center justify-between mb-2">
-                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                                  PRIMARY
-                                </Badge>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  {group.masterEntry.confidence != null && `Confidence: ${group.masterEntry.confidence}% | `}
-                                  Importance: {group.masterEntry.importance || 0}
+                            {group.masterEntry && (
+                              <div className="border border-green-200 dark:border-green-700 rounded p-4 bg-green-50 dark:bg-green-900/20">
+                                <div className="flex items-center justify-between mb-2">
+                                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                                    PRIMARY
+                                  </Badge>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    {group.masterEntry.confidence != null && `Confidence: ${group.masterEntry.confidence}% | `}
+                                    Importance: {group.masterEntry.importance || 0}
+                                  </div>
+                                </div>
+                                <p className="text-sm text-gray-900 dark:text-gray-100">
+                                  {group.masterEntry.content}
+                                </p>
+                                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                  Source: {group.masterEntry.source} • {new Date(group.masterEntry.createdAt).toLocaleDateString()}
                                 </div>
                               </div>
-                              <p className="text-sm text-gray-900 dark:text-gray-100">
-                                {group.masterEntry.content}
-                              </p>
-                              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                Source: {group.masterEntry.source} • {new Date(group.masterEntry.createdAt).toLocaleDateString()}
-                              </div>
-                            </div>
+                            )}
                             
                             {/* Similar Memories */}
                             {group.duplicates.map((memory: any, memoryIndex: number) => (
