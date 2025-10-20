@@ -542,6 +542,29 @@ export default function BrainManagement() {
   const [isLoadingDuplicates, setIsLoadingDuplicates] = useState(false);
   const [autoMergeInProgress, setAutoMergeInProgress] = useState(false);
   const [deepScanInProgress, setDeepScanInProgress] = useState(false);
+  const [savedScanDate, setSavedScanDate] = useState<string | null>(null);
+
+  // Load saved duplicate scan results on mount
+  useEffect(() => {
+    const loadSavedScan = async () => {
+      try {
+        const response = await fetch('/api/memory/saved-duplicate-scan');
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        if (data.hasSavedScan && data.duplicateGroups.length > 0) {
+          setDuplicateGroups(data.duplicateGroups);
+          setSimilarityThreshold(data.similarityThreshold);
+          setSavedScanDate(data.createdAt);
+          console.log(`📋 Loaded saved scan: ${data.duplicateGroups.length} duplicate groups from ${new Date(data.createdAt).toLocaleString()}`);
+        }
+      } catch (error) {
+        console.error('Failed to load saved duplicate scan:', error);
+      }
+    };
+
+    loadSavedScan();
+  }, []);
 
   // Entity editing state
   const [editingEntity, setEditingEntity] = useState<{type: 'person' | 'place' | 'event', data: any} | null>(null);
@@ -856,6 +879,7 @@ export default function BrainManagement() {
     onSuccess: (data) => {
       setDeepScanInProgress(false);
       setDuplicateGroups(data.duplicateGroups || []);
+      setSavedScanDate(new Date().toISOString());
       toast({
         title: "Deep Scan Complete",
         description: `Scanned ${data.scannedCount} memories, found ${data.duplicateGroups?.length || 0} duplicate groups (${data.totalDuplicates || 0} total duplicates)`,
@@ -916,14 +940,27 @@ export default function BrainManagement() {
       if (!response.ok) throw new Error('Failed to merge memories');
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      
+      // Remove the merged group from duplicateGroups state
+      const mergedIds = [variables.primaryId, ...variables.duplicateIds];
+      setDuplicateGroups(prevGroups => 
+        prevGroups.filter(group => {
+          // Keep groups that don't contain any of the merged memory IDs
+          const groupMemoryIds = [
+            group.masterEntry?.id,
+            ...(group.duplicates?.map((d: any) => d.id) || [])
+          ].filter(Boolean);
+          
+          return !groupMemoryIds.some(id => mergedIds.includes(id));
+        })
+      );
+      
       toast({
         title: "Memories Merged",
-        description: `Successfully merged ${data.mergedCount} memories`,
+        description: `Successfully merged ${data.mergedCount} memories. Group removed from list.`,
       });
-      // Refresh duplicate search
-      findDuplicatesMutation.mutate(similarityThreshold);
     },
     onError: (error) => {
       toast({
@@ -2612,10 +2649,17 @@ export default function BrainManagement() {
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">
-                  <CardTitle className="flex items-center gap-2">
-                    <Copy className="w-5 h-5 text-blue-500" />
-                    Memory Deduplication
-                  </CardTitle>
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Copy className="w-5 h-5 text-blue-500" />
+                      Memory Deduplication
+                    </CardTitle>
+                    {savedScanDate && duplicateGroups.length > 0 && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        Last scan: {new Date(savedScanDate).toLocaleString()} ({duplicateGroups.length} groups saved)
+                      </p>
+                    )}
+                  </div>
                   <div className="flex gap-2 items-center">
                     <div className="flex items-center gap-2">
                       <label className="text-sm font-medium">Similarity:</label>
