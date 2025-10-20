@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { memoryCaches } from "./services/memoryCache";
-import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, insertDiscordServerSchema, insertDiscordMemberSchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags } from "@shared/schema";
+import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, insertDiscordServerSchema, insertDiscordMemberSchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags, duplicateScanResults } from "@shared/schema";
 import { eq, and, sql, or, inArray, desc } from "drizzle-orm";
 import { db } from "./db";
 import { anthropicService } from "./services/anthropic";
@@ -1550,14 +1550,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
         similarityThreshold
       );
 
+      // Archive previous scan results
+      await db.update(duplicateScanResults)
+        .set({ status: 'ARCHIVED' })
+        .where(and(
+          eq(duplicateScanResults.profileId, activeProfile.id),
+          eq(duplicateScanResults.status, 'ACTIVE')
+        ));
+
+      // Save new scan results to database
+      const [savedScan] = await db.insert(duplicateScanResults).values({
+        profileId: activeProfile.id,
+        scanDepth: scanDepth === 'ALL' ? -1 : scanDepth,
+        similarityThreshold: Math.round(similarityThreshold * 100),
+        totalGroupsFound: results.duplicateGroups.length,
+        totalDuplicatesFound: results.totalDuplicates,
+        duplicateGroups: results.duplicateGroups,
+        status: 'ACTIVE'
+      }).returning();
+
+      console.log(`💾 Saved scan results: ${results.duplicateGroups.length} groups, ${results.totalDuplicates} duplicates`);
+
       res.json({
         success: true,
+        scanId: savedScan.id,
         message: `Scanned ${results.scannedCount} memories, found ${results.duplicateGroups.length} duplicate groups (${results.totalDuplicates} total duplicates)`,
         ...results
       });
     } catch (error) {
       console.error('Deep duplicate scan error:', error);
       res.status(500).json({ error: 'Failed to perform deep duplicate scan' });
+    }
+  });
+
+  // Get saved duplicate scan results
+  app.get('/api/memory/saved-duplicate-scan', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      // Get the most recent ACTIVE scan for this profile
+      const [savedScan] = await db.select()
+        .from(duplicateScanResults)
+        .where(and(
+          eq(duplicateScanResults.profileId, activeProfile.id),
+          eq(duplicateScanResults.status, 'ACTIVE')
+        ))
+        .orderBy(desc(duplicateScanResults.createdAt))
+        .limit(1);
+
+      if (!savedScan) {
+        return res.json({ hasSavedScan: false });
+      }
+
+      res.json({
+        hasSavedScan: true,
+        scanId: savedScan.id,
+        scanDepth: savedScan.scanDepth === -1 ? 'ALL' : savedScan.scanDepth,
+        similarityThreshold: savedScan.similarityThreshold / 100,
+        duplicateGroups: savedScan.duplicateGroups || [],
+        totalDuplicates: savedScan.totalDuplicatesFound,
+        scannedCount: savedScan.scanDepth === -1 ? 'ALL' : savedScan.scanDepth,
+        createdAt: savedScan.createdAt
+      });
+    } catch (error) {
+      console.error('Error fetching saved duplicate scan:', error);
+      res.status(500).json({ error: 'Failed to fetch saved duplicate scan' });
     }
   });
 

@@ -204,6 +204,20 @@ export const memoryEventLinks = pgTable("memory_event_links", {
   createdAt: timestamp("created_at").default(sql`now()`),
 });
 
+// Duplicate Scan Results - Persistent storage for deep scan results
+export const duplicateScanResults = pgTable("duplicate_scan_results", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  scanDepth: integer("scan_depth").notNull(), // Number of memories scanned (or -1 for ALL)
+  similarityThreshold: integer("similarity_threshold").notNull(), // Threshold percentage (0-100)
+  totalGroupsFound: integer("total_groups_found").default(0),
+  totalDuplicatesFound: integer("total_duplicates_found").default(0),
+  duplicateGroups: jsonb("duplicate_groups").$type<any[]>().default([]), // Array of duplicate group objects
+  status: text("status").$type<'ACTIVE' | 'ARCHIVED'>().default('ACTIVE'),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
 // Content Library - For stories, AITA posts, entertainment content (separate from facts)
 export const contentLibrary = pgTable("content_library", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
