@@ -1405,17 +1405,19 @@ export default function BrainManagement() {
     return sortFacts(filtered);
   };
 
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 90) return "bg-green-500";
-    if (confidence >= 70) return "bg-blue-500";
-    if (confidence >= 60) return "bg-yellow-500";
+  const getConfidenceColor = (confidence: number | null | undefined) => {
+    const conf = confidence ?? 0;
+    if (conf >= 90) return "bg-green-500";
+    if (conf >= 70) return "bg-blue-500";
+    if (conf >= 60) return "bg-yellow-500";
     return "bg-red-500";
   };
 
-  const getConfidenceLabel = (confidence: number) => {
-    if (confidence >= 90) return "Very High";
-    if (confidence >= 70) return "High";
-    if (confidence >= 60) return "Medium";
+  const getConfidenceLabel = (confidence: number | null | undefined) => {
+    const conf = confidence ?? 0;
+    if (conf >= 90) return "Very High";
+    if (conf >= 70) return "High";
+    if (conf >= 60) return "Medium";
     return "Low";
   };
 
@@ -2071,7 +2073,7 @@ export default function BrainManagement() {
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center space-x-2">
                             <Badge className={getConfidenceColor(fact.confidence)}>
-                              {fact.confidence}% {getConfidenceLabel(fact.confidence)}
+                              {fact.confidence ?? 0}% {getConfidenceLabel(fact.confidence)}
                             </Badge>
                             <Badge variant="outline">
                               {fact.supportCount} sources
@@ -2082,7 +2084,7 @@ export default function BrainManagement() {
                           </div>
                           <FactActions fact={fact} />
                         </div>
-                        <Progress value={fact.confidence} className="w-full mb-3" />
+                        <Progress value={fact.confidence ?? 0} className="w-full mb-3" />
                         <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
                           {fact.content}
                         </p>
@@ -2125,7 +2127,7 @@ export default function BrainManagement() {
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center space-x-2">
                             <Badge className={getConfidenceColor(fact.confidence)}>
-                              {fact.confidence}% {getConfidenceLabel(fact.confidence)}
+                              {fact.confidence ?? 0}% {getConfidenceLabel(fact.confidence)}
                             </Badge>
                             <Badge variant="outline">
                               Support: {fact.supportCount}
@@ -2133,7 +2135,7 @@ export default function BrainManagement() {
                           </div>
                           <FactActions fact={fact} />
                         </div>
-                        <Progress value={fact.confidence} className="w-full mb-3" />
+                        <Progress value={fact.confidence ?? 0} className="w-full mb-3" />
                         <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
                           {fact.content}
                         </p>
@@ -2176,7 +2178,7 @@ export default function BrainManagement() {
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center space-x-2">
                             <Badge className={getConfidenceColor(fact.confidence)}>
-                              {fact.confidence}% {getConfidenceLabel(fact.confidence)}
+                              {fact.confidence ?? 0}% {getConfidenceLabel(fact.confidence)}
                             </Badge>
                             <Badge variant="outline">
                               Support: {fact.supportCount}
@@ -2184,7 +2186,7 @@ export default function BrainManagement() {
                           </div>
                           <FactActions fact={fact} />
                         </div>
-                        <Progress value={fact.confidence} className="w-full mb-3" />
+                        <Progress value={fact.confidence ?? 0} className="w-full mb-3" />
                         <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
                           {fact.content}
                         </p>
@@ -2273,7 +2275,7 @@ export default function BrainManagement() {
                                 <div className="flex items-center space-x-2">
                                   <CheckCircle className="h-4 w-4 text-green-600" />
                                   <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                                    PRIMARY ({group.primaryFact.confidence}% confidence)
+                                    PRIMARY ({group.primaryFact.confidence ?? 0}% confidence)
                                   </Badge>
                                 </div>
                               </div>
@@ -2292,7 +2294,7 @@ export default function BrainManagement() {
                               <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center space-x-2">
                                   <Badge className={getConfidenceColor(fact.confidence)}>
-                                    {fact.confidence}% confidence
+                                    {fact.confidence ?? 0}% confidence
                                   </Badge>
                                   <Badge variant={fact.status === 'ACTIVE' ? 'default' : 'secondary'}>
                                     {fact.status}
@@ -2843,7 +2845,7 @@ export default function BrainManagement() {
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center space-x-2">
                             <Badge className={getConfidenceColor(fact.confidence)}>
-                              {fact.confidence}%
+                              {fact.confidence ?? 0}%
                             </Badge>
                             <Badge variant="outline">{fact.status}</Badge>
                           </div>
@@ -3082,7 +3084,7 @@ export default function BrainManagement() {
                         <div className="flex-1 space-y-3">
                           {/* Metadata */}
                           <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>Confidence: {preview.confidence}% • Source: {preview.source}</span>
+                            <span>Confidence: {preview.confidence ?? 0}% • Source: {preview.source}</span>
                             <span>{preview.originalLength} → {preview.cleanedLength} chars</span>
                           </div>
                           
