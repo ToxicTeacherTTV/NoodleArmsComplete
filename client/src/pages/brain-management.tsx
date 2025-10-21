@@ -548,18 +548,31 @@ export default function BrainManagement() {
   useEffect(() => {
     const loadSavedScan = async () => {
       try {
+        console.log('📡 Fetching saved duplicate scan...');
         const response = await fetch('/api/memory/saved-duplicate-scan');
-        if (!response.ok) return;
+        if (!response.ok) {
+          console.log('❌ Saved scan fetch failed:', response.status);
+          return;
+        }
         
         const data = await response.json();
+        console.log('📦 Saved scan data:', {
+          hasSavedScan: data.hasSavedScan,
+          groupsLength: data.duplicateGroups?.length,
+          threshold: data.similarityThreshold,
+          createdAt: data.createdAt
+        });
+        
         if (data.hasSavedScan && data.duplicateGroups.length > 0) {
           setDuplicateGroups(data.duplicateGroups);
           setSimilarityThreshold(data.similarityThreshold);
           setSavedScanDate(data.createdAt);
-          console.log(`📋 Loaded saved scan: ${data.duplicateGroups.length} duplicate groups from ${new Date(data.createdAt).toLocaleString()}`);
+          console.log(`✅ Loaded saved scan: ${data.duplicateGroups.length} duplicate groups from ${new Date(data.createdAt).toLocaleString()}`);
+        } else {
+          console.log('ℹ️ No saved scan to load');
         }
       } catch (error) {
-        console.error('Failed to load saved duplicate scan:', error);
+        console.error('❌ Failed to load saved duplicate scan:', error);
       }
     };
 
@@ -877,9 +890,17 @@ export default function BrainManagement() {
       return response.json();
     },
     onSuccess: (data) => {
+      console.log('🔍 Deep scan response:', {
+        hasDuplicateGroups: !!data.duplicateGroups,
+        groupsLength: data.duplicateGroups?.length,
+        totalDuplicates: data.totalDuplicates,
+        scannedCount: data.scannedCount,
+        fullData: data
+      });
       setDeepScanInProgress(false);
       setDuplicateGroups(data.duplicateGroups || []);
       setSavedScanDate(new Date().toISOString());
+      console.log('✅ Set duplicate groups:', data.duplicateGroups?.length || 0);
       toast({
         title: "Deep Scan Complete",
         description: `Scanned ${data.scannedCount} memories, found ${data.duplicateGroups?.length || 0} duplicate groups (${data.totalDuplicates || 0} total duplicates)`,
@@ -2776,6 +2797,15 @@ export default function BrainManagement() {
                 </p>
               </CardHeader>
               <CardContent>
+                {(() => {
+                  console.log('🎨 Rendering duplicates UI:', {
+                    groupsLength: duplicateGroups.length,
+                    isLoading: isLoadingDuplicates,
+                    firstGroup: duplicateGroups[0]
+                  });
+                  return null;
+                })()}
+                
                 {duplicateGroups.length === 0 && !isLoadingDuplicates ? (
                   <div className="text-center py-12">
                     <Copy className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -2789,8 +2819,11 @@ export default function BrainManagement() {
                 ) : (
                   <ScrollArea className="h-[600px]">
                     <div className="space-y-6">
-                      {duplicateGroups.map((group, groupIndex) => (
-                        <Card key={groupIndex} className="border-l-4 border-l-orange-500">
+                      {duplicateGroups.map((group, groupIndex) => {
+                        if (groupIndex === 0) {
+                          console.log('🎯 First group structure:', group);
+                        }
+                        return (<Card key={groupIndex} className="border-l-4 border-l-orange-500">
                           <CardHeader>
                             <div className="flex justify-between items-center">
                               <div className="flex items-center gap-2">
@@ -2862,8 +2895,8 @@ export default function BrainManagement() {
                               </div>
                             ))}
                           </CardContent>
-                        </Card>
-                      ))}
+                        </Card>);
+                      })}
                     </div>
                   </ScrollArea>
                 )}
