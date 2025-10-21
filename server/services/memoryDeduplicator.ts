@@ -489,6 +489,7 @@ export class MemoryDeduplicator {
   /**
    * 🔍 DEEP SCAN: Find all duplicate groups across the entire memory corpus
    * Configurable scan depth: 100, 500, 1000, or ALL memories
+   * 🚀 OPTIMIZED: Uses stored embeddings instead of regenerating for each comparison
    */
   async deepScanDuplicates(
     profileId: string,
@@ -505,11 +506,11 @@ export class MemoryDeduplicator {
   }> {
     console.log(`🔍 Starting deep duplicate scan (depth: ${scanDepth}, threshold: ${similarityThreshold})`);
     
-    // Get memories to scan
+    // 🚀 OPTIMIZATION: Load all memories with embeddings ONCE at the start
     const limit = scanDepth === 'ALL' ? 999999 : scanDepth;
     const memories = await storage.getRecentMemoriesWithEmbeddings(profileId, limit);
     
-    console.log(`📊 Scanning ${memories.length} memories for duplicates...`);
+    console.log(`📊 Scanning ${memories.length} memories for duplicates using stored embeddings (no API calls needed)...`);
     
     const duplicateGroups: Array<{
       masterId: string;
@@ -520,24 +521,23 @@ export class MemoryDeduplicator {
     const processedIds = new Set<string>();
     let totalDuplicates = 0;
     
-    // Check each memory against all others
+    // Check each memory against all others using stored embeddings
     for (let i = 0; i < memories.length; i++) {
       const memory = memories[i];
       
       // Skip if already processed as a duplicate
       if (processedIds.has(memory.id)) continue;
       
-      // Find duplicates for this memory
-      const duplicates = await embeddingService.findDuplicatesByEmbedding(
-        memory.content,
-        profileId,
-        similarityThreshold,
-        scanDepth === 'ALL' ? 999999 : scanDepth
+      // 🚀 OPTIMIZATION: Use stored embeddings directly (no API call!)
+      const duplicates = embeddingService.findDuplicatesFromStoredEmbeddings(
+        memory,
+        memories,
+        similarityThreshold
       );
       
-      // Filter out self and already processed
+      // Filter out already processed duplicates
       const actualDuplicates = duplicates.filter(
-        dup => dup.id !== memory.id && !processedIds.has(dup.id)
+        dup => !processedIds.has(dup.id)
       );
       
       if (actualDuplicates.length > 0) {
