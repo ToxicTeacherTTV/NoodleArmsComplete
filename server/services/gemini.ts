@@ -763,10 +763,26 @@ ${coreIdentity}`;
       }
 
       // 🚫 CRITICAL: Strip asterisk actions post-processing (last resort enforcement)
+      // Remove action descriptions, keep emphasized words/phrases
       const asteriskPattern = /\*[^*]+\*/g;
+      const actionVerbs = ['waves', 'wave', 'winks', 'wink', 'leans', 'lean', 'gestures', 'gesture', 
+                          'nods', 'nod', 'shrugs', 'shrug', 'points', 'point', 'laughs', 'laugh',
+                          'sighs', 'sigh', 'smirks', 'smirk', 'grins', 'grin', 'rolls eyes', 
+                          'crosses arms', 'snaps fingers', 'adjusts'];
+      
       const strippedContent = filteredContent.replace(asteriskPattern, (match) => {
-        console.warn(`🚫 Stripped asterisk action from Gemini response: ${match}`);
-        return ''; // Remove the asterisk action entirely
+        const content = match.slice(1, -1).toLowerCase();
+        
+        // Check if it contains action verbs - if so, remove it
+        const isAction = actionVerbs.some(verb => content.includes(verb));
+        
+        if (isAction) {
+          console.warn(`🚫 Stripped asterisk action from Gemini response: ${match}`);
+          return ''; // Remove action descriptions
+        }
+        
+        // Keep emphasized words/phrases (including catchphrases)
+        return match;
       }).replace(/\s{2,}/g, ' ').trim(); // Clean up extra spaces
 
       const processingTime = Date.now() - startTime;
