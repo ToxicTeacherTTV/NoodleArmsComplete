@@ -791,10 +791,58 @@ ${coreIdentity}`;
         return match;
       }).replace(/\s{2,}/g, ' ').trim(); // Clean up extra spaces
 
+      // ✅ CRITICAL: Fix missing punctuation (Gemini often skips periods)
+      const fixPunctuation = (text: string): string => {
+        // Split by emotion tags to process text segments
+        const emotionTagPattern = /(\[[^\]]+\])/g;
+        const segments = text.split(emotionTagPattern);
+        
+        const fixed = segments.map((segment, index) => {
+          // Skip emotion tags themselves
+          if (segment.match(/^\[[^\]]+\]$/)) {
+            return segment;
+          }
+          
+          // Process text segments
+          if (segment.trim()) {
+            const trimmed = segment.trim();
+            const lastChar = trimmed[trimmed.length - 1];
+            
+            // If already has ending punctuation, keep it
+            if (['.', '!', '?', '…'].includes(lastChar)) {
+              return segment;
+            }
+            
+            // Check if next segment is an emotion tag (don't add period before emotion tag)
+            const nextSegment = segments[index + 1];
+            if (nextSegment && nextSegment.match(/^\[[^\]]+\]$/)) {
+              return segment;
+            }
+            
+            // Add appropriate punctuation
+            // Use exclamation for all-caps phrases
+            if (trimmed.length > 3 && trimmed === trimmed.toUpperCase()) {
+              console.log(`🔧 Adding exclamation to: "${trimmed}"`);
+              return segment.trimEnd() + '!';
+            }
+            
+            // Default: add period
+            console.log(`🔧 Adding period to: "${trimmed}"`);
+            return segment.trimEnd() + '.';
+          }
+          
+          return segment;
+        });
+        
+        return fixed.join('');
+      };
+      
+      const finalContent = fixPunctuation(strippedContent);
+
       const processingTime = Date.now() - startTime;
 
       return {
-        content: strippedContent,
+        content: finalContent,
         processingTime,
         retrievedContext: contextPrompt || undefined,
       };
