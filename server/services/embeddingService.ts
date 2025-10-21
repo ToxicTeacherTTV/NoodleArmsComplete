@@ -565,6 +565,57 @@ class EmbeddingService {
   }
 
   /**
+   * 🚀 OPTIMIZED: Find duplicates using pre-loaded stored embeddings
+   * This avoids regenerating embeddings for every comparison
+   * Used by the deep scan duplicate checker
+   */
+  findDuplicatesFromStoredEmbeddings(
+    sourceMemory: { id: string; content: string; embedding: string | null },
+    allMemories: Array<{ id: string; content: string; embedding: string | null }>,
+    similarityThreshold: number = 0.90
+  ): Array<{ id: string; content: string; similarity: number }> {
+    const duplicates: Array<{ id: string; content: string; similarity: number }> = [];
+    
+    // Skip if source has no embedding
+    if (!sourceMemory.embedding) {
+      return [];
+    }
+    
+    try {
+      const sourceEmbedding = JSON.parse(sourceMemory.embedding);
+      
+      for (const targetMemory of allMemories) {
+        // Skip self-comparison and memories without embeddings
+        if (targetMemory.id === sourceMemory.id || !targetMemory.embedding) {
+          continue;
+        }
+        
+        try {
+          const targetEmbedding = JSON.parse(targetMemory.embedding);
+          const similarity = this.cosineSimilarity(sourceEmbedding, targetEmbedding);
+          
+          if (similarity >= similarityThreshold) {
+            duplicates.push({
+              id: targetMemory.id,
+              content: targetMemory.content,
+              similarity
+            });
+          }
+        } catch (error) {
+          console.error(`Failed to parse embedding for memory ${targetMemory.id}:`, error);
+        }
+      }
+      
+      // Sort by similarity (highest first) and limit to top 10
+      return duplicates.sort((a, b) => b.similarity - a.similarity).slice(0, 10);
+      
+    } catch (error) {
+      console.error(`Failed to parse embedding for memory ${sourceMemory.id}:`, error);
+      return [];
+    }
+  }
+
+  /**
    * Extract keywords from text (copied from existing implementation)
    */
   private extractKeywords(message: string): string[] {
