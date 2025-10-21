@@ -3466,7 +3466,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Manual merge endpoint (for frontend compatibility)
   app.post('/api/memory/merge', async (req, res) => {
     try {
-      const { primaryId, duplicateIds } = req.body;
+      const { primaryId, duplicateIds, mergedContent } = req.body;
       
       if (!primaryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
         return res.status(400).json({ error: 'primaryId and duplicateIds are required' });
@@ -3497,7 +3497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         masterEntry,
         duplicates: duplicateEntries,
         similarity: 1.0, // Manual merge, assume high similarity
-        mergedContent: masterEntry.content, // Use master content by default
+        mergedContent: mergedContent || masterEntry.content, // Use custom merged content or master content by default
         combinedImportance: Math.max(masterEntry.importance || 1, ...duplicateEntries.map(d => d.importance || 1)),
         combinedKeywords: Array.from(new Set([
           ...(masterEntry.keywords || []),

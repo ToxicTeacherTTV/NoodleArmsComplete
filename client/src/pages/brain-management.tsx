@@ -543,6 +543,9 @@ export default function BrainManagement() {
   const [autoMergeInProgress, setAutoMergeInProgress] = useState(false);
   const [deepScanInProgress, setDeepScanInProgress] = useState(false);
   const [savedScanDate, setSavedScanDate] = useState<string | null>(null);
+  const [showMergeEditDialog, setShowMergeEditDialog] = useState(false);
+  const [mergeEditGroup, setMergeEditGroup] = useState<any>(null);
+  const [mergeEditText, setMergeEditText] = useState("");
 
   // Load saved duplicate scan results on mount
   useEffect(() => {
@@ -952,11 +955,11 @@ export default function BrainManagement() {
 
   // Manual merge mutation
   const manualMergeMutation = useMutation({
-    mutationFn: async ({ primaryId, duplicateIds }: { primaryId: string; duplicateIds: string[] }) => {
+    mutationFn: async ({ primaryId, duplicateIds, mergedContent }: { primaryId: string; duplicateIds: string[]; mergedContent?: string }) => {
       const response = await fetch('/api/memory/merge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ primaryId, duplicateIds }),
+        body: JSON.stringify({ primaryId, duplicateIds, mergedContent }),
       });
       if (!response.ok) throw new Error('Failed to merge memories');
       return response.json();
@@ -977,6 +980,11 @@ export default function BrainManagement() {
           return !groupMemoryIds.some(id => mergedIds.includes(id));
         })
       );
+      
+      // Close the merge edit dialog
+      setShowMergeEditDialog(false);
+      setMergeEditGroup(null);
+      setMergeEditText("");
       
       toast({
         title: "Memories Merged",
@@ -2836,10 +2844,18 @@ export default function BrainManagement() {
                               </div>
                               <Button
                                 size="sm"
-                                onClick={() => manualMergeMutation.mutate({
-                                  primaryId: group.masterEntry.id,
-                                  duplicateIds: group.duplicates.map((d: any) => d.id)
-                                })}
+                                onClick={() => {
+                                  // Handle both data structures: masterEntry object or masterId+masterContent
+                                  const masterContent = group.masterEntry?.content || group.masterContent || '';
+                                  const allTexts = [
+                                    masterContent,
+                                    ...group.duplicates.map((d: any) => d.content)
+                                  ].filter(Boolean);
+                                  
+                                  setMergeEditGroup(group);
+                                  setMergeEditText(allTexts.join('\n\n'));
+                                  setShowMergeEditDialog(true);
+                                }}
                                 disabled={manualMergeMutation.isPending}
                                 data-testid={`button-merge-group-${groupIndex}`}
                               >
@@ -2853,23 +2869,28 @@ export default function BrainManagement() {
                             </div>
                           </CardHeader>
                           <CardContent className="space-y-4">
-                            {/* Primary Memory */}
-                            {group.masterEntry && (
+                            {/* Primary Memory - handle both masterEntry object and masterId+masterContent */}
+                            {(group.masterEntry || group.masterContent) && (
                               <div className="border border-green-200 dark:border-green-700 rounded p-4 bg-green-50 dark:bg-green-900/20">
                                 <div className="flex items-center justify-between mb-2">
                                   <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
                                     PRIMARY
                                   </Badge>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    {group.masterEntry.confidence != null && `Confidence: ${group.masterEntry.confidence}% | `}
-                                    Importance: {group.masterEntry.importance || 0}
+                                    {group.masterEntry?.confidence != null && `Confidence: ${group.masterEntry.confidence}% | `}
+                                    {group.masterEntry && `Importance: ${group.masterEntry.importance || 0}`}
                                   </div>
                                 </div>
                                 <p className="text-sm text-gray-900 dark:text-gray-100">
-                                  {group.masterEntry.content}
+                                  {group.masterEntry?.content || group.masterContent}
                                 </p>
                                 <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                  Source: {group.masterEntry.source} • {new Date(group.masterEntry.createdAt).toLocaleDateString()}
+                                  {group.masterEntry && (
+                                    <>Source: {group.masterEntry.source} • {new Date(group.masterEntry.createdAt).toLocaleDateString()}</>
+                                  )}
+                                  {!group.masterEntry && group.masterId && (
+                                    <>ID: {group.masterId.substring(0, 8)}...</>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -3872,6 +3893,87 @@ export default function BrainManagement() {
                 <>
                   <Merge className="w-4 h-4 mr-2" />
                   Confirm Merge
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Merge Edit Dialog */}
+      <Dialog open={showMergeEditDialog} onOpenChange={setShowMergeEditDialog}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Edit and Merge Duplicate Memories</DialogTitle>
+            <DialogDescription>
+              All duplicate texts are shown below (one per section). Edit them as needed, then merge into a single memory.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                Combined Text (edit as needed)
+              </label>
+              <Textarea
+                value={mergeEditText}
+                onChange={(e) => setMergeEditText(e.target.value)}
+                className="min-h-[300px] font-mono text-sm"
+                placeholder="Edit the merged content here..."
+                data-testid="textarea-merge-edit"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Tip: Each duplicate is separated by blank lines. Edit, combine, or rewrite as you see fit.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowMergeEditDialog(false);
+                setMergeEditGroup(null);
+                setMergeEditText("");
+              }}
+              disabled={manualMergeMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!mergeEditGroup || !mergeEditText.trim()) {
+                  toast({
+                    title: "Invalid Input",
+                    description: "Please provide merged content",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                
+                // Handle both data structures: masterEntry object or masterId
+                const primaryId = mergeEditGroup.masterEntry?.id || mergeEditGroup.masterId || mergeEditGroup.duplicates[0]?.id;
+                const duplicateIds = (mergeEditGroup.masterEntry || mergeEditGroup.masterId)
+                  ? mergeEditGroup.duplicates.map((d: any) => d.id)
+                  : mergeEditGroup.duplicates.slice(1).map((d: any) => d.id);
+                
+                manualMergeMutation.mutate({
+                  primaryId,
+                  duplicateIds,
+                  mergedContent: mergeEditText.trim()
+                });
+              }}
+              disabled={manualMergeMutation.isPending || !mergeEditText.trim()}
+              className="bg-purple-600 hover:bg-purple-700"
+              data-testid="button-confirm-merge-edit"
+            >
+              {manualMergeMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Merging...
+                </>
+              ) : (
+                <>
+                  <Merge className="w-4 h-4 mr-2" />
+                  Merge with Edited Text
                 </>
               )}
             </Button>
