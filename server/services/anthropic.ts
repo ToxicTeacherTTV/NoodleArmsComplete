@@ -987,8 +987,41 @@ ${coreIdentity}`;
           return match;
         }).replace(/\s{2,}/g, ' ').trim(); // Clean up extra spaces
 
+        // ✅ CRITICAL: Fix missing punctuation (Gemini often skips periods)
+        const fixPunctuation = (text: string): string => {
+          // Split into sentences by looking for natural breaks
+          const sentences = text.split(/(?<=[.!?…])\s+/);
+          
+          const fixed = sentences.map(sentence => {
+            const trimmed = sentence.trim();
+            if (!trimmed) return '';
+            
+            const lastChar = trimmed[trimmed.length - 1];
+            
+            // If already has ending punctuation, keep it
+            if (['.', '!', '?', '…'].includes(lastChar)) {
+              return trimmed;
+            }
+            
+            // Add appropriate punctuation
+            // Use exclamation for all-caps phrases
+            if (trimmed.length > 3 && trimmed === trimmed.toUpperCase()) {
+              console.log(`🔧 Adding exclamation to: "${trimmed}"`);
+              return trimmed + '!';
+            }
+            
+            // Default: add period
+            console.log(`🔧 Adding period to: "${trimmed}"`);
+            return trimmed + '.';
+          });
+          
+          return fixed.filter(s => s).join(' ');
+        };
+        
+        const punctuatedContent = fixPunctuation(strippedContent);
+
         // ✨ NEW: Post-generation repetition filter
-        let finalContent = strippedContent;
+        let finalContent = punctuatedContent;
         if (conversationId) {
           const repetitionCheck = await this.checkForRepetition(conversationId, strippedContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
           finalContent = repetitionCheck.content;
