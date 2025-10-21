@@ -1023,7 +1023,7 @@ ${coreIdentity}`;
         // ✨ NEW: Post-generation repetition filter
         let finalContent = punctuatedContent;
         if (conversationId) {
-          const repetitionCheck = await this.checkForRepetition(conversationId, strippedContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
+          const repetitionCheck = await this.checkForRepetition(conversationId, punctuatedContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
           finalContent = repetitionCheck.content;
           
           // 📖 NEW: Story completion tracking for enhanced memory persistence
@@ -1115,10 +1115,30 @@ ${coreIdentity}`;
             return match;
           }).replace(/\s{2,}/g, ' ').trim();
 
+          // ✅ Fix missing punctuation (Claude can also skip periods sometimes)
+          const fixPunctuation = (text: string): string => {
+            const sentences = text.split(/(?<=[.!?…])\s+/);
+            const fixed = sentences.map(sentence => {
+              const trimmed = sentence.trim();
+              if (!trimmed) return '';
+              const lastChar = trimmed[trimmed.length - 1];
+              if (['.', '!', '?', '…'].includes(lastChar)) return trimmed;
+              if (trimmed.length > 3 && trimmed === trimmed.toUpperCase()) {
+                console.log(`🔧 Adding exclamation to: "${trimmed}"`);
+                return trimmed + '!';
+              }
+              console.log(`🔧 Adding period to: "${trimmed}"`);
+              return trimmed + '.';
+            });
+            return fixed.filter(s => s).join(' ');
+          };
+          
+          const punctuatedContent = fixPunctuation(strippedContent);
+
           // ✨ Repetition filter
-          let finalContent = strippedContent;
+          let finalContent = punctuatedContent;
           if (conversationId) {
-            const repetitionCheck = await this.checkForRepetition(conversationId, strippedContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
+            const repetitionCheck = await this.checkForRepetition(conversationId, punctuatedContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
             finalContent = repetitionCheck.content;
             await this.trackStoryCompletion(conversationId, finalContent, profileId, mode);
           }
