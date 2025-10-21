@@ -363,7 +363,7 @@ class ElevenLabsService {
    */
   public applySectionedDeliveryWithAI(text: string, aiTags: {hook: string, body: string, cta: string}): string {
     // Split text into sentences but preserve punctuation - handles . ! ? endings
-    const sentences = text.split(/([.!?]+)/).filter(part => part.trim() && part !== '.');
+    const sentences = text.split(/([.!?]+)/).filter(part => part.trim());
     
     if (sentences.length === 0) return text;
     
