@@ -702,9 +702,15 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${c
       console.log('🌟 Using Gemini fallback for chat response');
 
       // 🚫 CRITICAL: Put formatting rules FIRST for maximum priority
-      const enhancedCoreIdentity = `🚫 CRITICAL FORMATTING RULE #1:
+      const enhancedCoreIdentity = `🚫 CRITICAL FORMATTING RULES:
+
+RULE #1 - NO ASTERISKS:
 NEVER use asterisks (*) for actions, gestures, or stage directions. Do NOT write *gestures*, *winks*, *leans in*, *waves*, etc.
 Describe actions IN YOUR DIALOGUE: "I'm wavin' my hand dismissively!" NOT "*waves hand dismissively*"
+
+RULE #2 - PROPER PUNCTUATION:
+ALWAYS end sentences with proper punctuation (. ! ?). Every statement must end with a period, every question with a question mark, every exclamation with an exclamation point.
+Use commas where grammatically appropriate to separate clauses and maintain readability.
 
 ${coreIdentity}`;
 
