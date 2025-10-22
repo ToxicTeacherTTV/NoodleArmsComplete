@@ -1,0 +1,512 @@
+🎯 Feature 1: Document Processing Status
+What You Need:
+Track the processing pipeline for each document:
+Upload → Extract Text → Extract Facts → Extract Entities → Deep Research → ✅ Complete
+
+Database Schema:
+sql-- Add processing columns to documents table
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS processing_status VARCHAR(50) DEFAULT 'pending';
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS processing_metadata JSONB DEFAULT '{}';
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64);
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_size INTEGER;
+
+-- Status values: 'pending', 'processing', 'completed', 'failed', 'skipped'
+Processing metadata structure:
+json{
+  "text_extraction": {
+    "status": "completed",
+    "timestamp": "2025-01-15T10:30:00Z",
+    "page_count": 15
+  },
+  "fact_extraction": {
+    "status": "completed", 
+    "timestamp": "2025-01-15T10:32:00Z",
+    "facts_found": 23
+  },
+  "entity_extraction": {
+    "status": "completed",
+    "timestamp": "2025-01-15T10:33:00Z",
+    "entities_found": 8
+  },
+  "deep_research": {
+    "status": "in_progress",
+    "timestamp": "2025-01-15T10:35:00Z",
+    "progress": 0.6
+  },
+  "embedding_generation": {
+    "status": "completed",
+    "timestamp": "2025-01-15T10:31:00Z"
+  }
+}
+
+Code Implementation:
+typescript// server/services/documentProcessor.ts
+
+interface ProcessingStage {
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped';
+  timestamp: string;
+  error?: string;
+  [key: string]: any; // Stage-specific metadata
+}
+
+interface DocumentProcessingMetadata {
+  text_extraction?: ProcessingStage;
+  fact_extraction?: ProcessingStage;
+  entity_extraction?: ProcessingStage;
+  deep_research?: ProcessingStage;
+  embedding_generation?: ProcessingStage;
+}
+
+class DocumentProcessor {
+  
+  async processDocument(documentId: string): Promise<void> {
+    try {
+      // Update overall status
+      await this.updateDocumentStatus(documentId, 'processing');
+      
+      // Stage 1: Text Extraction
+      await this.updateStageStatus(documentId, 'text_extraction', 'processing');
+      const text = await this.extractText(documentId);
+      await this.updateStageStatus(documentId, 'text_extraction', 'completed', {
+        page_count: text.pages
+      });
+      
+      // Stage 2: Embedding Generation
+      await this.updateStageStatus(documentId, 'embedding_generation', 'processing');
+      const embedding = await embeddingService.generateEmbedding(text.content);
+      await storage.updateDocumentEmbedding(documentId, embedding);
+      await this.updateStageStatus(documentId, 'embedding_generation', 'completed');
+      
+      // Stage 3: Fact Extraction
+      await this.updateStageStatus(documentId, 'fact_extraction', 'processing');
+      const facts = await this.extractFacts(text.content);
+      await this.updateStageStatus(documentId, 'fact_extraction', 'completed', {
+        facts_found: facts.length
+      });
+      
+      // Stage 4: Entity Extraction
+      await this.updateStageStatus(documentId, 'entity_extraction', 'processing');
+      const entities = await this.extractEntities(text.content);
+      await this.updateStageStatus(documentId, 'entity_extraction', 'completed', {
+        entities_found: entities.length
+      });
+      
+      // Stage 5: Deep Research (optional/on-demand)
+      // Skipped by default, triggered manually
+      await this.updateStageStatus(documentId, 'deep_research', 'skipped');
+      
+      // Mark overall as complete
+      await this.updateDocumentStatus(documentId, 'completed');
+      
+    } catch (error) {
+      console.error(`Document processing failed for ${documentId}:`, error);
+      await this.updateDocumentStatus(documentId, 'failed');
+    }
+  }
+  
+  private async updateDocumentStatus(
+    documentId: string, 
+    status: string
+  ): Promise<void> {
+    await db.query(`
+      UPDATE documents 
+      SET processing_status = $1
+      WHERE id = $2
+    `, [status, documentId]);
+  }
+  
+  private async updateStageStatus(
+    documentId: string,
+    stage: string,
+    status: string,
+    metadata?: any
+  ): Promise<void> {
+    const stageData: ProcessingStage = {
+      status,
+      timestamp: new Date().toISOString(),
+      ...metadata
+    };
+    
+    await db.query(`
+      UPDATE documents
+      SET processing_metadata = jsonb_set(
+        COALESCE(processing_metadata, '{}'::jsonb),
+        $1,
+        $2::jsonb
+      )
+      WHERE id = $3
+    `, [`{${stage}}`, JSON.stringify(stageData), documentId]);
+    
+    console.log(`📝 Document ${documentId} - ${stage}: ${status}`);
+  }
+  
+  // Get processing status for a document
+  async getProcessingStatus(documentId: string): Promise<DocumentProcessingMetadata> {
+    const result = await db.query(`
+      SELECT processing_status, processing_metadata
+      FROM documents
+      WHERE id = $1
+    `, [documentId]);
+    
+    return result.rows[0]?.processing_metadata || {};
+  }
+}
+
+UI Display:
+typescript// Show processing status in document list
+function DocumentCard({ doc }) {
+  const status = doc.processing_metadata;
+  
+  return (
+    <div className="document-card">
+      <h3>{doc.title}</h3>
+      
+      {/* Overall status badge */}
+      <StatusBadge status={doc.processing_status} />
+      
+      {/* Detailed processing stages */}
+      <ProcessingPipeline>
+        <Stage 
+          name="Text" 
+          status={status.text_extraction?.status}
+          icon="📄"
+        />
+        <Stage 
+          name="Embedding" 
+          status={status.embedding_generation?.status}
+          icon="🔢"
+        />
+        <Stage 
+          name="Facts" 
+          status={status.fact_extraction?.status}
+          icon="💡"
+          count={status.fact_extraction?.facts_found}
+        />
+        <Stage 
+          name="Entities" 
+          status={status.entity_extraction?.status}
+          icon="🏷️"
+          count={status.entity_extraction?.entities_found}
+        />
+        <Stage 
+          name="Research" 
+          status={status.deep_research?.status}
+          icon="🔬"
+        />
+      </ProcessingPipeline>
+    </div>
+  );
+}
+
+🎯 Feature 2: Duplicate Document Detection
+WITH VECTOR EMBEDDINGS, THIS GETS REALLY POWERFUL!
+
+Three-Tier Duplicate Detection:
+Tier 1: Content Hash (Exact Duplicates) ⚡ FAST
+typescript// Generate hash when uploading
+import crypto from 'crypto';
+
+function generateContentHash(fileBuffer: Buffer): string {
+  return crypto.createHash('sha256').update(fileBuffer).digest('hex');
+}
+
+async function checkExactDuplicate(hash: string): Promise<Document | null> {
+  const result = await db.query(`
+    SELECT * FROM documents 
+    WHERE content_hash = $1
+  `, [hash]);
+  
+  return result.rows[0] || null;
+}
+Catches: Same file uploaded twice, even with different filename
+
+Tier 2: Metadata Similarity 🔍 MEDIUM
+typescriptasync function checkMetadataSimilarity(
+  fileSize: number,
+  fileType: string,
+  fileName: string
+): Promise<Document[]> {
+  
+  // Find documents with:
+  // - Same size (±5%)
+  // - Same file type
+  // - Similar filename (optional)
+  
+  const sizeLower = fileSize * 0.95;
+  const sizeUpper = fileSize * 1.05;
+  
+  const result = await db.query(`
+    SELECT *, 
+           similarity(title, $1) as name_similarity
+    FROM documents
+    WHERE file_size BETWEEN $2 AND $3
+      AND file_type = $4
+      AND similarity(title, $1) > 0.3
+    ORDER BY name_similarity DESC
+    LIMIT 10
+  `, [fileName, sizeLower, sizeUpper, fileType]);
+  
+  return result.rows;
+}
+Catches: Same file with minor edits, renamed copies
+
+Tier 3: Semantic Similarity (EMBEDDINGS!) 🧠 SMART
+typescriptasync function checkSemanticDuplicates(
+  documentId: string,
+  threshold: number = 0.85
+): Promise<Array<{document: Document, similarity: number}>> {
+  
+  // Get the document's embedding
+  const doc = await storage.getDocument(documentId);
+  if (!doc.embedding) {
+    return [];
+  }
+  
+  // Find semantically similar documents
+  const allDocs = await storage.getAllDocumentsWithEmbeddings();
+  
+  const similar = allDocs
+    .filter(d => d.id !== documentId)
+    .map(d => ({
+      document: d,
+      similarity: embeddingService.cosineSimilarity(doc.embedding, d.embedding)
+    }))
+    .filter(item => item.similarity >= threshold)
+    .sort((a, b) => b.similarity - a.similarity);
+  
+  return similar;
+}
+Catches:
+
+Same content with different formatting
+Edited versions of same document
+Translated documents
+Paraphrased content
+
+
+Complete Duplicate Detection System:
+typescript// server/services/duplicateDetector.ts
+
+interface DuplicateResult {
+  type: 'exact' | 'metadata' | 'semantic';
+  document: Document;
+  confidence: number;
+  reason: string;
+}
+
+class DuplicateDetector {
+  
+  async checkForDuplicates(
+    file: File,
+    content: string
+  ): Promise<DuplicateResult[]> {
+    const duplicates: DuplicateResult[] = [];
+    
+    // STAGE 1: Content hash check (fastest)
+    console.log('🔍 Checking for exact duplicates...');
+    const hash = generateContentHash(file.buffer);
+    const exactDupe = await this.checkExactDuplicate(hash);
+    
+    if (exactDupe) {
+      duplicates.push({
+        type: 'exact',
+        document: exactDupe,
+        confidence: 1.0,
+        reason: 'Identical file content (SHA-256 match)'
+      });
+      
+      // If exact duplicate found, no need to continue
+      return duplicates;
+    }
+    
+    // STAGE 2: Metadata similarity check
+    console.log('🔍 Checking metadata similarity...');
+    const metadataDupes = await this.checkMetadataSimilarity(
+      file.size,
+      file.type,
+      file.name
+    );
+    
+    metadataDupes.forEach(doc => {
+      duplicates.push({
+        type: 'metadata',
+        document: doc,
+        confidence: doc.name_similarity,
+        reason: `Similar size (${doc.file_size} bytes) and filename`
+      });
+    });
+    
+    // STAGE 3: Semantic similarity check (slowest but smartest)
+    console.log('🔍 Checking semantic similarity...');
+    const embedding = await embeddingService.generateEmbedding(content);
+    const semanticDupes = await this.checkSemanticSimilarity(embedding, 0.85);
+    
+    semanticDupes.forEach(({ document, similarity }) => {
+      // Don't duplicate if already found in metadata check
+      if (!duplicates.some(d => d.document.id === document.id)) {
+        duplicates.push({
+          type: 'semantic',
+          document,
+          confidence: similarity,
+          reason: `${Math.round(similarity * 100)}% content similarity`
+        });
+      }
+    });
+    
+    return duplicates.sort((a, b) => b.confidence - a.confidence);
+  }
+  
+  private async checkExactDuplicate(hash: string): Promise<Document | null> {
+    const result = await db.query(`
+      SELECT * FROM documents WHERE content_hash = $1
+    `, [hash]);
+    return result.rows[0] || null;
+  }
+  
+  private async checkMetadataSimilarity(
+    size: number,
+    type: string,
+    name: string
+  ): Promise<Document[]> {
+    const sizeLower = size * 0.95;
+    const sizeUpper = size * 1.05;
+    
+    const result = await db.query(`
+      SELECT *, similarity(title, $1) as name_similarity
+      FROM documents
+      WHERE file_size BETWEEN $2 AND $3
+        AND file_type = $4
+        AND similarity(title, $1) > 0.3
+      ORDER BY name_similarity DESC
+      LIMIT 5
+    `, [name, sizeLower, sizeUpper, type]);
+    
+    return result.rows;
+  }
+  
+  private async checkSemanticSimilarity(
+    embedding: number[],
+    threshold: number
+  ): Promise<Array<{document: Document, similarity: number}>> {
+    const allDocs = await storage.getAllDocumentsWithEmbeddings();
+    
+    return allDocs
+      .map(doc => ({
+        document: doc,
+        similarity: embeddingService.cosineSimilarity(embedding, doc.embedding)
+      }))
+      .filter(item => item.similarity >= threshold)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 5);
+  }
+}
+
+export const duplicateDetector = new DuplicateDetector();
+
+Usage in Upload Flow:
+typescript// When user uploads a document:
+
+async function handleDocumentUpload(file: File): Promise<void> {
+  // Extract text first
+  const text = await extractTextFromFile(file);
+  
+  // Check for duplicates BEFORE saving
+  const duplicates = await duplicateDetector.checkForDuplicates(file, text);
+  
+  if (duplicates.length > 0) {
+    console.log(`⚠️ Found ${duplicates.length} potential duplicates`);
+    
+    // Show user the duplicates
+    const action = await promptUserAboutDuplicates(duplicates);
+    
+    if (action === 'skip') {
+      console.log('❌ User chose to skip upload');
+      return;
+    }
+    
+    if (action === 'merge') {
+      console.log('🔄 Merging with existing document');
+      await mergeDocuments(duplicates[0].document, file);
+      return;
+    }
+    
+    // action === 'upload_anyway'
+    console.log('✅ User chose to upload anyway');
+  }
+  
+  // Save the document
+  await saveDocument(file, text);
+}
+
+🎨 UI for Duplicate Detection
+typescriptfunction DuplicateWarning({ duplicates, onAction }) {
+  return (
+    <div className="duplicate-warning">
+      <h3>⚠️ Potential Duplicates Found</h3>
+      
+      {duplicates.map(dupe => (
+        <div key={dupe.document.id} className="duplicate-item">
+          <div className="confidence-badge">
+            {Math.round(dupe.confidence * 100)}% match
+          </div>
+          
+          <div className="document-info">
+            <h4>{dupe.document.title}</h4>
+            <p>{dupe.reason}</p>
+            <span className="upload-date">
+              Uploaded {formatDate(dupe.document.created_at)}
+            </span>
+          </div>
+          
+          <button onClick={() => onAction('view', dupe.document)}>
+            View Document
+          </button>
+        </div>
+      ))}
+      
+      <div className="actions">
+        <button onClick={() => onAction('skip')}>
+          ❌ Cancel Upload
+        </button>
+        <button onClick={() => onAction('merge')}>
+          🔄 Merge with Existing
+        </button>
+        <button onClick={() => onAction('upload_anyway')}>
+          ✅ Upload Anyway
+        </button>
+      </div>
+    </div>
+  );
+}
+
+📊 Summary
+Feature 1: Processing Status ✅
+
+Track each processing stage
+Show progress in UI
+Retry failed stages
+Skip expensive stages (deep research)
+
+Feature 2: Duplicate Detection ✅
+
+Tier 1: Content hash (exact duplicates)
+Tier 2: Metadata similarity (close matches)
+Tier 3: Semantic embeddings (smart detection)
+
+
+🎯 Priority Implementation
+Phase 1 (1-2 hours):
+
+Add processing_status and content_hash columns
+Implement content hash duplicate detection
+Update upload flow to check duplicates
+
+Phase 2 (2-3 hours):
+4. Implement processing pipeline with stages
+5. Add UI to show processing status
+6. Track metadata for each stage
+Phase 3 (2-3 hours):
+7. Add semantic duplicate detection (uses existing embeddings!)
+8. Build duplicate warning UI
+9. Add merge/skip options
+Total: 5-8 hours for complete system

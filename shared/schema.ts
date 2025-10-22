@@ -70,6 +70,20 @@ export const documents = pgTable("documents", {
   extractedContent: text("extracted_content"),
   processingStatus: text("processing_status").$type<'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'>().default('PENDING'),
   processingProgress: integer("processing_progress").default(0), // 0-100 percentage for background jobs
+  // 🔍 NEW: Enhanced processing metadata for stage-by-stage tracking
+  processingMetadata: jsonb("processing_metadata").$type<{
+    text_extraction?: { status: string; timestamp: string; page_count?: number; error?: string };
+    fact_extraction?: { status: string; timestamp: string; facts_found?: number; error?: string };
+    entity_extraction?: { status: string; timestamp: string; entities_found?: number; error?: string };
+    deep_research?: { status: string; timestamp: string; progress?: number; error?: string };
+    embedding_generation?: { status: string; timestamp: string; error?: string };
+  }>(),
+  // 🔍 NEW: Duplicate detection fields
+  contentHash: varchar("content_hash", { length: 64 }), // SHA-256 hash for exact duplicate detection
+  // 🔍 NEW: Semantic search support
+  embedding: text("embedding"), // JSON array of vector embeddings for semantic similarity
+  embeddingModel: text("embedding_model"), // Model used to generate embedding
+  embeddingUpdatedAt: timestamp("embedding_updated_at"), // When embedding was last generated
   retrievalCount: integer("retrieval_count").default(0),
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
