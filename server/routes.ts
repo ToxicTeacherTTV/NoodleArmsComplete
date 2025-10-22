@@ -29,6 +29,9 @@ import { z } from "zod";
 import { promises as fs } from "fs";
 import path from "path";
 import { prometheusMetrics } from "./services/prometheusMetrics.js";
+import { documentStageTracker } from "./services/documentStageTracker";
+import { documentDuplicateDetector } from "./services/documentDuplicateDetector";
+import { embeddingService } from "./services/embeddingService";
 
 // CRITICAL SECURITY: Add file size limits and type validation to prevent DoS attacks
 const SUPPORTED_FILE_TYPES = [
@@ -816,21 +819,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
+      // 🔍 NEW: Generate content hash for duplicate detection
+      const fileBuffer = req.file.buffer;
+      const contentHash = documentDuplicateDetector.generateContentHash(fileBuffer);
+
       const document = await storage.createDocument({
         profileId: activeProfile.id,
         name: req.body.name || null, // Custom name provided by user
         filename: req.file.originalname,
         contentType: req.file.mimetype,
         size: req.file.size,
+        contentHash, // Store hash for duplicate detection
         processingStatus: 'PENDING' as const,
       });
 
-      // Process document asynchronously
-      documentProcessor.processDocument(document.id, req.file.buffer)
-        .catch(error => {
+      // 📝 NEW: Initialize processing metadata
+      await documentStageTracker.updateStage(document.id, 'text_extraction', 'pending');
+      await documentStageTracker.updateStage(document.id, 'embedding_generation', 'pending');
+      await documentStageTracker.updateStage(document.id, 'fact_extraction', 'skipped');
+      await documentStageTracker.updateStage(document.id, 'entity_extraction', 'skipped');
+      await documentStageTracker.updateStage(document.id, 'deep_research', 'skipped');
+
+      // Process document asynchronously with enhanced stage tracking
+      (async () => {
+        try {
+          await documentStageTracker.updateStage(document.id, 'text_extraction', 'processing');
+          
+          // Original document processing
+          await documentProcessor.processDocument(document.id, fileBuffer);
+          
+          await documentStageTracker.updateStage(document.id, 'text_extraction', 'completed');
+          
+          // 🔢 NEW: Generate embedding for semantic search
+          const doc = await storage.getDocument(document.id);
+          if (doc?.extractedContent) {
+            await documentStageTracker.updateStage(document.id, 'embedding_generation', 'processing');
+            
+            const embedding = await embeddingService.generateEmbedding(doc.extractedContent);
+            await storage.updateDocument(document.id, {
+              embedding: JSON.stringify(embedding.embedding),
+              embeddingModel: embedding.model,
+              embeddingUpdatedAt: new Date()
+            });
+            
+            await documentStageTracker.updateStage(document.id, 'embedding_generation', 'completed');
+          }
+        } catch (error) {
           console.error('Document processing error:', error);
-          storage.updateDocument(document.id, { processingStatus: 'FAILED' as const });
-        });
+          await storage.updateDocument(document.id, { processingStatus: 'FAILED' as const });
+          await documentStageTracker.updateStage(
+            document.id, 
+            'text_extraction', 
+            'failed', 
+            { error: (error as Error).message }
+          );
+        }
+      })();
 
       res.json(document);
     } catch (error) {

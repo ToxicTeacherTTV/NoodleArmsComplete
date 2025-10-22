@@ -38,17 +38,17 @@ class DocumentStageTracker {
     try {
       // Get current metadata
       const doc = await storage.getDocument(documentId);
-      const currentMetadata = doc?.processingMetadata || {};
+      const currentMetadata = (doc?.processingMetadata as DocumentProcessingMetadata) || {};
       
       // Update the specific stage
-      const updatedMetadata = {
+      const updatedMetadata: DocumentProcessingMetadata = {
         ...currentMetadata,
         [stage]: stageData
       };
       
       // Update in database
       await db.update(documents)
-        .set({ processingMetadata: updatedMetadata })
+        .set({ processingMetadata: updatedMetadata as any })
         .where(eq(documents.id, documentId));
       
       console.log(`📝 Document ${documentId} - ${stage}: ${status}`);
@@ -63,7 +63,7 @@ class DocumentStageTracker {
    */
   async getProcessingStatus(documentId: string): Promise<DocumentProcessingMetadata | null> {
     const doc = await storage.getDocument(documentId);
-    return doc?.processingMetadata || null;
+    return (doc?.processingMetadata as DocumentProcessingMetadata) || null;
   }
   
   /**
