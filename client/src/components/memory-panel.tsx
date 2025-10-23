@@ -29,6 +29,9 @@ export default function MemoryPanel({
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [importanceRange, setImportanceRange] = useState<[number, number]>([0, 5]);
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedMemories, setSelectedMemories] = useState<Set<string>>(new Set());
+  const [batchImportance, setBatchImportance] = useState<number>(3);
+  const [batchType, setBatchType] = useState<string>('FACT');
 
   const { data: memoryEntries, isLoading } = useQuery({
     queryKey: ['/api/memory/entries', { limit: 10000 }],
@@ -87,6 +90,92 @@ export default function MemoryPanel({
       });
     },
   });
+
+  // Batch delete mutation
+  const batchDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      return await apiRequest('POST', '/api/memory/entries/batch-delete', { ids });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/stats'] });
+      setSelectedMemories(new Set());
+      toast({
+        title: "Batch Delete Complete",
+        description: `Deleted ${data.deletedCount} memories`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete memories",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Batch update importance mutation
+  const batchUpdateImportanceMutation = useMutation({
+    mutationFn: async ({ ids, importance }: { ids: string[]; importance: number }) => {
+      return await apiRequest('POST', '/api/memory/entries/batch-update-importance', { ids, importance });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
+      setSelectedMemories(new Set());
+      toast({
+        title: "Importance Updated",
+        description: `Updated ${data.updatedCount} memories`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update importance",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Batch update type mutation
+  const batchUpdateTypeMutation = useMutation({
+    mutationFn: async ({ ids, type }: { ids: string[]; type: string }) => {
+      return await apiRequest('POST', '/api/memory/entries/batch-update-type', { ids, type });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
+      setSelectedMemories(new Set());
+      toast({
+        title: "Type Updated",
+        description: `Updated ${data.updatedCount} memories`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update type",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleMemorySelection = (id: string) => {
+    const newSet = new Set(selectedMemories);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedMemories(newSet);
+  };
+
+  const selectAll = () => {
+    const allIds = new Set(filteredMemories.map(m => m.id));
+    setSelectedMemories(allIds);
+  };
+
+  const deselectAll = () => {
+    setSelectedMemories(new Set());
+  };
 
   // Filter memory entries based on all filters
   const filteredMemories = useMemo(() => {
@@ -395,6 +484,108 @@ export default function MemoryPanel({
           </Card>
         )}
         
+        {/* Batch Operations Toolbar */}
+        {selectedMemories.size > 0 && (
+          <Card className="p-3 bg-primary/10 border-primary/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-foreground">
+                  {selectedMemories.size} selected
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={selectAll}
+                    className="text-xs h-7"
+                    data-testid="button-select-all"
+                  >
+                    Select All ({filteredMemories.length})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={deselectAll}
+                    className="text-xs h-7"
+                    data-testid="button-deselect-all"
+                  >
+                    Deselect All
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Importance:</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={batchImportance}
+                    onChange={(e) => setBatchImportance(parseInt(e.target.value))}
+                    className="w-16 h-7 text-xs"
+                    data-testid="input-batch-importance"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => batchUpdateImportanceMutation.mutate({ 
+                      ids: Array.from(selectedMemories), 
+                      importance: batchImportance 
+                    })}
+                    disabled={batchUpdateImportanceMutation.isPending}
+                    className="text-xs h-7"
+                    data-testid="button-batch-update-importance"
+                  >
+                    Update
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Type:</span>
+                  <Select value={batchType} onValueChange={setBatchType}>
+                    <SelectTrigger className="w-24 h-7 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="FACT">FACT</SelectItem>
+                      <SelectItem value="PREFERENCE">PREFERENCE</SelectItem>
+                      <SelectItem value="LORE">LORE</SelectItem>
+                      <SelectItem value="CONTEXT">CONTEXT</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => batchUpdateTypeMutation.mutate({ 
+                      ids: Array.from(selectedMemories), 
+                      type: batchType 
+                    })}
+                    disabled={batchUpdateTypeMutation.isPending}
+                    className="text-xs h-7"
+                    data-testid="button-batch-update-type"
+                  >
+                    Update
+                  </Button>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    if (confirm(`Delete ${selectedMemories.size} memories?`)) {
+                      batchDeleteMutation.mutate(Array.from(selectedMemories));
+                    }
+                  }}
+                  disabled={batchDeleteMutation.isPending}
+                  className="text-xs h-7"
+                  data-testid="button-batch-delete"
+                >
+                  <i className="fas fa-trash mr-1"></i>
+                  Delete
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Memory Results */}
         <div className="space-y-2 max-h-60 overflow-y-auto chat-scroll" data-testid="memory-entries-list">
           {isLoading ? (
@@ -416,11 +607,23 @@ export default function MemoryPanel({
             </div>
           ) : (
             filteredMemories.map((memory: MemoryEntry) => (
-              <Card key={memory.id} className="bg-muted/30 p-3 rounded-lg">
+              <Card 
+                key={memory.id} 
+                className={`p-3 rounded-lg ${selectedMemories.has(memory.id) ? 'bg-primary/20 border-primary' : 'bg-muted/30'}`}
+              >
                 <CardContent className="p-0">
                   <div className="flex items-center justify-between mb-1">
-                    <div className={`text-xs font-medium ${getTypeColor(memory.type)}`}>
-                      {memory.type.charAt(0) + memory.type.slice(1).toLowerCase()} Knowledge
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedMemories.has(memory.id)}
+                        onChange={() => toggleMemorySelection(memory.id)}
+                        className="h-4 w-4 cursor-pointer"
+                        data-testid={`checkbox-memory-${memory.id}`}
+                      />
+                      <div className={`text-xs font-medium ${getTypeColor(memory.type)}`}>
+                        {memory.type.charAt(0) + memory.type.slice(1).toLowerCase()} Knowledge
+                      </div>
                     </div>
                     <Badge variant="outline" className="text-xs">
                       Importance: {memory.importance}/5
