@@ -347,16 +347,66 @@ export class MemoryDeduplicator {
   
   /**
    * Auto-merge duplicates above a high confidence threshold
+   * 🚀 NOW USES VECTOR EMBEDDINGS (same as deep scan) for consistent results!
    */
   async autoMergeDuplicates(
     db: PostgresJsDatabase<any>,
     profileId: string,
     autoMergeThreshold: number = 0.9
   ): Promise<number> {
-    console.log(`🚀 Auto-merging high-confidence duplicates (threshold: ${autoMergeThreshold})`);
+    console.log(`🚀 Auto-merging high-confidence duplicates using VECTOR EMBEDDINGS (threshold: ${autoMergeThreshold})`);
     
-    const duplicateGroups = await this.findDuplicateGroups(db, profileId, autoMergeThreshold);
+    // 🚀 Use vector-based detection (same as deep scan!)
+    const memories = await storage.getRecentMemoriesWithEmbeddings(profileId, 999999);
+    console.log(`📊 Processing ${memories.length} memories with stored embeddings...`);
     
+    const duplicateGroups: DuplicateGroup[] = [];
+    const processedIds = new Set<string>();
+    
+    // Find all duplicate groups using vector embeddings
+    for (const memory of memories) {
+      if (processedIds.has(memory.id)) continue;
+      
+      // 🚀 OPTIMIZATION: Use stored embeddings directly (no API call!)
+      const vectorDuplicates = embeddingService.findDuplicatesFromStoredEmbeddings(
+        memory,
+        memories,
+        autoMergeThreshold
+      );
+      
+      // Filter out already processed duplicates
+      const actualDuplicates = vectorDuplicates
+        .filter(dup => !processedIds.has(dup.id))
+        .map(dup => {
+          // Find the full memory entry
+          const fullEntry = memories.find(m => m.id === dup.id);
+          return fullEntry!;
+        });
+      
+      if (actualDuplicates.length > 0) {
+        // Build a DuplicateGroup using the same structure as text-based method
+        const group: DuplicateGroup = {
+          masterEntry: memory,
+          duplicates: actualDuplicates,
+          similarity: vectorDuplicates.length > 0 ? 
+            vectorDuplicates.reduce((sum, dup) => sum + dup.similarity, 0) / vectorDuplicates.length : 
+            1.0,
+          mergedContent: this.mergeContent(memory, actualDuplicates),
+          combinedImportance: this.calculateCombinedImportance(memory, actualDuplicates),
+          combinedKeywords: this.mergeKeywords(memory, actualDuplicates),
+          combinedRelationships: this.mergeRelationships(memory, actualDuplicates)
+        };
+        
+        duplicateGroups.push(group);
+        
+        // Mark all duplicates as processed
+        actualDuplicates.forEach(dup => processedIds.add(dup.id));
+      }
+    }
+    
+    console.log(`✅ Found ${duplicateGroups.length} duplicate groups using vector embeddings`);
+    
+    // Execute merges
     let mergedCount = 0;
     for (const group of duplicateGroups) {
       await this.executeMerge(db, group);
