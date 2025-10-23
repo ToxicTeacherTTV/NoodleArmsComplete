@@ -883,6 +883,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Check for duplicate documents before upload
+  app.post('/api/documents/check-duplicates', upload.single('document'), handleMulterError, async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file provided for duplicate check' });
+      }
+
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const fileBuffer = req.file.buffer;
+      const duplicates = await documentDuplicateDetector.findDuplicates(
+        activeProfile.id,
+        fileBuffer,
+        req.file.originalname,
+        req.file.mimetype,
+        req.file.size
+      );
+
+      res.json({
+        hasDuplicates: duplicates.length > 0,
+        duplicates: duplicates.map(d => ({
+          id: d.document.id,
+          name: d.document.name,
+          filename: d.document.filename,
+          size: d.document.size,
+          uploadedAt: d.document.uploadedAt,
+          matchType: d.matchType,
+          similarity: d.similarity
+        }))
+      });
+    } catch (error) {
+      console.error('Duplicate check error:', error);
+      res.status(500).json({ error: 'Failed to check for duplicates' });
+    }
+  });
+
   // Create training example from pasted text
   app.post('/api/training-examples', async (req: Request, res: Response) => {
     try {
@@ -1351,6 +1390,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Failed to delete memory entry:', error);
       res.status(500).json({ error: 'Failed to delete memory entry' });
+    }
+  });
+
+  // Batch delete memory entries
+  app.post('/api/memory/entries/batch-delete', async (req, res) => {
+    try {
+      const { ids } = req.body;
+      
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: 'Invalid or empty ids array' });
+      }
+
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      let deletedCount = 0;
+      for (const id of ids) {
+        try {
+          await storage.deleteMemoryEntry(id);
+          deletedCount++;
+        } catch (error) {
+          console.error(`Failed to delete memory ${id}:`, error);
+        }
+      }
+      
+      console.log(`🗑️ Batch deleted ${deletedCount} memory entries`);
+      res.json({ 
+        success: true, 
+        deletedCount,
+        message: `Successfully deleted ${deletedCount} memory entries`
+      });
+      
+    } catch (error) {
+      console.error('Batch delete failed:', error);
+      res.status(500).json({ error: 'Failed to batch delete memory entries' });
+    }
+  });
+
+  // Batch update memory importance
+  app.post('/api/memory/entries/batch-update-importance', async (req, res) => {
+    try {
+      const { ids, importance } = req.body;
+      
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: 'Invalid or empty ids array' });
+      }
+
+      if (typeof importance !== 'number' || importance < 0 || importance > 100) {
+        return res.status(400).json({ error: 'Importance must be a number between 0 and 100' });
+      }
+
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      await db
+        .update(memoryEntries)
+        .set({ importance })
+        .where(
+          and(
+            eq(memoryEntries.profileId, activeProfile.id),
+            inArray(memoryEntries.id, ids)
+          )
+        );
+      
+      console.log(`📊 Updated importance to ${importance} for ${ids.length} memory entries`);
+      res.json({ 
+        success: true, 
+        updatedCount: ids.length,
+        message: `Successfully updated importance for ${ids.length} memory entries`
+      });
+      
+    } catch (error) {
+      console.error('Batch update importance failed:', error);
+      res.status(500).json({ error: 'Failed to batch update importance' });
+    }
+  });
+
+  // Batch update memory type
+  app.post('/api/memory/entries/batch-update-type', async (req, res) => {
+    try {
+      const { ids, type } = req.body;
+      
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: 'Invalid or empty ids array' });
+      }
+
+      const validTypes = ['FACT', 'PREFERENCE', 'LORE', 'CONTEXT'];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ error: `Type must be one of: ${validTypes.join(', ')}` });
+      }
+
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      await db
+        .update(memoryEntries)
+        .set({ type: type as any })
+        .where(
+          and(
+            eq(memoryEntries.profileId, activeProfile.id),
+            inArray(memoryEntries.id, ids)
+          )
+        );
+      
+      console.log(`🏷️ Updated type to ${type} for ${ids.length} memory entries`);
+      res.json({ 
+        success: true, 
+        updatedCount: ids.length,
+        message: `Successfully updated type for ${ids.length} memory entries`
+      });
+      
+    } catch (error) {
+      console.error('Batch update type failed:', error);
+      res.status(500).json({ error: 'Failed to batch update type' });
     }
   });
 
