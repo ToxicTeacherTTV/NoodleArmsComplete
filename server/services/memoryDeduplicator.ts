@@ -348,6 +348,7 @@ export class MemoryDeduplicator {
   /**
    * Auto-merge duplicates above a high confidence threshold
    * 🚀 NOW USES VECTOR EMBEDDINGS (same as deep scan) for consistent results!
+   * 🛡️ SAFE: Processes in batches with retry logic and connection error handling
    */
   async autoMergeDuplicates(
     db: PostgresJsDatabase<any>,
@@ -406,14 +407,56 @@ export class MemoryDeduplicator {
     
     console.log(`✅ Found ${duplicateGroups.length} duplicate groups using vector embeddings`);
     
-    // Execute merges
+    // 🛡️ Execute merges in BATCHES with error handling
+    const BATCH_SIZE = 20; // Process 20 groups at a time to avoid timeouts
     let mergedCount = 0;
-    for (const group of duplicateGroups) {
-      await this.executeMerge(db, group);
-      mergedCount += group.duplicates.length;
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (let i = 0; i < duplicateGroups.length; i += BATCH_SIZE) {
+      const batch = duplicateGroups.slice(i, i + BATCH_SIZE);
+      const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(duplicateGroups.length / BATCH_SIZE);
+      
+      console.log(`📦 Processing batch ${batchNumber}/${totalBatches} (${batch.length} groups)...`);
+      
+      // Process each group in the batch
+      for (const group of batch) {
+        try {
+          console.log(`🔄 Merging duplicate group: master ${group.masterEntry.id} with ${group.duplicates.length} duplicates`);
+          await this.executeMerge(db, group);
+          mergedCount += group.duplicates.length;
+          successCount++;
+        } catch (error: any) {
+          errorCount++;
+          console.error(`❌ Failed to merge duplicate group:`, error.message);
+          
+          // If connection error (Neon timeout), throw to stop the whole operation
+          if (error.code === '57P01' || error.message?.includes('connection')) {
+            console.error(`⚠️ Database connection error detected - stopping merge operation`);
+            throw new Error(
+              `Auto-merge stopped after processing ${successCount} groups (merged ${mergedCount} duplicates). ` +
+              `Connection error encountered. Please try again with fewer duplicates or higher threshold.`
+            );
+          }
+          
+          // For other errors, continue with next group
+          console.warn(`   Skipping this group and continuing...`);
+        }
+      }
+      
+      // Add small delay between batches to avoid overwhelming the connection
+      if (i + BATCH_SIZE < duplicateGroups.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     }
     
-    console.log(`🎯 Auto-merged ${duplicateGroups.length} groups, eliminated ${mergedCount} duplicate memories`);
+    console.log(`🎯 Auto-merge complete: ${successCount} groups merged, ${errorCount} failed, eliminated ${mergedCount} duplicate memories`);
+    
+    if (errorCount > 0) {
+      console.warn(`⚠️ ${errorCount} groups failed to merge - you may want to run again or review manually`);
+    }
+    
     return mergedCount;
   }
   
