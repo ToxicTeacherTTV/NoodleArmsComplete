@@ -34,6 +34,19 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
   const [trainingName, setTrainingName] = useState('');
   const [viewingDocument, setViewingDocument] = useState<Document | null>(null);
   const [documentContent, setDocumentContent] = useState<string>('');
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    file: File;
+    name?: string;
+    duplicates: Array<{
+      id: string;
+      name: string;
+      filename: string;
+      size: number;
+      uploadedAt: string;
+      matchType: string;
+      similarity: number;
+    }>;
+  } | null>(null);
 
   // 🔄 Auto-refresh documents while processing
   useEffect(() => {
@@ -47,6 +60,24 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
 
     return () => clearInterval(interval);
   }, [documents, queryClient]);
+
+  const checkDuplicatesMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('document', file);
+      
+      const response = await fetch('/api/documents/check-duplicates', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('Duplicate check failed');
+      }
+      
+      return response.json();
+    },
+  });
 
   const uploadDocumentMutation = useMutation({
     mutationFn: async ({file, name}: {file: File, name?: string}) => {
@@ -74,6 +105,7 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
         description: `${displayName} is being processed`,
       });
       setDocumentName('');
+      setDuplicateWarning(null);
       queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
     },
     onError: (error) => {
@@ -342,7 +374,7 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
     }
   };
 
-  const handleFileSelect = (files: FileList | null) => {
+  const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     
     const file = files[0];
@@ -373,7 +405,23 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
       return;
     }
     
-    uploadDocumentMutation.mutate({ file, name: documentName });
+    // Check for duplicates first
+    try {
+      const result = await checkDuplicatesMutation.mutateAsync(file);
+      
+      if (result.hasDuplicates && result.duplicates.length > 0) {
+        setDuplicateWarning({
+          file,
+          name: documentName,
+          duplicates: result.duplicates
+        });
+      } else {
+        uploadDocumentMutation.mutate({ file, name: documentName });
+      }
+    } catch (error) {
+      console.error('Duplicate check failed:', error);
+      uploadDocumentMutation.mutate({ file, name: documentName });
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -1021,6 +1069,75 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
               <pre className="whitespace-pre-wrap text-sm text-foreground font-mono leading-relaxed">
                 {documentContent || 'Loading...'}
               </pre>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate Warning Dialog */}
+      <Dialog open={!!duplicateWarning} onOpenChange={() => setDuplicateWarning(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-yellow-500">
+              <i className="fas fa-exclamation-triangle"></i>
+              Possible Duplicate Document Detected
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This file appears similar to {duplicateWarning?.duplicates.length || 0} existing document{(duplicateWarning?.duplicates.length || 0) > 1 ? 's' : ''}:
+            </p>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {duplicateWarning?.duplicates.map((dup) => (
+                <Card key={dup.id} className="p-3 bg-yellow-500/10 border-yellow-500/30">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-foreground">
+                      {dup.name || dup.filename}
+                    </div>
+                    <div className="text-xs text-muted-foreground space-x-3">
+                      <span>Size: {formatFileSize(dup.size)}</span>
+                      <span>Uploaded: {new Date(dup.uploadedAt).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={`px-2 py-1 rounded ${
+                        dup.matchType === 'exact' 
+                          ? 'bg-red-500/20 text-red-400' 
+                          : dup.matchType === 'metadata'
+                          ? 'bg-orange-500/20 text-orange-400'
+                          : 'bg-yellow-500/20 text-yellow-400'
+                      }`}>
+                        {dup.matchType === 'exact' && 'Exact Match'}
+                        {dup.matchType === 'metadata' && `${Math.round(dup.similarity * 100)}% Similar`}
+                        {dup.matchType === 'semantic' && `${Math.round(dup.similarity * 100)}% Content Match`}
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+            <div className="flex gap-2 justify-end pt-4 border-t border-border">
+              <Button
+                variant="outline"
+                onClick={() => setDuplicateWarning(null)}
+                data-testid="button-cancel-upload"
+              >
+                Cancel Upload
+              </Button>
+              <Button
+                onClick={() => {
+                  if (duplicateWarning) {
+                    uploadDocumentMutation.mutate({ 
+                      file: duplicateWarning.file, 
+                      name: duplicateWarning.name 
+                    });
+                  }
+                }}
+                className="bg-yellow-600 hover:bg-yellow-700"
+                data-testid="button-upload-anyway"
+              >
+                <i className="fas fa-upload mr-2"></i>
+                Upload Anyway
+              </Button>
             </div>
           </div>
         </DialogContent>
