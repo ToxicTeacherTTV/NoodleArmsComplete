@@ -465,6 +465,50 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
     }
   };
 
+  const getStageIcon = (status: string) => {
+    switch (status) {
+      case 'completed': return 'fas fa-check-circle text-green-500';
+      case 'processing': return 'fas fa-spinner fa-spin text-blue-500';
+      case 'failed': return 'fas fa-times-circle text-red-500';
+      case 'pending': return 'fas fa-circle text-gray-400';
+      case 'skipped': return 'fas fa-minus-circle text-gray-300';
+      default: return 'fas fa-circle text-gray-300';
+    }
+  };
+
+  const renderProcessingStages = (doc: Document) => {
+    const metadata = doc.processingMetadata as any;
+    if (!metadata) return null;
+
+    const stages = [
+      { key: 'text_extraction', label: 'Text' },
+      { key: 'fact_extraction', label: 'Facts' },
+      { key: 'entity_extraction', label: 'Entities' },
+      { key: 'embedding_generation', label: 'Embedding' },
+      { key: 'deep_research', label: 'Research' }
+    ];
+
+    return (
+      <div className="flex flex-wrap gap-2 mt-2">
+        {stages.map(stage => {
+          const stageData = metadata[stage.key];
+          if (!stageData || stageData.status === 'skipped') return null;
+          
+          return (
+            <div 
+              key={stage.key}
+              className="flex items-center gap-1 text-xs px-2 py-1 bg-muted rounded"
+              title={`${stage.label}: ${stageData.status}`}
+            >
+              <i className={getStageIcon(stageData.status)}></i>
+              <span>{stage.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 p-4 space-y-4">
       {/* Upload Area */}
@@ -812,6 +856,9 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                       </Button>
                     </div>
                   </div>
+                  
+                  {/* Processing Stage Indicators */}
+                  {renderProcessingStages(doc)}
                   
                   {/* Training Example Actions - Only show for completed training examples */}
                   {doc.processingStatus === 'COMPLETED' && doc.documentType === 'TRAINING_EXAMPLE' && (
