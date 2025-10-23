@@ -1728,6 +1728,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post('/api/memory/deep-scan-duplicates', async (req, res) => {
+    let results;
+    let scanCompleted = false;
+    
     try {
       const activeProfile = await storage.getActiveProfile();
       if (!activeProfile) {
@@ -1747,41 +1750,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🔍 Starting deep duplicate scan: depth=${scanDepth}, threshold=${similarityThreshold}`);
 
       const { memoryDeduplicator } = await import('./services/memoryDeduplicator.js');
-      const results = await memoryDeduplicator.deepScanDuplicates(
+      results = await memoryDeduplicator.deepScanDuplicates(
         activeProfile.id,
         scanDepth,
         similarityThreshold
       );
+      
+      scanCompleted = true;
+      console.log(`✅ Scan completed: ${results.duplicateGroups.length} groups, ${results.totalDuplicates} duplicates`);
 
-      // Archive previous scan results
-      await db.update(duplicateScanResults)
-        .set({ status: 'ARCHIVED' })
-        .where(and(
-          eq(duplicateScanResults.profileId, activeProfile.id),
-          eq(duplicateScanResults.status, 'ACTIVE')
-        ));
+      // Try to save scan results to database (may timeout on large scans)
+      let savedScanId = null;
+      let savedSuccessfully = true;
+      
+      try {
+        // Archive previous scan results
+        await db.update(duplicateScanResults)
+          .set({ status: 'ARCHIVED' })
+          .where(and(
+            eq(duplicateScanResults.profileId, activeProfile.id),
+            eq(duplicateScanResults.status, 'ACTIVE')
+          ));
 
-      // Save new scan results to database
-      const [savedScan] = await db.insert(duplicateScanResults).values({
-        profileId: activeProfile.id,
-        scanDepth: scanDepth === 'ALL' ? -1 : scanDepth,
-        similarityThreshold: Math.round(similarityThreshold * 100),
-        totalGroupsFound: results.duplicateGroups.length,
-        totalDuplicatesFound: results.totalDuplicates,
-        duplicateGroups: results.duplicateGroups,
-        status: 'ACTIVE'
-      }).returning();
+        // Save new scan results to database
+        const [savedScan] = await db.insert(duplicateScanResults).values({
+          profileId: activeProfile.id,
+          scanDepth: scanDepth === 'ALL' ? -1 : scanDepth,
+          similarityThreshold: Math.round(similarityThreshold * 100),
+          totalGroupsFound: results.duplicateGroups.length,
+          totalDuplicatesFound: results.totalDuplicates,
+          duplicateGroups: results.duplicateGroups,
+          status: 'ACTIVE'
+        }).returning();
 
-      console.log(`💾 Saved scan results: ${results.duplicateGroups.length} groups, ${results.totalDuplicates} duplicates`);
+        savedScanId = savedScan.id;
+        console.log(`💾 Saved scan results to database: ID ${savedScanId}`);
+      } catch (saveError: any) {
+        savedSuccessfully = false;
+        console.warn(`⚠️ Failed to save scan results to database (likely timeout): ${saveError.message}`);
+        console.warn('   Returning results to client anyway - they can still work with them in-memory');
+      }
 
       res.json({
         success: true,
-        scanId: savedScan.id,
+        scanId: savedScanId,
+        savedToDatabase: savedSuccessfully,
         message: `Scanned ${results.scannedCount} memories, found ${results.duplicateGroups.length} duplicate groups (${results.totalDuplicates} total duplicates)`,
+        warning: savedSuccessfully ? undefined : 'Scan completed but results could not be saved to database due to timeout. You can still work with the results below.',
         ...results
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Deep duplicate scan error:', error);
+      
+      // If scan completed but only saving failed, return partial success
+      if (scanCompleted && results) {
+        console.log('⚠️ Scan completed successfully but response failed - returning results anyway');
+        return res.json({
+          success: true,
+          scanId: null,
+          savedToDatabase: false,
+          message: `Scanned ${results.scannedCount} memories, found ${results.duplicateGroups.length} duplicate groups (${results.totalDuplicates} total duplicates)`,
+          warning: 'Scan completed but results could not be saved due to database timeout. You can still work with the results below.',
+          ...results
+        });
+      }
+      
       res.status(500).json({ error: 'Failed to perform deep duplicate scan' });
     }
   });

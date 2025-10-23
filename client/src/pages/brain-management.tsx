@@ -898,17 +898,28 @@ export default function BrainManagement() {
         groupsLength: data.duplicateGroups?.length,
         totalDuplicates: data.totalDuplicates,
         scannedCount: data.scannedCount,
+        savedToDatabase: data.savedToDatabase,
+        warning: data.warning,
         fullData: data
       });
       setDeepScanInProgress(false);
       setDuplicateGroups(data.duplicateGroups || []);
       setSavedScanDate(new Date().toISOString());
       console.log('✅ Set duplicate groups:', data.duplicateGroups?.length || 0);
-      toast({
-        title: "Deep Scan Complete",
-        description: `Scanned ${data.scannedCount} memories, found ${data.duplicateGroups?.length || 0} duplicate groups (${data.totalDuplicates || 0} total duplicates)`,
-        duration: 8000,
-      });
+      
+      if (data.warning || !data.savedToDatabase) {
+        toast({
+          title: "⚠️ Deep Scan Complete (With Warning)",
+          description: data.warning || `Scan completed but results weren't saved to database. Found ${data.duplicateGroups?.length || 0} duplicate groups (${data.totalDuplicates || 0} total duplicates). You can still work with them below.`,
+          duration: 10000,
+        });
+      } else {
+        toast({
+          title: "Deep Scan Complete",
+          description: `Scanned ${data.scannedCount} memories, found ${data.duplicateGroups?.length || 0} duplicate groups (${data.totalDuplicates || 0} total duplicates)`,
+          duration: 8000,
+        });
+      }
     },
     onError: (error) => {
       setDeepScanInProgress(false);
