@@ -895,18 +895,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      const fileBuffer = req.file.buffer;
-      const duplicates = await documentDuplicateDetector.findDuplicates(
-        activeProfile.id,
-        fileBuffer,
-        req.file.originalname,
-        req.file.mimetype,
-        req.file.size
+      const duplicates = await documentDuplicateDetector.checkForDuplicates(
+        {
+          buffer: req.file.buffer,
+          size: req.file.size,
+          type: req.file.mimetype,
+          name: req.file.originalname
+        },
+        '', // content - will be extracted in checkForDuplicates
+        activeProfile.id
       );
 
       res.json({
         hasDuplicates: duplicates.length > 0,
-        duplicates: duplicates.map(d => ({
+        duplicates: duplicates.map((d: any) => ({
           id: d.document.id,
           name: d.document.name,
           filename: d.document.filename,
