@@ -3625,6 +3625,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { threshold = 0.9 } = req.body;
       const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
       
+      // 🔧 Warm up connection pool with a simple query to ensure fresh connections
+      try {
+        await db.execute(sql`SELECT 1 as test`);
+        console.log('✅ Connection pool warmed up successfully');
+      } catch (warmupError) {
+        console.warn('⚠️ Connection pool warmup failed, proceeding anyway:', warmupError);
+      }
+      
       const mergedCount = await memoryDeduplicator.autoMergeDuplicates(
         db,
         profile.id,
@@ -3634,7 +3642,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         success: true,
         mergedCount,
-        message: `Successfully merged ${mergedCount} duplicate memories`
+        message: mergedCount > 0 
+          ? `Successfully merged ${mergedCount} duplicate memories. Run again to process more.` 
+          : 'No duplicates merged. Either no duplicates found or connection timed out.'
       });
     } catch (error) {
       console.error('Error auto-merging duplicates:', error);
