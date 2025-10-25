@@ -3,6 +3,12 @@ import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { memoryEntries } from "@shared/schema";
 import { embeddingService } from "./embeddingService";
 import { storage } from "../storage";
+import Anthropic from '@anthropic-ai/sdk';
+import { geminiService } from './gemini.js';
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY || '',
+});
 
 // Use the actual database schema type
 type MemoryEntry = typeof memoryEntries.$inferSelect;
@@ -232,7 +238,7 @@ export class MemoryDeduplicator {
   }
   
   /**
-   * Intelligently merge content from similar memories
+   * Intelligently merge content from similar memories (simple version - picks best)
    * PUBLIC: Can be called by routes for manual merging
    */
   mergeContent(master: MemoryEntry, duplicates: MemoryEntry[]): string {
@@ -252,6 +258,94 @@ export class MemoryDeduplicator {
     
     // Otherwise, keep the master content
     return master.content;
+  }
+
+  /**
+   * AI-POWERED intelligent merge - combines ALL duplicate versions into one comprehensive memory
+   * Uses Gemini 2.5 Pro (primary) with Claude Sonnet 4.5 (fallback)
+   * PUBLIC: Can be called by routes for manual merging
+   */
+  async mergeContentWithAI(master: MemoryEntry, duplicates: MemoryEntry[]): Promise<string> {
+    const allEntries = [master, ...duplicates];
+    
+    // Build the versions list
+    const versionsText = allEntries
+      .map((entry, idx) => {
+        const label = idx === 0 ? 'PRIMARY' : `DUPLICATE ${idx}`;
+        return `--- ${label} ---\nContent: ${entry.content}\nImportance: ${entry.importance || 1}/10\nQuality: ${entry.qualityScore || 5}/10\nKeywords: ${(entry.keywords || []).join(', ')}`;
+      })
+      .join('\n\n');
+
+    const prompt = `You are merging duplicate memory entries from an AI personality database. Your task is to create ONE comprehensive memory that contains ALL unique facts and details from every version.
+
+${versionsText}
+
+MERGE INSTRUCTIONS:
+1. Combine ALL unique facts and details from every version
+2. Keep the most detailed/specific wording when versions overlap
+3. Preserve all context that adds meaning (e.g., "stopped by tour guide" is important context)
+4. Remove pure redundancy (don't repeat the same fact twice)
+5. Maintain natural, coherent language
+6. Keep it concise - focus on facts, not flowery language
+
+OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences). No explanations, no metadata, just the final merged text.`;
+
+    try {
+      // 🎯 PRIMARY: Try Gemini first (free tier)
+      const systemPrompt = 'You are a memory consolidation expert. Merge duplicate memories into comprehensive, factual entries.';
+      const fullPrompt = `${systemPrompt}\n\n${prompt}`;
+      
+      const geminiResponse = await geminiService['ai'].models.generateContent({
+        model: 'gemini-2.5-pro', // 🚫 NEVER Flash - hallucinates during merging
+        contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+        config: {
+          maxOutputTokens: 1000,
+          temperature: 0.3
+        }
+      });
+      
+      // Extract text from Gemini response (same pattern as styleConsolidator.ts)
+      const mergedContent = geminiResponse.text || '';
+      console.log('🤖 Gemini AI merge result (first 300 chars):', mergedContent.substring(0, 300));
+      
+      if (!mergedContent || mergedContent.trim().length === 0) {
+        throw new Error('Gemini returned empty content');
+      }
+      
+      console.log('✅ Successfully merged memories using Gemini AI');
+      return mergedContent.trim();
+      
+    } catch (geminiError) {
+      // 🔄 FALLBACK: Use Claude if Gemini fails
+      console.log('❌ Gemini merge failed, falling back to Claude:', geminiError);
+      
+      try {
+        const response = await anthropic.messages.create({
+          model: 'claude-sonnet-4-5-20250929',
+          max_tokens: 1000,
+          temperature: 0.3,
+          system: 'You are a memory consolidation expert. Merge duplicate memories into comprehensive, factual entries.',
+          messages: [{
+            role: 'user',
+            content: prompt
+          }]
+        });
+
+        const textContent = response.content.find(c => c.type === 'text');
+        if (!textContent || textContent.type !== 'text') {
+          throw new Error('No text content in response');
+        }
+
+        console.log('✅ Successfully merged memories using Claude AI (fallback)');
+        return textContent.text.trim();
+        
+      } catch (claudeError) {
+        console.error('❌ Both Gemini and Claude AI merge failed:', claudeError);
+        // Fall back to simple merge
+        console.log('⚠️ Falling back to simple merge (picks most comprehensive version)');
+        return this.mergeContent(master, duplicates);
+      }
+    }
   }
   
   /**

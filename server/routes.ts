@@ -3681,12 +3681,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Master entry not found' });
       }
 
-      // Build duplicate group and merge - intelligently choose the most detailed content
+      // Build duplicate group and merge - use AI to combine ALL unique facts from all versions
+      const mergedContent = await memoryDeduplicator.mergeContentWithAI(masterEntry, duplicateEntries);
+      
       const duplicateGroup = {
         masterEntry,
         duplicates: duplicateEntries,
         similarity: 1.0, // Manual merge, assume high similarity
-        mergedContent: memoryDeduplicator.mergeContent(masterEntry, duplicateEntries), // Intelligently choose most detailed version
+        mergedContent, // AI-powered merge combining all unique facts
         combinedImportance: Math.max(masterEntry.importance || 1, ...duplicateEntries.map(d => d.importance || 1)),
         combinedKeywords: Array.from(new Set([
           ...(masterEntry.keywords || []),
