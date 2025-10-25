@@ -964,6 +964,48 @@ export default function BrainManagement() {
     },
   });
 
+  // Quick merge mutation (no editing, just merge)
+  const quickMergeMutation = useMutation({
+    mutationFn: async ({ masterEntryId, duplicateIds }: { masterEntryId: string; duplicateIds: string[] }) => {
+      const response = await fetch('/api/memory/merge-group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ masterEntryId, duplicateIds }),
+      });
+      if (!response.ok) throw new Error('Failed to merge group');
+      return response.json();
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+      
+      // Remove the merged group from duplicateGroups state
+      const mergedIds = [variables.masterEntryId, ...variables.duplicateIds];
+      setDuplicateGroups(prevGroups => 
+        prevGroups.filter(group => {
+          // Keep groups that don't contain any of the merged memory IDs
+          const groupMemoryIds = [
+            group.masterEntry?.id || group.masterId,
+            ...(group.duplicates?.map((d: any) => d.id) || [])
+          ].filter(Boolean);
+          
+          return !groupMemoryIds.some(id => mergedIds.includes(id));
+        })
+      );
+      
+      toast({
+        title: "Group Merged",
+        description: `Successfully merged ${data.mergedCount} duplicates. Group removed from list.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Merge Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Manual merge mutation
   const manualMergeMutation = useMutation({
     mutationFn: async ({ primaryId, duplicateIds, mergedContent }: { primaryId: string; duplicateIds: string[]; mergedContent?: string }) => {
@@ -2853,30 +2895,55 @@ export default function BrainManagement() {
                                   {Math.round(group.avgSimilarity * 100)}% similar
                                 </Badge>
                               </div>
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  // Handle both data structures: masterEntry object or masterId+masterContent
-                                  const masterContent = group.masterEntry?.content || group.masterContent || '';
-                                  const allTexts = [
-                                    masterContent,
-                                    ...group.duplicates.map((d: any) => d.content)
-                                  ].filter(Boolean);
-                                  
-                                  setMergeEditGroup(group);
-                                  setMergeEditText(allTexts.join('\n\n'));
-                                  setShowMergeEditDialog(true);
-                                }}
-                                disabled={manualMergeMutation.isPending}
-                                data-testid={`button-merge-group-${groupIndex}`}
-                              >
-                                {manualMergeMutation.isPending ? (
-                                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                ) : (
-                                  <Merge className="h-4 w-4 mr-1" />
-                                )}
-                                Merge Group
-                              </Button>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => {
+                                    // Quick merge - no editing, just merge using PRIMARY as master
+                                    const masterEntryId = group.masterEntry?.id || group.masterId;
+                                    const duplicateIds = group.duplicates.map((d: any) => d.id);
+                                    
+                                    if (masterEntryId && duplicateIds.length > 0) {
+                                      quickMergeMutation.mutate({ masterEntryId, duplicateIds });
+                                    }
+                                  }}
+                                  disabled={quickMergeMutation.isPending}
+                                  data-testid={`button-quick-merge-${groupIndex}`}
+                                >
+                                  {quickMergeMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                  ) : (
+                                    <Zap className="h-4 w-4 mr-1" />
+                                  )}
+                                  Quick Merge
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    // Handle both data structures: masterEntry object or masterId+masterContent
+                                    const masterContent = group.masterEntry?.content || group.masterContent || '';
+                                    const allTexts = [
+                                      masterContent,
+                                      ...group.duplicates.map((d: any) => d.content)
+                                    ].filter(Boolean);
+                                    
+                                    setMergeEditGroup(group);
+                                    setMergeEditText(allTexts.join('\n\n'));
+                                    setShowMergeEditDialog(true);
+                                  }}
+                                  disabled={manualMergeMutation.isPending}
+                                  data-testid={`button-merge-group-${groupIndex}`}
+                                >
+                                  {manualMergeMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                  ) : (
+                                    <Merge className="h-4 w-4 mr-1" />
+                                  )}
+                                  Edit & Merge
+                                </Button>
+                              </div>
                             </div>
                           </CardHeader>
                           <CardContent className="space-y-4">
