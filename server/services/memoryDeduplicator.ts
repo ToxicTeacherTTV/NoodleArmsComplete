@@ -304,13 +304,25 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
         }
       });
       
-      // Extract text from Gemini response (same pattern as styleConsolidator.ts)
+      // Extract text from Gemini response (same pattern as gemini.ts line 920)
       const mergedContent = geminiResponse.text || '';
-      console.log('🤖 Gemini AI merge result (first 300 chars):', mergedContent.substring(0, 300));
+      
+      // Debug logging to diagnose empty responses
+      console.log('🔍 Gemini response debug:', {
+        hasText: !!geminiResponse.text,
+        textLength: mergedContent.length,
+        firstChars: mergedContent.substring(0, 100),
+        responseKeys: Object.keys(geminiResponse || {}),
+        candidates: geminiResponse.candidates?.length
+      });
       
       if (!mergedContent || mergedContent.trim().length === 0) {
+        console.error('❌ Gemini returned empty content. Full response:', JSON.stringify(geminiResponse, null, 2));
         throw new Error('Gemini returned empty content');
       }
+      
+      console.log('✅ Successfully merged memories using Gemini AI (length: ' + mergedContent.length + ' chars)');
+      console.log('📝 Merged result preview:', mergedContent.substring(0, 200));
       
       console.log('✅ Successfully merged memories using Gemini AI');
       return mergedContent.trim();
