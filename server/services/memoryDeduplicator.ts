@@ -233,8 +233,9 @@ export class MemoryDeduplicator {
   
   /**
    * Intelligently merge content from similar memories
+   * PUBLIC: Can be called by routes for manual merging
    */
-  private mergeContent(master: MemoryEntry, duplicates: MemoryEntry[]): string {
+  mergeContent(master: MemoryEntry, duplicates: MemoryEntry[]): string {
     const allEntries = [master, ...duplicates];
     
     // Find the most comprehensive version (longest content with most detail)
