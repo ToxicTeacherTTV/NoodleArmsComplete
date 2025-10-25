@@ -407,8 +407,9 @@ export class MemoryDeduplicator {
     
     console.log(`✅ Found ${duplicateGroups.length} duplicate groups using vector embeddings`);
     
-    // 🛡️ Execute merges in BATCHES with error handling
-    const BATCH_SIZE = 20; // Process 20 groups at a time to avoid timeouts
+    // 🛡️ Execute merges in SMALL BATCHES with aggressive error handling
+    const BATCH_SIZE = 5; // Smaller batches to stay under Neon's ~60s timeout
+    const BATCH_DELAY = 500; // Longer delay between batches
     let mergedCount = 0;
     let successCount = 0;
     let errorCount = 0;
@@ -431,13 +432,13 @@ export class MemoryDeduplicator {
           errorCount++;
           console.error(`❌ Failed to merge duplicate group:`, error.message);
           
-          // If connection error (Neon timeout), throw to stop the whole operation
-          if (error.code === '57P01' || error.message?.includes('connection')) {
-            console.error(`⚠️ Database connection error detected - stopping merge operation`);
-            throw new Error(
-              `Auto-merge stopped after processing ${successCount} groups (merged ${mergedCount} duplicates). ` +
-              `Connection error encountered. Please try again with fewer duplicates or higher threshold.`
-            );
+          // If connection error (Neon timeout), stop gracefully
+          if (error.code === '57P01' || error.message?.includes('connection') || error.message?.includes('terminating')) {
+            console.error(`⚠️ Database connection error detected - stopping merge operation gracefully`);
+            console.log(`📊 Progress so far: ${successCount} groups merged, ${mergedCount} duplicates eliminated`);
+            
+            // Return current progress instead of throwing
+            return mergedCount;
           }
           
           // For other errors, continue with next group
@@ -445,9 +446,9 @@ export class MemoryDeduplicator {
         }
       }
       
-      // Add small delay between batches to avoid overwhelming the connection
+      // Add delay between batches to avoid overwhelming the connection
       if (i + BATCH_SIZE < duplicateGroups.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
       }
     }
     

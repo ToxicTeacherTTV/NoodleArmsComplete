@@ -21,8 +21,15 @@ export const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
-// Add proper error handling to prevent unhandled error dumps
+// Add proper error handling to prevent unhandled error dumps and crashes
 pool.on('error', (err: any) => {
+  // Silently handle connection terminations (expected behavior for Neon serverless)
+  if (err.code === '57P01' || err.message?.includes('terminating connection')) {
+    // These are normal for long-running operations on Neon
+    // Pool will automatically create new connections
+    return;
+  }
+  
   console.error('⚠️ Database pool error:', err.message);
   
   // Log the error type and basic info without dumping the entire client object
@@ -32,12 +39,17 @@ pool.on('error', (err: any) => {
   if (err.severity) {
     console.error('   Error severity:', err.severity);
   }
-  
-  // Handle specific connection termination errors (Neon timeouts)
-  if (err.code === '57P01') {
-    console.warn('   Connection was terminated by server (likely timeout)');
-    console.warn('   Pool will automatically create new connections as needed');
-  }
+});
+
+// Catch unhandled client errors that would otherwise crash the server
+pool.on('connect', (client: any) => {
+  client.on('error', (err: any) => {
+    // Silently handle connection terminations
+    if (err.code === '57P01' || err.message?.includes('terminating connection') || err.message?.includes('Connection terminated')) {
+      return;
+    }
+    console.error('⚠️ Database client error:', err.message);
+  });
 });
 
 // Periodically check pool health and log stats
