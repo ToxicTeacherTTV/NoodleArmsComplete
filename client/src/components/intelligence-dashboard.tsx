@@ -199,7 +199,7 @@ export function IntelligenceDashboard() {
       memoryIds?: string[];
       options?: any;
     }) => {
-      return apiRequest('/api/intelligence/bulk-action', 'POST', { 
+      return apiRequest('POST', '/api/intelligence/bulk-action', { 
         action, 
         memoryIds, 
         options, 
