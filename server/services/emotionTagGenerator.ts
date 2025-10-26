@@ -137,19 +137,19 @@ MOOD: ${context.mood || 'balanced'}
 INTENSITY: ${context.intensity || 'medium'}
 
 Rules:
-1. Return ONLY JSON: {"hook": "[tag1, tag2]", "body": "[tag3, tag4]", "cta": "[tag5, tag6]"}
-2. Use 1-2 emotion words per tag in brackets
+1. Return ONLY JSON: {"hook": "[TAG]", "body": "[TAG]", "cta": "[TAG]"}
+2. Use EXACTLY ONE emotion/delivery word per tag - NO COMMAS, NO MULTIPLE WORDS
 3. Match the personality and content mood
 4. Hook = opening energy, Body = main content, CTA = closing energy
-5. Keep tags simple and TTS-friendly
+5. Keep tags simple and TTS-friendly (uppercase preferred: [ANNOYED] not [annoyed])
 6. Use ONLY pure emotions/attitudes - NO accents, locations, or character names
 7. Do NOT include words like "bronx", "italian", "jersey" or any geographic/accent descriptors
 8. No explanation, just the JSON object
 
 Examples:
-- Aggressive ad: {"hook": "[bold, confident]", "body": "[intense, persuasive]", "cta": "[urgent, demanding]"}
-- Warm chat: {"hook": "[friendly, welcoming]", "body": "[conversational, warm]", "cta": "[encouraging, supportive]"}
-- Conspiracy content: {"hook": "[whispered, secretive]", "body": "[conspiratorial, urgent]", "cta": "[warning, serious]"}
+- Aggressive ad: {"hook": "[CONFIDENT]", "body": "[INTENSE]", "cta": "[URGENT]"}
+- Warm chat: {"hook": "[FRIENDLY]", "body": "[WARM]", "cta": "[ENCOURAGING]"}
+- Conspiracy content: {"hook": "[WHISPERING]", "body": "[CONSPIRATORIAL]", "cta": "[SERIOUS]"}
 
 Generate tags now:`;
   }
@@ -177,32 +177,32 @@ Generate tags now:`;
    * Get fallback tags based on context
    */
   private getFallbackTags(context: EmotionTagContext): EmotionTags {
-    // Simple fallback based on content type
+    // Simple fallback based on content type - SINGLE tags only
     switch (context.contentType) {
       case 'ad':
         return {
-          hook: '[confident, engaging]',
-          body: '[persuasive, friendly]',
-          cta: '[urgent, convincing]'
+          hook: '[CONFIDENT]',
+          body: '[PERSUASIVE]',
+          cta: '[URGENT]'
         };
       case 'chat':
       case 'voice_response':
         return {
-          hook: '[conversational, natural]',
-          body: '[expressive, authentic]',
-          cta: '[warm, genuine]'
+          hook: '[CONVERSATIONAL]',
+          body: '[EXPRESSIVE]',
+          cta: '[WARM]'
         };
       case 'announcement':
         return {
-          hook: '[clear, attention-getting]',
-          body: '[informative, direct]',
-          cta: '[conclusive, memorable]'
+          hook: '[CLEAR]',
+          body: '[INFORMATIVE]',
+          cta: '[MEMORABLE]'
         };
       default:
         return {
-          hook: '[natural, expressive]',
-          body: '[conversational, engaging]',
-          cta: '[warm, authentic]'
+          hook: '[NATURAL]',
+          body: '[ENGAGING]',
+          cta: '[AUTHENTIC]'
         };
     }
   }
