@@ -694,21 +694,38 @@ export type InsertTopicEscalation = z.infer<typeof insertTopicEscalationSchema>;
 export const podcastEpisodes = pgTable("podcast_episodes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   profileId: varchar("profile_id").references(() => profiles.id).notNull(),
-  episodeNumber: integer("episode_number").notNull(),
+  // RSS feed metadata
+  guid: text("guid"), // Unique episode identifier from RSS feed
+  episodeNumber: integer("episode_number"),
+  seasonNumber: integer("season_number"),
   title: text("title").notNull(),
-  description: text("description").notNull(),
-  airDate: timestamp("air_date"),
-  duration: integer("duration"), // Duration in minutes
+  description: text("description"),
+  airDate: timestamp("air_date"), // Kept for backward compatibility
+  publishedAt: timestamp("published_at"), // RSS publication date
+  duration: integer("duration"), // Duration in seconds (RSS standard)
+  audioUrl: text("audio_url"), // Direct link to audio file from RSS
+  imageUrl: text("image_url"), // Episode artwork URL
+  // Content metadata
   guestNames: text("guest_names").array(), // Array of guest names
   topics: text("topics").array(), // Main topics covered
   transcript: text("transcript"), // Full episode transcript
+  transcriptFilename: text("transcript_filename"), // Local filename for transcript matching
   highlights: text("highlights").array(), // Key moments or quotes
+  // Processing status
   status: text("status").$type<'DRAFT' | 'PUBLISHED' | 'ARCHIVED'>().default('DRAFT'),
+  processingStatus: text("processing_status").$type<'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'>().default('PENDING'),
+  processingProgress: integer("processing_progress").default(0), // 0-100 percentage
+  factsExtracted: integer("facts_extracted").default(0), // Count of facts from this episode
+  entitiesExtracted: integer("entities_extracted").default(0), // Count of entities extracted
+  // Metadata
   viewCount: integer("view_count").default(0),
   notes: text("notes"), // Private production notes
+  lastSyncedAt: timestamp("last_synced_at"), // Last RSS sync check
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
-});
+}, (table) => ({
+  uniqueGuid: uniqueIndex("unique_episode_guid_idx").on(table.profileId, table.guid),
+}));
 
 export const podcastSegments = pgTable("podcast_segments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
