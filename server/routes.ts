@@ -5361,6 +5361,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           break;
 
+        case 'merge_cluster':
+          // Merge a cluster of related facts into one consolidated fact
+          if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length < 2) {
+            return res.status(400).json({ error: 'merge_cluster requires at least 2 memory IDs' });
+          }
+          
+          if (!options || !options.mergedContent) {
+            return res.status(400).json({ error: 'merge_cluster requires mergedContent in options' });
+          }
+
+          console.log(`🔀 Merging cluster of ${memoryIds.length} facts...`);
+          
+          // Get all facts to merge for metadata preservation
+          const factsToMerge = await Promise.all(
+            memoryIds.map(id => storage.db.query.memoryEntries.findFirst({
+              where: (entries, { eq }) => eq(entries.id, id)
+            }))
+          );
+
+          const validFacts = factsToMerge.filter(f => f !== undefined);
+          
+          if (validFacts.length === 0) {
+            return res.status(404).json({ error: 'No valid facts found to merge' });
+          }
+
+          if (validFacts.length < 2) {
+            return res.status(400).json({ error: 'At least 2 valid facts are required to merge' });
+          }
+
+          // Use the first VALID fact as the primary one (not memoryIds[0] which might be stale)
+          const primaryId = validFacts[0].id;
+          const factsToDelete = validFacts.slice(1);
+
+          console.log(`📌 Using surviving fact ${primaryId} as primary, will delete ${factsToDelete.length} duplicates`);
+
+          // Merge metadata from all facts
+          const allKeywords = Array.from(new Set(
+            validFacts.flatMap(f => f?.keywords || [])
+          ));
+
+          const allRelationships = Array.from(new Set(
+            validFacts.flatMap(f => f?.relationships || [])
+          ));
+
+          // Calculate average importance
+          const avgImportance = validFacts.reduce((sum, f) => sum + (f?.importance || 50), 0) / validFacts.length;
+
+          // Update the primary fact with merged content and metadata
+          const updateResult = await storage.db.update(memoryEntries)
+            .set({
+              content: options.mergedContent,
+              keywords: allKeywords,
+              relationships: allRelationships,
+              importance: Math.round(avgImportance),
+              confidence: 100, // Merged facts have high confidence
+              supportCount: validFacts.length, // Track how many facts were merged
+              updatedAt: new Date()
+            })
+            .where(eq(memoryEntries.id, primaryId))
+            .returning();
+
+          // Verify the update succeeded before deleting anything
+          if (!updateResult || updateResult.length === 0) {
+            console.error(`❌ Failed to update primary fact ${primaryId} - it may have been concurrently deleted`);
+            return res.status(410).json({ error: 'Primary fact no longer exists, merge aborted to prevent data loss' });
+          }
+
+          console.log(`✅ Updated primary fact ${primaryId} with merged content`);
+
+          // Delete the other facts (only after confirming primary update succeeded)
+          for (const fact of factsToDelete) {
+            await storage.deleteMemoryEntry(fact.id);
+            affectedCount++;
+          }
+
+          console.log(`🗑️ Deleted ${affectedCount} duplicate facts, kept merged fact ${primaryId}`);
+          affectedCount++; // Count the updated primary fact
+
+          break;
+
         default:
           return res.status(400).json({ error: 'Invalid bulk action' });
       }

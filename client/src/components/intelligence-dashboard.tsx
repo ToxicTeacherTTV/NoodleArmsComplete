@@ -29,7 +29,7 @@ import { useToast } from '@/hooks/use-toast';
 interface IntelligenceAnalysis {
   factClusters: FactCluster[];
   sourceReliability: SourceReliability[];
-  personalityDrift: PersonalityDrift;
+  personalityDrift: PersonalityDriftItem[];
   contextRelevance: ContextRelevance[];
   summary?: {
     totalIssues: number;
@@ -60,16 +60,14 @@ interface SourceReliability {
   accuracyRate: number;
 }
 
-interface PersonalityDrift {
-  overallDrift?: number;
-  driftAreas?: Array<{
-    trait: string;
-    originalValue: number;
-    currentValue: number;
-    drift: number;
-    severity: 'LOW' | 'MEDIUM' | 'HIGH';
-  }>;
-  recommendation?: string;
+interface PersonalityDriftItem {
+  traitName: string;
+  baseline: number;
+  current: number;
+  driftAmount: number;
+  severity: 'MINOR' | 'MODERATE' | 'MAJOR';
+  affectedFacts: string[];
+  recommendation: string;
 }
 
 interface SummaryData {
@@ -694,6 +692,35 @@ export function IntelligenceDashboard() {
                   </div>
 
                   <Progress value={cluster.consolidationScore || 0} className="w-full" />
+
+                  <div className="flex justify-end pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        bulkActionMutation.mutate({
+                          action: 'merge_cluster',
+                          memoryIds: cluster.factIds,
+                          options: { mergedContent: cluster.suggestedMerge }
+                        });
+                      }}
+                      disabled={bulkActionMutation.isPending}
+                      data-testid={`button-merge-cluster-${cluster.clusterId}`}
+                      className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900 dark:hover:bg-blue-800 dark:text-blue-200"
+                    >
+                      {bulkActionMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Merging...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Auto Merge
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               )) : (
                 <div className="text-center py-8 text-gray-500">
@@ -751,53 +778,57 @@ export function IntelligenceDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium">Overall Drift Score</span>
-                  <span className="text-lg font-bold" data-testid="overall-drift-score">
-                    {analysis?.personalityDrift?.overallDrift || 0}%
-                  </span>
-                </div>
-                <Progress value={analysis?.personalityDrift?.overallDrift || 0} className="w-full" />
-              </div>
-
-              <div className="space-y-3">
-                {(analysis?.personalityDrift?.driftAreas || []).length > 0 ? (analysis?.personalityDrift?.driftAreas || []).map((area, index) => (
-                  <div
-                    key={area.trait}
-                    className="p-3 border rounded-lg"
-                    data-testid={`drift-area-${index}`}
-                  >
+              {(analysis?.personalityDrift || []).length > 0 ? (
+                <>
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium">{area.trait}</span>
-                      <PriorityBadge priority={area.severity} score={Math.abs(area.drift)} />
-                    </div>
-                    <div className="flex items-center space-x-4 text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">
-                        Original: {area.originalValue}
-                      </span>
-                      <span className="text-gray-600 dark:text-gray-400">
-                        Current: {area.currentValue}
-                      </span>
-                      <span className={area.drift > 0 ? 'text-red-600' : 'text-green-600'}>
-                        {area.drift > 0 ? '+' : ''}{area.drift}%
+                      <span className="font-medium">Drift Detection Summary</span>
+                      <span className="text-lg font-bold" data-testid="drift-count">
+                        {(analysis?.personalityDrift || []).length} trait{(analysis?.personalityDrift || []).length !== 1 ? 's' : ''} shifted
                       </span>
                     </div>
                   </div>
-                )) : (
-                  <div className="text-center py-8 text-gray-500">
-                    No personality drift detected. This could be due to API limitations or stable personality traits.
-                  </div>
-                )}
-              </div>
 
-              {analysis?.personalityDrift?.recommendation && (
-                <Alert>
-                  <Brain className="h-4 w-4" />
-                  <AlertDescription>
-                    {analysis.personalityDrift.recommendation}
-                  </AlertDescription>
-                </Alert>
+                  <div className="space-y-3">
+                    {(analysis.personalityDrift || []).map((drift, index) => (
+                      <div
+                        key={drift.traitName}
+                        className="p-4 border rounded-lg space-y-3"
+                        data-testid={`drift-area-${index}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-lg">{drift.traitName}</span>
+                          <PriorityBadge priority={drift.severity} score={Math.abs(drift.driftAmount)} />
+                        </div>
+                        
+                        <div className="flex items-center space-x-4 text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">
+                            Baseline: {drift.baseline}
+                          </span>
+                          <span className="text-gray-600 dark:text-gray-400">
+                            Current: {drift.current}
+                          </span>
+                          <span className={drift.driftAmount > 0 ? 'text-red-600' : 'text-green-600'}>
+                            {drift.driftAmount > 0 ? '+' : ''}{drift.driftAmount}
+                          </span>
+                        </div>
+
+                        <div className="text-sm bg-blue-50 dark:bg-blue-900 p-3 rounded">
+                          <div className="font-medium mb-1">Recommendation:</div>
+                          {drift.recommendation}
+                        </div>
+
+                        <div className="text-xs text-gray-500">
+                          Affected facts: {drift.affectedFacts.length}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No personality drift detected. Nicky's personality traits are stable and consistent.
+                </div>
               )}
             </CardContent>
           </Card>
