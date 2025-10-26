@@ -5776,7 +5776,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage,
         episode.profileId,
         episode.id,
-        episode.episodeNumber,
+        episode.episodeNumber || 0,
         episode.title,
         episode.transcript,
         episode.guestNames || [],
