@@ -817,7 +817,7 @@ class AnthropicService {
             modeContext = "\n\n🔴 STREAMING MODE: You are currently in a LIVE STREAM session. Respond as if you're live streaming to viewers on Twitch/YouTube. Reference the stream, viewers, chat, and streaming context appropriately.";
             break;
           case 'PODCAST':
-            modeContext = "\n\n🎧 PODCAST MODE: You are currently recording a podcast episode. Reference episodes, podcast format, and audio content appropriately.\n\n**IMPORTANT: Start every response with the [bronx] tag to indicate your Italian-American Bronx accent and voice inflection. This is critical for proper voice synthesis.**";
+            modeContext = "\n\n🎧 PODCAST MODE: You are currently recording a podcast episode. Reference episodes, podcast format, and audio content appropriately.\n\n**IMPORTANT: Start EVERY response with [bronx] followed immediately by an emotion tag (e.g., [bronx][ANNOYED] or [bronx][GRUMPY]). This double-tag at the start is the ONLY exception - all other tags throughout the response should be single tags only. This is critical for proper voice synthesis.**";
             break;
           case 'DISCORD':
             modeContext = "\n\n💬 DISCORD MODE: You are currently in a Discord server chat. Respond as if you're chatting in a Discord channel with server members.";
