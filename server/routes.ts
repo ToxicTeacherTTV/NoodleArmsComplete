@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { memoryCaches } from "./services/memoryCache";
-import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, insertDiscordServerSchema, insertDiscordMemberSchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags, duplicateScanResults } from "@shared/schema";
+import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, insertDiscordServerSchema, insertDiscordMemberSchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags, duplicateScanResults, profiles } from "@shared/schema";
 import { eq, and, sql, or, inArray, desc } from "drizzle-orm";
 import { db } from "./db";
 import { anthropicService } from "./services/anthropic";
@@ -5455,6 +5455,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Bulk operation error:', error);
       res.status(500).json({ error: 'Failed to perform bulk operation' });
+    }
+  });
+
+  // Accept personality drift as new baseline
+  app.post('/api/intelligence/accept-baseline', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { traitName, value, previousValue, notes } = req.body;
+
+      if (!traitName || typeof value !== 'number') {
+        return res.status(400).json({ error: 'traitName and value are required' });
+      }
+
+      console.log(`📊 Accepting personality baseline for "${traitName}": ${previousValue || '?'} → ${value}`);
+
+      // Get current baselines or initialize empty object
+      const currentBaselines = (activeProfile.personalityBaselines as any) || {};
+
+      // Add/update the baseline for this trait
+      const updatedBaselines = {
+        ...currentBaselines,
+        [traitName]: {
+          value,
+          acceptedAt: new Date().toISOString(),
+          acceptedBy: 'USER' as const,
+          previousValue,
+          notes
+        }
+      };
+
+      // Update the profile with new baselines
+      await storage.db.update(profiles)
+        .set({
+          personalityBaselines: updatedBaselines,
+          updatedAt: new Date()
+        })
+        .where(eq(profiles.id, activeProfile.id));
+
+      console.log(`✅ Updated personality baseline for "${traitName}" in profile ${activeProfile.id}`);
+
+      res.json({
+        success: true,
+        message: `Accepted "${traitName}" baseline: ${value}`,
+        baselines: updatedBaselines
+      });
+
+    } catch (error) {
+      console.error('Accept baseline error:', error);
+      res.status(500).json({ error: 'Failed to accept personality baseline' });
     }
   });
 

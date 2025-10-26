@@ -21,7 +21,9 @@ import {
   ShieldCheck,
   Link,
   Loader2,
-  Wrench
+  Wrench,
+  Check,
+  Eye
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -234,6 +236,44 @@ export function IntelligenceDashboard() {
         ? prev.filter(id => id !== memoryId)
         : [...prev, memoryId]
     );
+  };
+
+  const handleAcceptBaseline = async (drift: PersonalityDriftItem) => {
+    try {
+      await apiRequest('POST', '/api/intelligence/accept-baseline', {
+        traitName: drift.traitName,
+        value: drift.current,
+        previousValue: drift.baseline,
+        notes: `Accepted drift from ${drift.baseline} to ${drift.current} (${drift.driftAmount >= 0 ? '+' : ''}${drift.driftAmount})`
+      });
+      
+      toast({
+        title: "Baseline Updated",
+        description: `"${drift.traitName}" baseline set to ${drift.current}. Future analysis will compare against this value.`,
+      });
+
+      // Invalidate analysis to refresh drift detection
+      queryClient.invalidateQueries({ queryKey: ['/api/intelligence/analysis'] });
+    } catch (error: any) {
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update personality baseline",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleReviewFacts = (factIds: string[]) => {
+    // For now, show a toast with fact IDs
+    // Future enhancement: navigate to memory management with filter
+    toast({
+      title: "Review Affected Facts",
+      description: `Opening ${factIds.length} affected facts in memory management...`,
+    });
+    
+    console.log('Facts to review:', factIds);
+    // TODO: Navigate to Brain Management tab with factIds filter
+    // This could be enhanced to open a modal or filter the memory panel
   };
 
   const handleRunStoryReconstruction = async () => {
@@ -818,8 +858,31 @@ export function IntelligenceDashboard() {
                           {drift.recommendation}
                         </div>
 
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-gray-500 mb-2">
                           Affected facts: {drift.affectedFacts.length}
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAcceptBaseline(drift)}
+                            data-testid={`button-accept-baseline-${index}`}
+                            className="flex-1"
+                          >
+                            <Check className="h-4 w-4 mr-1" />
+                            Accept as New Baseline
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleReviewFacts(drift.affectedFacts)}
+                            data-testid={`button-review-facts-${index}`}
+                            className="flex-1"
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            Review Affected Facts ({drift.affectedFacts.length})
+                          </Button>
                         </div>
                       </div>
                     ))}

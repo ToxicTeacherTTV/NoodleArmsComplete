@@ -25,6 +25,15 @@ export const profiles = pgTable("profiles", {
     style?: number;
     use_speaker_boost?: boolean;
   }>().default(sql`'{"stability": 0.0, "similarity_boost": 0.75}'`),
+  personalityBaselines: jsonb("personality_baselines").$type<{
+    [traitName: string]: {
+      value: number;
+      acceptedAt: string;
+      acceptedBy: 'USER' | 'AI';
+      previousValue?: number;
+      notes?: string;
+    };
+  }>(), // Stores accepted personality trait baselines for drift detection
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
