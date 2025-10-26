@@ -362,15 +362,12 @@ class ElevenLabsService {
    * Apply AI-generated emotion tags to text with proper 2-3 sentence distribution for podcast mode
    */
   public applySectionedDeliveryWithAI(text: string, aiTags: {hook: string, body: string, cta: string}): string {
-    // ✅ STRIP any existing emotion tags to prevent doubles like "[grumpy] [annoyed]"
-    const cleanedText = text.replace(/\[[\w\s,\-]+\]/g, '').replace(/\s+/g, ' ').trim();
-    
     // Split text into sentences but preserve punctuation - handles . ! ? endings
-    const sentences = cleanedText.split(/([.!?]+)/).filter(part => part.trim());
+    const sentences = text.split(/([.!?]+)/).filter(part => part.trim());
     
-    if (sentences.length === 0) return cleanedText;
+    if (sentences.length === 0) return text;
     
-    console.log(`🎭 BEFORE applying tags (cleaned): "${cleanedText.substring(0, 50)}..."`);
+    console.log(`🎭 BEFORE applying tags: "${text.substring(0, 50)}..."`);
     
     // Group sentences for better emotion tag distribution
     let result = '';
