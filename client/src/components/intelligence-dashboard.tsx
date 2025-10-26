@@ -863,7 +863,7 @@ export function IntelligenceDashboard() {
                         </div>
 
                         <div className="text-xs text-gray-500 mb-2">
-                          Affected facts: {drift.affectedFacts.length}
+                          Affected facts: {drift.affectedFacts?.length || 0}
                         </div>
 
                         <div className="flex gap-2">
@@ -880,12 +880,12 @@ export function IntelligenceDashboard() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleReviewFacts(drift.affectedFacts)}
+                            onClick={() => handleReviewFacts(drift.affectedFacts || [])}
                             data-testid={`button-review-facts-${index}`}
                             className="flex-1"
                           >
                             <Eye className="h-4 w-4 mr-1" />
-                            Review Affected Facts ({drift.affectedFacts.length})
+                            Review Affected Facts ({drift.affectedFacts?.length || 0})
                           </Button>
                         </div>
                       </div>
