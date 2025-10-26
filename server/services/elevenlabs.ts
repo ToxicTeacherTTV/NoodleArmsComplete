@@ -196,9 +196,9 @@ class ElevenLabsService {
         
         // Use maximum expressiveness settings (lowest stability for most emotional range)
         settings = voiceSettings || {
-          stability: 0.0, // Maximum expressiveness
-          similarity_boost: 0.75,
-          style: 0.8, // Slightly higher style for more character
+          stability: 0.0, // Maximum expressiveness - ZERO stability for wild delivery
+          similarity_boost: 0.65, // Lower for more variation and character
+          style: 1.0, // MAXIMUM style exaggeration - full Bronx Italian energy
           use_speaker_boost: true,
           seed: Math.floor(Math.random() * 1000000)
         };
