@@ -5857,6 +5857,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // RSS Feed Sync for Podcast Episodes
+  app.post('/api/podcast/rss/sync', async (req, res) => {
+    try {
+      const { feedUrl, transcriptDir, processTranscripts } = req.body;
+      
+      if (!feedUrl || typeof feedUrl !== 'string') {
+        return res.status(400).json({ error: 'RSS feed URL is required' });
+      }
+
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { PodcastRssSyncService } = await import('./services/podcastRssSync.js');
+      const syncService = new PodcastRssSyncService(transcriptDir || './podcast_transcripts');
+      
+      const result = await syncService.syncRssFeed(
+        db,
+        activeProfile.id,
+        feedUrl,
+        processTranscripts !== false
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error('Error syncing RSS feed:', error);
+      res.status(500).json({ 
+        error: 'Failed to sync RSS feed',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Process pending podcast episodes
+  app.post('/api/podcast/rss/process', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { PodcastRssSyncService } = await import('./services/podcastRssSync.js');
+      const syncService = new PodcastRssSyncService();
+      
+      const result = await syncService.processPendingEpisodes(
+        db,
+        storage,
+        activeProfile.id
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error('Error processing episodes:', error);
+      res.status(500).json({ 
+        error: 'Failed to process episodes',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Get RSS sync configuration
+  app.get('/api/podcast/rss/config', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      // For now, return empty config - can be extended to store in database
+      res.json({
+        feedUrl: '',
+        transcriptDir: './podcast_transcripts',
+        lastSync: null
+      });
+    } catch (error) {
+      console.error('Error getting RSS config:', error);
+      res.status(500).json({ error: 'Failed to get RSS config' });
+    }
+  });
+
   // Topic Escalation Management
   app.get('/api/topics/escalations', async (req, res) => {
     try {
