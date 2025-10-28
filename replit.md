@@ -1,63 +1,131 @@
 # AI-Powered Co-Host Application
 
 ## Overview
-This AI-powered co-host application is an interactive voice agent designed to enhance live streaming interactions and podcast content creation. It processes user speech, utilizes AI for contextually-aware audio responses, and features real-time interaction, persistent memory, document processing, and customizable AI personalities.
+"Nicky 'Noodle Arms' A.I. Dente" is an AI-powered co-host application for live streaming and podcast content. It features an Italian-American mafia persona with real-time voice interaction, autonomous knowledge management, memory systems using vector embeddings, and intelligent content processing pipelines. The project aims to provide engaging, personalized, and dynamic AI interactions for content creators.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### UI/UX Decisions
-The frontend uses React 19 with TypeScript, functional components, and hooks. Styling is managed with Tailwind CSS, custom CSS variables, Radix UI, and shadcn/ui.
+### Frontend
+- **Framework**: React 19 with TypeScript, functional components.
+- **Routing**: Wouter for client-side routing.
+- **State Management**: TanStack React Query v5 for server state, React hooks for local state.
+- **Styling**: Tailwind CSS, Radix UI primitives, shadcn/ui.
+- **Forms**: React Hook Form with Zod validation.
+- **Build Tool**: Vite.
 
-### Technical Implementations
-- **Frontend**: React 19 (TypeScript), Wouter for routing, TanStack React Query for data fetching.
-- **Backend**: Node.js with Express.js (TypeScript, ESM) providing a RESTful API.
-- **Data Storage**: PostgreSQL (Neon serverless) with Drizzle ORM for profiles, conversations, messages, documents, and memory.
-- **Authentication**: Express sessions with PostgreSQL storage and environment-based API keys.
-- **Voice Processing**: Browser-native Web Speech API for speech-to-text, browser-native Speech Synthesis API and ElevenLabs for text-to-speech, and Web Audio API for voice activity detection. It includes smart voice credit management with PODCAST and STREAMING modes.
-- **AI Integration**: The system primarily uses Google Gemini 2.5 Pro for all AI operations, with Claude Sonnet 4.5 as a fallback for user-facing features. Gemini Flash models are banned due to hallucination issues.
-    - **User-Facing Features**: Main chat responses, memory consolidation, intelligence analysis, ad generation, style consolidation, Discord bot responses, emotion tags, and story reconstruction utilize Gemini 2.5 Pro with Claude Sonnet 4.5 as a paid failsafe.
-    - **Bulk/Volume Tasks**: Content flagging, document processing, podcast fact extraction, Discord member facts, entity extraction, contradiction detection, and intrusive thoughts are handled exclusively by Gemini 2.5 Pro for cost optimization.
-    - **Enforcement**: Runtime checks and validation points prevent the use of banned models.
-- **Memory System**: Features enhanced RAG with intelligent retrieval, including recency bias, thread awareness, query intent detection, diversity scoring, two-pass re-ranking, knowledge gap detection, and performance optimizations (caching, batch queries, indexing). It supports a unified personality system with customizable profiles.
-- **Document Processing**: Handles PDF parsing, intelligent text chunking, and automatic knowledge extraction via Gemini. It includes a training examples system for meta-learning strategy patterns and conversation styles from samples.
-- **Podcast Processing**: Automatically extracts both facts AND entities (people, places, events) from podcast episode transcripts. The system processes transcripts with Gemini to identify structured facts, then performs entity extraction to recognize and link people, places, and events mentioned in the episode. Entities are automatically created or updated with new context, and linked to relevant memory entries. All memories are tagged with their source episode ID, enabling queries like "What did we learn from Episode 68?" via the episode-specific memory endpoint.
-- **Memory Management**: Supports FACT, PREFERENCE, LORE, CONTEXT memory types with importance scoring. AI-powered consolidation (Gemini primary, Claude fallback), keyword-based search, and atomic UPSERT-based deduplication with comprehensive metadata merging are implemented. Entity linking creates many-to-many relationships between memories and entities, with automatic AI extraction and smart updates to prevent duplicates.
-- **Metrics & Observability**: Prometheus metrics track LLM calls, tokens, estimated costs, errors, latency (for both Claude and Gemini), Discord interactions, and HTTP requests. Cost estimation is built-in.
-- **Communication Flow**: Voice input -> Message Queuing -> Context Retrieval (RAG) -> AI Processing -> Response Generation -> Voice Output -> Memory Storage.
-- **Core Components**: Includes Dashboard, Chat Panel, Control Panel, PersonalitySurgePanel, Discord Management Panel, Profile, Memory, Document Panels, Voice Visualizer, and a Memory UI Suite with enhanced panels, debug tools, analytics dashboard, and a protected facts manager. Ad generation is simplified for comedy.
+### Backend
+- **Runtime**: Node.js with Express.js (TypeScript, ESM).
+- **API Pattern**: RESTful API (JSON).
+- **Session Management**: Express sessions with PostgreSQL storage.
+- **File Handling**: Multer for multipart/form-data uploads.
+- **WebSocket**: Real-time communication for voice streaming and status updates.
+
+### Database
+- **Provider**: Neon serverless PostgreSQL.
+- **ORM**: Drizzle ORM with type-safe queries.
+- **Migration Strategy**: `drizzle-kit push`.
+- **Indexing**: Strategic indexes on foreign keys, unique constraints, full-text search preparation.
+- **Core Tables**: `profiles`, `conversations`, `messages`, `memories`, `entities`, `documents`, `podcast_episodes`, `protected_facts`. All entities are scoped to `profileId` for multi-tenancy.
+
+### AI Integration Strategy
+- **Primary AI**: Google Gemini 2.5 Pro for all AI operations. Gemini Flash models are banned.
+- **Fallback AI**: Claude Sonnet 4.5 for critical user-facing features when Gemini fails.
+- **AI Operation Categories**:
+    - **User-Facing**: Chat responses, memory consolidation, intelligence analysis, ad generation, emotion tagging.
+    - **Bulk/Volume**: Content moderation, document processing, podcast fact extraction, entity extraction, contradiction detection.
+- **Model Configuration**: Dynamic temperature (0.7-1.2), configured max tokens (512-4096), personality-aware system prompts, streaming support.
+
+### Voice Processing System
+- **Speech Recognition**: Browser-native Web Speech API with continuous recognition and VAD.
+- **Text-to-Speech**: ElevenLabs API (primary), browser-native Speech Synthesis API (fallback). Configurable voice models.
+- **Credit Management**: Monitors ElevenLabs character usage, automatic fallback to browser TTS.
+
+### Memory System Architecture
+- **Enhanced RAG**: Recency bias, thread awareness, query intent detection, diversity scoring, two-pass re-ranking, knowledge gap detection.
+- **Performance Optimizations**: Embedding cache, batch queries, strategic indexing, lazy loading.
+- **Memory Types**: FACT, PREFERENCE, LORE, CONTEXT.
+- **Memory Importance Scoring**: AI-assigned 1-100 scale, decay over time, protected facts.
+- **Memory Consolidation**: Automatic merging of duplicate/similar memories (>90% vector similarity) via AI analysis.
+- **Entity Extraction and Linking**: AI extracts entities (Person, Place, Event, Organization, Concept) from content, linking them to memories.
+
+### Podcast Processing Pipeline
+- **RSS Feed Auto-Sync**: Fetches and parses RSS feeds, extracts episode metadata, matches transcripts by filename or title similarity.
+- **Batch Processing**: Processes pending episodes by loading transcripts and invoking AI for fact extraction.
+- **Fact Extraction**: Gemini analyzes transcripts for factual statements, categorizes them, assigns importance, generates keywords, and links to episode ID.
+- **Entity Recognition**: AI identifies and links entities within podcast content.
+
+### Document Processing Pipeline
+- **Upload and Parsing**: PDF documents parsed via `pdf-parse`.
+- **Intelligent Text Chunking**: Configurable chunk size (1000-1500 chars) with overlap and boundary detection.
+- **Knowledge Extraction**: AI processes chunks for facts, creates memories, identifies entities, and attributes to document/chunk ID.
+
+### Intelligence Engine
+- **AI-Powered Memory Management**:
+    - **Fact Cluster Merging**: Detects and merges related memories with AI analysis.
+    - **Personality Drift Detection**: Monitors AI responses against a baseline of protected facts.
+    - **Personality Rectification**: AI proposes and implements plans to adjust personality consistency.
+    - **Context Relevance Analysis**: Evaluates and cleans up outdated or redundant memories.
+- **Protected Facts System**: Immutable baseline knowledge curated via UI, used for drift prevention.
+
+### Discord Integration
+- **Bot Architecture**: `discord.js` for message handling, authentication, and status sync.
+- **Conversational Features**: Responds to mentions/DMs, uses context-aware responses with personality.
+- **Proactive Messaging**: Generates "intrusive thoughts" based on chaos level.
+- **Member Fact Extraction**: Monitors user messages to extract and store facts about server members for personalization.
+
+### UI Components
+- **Dashboard**: Overview of activity, quick actions, status indicators.
+- **Chat Panel**: Threaded conversation, voice controls, context indicators, streaming.
+- **Control Panel**: Voice settings, chaos controls, profile management.
+- **Personality Surge Panel**: Triggers and monitors chaos level spikes.
+- **Discord Management Panel**: Bot status, channel settings, intrusive thought configuration.
+- **Memory UI Suite**: Browser, Protected Facts Manager, Analytics Dashboard, Intelligence Dashboard, Debug Tools for comprehensive memory management and analysis.
+
+### Communication Flow
+- **Voice Interaction Lifecycle**: User speaks → Web Speech API → Text sent to backend → RAG retrieves context → AI generates response → TTS synthesizes speech → Memory stored → UI updated.
+- **Memory Lifecycle**: Fact extracted → Deduplicated/Consolidated → Stored with embeddings → Entities linked → Indexed → Retrieved by RAG → Importance decays/protected.
 
 ## External Dependencies
 
 ### AI Services
 - **Google Gemini API**: Primary AI provider.
 - **Anthropic Claude API**: Fallback AI provider.
-- **ElevenLabs API**: Enhanced text-to-speech service.
+- **ElevenLabs API**: Premium text-to-speech.
 
 ### Database Services
-- **Neon Database**: Serverless PostgreSQL hosting.
-- **PostgreSQL**: Relational database.
+- **Neon Database**: Serverless PostgreSQL.
+- **PostgreSQL**: Core relational database.
 
 ### Development Tools
 - **Vite**: Frontend build tool.
 - **Replit Integration**: Development environment.
+- **Drizzle Kit**: Database migration tool.
+- **TypeScript**: Static type checking.
 
 ### Browser APIs
 - **Web Speech API**: Speech recognition and synthesis.
 - **Web Audio API**: Audio processing.
 - **MediaDevices API**: Microphone access.
+- **Fetch API**: HTTP requests.
 
 ### UI Libraries
-- **Radix UI**: Headless UI components.
+- **Radix UI**: Accessible headless components.
 - **Tailwind CSS**: Utility-first CSS framework.
-- **Lucide React**: Icon library.
+- **Lucide React / React Icons**: Icon libraries.
+- **Framer Motion**: Animation library.
+- **Recharts**: Charting library.
 
 ### Utility Libraries
 - **Drizzle ORM**: Type-safe ORM.
 - **TanStack React Query**: Server state management.
-- **date-fns**: Date utility library.
-- **nanoid**: Unique ID generator.
+- **date-fns**: Date manipulation.
+- **nanoid**: Unique ID generation.
 - **pdf-parse**: PDF text extraction.
 - **multer**: File upload handling.
+- **rss-parser**: RSS/Atom feed parsing.
+- **tiktoken**: LLM token counting.
+- **zod**: Runtime type validation.
+- **natural**: Natural language processing.
