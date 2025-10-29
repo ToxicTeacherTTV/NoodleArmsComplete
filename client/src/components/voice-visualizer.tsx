@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { VoiceActivity, StreamSettings } from "@/types";
 
 interface VoiceVisualizerProps {
@@ -7,6 +8,8 @@ interface VoiceVisualizerProps {
   isActive: boolean;
   streamSettings: StreamSettings;
   onUpdateSettings: (settings: StreamSettings) => void;
+  variant?: 'floating' | 'embedded';
+  className?: string;
 }
 
 export default function VoiceVisualizer({
@@ -14,6 +17,8 @@ export default function VoiceVisualizer({
   isActive,
   streamSettings,
   onUpdateSettings,
+  variant = 'floating',
+  className,
 }: VoiceVisualizerProps) {
   const toggleSetting = (key: keyof StreamSettings) => {
     onUpdateSettings({
@@ -23,9 +28,23 @@ export default function VoiceVisualizer({
   };
 
   return (
-    <div className="fixed bottom-6 right-6 space-y-3 z-30">
+    <div
+      className={cn(
+        variant === 'floating'
+          ? 'fixed bottom-6 right-6 z-30 space-y-3'
+          : 'space-y-3',
+        className
+      )}
+    >
       {/* Voice Visualization */}
-      <Card className="bg-card/90 backdrop-blur-sm border border-border rounded-xl p-4 w-64">
+      <Card
+        className={cn(
+          variant === 'floating'
+            ? 'w-64 bg-card/90 backdrop-blur-sm'
+            : 'w-full bg-card',
+          'border border-border rounded-xl p-4'
+        )}
+      >
         <CardContent className="p-0">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium text-foreground">Voice Input</span>
@@ -68,7 +87,14 @@ export default function VoiceVisualizer({
       </Card>
 
       {/* Quick Settings */}
-      <Card className="bg-card/90 backdrop-blur-sm border border-border rounded-xl p-4">
+      <Card
+        className={cn(
+          variant === 'floating'
+            ? 'bg-card/90 backdrop-blur-sm'
+            : 'bg-card',
+          'border border-border rounded-xl p-4'
+        )}
+      >
         <CardContent className="p-0">
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-foreground">Stream Mode</h4>
