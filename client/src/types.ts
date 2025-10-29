@@ -77,3 +77,27 @@ export interface ChaosState {
   manualOverride?: number;
   lastModeChange?: string;
 }
+
+export interface PersonalityState {
+  basePersonality: {
+    preset: string;
+    intensity: 'low' | 'med' | 'high' | 'ultra';
+    dbd_lens: boolean;
+    spice: 'platform_safe' | 'normal' | 'spicy';
+  };
+  chaosInfluence?: {
+    reason: string;
+    intensityDelta: number;
+    suggestedPreset?: string;
+    presetSuggestion?: string;
+    spiceCap?: 'platform_safe' | 'normal' | 'spicy';
+  };
+  effectivePersonality: {
+    preset: string;
+    intensity: 'low' | 'med' | 'high' | 'ultra';
+    dbd_lens: boolean;
+    spice: 'platform_safe' | 'normal' | 'spicy';
+  };
+  lastUpdated: string;
+  source: string;
+}
