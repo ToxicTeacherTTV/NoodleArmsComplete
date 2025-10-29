@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 
 interface ConversationWithMeta {
@@ -17,12 +18,16 @@ interface ChatHistorySidebarProps {
   currentConversationId: string;
   onSelectConversation: (id: string) => void;
   onNewChat: () => void;
+  variant?: 'sidebar' | 'embedded';
+  className?: string;
 }
 
 export default function ChatHistorySidebar({
   currentConversationId,
   onSelectConversation,
   onNewChat,
+  variant = 'sidebar',
+  className,
 }: ChatHistorySidebarProps) {
   const { data: conversations = [], isLoading } = useQuery<ConversationWithMeta[]>({
     queryKey: ['/api/conversations/web'],
@@ -91,8 +96,21 @@ export default function ChatHistorySidebar({
   const groupedConversations = groupByDate(conversations);
 
   return (
-    <div className="h-full flex flex-col bg-card border-r border-border">
-      <div className="p-4 border-b border-border">
+    <div
+      className={cn(
+        "h-full flex flex-col",
+        variant === 'sidebar' ? 'bg-card border-r border-border' : '',
+        className
+      )}
+    >
+      <div
+        className={cn(
+          "p-4",
+          variant === 'sidebar'
+            ? 'border-b border-border bg-card'
+            : 'border-b border-border/60 bg-muted/20'
+        )}
+      >
         <Button
           onClick={onNewChat}
           className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"

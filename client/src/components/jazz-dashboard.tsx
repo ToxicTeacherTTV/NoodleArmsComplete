@@ -4,7 +4,6 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import ChatPanel from "@/components/chat-panel";
 import ControlPanel from "@/components/control-panel";
-import DiscordManagementPanel from "@/components/discord-management-panel";
 import ChatHistorySidebar from "@/components/chat-history-sidebar";
 // PersonalityPanel moved to brain-management.tsx
 // MemoryPanel and DocumentPanel moved to brain-management.tsx
@@ -13,18 +12,18 @@ import VoiceVisualizer from "@/components/voice-visualizer";
 import ProfileModal from "@/components/profile-modal";
 import PersonalitySurgePanel from "@/components/personality-surge-panel";
 import { MemoryChecker } from "@/components/memory-checker";
-import { MemoryDebugPanel } from "@/components/memory-debug-panel";
 import NotesModal from "@/components/notes-modal";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useSpeechSynthesis } from "@/hooks/use-speech-synthesis";
 import { useElevenLabsSpeech } from "@/hooks/use-elevenlabs-speech";
 import { useVoiceActivity } from "@/hooks/use-voice-activity";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Message, Profile, AIStatus, StreamSettings, VoiceActivity, AppMode, ChatResponse, ConversationResponse, MemoryStats } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
 import { nanoid } from "nanoid";
@@ -61,8 +60,8 @@ export default function JazzDashboard() {
   const [checkerPosition, setCheckerPosition] = useState({ x: 0, y: 0 });
   const [pendingTranscript, setPendingTranscript] = useState<string>(''); // For manual voice control
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
-  const [isControlsCollapsed, setIsControlsCollapsed] = useState(true); // Start collapsed on mobile
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Chat history sidebar
+  const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
+  const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(false);
   const [isDebugMode, setIsDebugMode] = useState(false); // Memory debug panel
 
   // Refs for queue management
@@ -332,374 +331,468 @@ export default function JazzDashboard() {
     setMessages([]);
   };
 
+  const documentCount = Array.isArray(documents) ? documents.length : 0;
+
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-background via-background to-primary/5">
-      {/* Header - Fixed Height */}
-      <header className="bg-gradient-to-r from-primary via-accent to-secondary p-4 shadow-lg">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-              <span className="text-2xl font-bold text-white">🎷</span>
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white drop-shadow-sm">
-                {activeProfile?.name || "Nicky A.I. Dente"}
-              </h1>
-              <p className="text-white/80 text-sm">"Noodle Arms" Jazz Cup Co-Host</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            <StatusIndicator status={aiStatus} />
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="px-2 md:px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors text-sm hidden md:block"
-              data-testid="button-toggle-sidebar"
-              title={isSidebarOpen ? "Hide chat history" : "Show chat history"}
-            >
-              <i className={`fas ${isSidebarOpen ? 'fa-sidebar' : 'fa-bars'}`}></i>
-            </button>
-            <button
-              onClick={() => setLocation('/workspace')}
-              className="px-2 md:px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors text-sm"
-              data-testid="button-project-workspace"
-            >
-              <span className="hidden sm:inline">🚧 Project Workspace</span>
-              <span className="sm:hidden">🚧</span>
-            </button>
-            <button
-              onClick={() => setLocation('/brain')}
-              className="px-2 md:px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors text-sm"
-              data-testid="button-brain-management"
-            >
-              <span className="hidden sm:inline">🧠 Brain Management</span>
-              <span className="sm:hidden">🧠</span>
-            </button>
-            <button
-              onClick={() => setAppMode(appMode === 'PODCAST' ? 'STREAMING' : 'PODCAST')}
-              className="px-2 md:px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 transition-colors text-sm"
-              data-testid="button-toggle-mode"
-            >
-              <span className="hidden sm:inline">{appMode === 'PODCAST' ? '🎙️ Podcast Mode' : '🔴 Streaming Mode'}</span>
-              <span className="sm:hidden">{appMode === 'PODCAST' ? '🎙️' : '🔴'}</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content - Flexible Height with Bottom Padding */}
-      <main className="flex-1 overflow-hidden pb-32 p-4">
-        <div className="h-full flex gap-4">
-          {/* Chat History Sidebar */}
-          {isSidebarOpen && (
-            <div className="w-64 flex-shrink-0 hidden md:block">
-              <ChatHistorySidebar
-                currentConversationId={currentConversationId}
-                onSelectConversation={handleSelectConversation}
-                onNewChat={handleNewChat}
-              />
-            </div>
-          )}
-
-          {/* Main Chat Area */}
-          <Card className="border-primary/20 shadow-xl flex-1">
-            <div className="h-full flex flex-col">
-              <ChatPanel
-                messages={messages}
-                sessionDuration={getSessionDuration()}
-                messageCount={messages.length}
-                appMode={appMode}
-                isDebugMode={isDebugMode}
-                onToggleDebugMode={() => setIsDebugMode(!isDebugMode)}
-                onPlayAudio={(content: string) => {
-                  if (appMode === 'PODCAST') {
-                    if (isSpeakingElevenLabs && !isPausedElevenLabs) {
-                      pauseElevenLabs();
-                    } else if (isPausedElevenLabs) {
-                      resumeElevenLabs();
-                    } else {
-                      speakElevenLabs(content);
-                    }
-                  } else {
-                    if (isSpeaking && !isPaused) {
-                      pausePlayback();
-                    } else if (isPaused) {
-                      resumePlayback();
-                    } else {
-                      speakText(content);
-                    }
-                  }
-                }}
-                onReplayAudio={() => {
-                  if (appMode === 'PODCAST') {
-                    replayElevenLabs();
-                  } else {
-                    replayLastAudio();
-                  }
-                }}
-                onSaveAudio={(filename?: string) => {
-                  if (appMode === 'PODCAST') {
-                    saveAudioElevenLabs(filename);
-                  }
-                }}
-                isPlayingAudio={appMode === 'PODCAST' ? isSpeakingElevenLabs && !isPausedElevenLabs : isSpeaking && !isPaused}
-                isPausedAudio={appMode === 'PODCAST' ? isPausedElevenLabs : isPaused}
-                canReplay={appMode === 'PODCAST' ? canReplayElevenLabs : canReplay}
-                canSave={appMode === 'PODCAST' ? canSaveElevenLabs : false}
-                onTextSelection={handleTextSelection}
-              />
-            </div>
-          </Card>
-        </div>
-      </main>
-
-      {/* Footer - Fixed Input Controls */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur border-t border-border/20 shadow-lg z-40 h-32">
-          {/* Main Control Row */}
-          <div className="p-3 flex gap-3 items-center">
-            {/* Chat Input - Takes most space */}
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.target as HTMLFormElement);
-              const message = formData.get('message') as string;
-              if (message.trim()) {
-                const userMessage: Message = {
-                  id: nanoid(),
-                  conversationId: currentConversationId,
-                  type: 'USER',
-                  content: message,
-                  createdAt: new Date().toISOString(),
-                  rating: null,
-                  metadata: null,
-                };
-                setMessages(prev => [...prev, userMessage]);
-                setAiStatus('PROCESSING');
-                sendMessageMutation.mutate({
-                  conversationId: currentConversationId,
-                  type: 'USER',
-                  content: message,
-                });
-                (e.target as HTMLFormElement).reset();
-              }
-            }} className="flex-1 flex gap-2">
-              <Textarea
-                name="message"
-                className="flex-1 bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                placeholder={isListening ? "🎤 Listening... speak now!" : "Type a message to Nicky... (Enter to send, Shift+Enter for new line)"}
-                rows={2}
-                data-testid="textarea-message-input"
-                readOnly={isListening}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    const form = e.currentTarget.form;
-                    if (form) {
-                      form.requestSubmit();
-                    }
-                  }
-                }}
-              />
-              <Button 
-                type="submit" 
-                className="bg-accent hover:bg-accent/90 text-accent-foreground px-4 rounded-lg flex items-center justify-center transition-all duration-200"
-                data-testid="button-send-message"
-              >
-                <i className="fas fa-paper-plane"></i>
-              </Button>
-            </form>
-
-            {/* Voice Control */}
-            <Button
-              onClick={toggleListening}
-              className={`p-3 rounded-lg transition-all duration-200 ${
-                isListening 
-                  ? 'bg-red-500 hover:bg-red-600 text-white' 
-                  : 'bg-primary hover:bg-primary/90 text-primary-foreground'
-              }`}
-              data-testid="button-toggle-voice"
-            >
-              <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'}`}></i>
-            </Button>
-
-            {/* Action Buttons */}
-            <Button
-              onClick={() => setMessages([])}
-              className="p-3 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-700 dark:text-red-300 border border-red-500/30"
-              data-testid="button-clear-chat"
-              title="Clear Chat"
-            >
-              🗑️
-            </Button>
-            
-            <Button
-              onClick={() => {
-                if (messages.length > 0) {
-                  consolidateMemoryMutation.mutate(currentConversationId);
-                }
+    <>
+      <Sheet open={isHistorySheetOpen} onOpenChange={setIsHistorySheetOpen}>
+        <SheetContent side="left" className="p-0 sm:max-w-md">
+          <SheetHeader className="px-4 py-3">
+            <SheetTitle>Conversation History</SheetTitle>
+          </SheetHeader>
+          <div className="h-[calc(100vh-4rem)]">
+            <ChatHistorySidebar
+              currentConversationId={currentConversationId}
+              onSelectConversation={(conversationId) => {
+                setIsHistorySheetOpen(false);
+                handleSelectConversation(conversationId);
               }}
-              className="p-3 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300 border border-blue-500/30"
-              data-testid="button-store-conversation"
-              title="Store Conversation to Memory"
-            >
-              💾
-            </Button>
+              onNewChat={() => {
+                setIsHistorySheetOpen(false);
+                handleNewChat();
+              }}
+              variant="sidebar"
+              className="h-full"
+            />
           </div>
+        </SheetContent>
+      </Sheet>
 
-          {/* Status Bar */}
-          <div className="bg-gradient-to-r from-primary/90 via-accent/90 to-secondary/90 backdrop-blur-sm border-t border-white/20 px-3 py-2">
-            <div className="flex items-center justify-between text-xs text-black">
-              <div className="flex items-center space-x-4">
-                <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
-                  Claude API
-                </span>
-                <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
-                  ElevenLabs
-                </span>
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <div className="flex min-h-screen flex-col">
+          <header className="border-b bg-background/80 backdrop-blur">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                  <span className="text-2xl">🎷</span>
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-foreground">
+                    {activeProfile?.name || "Nicky A.I. Dente"}
+                  </h1>
+                  <p className="text-sm text-muted-foreground">"Noodle Arms" Jazz Cup Co-Host</p>
+                </div>
               </div>
-              <div className="flex items-center space-x-4">
-                <span>💬 {messages.length} messages</span>
-                <span>🧠 {memoryStats?.totalFacts || 0} facts</span>
+
+              <div className="flex w-full flex-col gap-3 sm:w-auto">
+                <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-end">
+                  <StatusIndicator status={aiStatus} />
+                  <ToggleGroup
+                    type="single"
+                    value={appMode}
+                    onValueChange={(value) => {
+                      if (value) {
+                        setAppMode(value as AppMode);
+                      }
+                    }}
+                    size="sm"
+                    className="rounded-lg bg-muted/50 p-1"
+                  >
+                    <ToggleGroupItem value="PODCAST" aria-label="Podcast mode">
+                      <i className="fas fa-podcast" />
+                      <span className="hidden sm:inline">Podcast</span>
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="STREAMING" aria-label="Streaming mode">
+                      <i className="fas fa-broadcast-tower" />
+                      <span className="hidden sm:inline">Streaming</span>
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="sm:hidden"
+                    onClick={() => setIsHistorySheetOpen(true)}
+                    data-testid="button-toggle-sidebar"
+                  >
+                    <i className="fas fa-clock-rotate-left mr-2" />
+                    History
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setIsProfileModalOpen(true)}>
+                    <i className="fas fa-user-astronaut mr-2" />
+                    Profile
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setIsNotesModalOpen(true)}>
+                    <i className="fas fa-note-sticky mr-2" />
+                    Notes
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLocation('/workspace')}
+                    data-testid="button-project-workspace"
+                  >
+                    <span className="hidden md:inline">🚧 Project Workspace</span>
+                    <span className="md:hidden">🚧</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLocation('/brain')}
+                    data-testid="button-brain-management"
+                  >
+                    <span className="hidden md:inline">🧠 Brain Management</span>
+                    <span className="md:hidden">🧠</span>
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        </footer>
+          </header>
 
-      {/* Legacy controls section - now hidden */}
-      <div className="hidden">
-        {/* Mobile: Collapsible Controls, Desktop: Side Panel */}
-        <div className="md:col-span-3 space-y-4 order-3">
-          <Collapsible 
-            open={isControlsCollapsed ? false : true} 
-            onOpenChange={(open) => setIsControlsCollapsed(!open)}
-            className="md:hidden"
-          >
-            <Card className="border-primary/20 shadow-lg">
-              <CollapsibleTrigger asChild>
-                <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50">
-                  <CardTitle className="text-lg flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
-                      Live Controls
+          <main className="flex-1 overflow-hidden">
+            <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-4 px-4 py-6">
+              <div className="grid flex-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
+                <Card className="hidden min-h-0 flex-col overflow-hidden lg:flex">
+                  <CardHeader className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+                    <CardTitle className="text-sm font-semibold text-muted-foreground">Conversations</CardTitle>
+                    <Badge variant="secondary" className="text-xs">
+                      {messages.length} active
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="flex-1 p-0">
+                    <ChatHistorySidebar
+                      currentConversationId={currentConversationId}
+                      onSelectConversation={handleSelectConversation}
+                      onNewChat={handleNewChat}
+                      variant="embedded"
+                      className="h-full"
+                    />
+                  </CardContent>
+                </Card>
+
+                <div className="flex min-h-0 flex-col gap-4">
+                  <Card className="flex min-h-0 flex-1 flex-col overflow-hidden border-primary/20 shadow-xl">
+                    <CardContent className="flex-1 p-0">
+                      <ChatPanel
+                        messages={messages}
+                        sessionDuration={getSessionDuration()}
+                        messageCount={messages.length}
+                        appMode={appMode}
+                        isDebugMode={isDebugMode}
+                        onToggleDebugMode={() => setIsDebugMode(!isDebugMode)}
+                        onPlayAudio={(content: string) => {
+                          if (appMode === 'PODCAST') {
+                            if (isSpeakingElevenLabs && !isPausedElevenLabs) {
+                              pauseElevenLabs();
+                            } else if (isPausedElevenLabs) {
+                              resumeElevenLabs();
+                            } else {
+                              speakElevenLabs(content);
+                            }
+                          } else {
+                            if (isSpeaking && !isPaused) {
+                              pausePlayback();
+                            } else if (isPaused) {
+                              resumePlayback();
+                            } else {
+                              speakText(content);
+                            }
+                          }
+                        }}
+                        onReplayAudio={() => {
+                          if (appMode === 'PODCAST') {
+                            replayElevenLabs();
+                          } else {
+                            replayLastAudio();
+                          }
+                        }}
+                        onSaveAudio={(filename?: string) => {
+                          if (appMode === 'PODCAST') {
+                            saveAudioElevenLabs(filename);
+                          }
+                        }}
+                        isPlayingAudio={appMode === 'PODCAST' ? isSpeakingElevenLabs && !isPausedElevenLabs : isSpeaking && !isPaused}
+                        isPausedAudio={appMode === 'PODCAST' ? isPausedElevenLabs : isPaused}
+                        canReplay={appMode === 'PODCAST' ? canReplayElevenLabs : canReplay}
+                        canSave={appMode === 'PODCAST' ? canSaveElevenLabs : false}
+                        onTextSelection={handleTextSelection}
+                      />
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-primary/10 shadow-md">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <i className="fas fa-keyboard text-muted-foreground" />
+                        Message Composer
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {appMode === 'STREAMING'
+                          ? 'Use keyboard or microphone to keep pace with live chat without leaving stream mode.'
+                          : 'Draft scripted prompts and switch to streaming mode when you are ready to go live.'}
+                      </p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const formData = new FormData(e.target as HTMLFormElement);
+                          const message = (formData.get('message') as string) || '';
+                          const trimmed = message.trim();
+                          if (!trimmed) {
+                            return;
+                          }
+
+                          const userMessage: Message = {
+                            id: nanoid(),
+                            conversationId: currentConversationId,
+                            type: 'USER',
+                            content: trimmed,
+                            createdAt: new Date().toISOString(),
+                            rating: null,
+                            metadata: null,
+                          };
+
+                          setMessages(prev => [...prev, userMessage]);
+                          setAiStatus('PROCESSING');
+                          sendMessageMutation.mutate({
+                            conversationId: currentConversationId,
+                            type: 'USER',
+                            content: trimmed,
+                          });
+                          (e.target as HTMLFormElement).reset();
+                        }}
+                        className="space-y-3"
+                      >
+                        <Textarea
+                          name="message"
+                          className="min-h-[80px] w-full resize-none rounded-lg border border-border bg-input p-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-transparent focus:ring-2 focus:ring-ring"
+                          placeholder={isListening ? '🎤 Listening... speak now!' : 'Type a message to Nicky... (Enter to send, Shift+Enter for new line)'}
+                          data-testid="textarea-message-input"
+                          readOnly={isListening}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              const form = e.currentTarget.form;
+                              form?.requestSubmit();
+                            }
+                          }}
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button type="submit" className="bg-accent px-4 text-accent-foreground hover:bg-accent/90" data-testid="button-send-message">
+                            <i className="fas fa-paper-plane mr-2" />
+                            Send Message
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={toggleListening}
+                            className={`px-4 transition-colors ${
+                              isListening
+                                ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                            }`}
+                            data-testid="button-toggle-listening"
+                          >
+                            <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'} mr-2`} />
+                            {isListening ? 'Stop Listening' : 'Start Listening'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setMessages([])}
+                            data-testid="button-clear-chat"
+                          >
+                            <i className="fas fa-trash mr-2" />
+                            Clear Chat
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              if (messages.length > 0) {
+                                consolidateMemoryMutation.mutate(currentConversationId);
+                              }
+                            }}
+                            data-testid="button-store-conversation"
+                          >
+                            <i className="fas fa-save mr-2" />
+                            Store to Memory
+                          </Button>
+                        </div>
+                      </form>
+
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="secondary" className="flex items-center gap-1">
+                          <i className="fas fa-clock" />
+                          {getSessionDuration()}
+                        </Badge>
+                        <Badge variant="secondary" className="flex items-center gap-1">
+                          <i className="fas fa-comments" />
+                          {messages.length} messages
+                        </Badge>
+                        <Badge variant="secondary" className="flex items-center gap-1">
+                          <i className="fas fa-brain" />
+                          {memoryStats?.totalFacts ?? 0} facts
+                        </Badge>
+                        <Badge variant="secondary" className="flex items-center gap-1">
+                          <i className="fas fa-folder-tree" />
+                          {documentCount} docs
+                        </Badge>
+                      </div>
+
+                      <Collapsible open={isMobileControlsOpen} onOpenChange={setIsMobileControlsOpen} className="md:hidden">
+                        <Card className="border border-dashed border-primary/30 bg-muted/10">
+                          <CollapsibleTrigger asChild>
+                            <CardHeader className="flex cursor-pointer items-center justify-between pb-2">
+                              <CardTitle className="text-sm font-semibold">Live Controls</CardTitle>
+                              <Button variant="ghost" size="sm">
+                                <i className={`fas ${isMobileControlsOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`} />
+                              </Button>
+                            </CardHeader>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <CardContent className="space-y-4">
+                              <ControlPanel
+                                onToggleListening={toggleListening}
+                                onSendText={(message: string) => {
+                                  if (message.trim()) {
+                                    const userMessage: Message = {
+                                      id: nanoid(),
+                                      conversationId: currentConversationId,
+                                      type: 'USER',
+                                      content: message.trim(),
+                                      createdAt: new Date().toISOString(),
+                                      rating: null,
+                                      metadata: null,
+                                    };
+                                    setMessages(prev => [...prev, userMessage]);
+                                    setAiStatus('PROCESSING');
+                                    sendMessageMutation.mutate({
+                                      conversationId: currentConversationId,
+                                      type: 'USER',
+                                      content: message.trim(),
+                                    });
+                                  }
+                                }}
+                                onClearChat={() => setMessages([])}
+                                onStoreConversation={() => {
+                                  if (messages.length > 0) {
+                                    consolidateMemoryMutation.mutate(currentConversationId);
+                                  }
+                                }}
+                                onPauseSpeech={pauseElevenLabs}
+                                onResumeSpeech={resumeElevenLabs}
+                                onStopSpeech={stopSpeaking}
+                                isListening={isListening}
+                                isSpeaking={isSpeaking}
+                                isPaused={isPausedElevenLabs}
+                                appMode={appMode}
+                                pendingTranscript={pendingTranscript}
+                              />
+                              <VoiceVisualizer
+                                voiceActivity={voiceActivity}
+                                isActive={isListening}
+                                streamSettings={streamSettings}
+                                onUpdateSettings={setStreamSettings}
+                                variant="embedded"
+                              />
+                            </CardContent>
+                          </CollapsibleContent>
+                        </Card>
+                      </Collapsible>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card className="hidden min-h-0 flex-col overflow-hidden xl:flex">
+                  <CardHeader className="border-b border-border/60 px-4 py-3">
+                    <CardTitle className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                      <i className="fas fa-sliders-h" />
+                      Command Center
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex-1 overflow-y-auto p-4">
+                    <div className="space-y-4">
+                      <div className="rounded-lg border border-dashed border-primary/30 bg-muted/10 p-4">
+                        <h3 className="text-sm font-semibold text-foreground">Session Summary</h3>
+                        <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <i className="fas fa-clock text-primary" />
+                            <span>{getSessionDuration()}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <i className="fas fa-comments text-primary" />
+                            <span>{messages.length} messages</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <i className="fas fa-brain text-primary" />
+                            <span>{memoryStats?.totalFacts ?? 0} facts</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <i className="fas fa-folder-open text-primary" />
+                            <span>{documentCount} docs</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Card className="border border-border/80 shadow-sm">
+                        <CardContent className="p-0">
+                          <ControlPanel
+                            onToggleListening={toggleListening}
+                            onSendText={(message: string) => {
+                              if (message.trim()) {
+                                const userMessage: Message = {
+                                  id: nanoid(),
+                                  conversationId: currentConversationId,
+                                  type: 'USER',
+                                  content: message.trim(),
+                                  createdAt: new Date().toISOString(),
+                                  rating: null,
+                                  metadata: null,
+                                };
+                                setMessages(prev => [...prev, userMessage]);
+                                setAiStatus('PROCESSING');
+                                sendMessageMutation.mutate({
+                                  conversationId: currentConversationId,
+                                  type: 'USER',
+                                  content: message.trim(),
+                                });
+                              }
+                            }}
+                            onClearChat={() => setMessages([])}
+                            onStoreConversation={() => {
+                              if (messages.length > 0) {
+                                consolidateMemoryMutation.mutate(currentConversationId);
+                              }
+                            }}
+                            onPauseSpeech={pauseElevenLabs}
+                            onResumeSpeech={resumeElevenLabs}
+                            onStopSpeech={stopSpeaking}
+                            isListening={isListening}
+                            isSpeaking={isSpeaking}
+                            isPaused={isPausedElevenLabs}
+                            appMode={appMode}
+                            pendingTranscript={pendingTranscript}
+                          />
+                        </CardContent>
+                      </Card>
+
+                      <VoiceVisualizer
+                        voiceActivity={voiceActivity}
+                        isActive={isListening}
+                        streamSettings={streamSettings}
+                        onUpdateSettings={setStreamSettings}
+                        variant="embedded"
+                      />
+
+                      <Card className="border border-border/80 shadow-sm">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-semibold text-muted-foreground">
+                            Personality Surge
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                          <PersonalitySurgePanel />
+                        </CardContent>
+                      </Card>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      {isControlsCollapsed ? '▼' : '▲'}
-                    </Button>
-                  </CardTitle>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent>
-                  <ControlPanel
-                    onToggleListening={toggleListening}
-                    onSendText={(message: string) => {
-                      if (message.trim()) {
-                        const userMessage: Message = {
-                          id: nanoid(),
-                          conversationId: currentConversationId,
-                          type: 'USER',
-                          content: message,
-                          createdAt: new Date().toISOString(),
-                          rating: null,
-                          metadata: null,
-                        };
-                        setMessages(prev => [...prev, userMessage]);
-                        setAiStatus('PROCESSING');
-                        sendMessageMutation.mutate({
-                          conversationId: currentConversationId,
-                          type: 'USER',
-                          content: message,
-                        });
-                      }
-                    }}
-                    onClearChat={() => setMessages([])}
-                    onStoreConversation={() => {
-                      if (messages.length > 0) {
-                        consolidateMemoryMutation.mutate(currentConversationId);
-                      }
-                    }}
-                    onPauseSpeech={pauseElevenLabs}
-                    onResumeSpeech={resumeElevenLabs}
-                    onStopSpeech={stopSpeaking}
-                    isListening={isListening}
-                    isSpeaking={isSpeaking}
-                    isPaused={isPausedElevenLabs}
-                    appMode={appMode}
-                    pendingTranscript={pendingTranscript}
-                  />
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
-          
-          {/* Desktop: Always visible controls */}
-          <Card className="border-primary/20 shadow-lg hidden md:block">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
-                Live Controls
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ControlPanel
-                onToggleListening={toggleListening}
-                onSendText={(message: string) => {
-                  if (message.trim()) {
-                    const userMessage: Message = {
-                      id: nanoid(),
-                      conversationId: currentConversationId,
-                      type: 'USER',
-                      content: message,
-                      createdAt: new Date().toISOString(),
-                      rating: null,
-                      metadata: null,
-                    };
-                    setMessages(prev => [...prev, userMessage]);
-                    setAiStatus('PROCESSING');
-                    sendMessageMutation.mutate({
-                      conversationId: currentConversationId,
-                      type: 'USER',
-                      content: message,
-                    });
-                  }
-                }}
-                onClearChat={() => setMessages([])}
-                onStoreConversation={() => {
-                  if (messages.length > 0) {
-                    consolidateMemoryMutation.mutate(currentConversationId);
-                  }
-                }}
-                onPauseSpeech={pauseElevenLabs}
-                onResumeSpeech={resumeElevenLabs}
-                onStopSpeech={stopSpeaking}
-                isListening={isListening}
-                isSpeaking={isSpeaking}
-                isPaused={isPausedElevenLabs}
-                appMode={appMode}
-                pendingTranscript={pendingTranscript}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Unified personality control panel */}
-          <Card className="border-accent/20 hidden md:block">
-            <CardContent className="p-4">
-              <PersonalitySurgePanel />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Floating Voice Visualizer */}
-      {isListening && (
-        <VoiceVisualizer
-          voiceActivity={voiceActivity}
-          isActive={isListening}
-          streamSettings={streamSettings}
-          onUpdateSettings={setStreamSettings}
-        />
-      )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </main>
 
       {/* Memory Checker */}
       <MemoryChecker
@@ -722,6 +815,8 @@ export default function JazzDashboard() {
         onClose={() => setIsNotesModalOpen(false)}
       />
 
-    </div>
+        </div>
+      </div>
+    </>
   );
 }
