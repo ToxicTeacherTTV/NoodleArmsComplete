@@ -7,28 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Settings, RotateCcw, Zap } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-
-interface PersonalityState {
-  basePersonality: {
-    preset: string;
-    intensity: 'low' | 'med' | 'high' | 'ultra';
-    dbd_lens: boolean;
-    spice: 'platform_safe' | 'normal' | 'spicy';
-  };
-  chaosInfluence?: {
-    reason: string;
-    intensityDelta: number;
-    suggestedPreset?: string;
-  };
-  effectivePersonality: {
-    preset: string;
-    intensity: 'low' | 'med' | 'high' | 'ultra';
-    dbd_lens: boolean;
-    spice: 'platform_safe' | 'normal' | 'spicy';
-  };
-  lastUpdated: string;
-  source: string;
-}
+import type { PersonalityState } from '@/types';
 
 export default function PersonalitySurgePanel() {
   const [showOverride, setShowOverride] = useState(false);
