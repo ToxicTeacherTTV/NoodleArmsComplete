@@ -28,6 +28,8 @@ import ContentLibraryPanel from "@/components/content-library-panel";
 import ContentIngestionPanel from "@/components/content-ingestion-panel";
 import { IntelligenceDashboard } from "@/components/intelligence-dashboard";
 import PodcastManagementPanel from "@/components/podcast-management-panel";
+import SystemOperationsSummary from "@/components/system-operations-summary";
+import type { ChaosState, MemoryStats, PersonalityState, Document as KnowledgeDocument } from "@/types";
 
 interface MemoryFact {
   id: string;
@@ -133,14 +135,24 @@ export default function BrainManagement() {
     refetchInterval: false,
   });
 
-  const { data: memoryStats } = useQuery({
+  const { data: memoryStats } = useQuery<MemoryStats>({
     queryKey: ['/api/memory/stats'],
     refetchInterval: 120000,
   });
 
-  const { data: documents } = useQuery({
+  const { data: documents } = useQuery<KnowledgeDocument[]>({
     queryKey: ['/api/documents'],
     refetchInterval: false,
+  });
+
+  const { data: chaosState } = useQuery<ChaosState>({
+    queryKey: ['/api/chaos/state'],
+    refetchInterval: 10000,
+  });
+
+  const { data: personalityState } = useQuery<PersonalityState>({
+    queryKey: ['/api/personality/state'],
+    refetchInterval: 5000,
   });
 
   // Entity system queries
@@ -1570,6 +1582,15 @@ export default function BrainManagement() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <SystemOperationsSummary
+          memoryStats={memoryStats}
+          flagsData={flagsData}
+          flagAnalytics={flagAnalytics}
+          documents={documents}
+          chaosState={chaosState}
+          personalityState={personalityState}
+        />
+
         {/* Search Bar & Sorting Controls */}
         <div className="mb-8 space-y-4">
           <div className="flex gap-4">
