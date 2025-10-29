@@ -85,7 +85,7 @@ class PrometheusMetrics {
     this.discordProactiveMessages = new Counter({
       name: 'discord_proactive_messages_total',
       help: 'Total proactive Discord messages sent',
-      labelNames: ['channel', 'triggered_by'],
+      labelNames: ['channel_type', 'triggered_by'],
       registers: [this.register]
     });
 
@@ -179,7 +179,8 @@ class PrometheusMetrics {
     }
 
     if (error) {
-      this.llmErrorsTotal.inc({ provider, model, error_type: error });
+      const errorType = this.normalizeLLMError(error);
+      this.llmErrorsTotal.inc({ provider, model, error_type: errorType });
       return;
     }
 
@@ -235,19 +236,109 @@ class PrometheusMetrics {
   /**
    * Track Discord message
    */
-  trackDiscordMessage(type: 'reply' | 'proactive' | 'error', channel?: string, trigger?: string): void {
+  trackDiscordMessage(type: 'reply' | 'proactive' | 'error', channelType?: string | number, trigger?: string): void {
     this.discordMessagesTotal.inc({ type });
-    
-    if (type === 'proactive' && channel) {
-      this.discordProactiveMessages.inc({ 
-        channel: channel, 
-        triggered_by: trigger || 'unknown' 
+
+    if (type === 'proactive') {
+      this.discordProactiveMessages.inc({
+        channel_type: this.normalizeDiscordChannelType(channelType),
+        triggered_by: trigger || 'unknown'
       });
     }
 
     if (type === 'error') {
-      this.discordErrorsTotal.inc({ error_type: trigger || 'unknown' });
+      this.discordErrorsTotal.inc({ error_type: this.normalizeDiscordErrorType(trigger) });
     }
+  }
+
+  private normalizeLLMError(error: string): string {
+    const normalized = (error ?? '').toString().toLowerCase();
+
+    if (normalized.includes('timeout') || normalized.includes('etimedout')) {
+      return 'timeout';
+    }
+
+    if (normalized.includes('rate limit') || normalized.includes('429')) {
+      return 'rate_limited';
+    }
+
+    if (normalized.includes('unauthorized') || normalized.includes('401') || normalized.includes('403') || normalized.includes('forbidden')) {
+      return 'auth_error';
+    }
+
+    if (normalized.includes('insufficient') && normalized.includes('credit')) {
+      return 'insufficient_credits';
+    }
+
+    if (normalized.includes('network') || normalized.includes('econnreset')) {
+      return 'network_error';
+    }
+
+    const statusMatch = normalized.match(/\b(\d{3})\b/);
+    if (statusMatch) {
+      const statusCode = Number(statusMatch[1]);
+      if (statusCode >= 500) {
+        return 'server_error';
+      }
+      if (statusCode >= 400) {
+        return 'client_error';
+      }
+    }
+
+    return 'other';
+  }
+
+  private normalizeDiscordChannelType(channelType?: string | number): string {
+    if (channelType === undefined || channelType === null) {
+      return 'unknown';
+    }
+
+    if (typeof channelType === 'number') {
+      switch (channelType) {
+        case 0: // GuildText
+          return 'guild_text';
+        case 1: // DM
+          return 'dm';
+        case 2: // GuildVoice
+          return 'guild_voice';
+        case 5: // GuildNews
+          return 'guild_announcements';
+        case 10: // GuildNewsThread
+        case 11: // GuildPublicThread
+        case 12: // GuildPrivateThread
+          return 'thread';
+        case 13: // GuildStageVoice
+          return 'stage';
+        case 15: // GuildForum
+          return 'forum';
+        default:
+          return 'other';
+      }
+    }
+
+    const normalized = channelType.toString().toLowerCase();
+    if (normalized.includes('thread')) return 'thread';
+    if (normalized.includes('voice')) return 'guild_voice';
+    if (normalized.includes('stage')) return 'stage';
+    if (normalized.includes('forum')) return 'forum';
+    if (normalized.includes('dm')) return 'dm';
+    if (normalized.includes('text')) return 'guild_text';
+    if (normalized.includes('announcement') || normalized.includes('news')) return 'guild_announcements';
+    return 'other';
+  }
+
+  private normalizeDiscordErrorType(error?: string): string {
+    if (!error) {
+      return 'unknown';
+    }
+
+    const normalized = (error ?? '').toString().toLowerCase();
+    if (normalized.includes('rate')) return 'rate_limited';
+    if (normalized.includes('auth') || normalized.includes('token')) return 'auth_error';
+    if (normalized.includes('permission')) return 'permission_denied';
+    if (normalized.includes('network')) return 'network_error';
+    if (normalized.includes('send')) return 'send_failed';
+    return 'other';
   }
 
   /**

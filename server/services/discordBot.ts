@@ -22,6 +22,18 @@ export class DiscordBotService {
     });
   }
 
+  private getChannelMetricType(channel: any): string | number | undefined {
+    if (!channel) {
+      return undefined;
+    }
+
+    if (typeof channel.type !== 'undefined') {
+      return channel.type as string | number;
+    }
+
+    return undefined;
+  }
+
   private setupEventHandlers() {
     this.client.once(Events.ClientReady, (readyClient) => {
       console.log(`🤖 Discord bot ready! Logged in as ${readyClient.user.tag}`);
@@ -258,14 +270,16 @@ export class DiscordBotService {
           // Send response to Discord with single send method
           try {
             await message.reply(response);
-            
+
             // 📊 Track Discord reply message
-            prometheusMetrics.trackDiscordMessage('reply', 'name' in message.channel ? message.channel.name || undefined : undefined, shouldRespond.triggerType);
+            const replyChannelType = this.getChannelMetricType(message.channel);
+            prometheusMetrics.trackDiscordMessage('reply', replyChannelType, shouldRespond.triggerType);
           } catch (discordError) {
             console.error(`❌ Discord API error sending message:`, discordError);
             
             // 📊 Track Discord error
-            prometheusMetrics.trackDiscordMessage('error', undefined, 'send_failed');
+            const errorChannelType = this.getChannelMetricType(message.channel);
+            prometheusMetrics.trackDiscordMessage('error', errorChannelType, 'send_failed');
             
             // Don't try fallback to prevent duplicate messages
             // Log the failure but don't crash
@@ -1095,7 +1109,8 @@ export class DiscordBotService {
         await channel.send(proactiveMessage);
         
         // 📊 Track proactive message
-        prometheusMetrics.trackDiscordMessage('proactive', channel.name, 'scheduled');
+        const proactiveChannelType = this.getChannelMetricType(channel);
+        prometheusMetrics.trackDiscordMessage('proactive', proactiveChannelType, 'scheduled');
 
         // Log this as a conversation
         await storage.logDiscordConversation({
