@@ -1,3 +1,8 @@
+import { AlertTriangle, BookOpen, Brain, CalendarClock, Flame, Sparkles, Workflow } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import type { ChaosState, Document, MemoryStats, PersonalityState, TimelineAuditResult } from '@/types';
 import { AlertTriangle, BookOpen, Brain, Sparkles, Workflow } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +25,9 @@ interface SystemOperationsSummaryProps {
   documents?: Document[];
   chaosState?: ChaosState | null;
   personalityState?: PersonalityState | null;
+  timelineHealth?: TimelineAuditResult | null;
+  onRequestTimelineRepair?: () => void;
+  timelineRepairPending?: boolean;
 }
 
 function getDocumentsByStatus(documents: Document[] = []): DocumentsByStatus {
@@ -37,6 +45,9 @@ export default function SystemOperationsSummary({
   documents,
   chaosState,
   personalityState,
+  timelineHealth,
+  onRequestTimelineRepair,
+  timelineRepairPending,
 }: SystemOperationsSummaryProps) {
   const docsByStatus = getDocumentsByStatus(documents);
   const documentBacklog = docsByStatus.PENDING + docsByStatus.PROCESSING;
@@ -53,6 +64,9 @@ export default function SystemOperationsSummary({
 
   const effectiveChaos = chaosState?.effectiveLevel ?? chaosState?.level ?? 0;
   const manualOverrideActive = typeof chaosState?.manualOverride === 'number';
+  const chaosPresetSuggestion = personalityState?.chaosInfluence?.suggestedPreset
+    ?? personalityState?.chaosInfluence?.presetSuggestion;
+  const chaosSpiceCap = personalityState?.chaosInfluence?.spiceCap;
 
   const currentPreset = personalityState?.effectivePersonality.preset ?? 'Unknown';
   const currentIntensity = personalityState?.effectivePersonality.intensity?.toUpperCase?.() ?? '—';
@@ -63,6 +77,7 @@ export default function SystemOperationsSummary({
   const baseDbDLens = personalityState?.basePersonality.dbd_lens;
   const timelineIssues = timelineHealth?.flaggedMemories.length ?? 0;
   const timelineRunAt = timelineHealth?.runAt ? new Date(timelineHealth.runAt).toLocaleString() : null;
+  const orientationSummary = timelineHealth?.orientationSummary;
 
   const factsPerConversation = memoryStats?.conversations
     ? (memoryStats.totalFacts / memoryStats.conversations).toFixed(1)
@@ -293,6 +308,26 @@ export default function SystemOperationsSummary({
               </div>
               {timelineRunAt && (
                 <p className="text-[11px] text-muted-foreground">Last audit: {timelineRunAt}</p>
+              )}
+              {orientationSummary && (
+                <div className="grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
+                  <div className="flex justify-between bg-background/60 px-2 py-1 rounded border border-border/40">
+                    <span>Future</span>
+                    <span className="text-foreground font-medium">{orientationSummary.future}</span>
+                  </div>
+                  <div className="flex justify-between bg-background/60 px-2 py-1 rounded border border-border/40">
+                    <span>Past</span>
+                    <span className="text-foreground font-medium">{orientationSummary.past}</span>
+                  </div>
+                  <div className="flex justify-between bg-background/60 px-2 py-1 rounded border border-border/40">
+                    <span>Ambiguous</span>
+                    <span className="text-foreground font-medium">{orientationSummary.ambiguous}</span>
+                  </div>
+                  <div className="flex justify-between bg-background/60 px-2 py-1 rounded border border-border/40">
+                    <span>None</span>
+                    <span className="text-foreground font-medium">{orientationSummary.none}</span>
+                  </div>
+                </div>
               )}
               {timelineHealth?.flaggedMemories.slice(0, 2).map((conflict) => (
                 <p key={conflict.memoryId} className="text-[11px] text-muted-foreground">
