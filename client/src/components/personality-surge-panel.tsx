@@ -7,34 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Settings, RotateCcw, Zap } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-
-interface PersonalityState {
-  basePersonality: {
-    preset: string;
-    intensity: 'low' | 'med' | 'high' | 'ultra';
-    dbd_lens: boolean;
-    spice: 'platform_safe' | 'normal' | 'spicy';
-  };
-  chaosInfluence?: {
-    reason: string;
-    intensityDelta: number;
-    suggestedPreset?: string;
-  };
-  effectivePersonality: {
-    preset: string;
-    intensity: 'low' | 'med' | 'high' | 'ultra';
-    dbd_lens: boolean;
-    spice: 'platform_safe' | 'normal' | 'spicy';
-  };
-  lastUpdated: string;
-  source: string;
-}
+import type { PersonalityState } from '@/types';
 
 export default function PersonalitySurgePanel() {
   const [showOverride, setShowOverride] = useState(false);
-  const [overridePreset, setOverridePreset] = useState<string>('');
-  const [overrideIntensity, setOverrideIntensity] = useState<string>('');
-  const [overrideSpice, setOverrideSpice] = useState<string>('');
+  const [overridePreset, setOverridePreset] = useState<string | undefined>();
+  const [overrideIntensity, setOverrideIntensity] = useState<string | undefined>();
+  const [overrideSpice, setOverrideSpice] = useState<string | undefined>();
   const queryClient = useQueryClient();
 
   // Get personality state from unified controller
@@ -50,9 +29,9 @@ export default function PersonalitySurgePanel() {
       queryClient.invalidateQueries({ queryKey: ['/api/personality/state'] });
       setShowOverride(false);
       // Clear override form
-      setOverridePreset('');
-      setOverrideIntensity('');
-      setOverrideSpice('');
+      setOverridePreset(undefined);
+      setOverrideIntensity(undefined);
+      setOverrideSpice(undefined);
     },
     onError: (error) => {
       console.error('Failed to set personality override:', error);
@@ -125,6 +104,7 @@ export default function PersonalitySurgePanel() {
   }
 
   const { basePersonality, effectivePersonality, chaosInfluence, source } = personalityState;
+  const chaosPresetSuggestion = chaosInfluence?.suggestedPreset ?? chaosInfluence?.presetSuggestion;
 
   return (
     <Card className="w-full max-w-md" data-testid="personality-surge-panel">
@@ -191,11 +171,16 @@ export default function PersonalitySurgePanel() {
         {/* Chaos Influence Display */}
         {chaosInfluence && (
           <div className="p-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
-            <div className="text-xs text-amber-700 dark:text-amber-300">
-              🎲 Chaos Influence: {chaosInfluence.reason}
-              {chaosInfluence.suggestedPreset && (
+            <div className="text-xs text-amber-700 dark:text-amber-300 space-y-1">
+              <div>🎲 Chaos Influence: {chaosInfluence.reason}</div>
+              {chaosPresetSuggestion && (
                 <div className="mt-1">
-                  Suggests: {chaosInfluence.suggestedPreset}
+                  Suggests: {chaosPresetSuggestion}
+                </div>
+              )}
+              {chaosInfluence.spiceCap && (
+                <div className="mt-1">
+                  Spice cap: {chaosInfluence.spiceCap === 'platform_safe' ? 'SAFE' : chaosInfluence.spiceCap.toUpperCase()}
                 </div>
               )}
             </div>
@@ -212,12 +197,17 @@ export default function PersonalitySurgePanel() {
             <div className="space-y-2">
               <div>
                 <label className="text-xs text-muted-foreground">Preset</label>
-                <Select value={overridePreset} onValueChange={setOverridePreset}>
+                <Select
+                  value={overridePreset ?? undefined}
+                  onValueChange={(value) =>
+                    setOverridePreset(value === 'keep-current' ? undefined : value)
+                  }
+                >
                   <SelectTrigger className="h-8 text-xs" data-testid="select-override-preset">
                     <SelectValue placeholder="Keep current" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Keep current</SelectItem>
+                    <SelectItem value="keep-current">Keep current</SelectItem>
                     <SelectItem value="Chill Nicky">Chill Nicky</SelectItem>
                     <SelectItem value="Roast Mode">Roast Mode</SelectItem>
                     <SelectItem value="Unhinged">Unhinged</SelectItem>
@@ -231,12 +221,17 @@ export default function PersonalitySurgePanel() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-muted-foreground">Intensity</label>
-                  <Select value={overrideIntensity} onValueChange={setOverrideIntensity}>
+                  <Select
+                    value={overrideIntensity ?? undefined}
+                    onValueChange={(value) =>
+                      setOverrideIntensity(value === 'keep-current' ? undefined : value)
+                    }
+                  >
                     <SelectTrigger className="h-8 text-xs" data-testid="select-override-intensity">
                       <SelectValue placeholder="Keep" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Keep current</SelectItem>
+                      <SelectItem value="keep-current">Keep current</SelectItem>
                       <SelectItem value="low">Low</SelectItem>
                       <SelectItem value="med">Medium</SelectItem>
                       <SelectItem value="high">High</SelectItem>
@@ -247,12 +242,17 @@ export default function PersonalitySurgePanel() {
                 
                 <div>
                   <label className="text-xs text-muted-foreground">Spice</label>
-                  <Select value={overrideSpice} onValueChange={setOverrideSpice}>
+                  <Select
+                    value={overrideSpice ?? undefined}
+                    onValueChange={(value) =>
+                      setOverrideSpice(value === 'keep-current' ? undefined : value)
+                    }
+                  >
                     <SelectTrigger className="h-8 text-xs" data-testid="select-override-spice">
                       <SelectValue placeholder="Keep" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Keep current</SelectItem>
+                      <SelectItem value="keep-current">Keep current</SelectItem>
                       <SelectItem value="platform_safe">Safe</SelectItem>
                       <SelectItem value="normal">Normal</SelectItem>
                       <SelectItem value="spicy">Spicy</SelectItem>
