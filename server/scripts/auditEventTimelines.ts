@@ -29,6 +29,12 @@ async function main() {
   console.log(`   • Memories inspected: ${result.inspectedMemories}`);
   console.log(`   • Flagged memories: ${result.flaggedMemories.length}`);
   console.log(`   • Updates applied: ${result.updatesApplied}`);
+  if (result.orientationSummary) {
+    const { future, past, ambiguous, none } = result.orientationSummary;
+    console.log(
+      `   • Orientation summary: future=${future}, past=${past}, ambiguous=${ambiguous}, none=${none}`
+    );
+  }
 
   if (result.flaggedMemories.length > 0) {
     console.log("\n   Flagged entries:");

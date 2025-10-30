@@ -124,4 +124,10 @@ export interface TimelineAuditResult {
   updatesApplied: number;
   dryRun: boolean;
   runAt: string;
+  orientationSummary: {
+    future: number;
+    past: number;
+    ambiguous: number;
+    none: number;
+  };
 }
