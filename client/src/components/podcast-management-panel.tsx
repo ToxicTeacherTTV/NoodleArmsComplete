@@ -1129,10 +1129,10 @@ export default function PodcastManagementPanel() {
                 </div>
 
                 <Tabs
-                  value={episodeDetailTab}
-                  onValueChange={(value) => setEpisodeDetailTab(value as 'segments' | 'memories')}
-                  className="space-y-4"
-                >
+                value={episodeDetailTab}
+                onValueChange={(value) => setEpisodeDetailTab(value as 'segments' | 'memories')}
+                className="space-y-4"
+              >
                         <TabsList className="grid w-full grid-cols-2 md:w-auto">
                           <TabsTrigger value="segments">Segments</TabsTrigger>
                           <TabsTrigger value="memories">Memory Entries</TabsTrigger>
@@ -1289,6 +1289,7 @@ export default function PodcastManagementPanel() {
             )}
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   );

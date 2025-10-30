@@ -30,7 +30,6 @@ import { IntelligenceDashboard } from "@/components/intelligence-dashboard";
 import PodcastManagementPanel from "@/components/podcast-management-panel";
 import SystemOperationsSummary from "@/components/system-operations-summary";
 import type { ChaosState, MemoryStats, PersonalityState, Document as KnowledgeDocument, TimelineAuditResult } from "@/types";
-import type { ChaosState, MemoryStats, PersonalityState, Document as KnowledgeDocument } from "@/types";
 
 interface MemoryFact {
   id: string;
