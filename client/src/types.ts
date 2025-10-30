@@ -89,6 +89,8 @@ export interface PersonalityState {
     reason: string;
     intensityDelta: number;
     suggestedPreset?: string;
+    presetSuggestion?: string;
+    spiceCap?: 'platform_safe' | 'normal' | 'spicy';
   };
   effectivePersonality: {
     preset: string;
@@ -98,4 +100,28 @@ export interface PersonalityState {
   };
   lastUpdated: string;
   source: string;
+}
+
+export interface TimelineConflict {
+  eventId: string;
+  eventName: string;
+  eventDate?: string | null;
+  memoryId: string;
+  memoryExcerpt: string;
+  existingStatus: 'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS';
+  suggestedStatus: 'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS';
+  orientation: 'FUTURE' | 'PAST';
+  eventPosition: 'FUTURE' | 'PAST' | 'PRESENT' | 'UNKNOWN';
+  conflictType: 'STALE_FUTURE' | 'STALE_PAST' | 'INTERNAL_CONFLICT';
+  note: string;
+}
+
+export interface TimelineAuditResult {
+  inspectedEvents: number;
+  inspectedMemories: number;
+  flaggedMemories: TimelineConflict[];
+  skippedEvents: Array<{ eventId: string; reason: string }>;
+  updatesApplied: number;
+  dryRun: boolean;
+  runAt: string;
 }
