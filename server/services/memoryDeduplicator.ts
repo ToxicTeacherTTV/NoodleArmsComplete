@@ -491,20 +491,10 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
   ): Promise<number> {
     console.log(`🚀 Auto-merging high-confidence duplicates using VECTOR EMBEDDINGS (threshold: ${autoMergeThreshold})`);
 
-    const MAX_AUTOMERGE_CANDIDATES = 2500;
+    const MAX_AUTOMERGE_CANDIDATES = 5000;
 
-    let memories: MemoryEntry[] = [];
-    try {
-      // 🚀 Use vector-based detection (same as deep scan!)
-      memories = await storage.getRecentMemoriesWithEmbeddings(profileId, MAX_AUTOMERGE_CANDIDATES);
-    } catch (error: any) {
-      if (error?.code === '57P01' || error?.message?.includes('terminating connection')) {
-        console.error('⚠️ Database connection terminated while loading auto-merge candidates. Try running again to continue.');
-        return 0;
-      }
-
-      throw error;
-    }
+    // 🚀 Use vector-based detection (same as deep scan!)
+    const memories = await storage.getRecentMemoriesWithEmbeddings(profileId, MAX_AUTOMERGE_CANDIDATES);
 
     if (memories.length === MAX_AUTOMERGE_CANDIDATES) {
       console.log(
