@@ -1,8 +1,7 @@
-import { AlertTriangle, BookOpen, Brain, CalendarClock, Flame, Sparkles, Workflow } from 'lucide-react';
+import { AlertTriangle, BookOpen, Brain, Sparkles, Workflow } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import type { ChaosState, Document, MemoryStats, PersonalityState, TimelineAuditResult } from '@/types';
+import type { ChaosState, Document, MemoryStats, PersonalityState } from '@/types';
 
 type DocumentsByStatus = Record<'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED', number>;
 
@@ -21,9 +20,6 @@ interface SystemOperationsSummaryProps {
   documents?: Document[];
   chaosState?: ChaosState | null;
   personalityState?: PersonalityState | null;
-  timelineHealth?: TimelineAuditResult | null;
-  onRequestTimelineRepair?: () => void;
-  timelineRepairPending?: boolean;
 }
 
 function getDocumentsByStatus(documents: Document[] = []): DocumentsByStatus {
@@ -41,9 +37,6 @@ export default function SystemOperationsSummary({
   documents,
   chaosState,
   personalityState,
-  timelineHealth,
-  onRequestTimelineRepair,
-  timelineRepairPending,
 }: SystemOperationsSummaryProps) {
   const docsByStatus = getDocumentsByStatus(documents);
   const documentBacklog = docsByStatus.PENDING + docsByStatus.PROCESSING;
@@ -60,9 +53,6 @@ export default function SystemOperationsSummary({
 
   const effectiveChaos = chaosState?.effectiveLevel ?? chaosState?.level ?? 0;
   const manualOverrideActive = typeof chaosState?.manualOverride === 'number';
-  const chaosPresetSuggestion = personalityState?.chaosInfluence?.suggestedPreset
-    ?? personalityState?.chaosInfluence?.presetSuggestion;
-  const chaosSpiceCap = personalityState?.chaosInfluence?.spiceCap;
 
   const currentPreset = personalityState?.effectivePersonality.preset ?? 'Unknown';
   const currentIntensity = personalityState?.effectivePersonality.intensity?.toUpperCase?.() ?? '—';
@@ -109,6 +99,7 @@ export default function SystemOperationsSummary({
 
   if (timelineIssues > 0) {
     actionItems.push(`Timeline audit flagged ${timelineIssues} event fact${timelineIssues === 1 ? '' : 's'} for review.`);
+    actionItems.push(`Chaos influence active: ${personalityState.chaosInfluence.reason}.`);
   }
 
   if (actionItems.length === 0) {
@@ -139,6 +130,15 @@ export default function SystemOperationsSummary({
               <div className="flex flex-wrap gap-2 text-xs">
                 <Badge variant="secondary">Intensity {currentIntensity}</Badge>
                 <Badge variant="secondary">Spice {currentSpice === 'platform_safe' ? 'SAFE' : currentSpice.toUpperCase()}</Badge>
+          <div className="rounded-lg border border-border/60 bg-muted/40 p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <Brain className="h-4 w-4" /> Personality & Chaos
+            </div>
+            <div className="mt-3 space-y-2">
+              <div className="text-2xl font-semibold">{currentPreset}</div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Badge variant="secondary">Intensity {currentIntensity}</Badge>
+                <Badge variant="secondary">Spice {currentSpice.toUpperCase()}</Badge>
                 <Badge variant="outline">Chaos {Math.round(effectiveChaos)}%</Badge>
               </div>
               {chaosState?.mode && (
@@ -203,6 +203,11 @@ export default function SystemOperationsSummary({
               <AlertTriangle className="h-4 w-4 text-orange-500" /> Flagging System
             </div>
             <div className="space-y-2">
+          <div className="rounded-lg border border-border/60 bg-muted/40 p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <AlertTriangle className="h-4 w-4 text-orange-500" /> Flagging System
+            </div>
+            <div className="mt-3 space-y-2">
               <div className="text-2xl font-semibold">{pendingFlags}</div>
               <p className="text-xs text-muted-foreground">Pending safety reviews</p>
               <div className="flex flex-wrap gap-2 text-xs">
@@ -233,6 +238,14 @@ export default function SystemOperationsSummary({
               <BookOpen className="h-4 w-4" /> Document Ingestion
             </div>
             <div className="space-y-2">
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border/60 bg-muted/40 p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <BookOpen className="h-4 w-4" /> Document Ingestion
+            </div>
+            <div className="mt-3 space-y-2">
               <div className="text-2xl font-semibold">{completedDocuments}</div>
               <p className="text-xs text-muted-foreground">Docs fully processed</p>
               <div className="flex flex-wrap gap-2 text-xs">
