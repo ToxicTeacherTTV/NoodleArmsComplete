@@ -104,6 +104,7 @@ export default function PersonalitySurgePanel() {
   }
 
   const { basePersonality, effectivePersonality, chaosInfluence, source } = personalityState;
+  const chaosPresetSuggestion = chaosInfluence?.suggestedPreset ?? chaosInfluence?.presetSuggestion;
 
   return (
     <Card className="w-full max-w-md" data-testid="personality-surge-panel">
@@ -170,11 +171,16 @@ export default function PersonalitySurgePanel() {
         {/* Chaos Influence Display */}
         {chaosInfluence && (
           <div className="p-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
-            <div className="text-xs text-amber-700 dark:text-amber-300">
-              🎲 Chaos Influence: {chaosInfluence.reason}
-              {chaosInfluence.suggestedPreset && (
+            <div className="text-xs text-amber-700 dark:text-amber-300 space-y-1">
+              <div>🎲 Chaos Influence: {chaosInfluence.reason}</div>
+              {chaosPresetSuggestion && (
                 <div className="mt-1">
-                  Suggests: {chaosInfluence.suggestedPreset}
+                  Suggests: {chaosPresetSuggestion}
+                </div>
+              )}
+              {chaosInfluence.spiceCap && (
+                <div className="mt-1">
+                  Spice cap: {chaosInfluence.spiceCap === 'platform_safe' ? 'SAFE' : chaosInfluence.spiceCap.toUpperCase()}
                 </div>
               )}
             </div>
