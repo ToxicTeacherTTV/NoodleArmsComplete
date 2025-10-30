@@ -1,5 +1,5 @@
 import { db } from "../db.js";
-import { contentFlags, flagAutoApprovals } from "../../shared/schema.js";
+import { contentFlags, flagAutoApprovals, flagAutoApprovalFlagLinks } from "../../shared/schema.js";
 import { eq, and, sql, inArray } from "drizzle-orm";
 
 /**
@@ -131,23 +131,43 @@ export class FlagAutoApprovalService {
 
     // Update or create daily stats
     if (approvedFlagIds.length > 0) {
-      if (dailyStats) {
-        await db
-          .update(flagAutoApprovals)
-          .set({
-            approvalCount: currentCount + approvedFlagIds.length,
-            flagIds: sql`array_cat(flag_ids, ARRAY[${sql.join(approvedFlagIds.map(id => sql`${id}`), sql`, `)}]::text[])`,
-            updatedAt: new Date(),
-          })
-          .where(eq(flagAutoApprovals.id, dailyStats.id));
-      } else {
-        await db.insert(flagAutoApprovals).values({
-          profileId,
-          approvalDate: today,
-          approvalCount: approvedFlagIds.length,
-          flagIds: approvedFlagIds,
-        });
-      }
+      await db.transaction(async (tx) => {
+        let autoApprovalId: string;
+
+        if (dailyStats) {
+          const [updated] = await tx
+            .update(flagAutoApprovals)
+            .set({
+              approvalCount: currentCount + approvedFlagIds.length,
+              updatedAt: new Date(),
+            })
+            .where(eq(flagAutoApprovals.id, dailyStats.id))
+            .returning({ id: flagAutoApprovals.id });
+          autoApprovalId = updated.id;
+        } else {
+          const [created] = await tx
+            .insert(flagAutoApprovals)
+            .values({
+              profileId,
+              approvalDate: today,
+              approvalCount: approvedFlagIds.length,
+            })
+            .returning({ id: flagAutoApprovals.id });
+          autoApprovalId = created.id;
+        }
+
+        const linkValues = approvedFlagIds.map((flagId) => ({
+          autoApprovalId,
+          flagId,
+        }));
+
+        if (linkValues.length > 0) {
+          await tx
+            .insert(flagAutoApprovalFlagLinks)
+            .values(linkValues)
+            .onConflictDoNothing();
+        }
+      });
     }
 
     console.log(`✅ Auto-approved ${approvedFlagIds.length} flags (${skipped} skipped)`);
@@ -205,13 +225,28 @@ export class FlagAutoApprovalService {
       ),
     });
 
-    if (!dailyStats || !dailyStats.flagIds || dailyStats.flagIds.length === 0) {
+    if (!dailyStats || dailyStats.approvalCount === 0) {
       return null;
     }
 
+    const flagLinks = await db
+      .select({ flagId: flagAutoApprovalFlagLinks.flagId })
+      .from(flagAutoApprovalFlagLinks)
+      .where(eq(flagAutoApprovalFlagLinks.autoApprovalId, dailyStats.id));
+
+    if (flagLinks.length === 0) {
+      return {
+        date: targetDate,
+        totalApproved: dailyStats.approvalCount || 0,
+        flags: [],
+        categoryBreakdown: {},
+      };
+    }
+
     // Fetch the actual flags
+    const flagIds = flagLinks.map((link) => link.flagId);
     const flags = await db.query.contentFlags.findMany({
-      where: sql`${contentFlags.id} = ANY(${dailyStats.flagIds})`,
+      where: inArray(contentFlags.id, flagIds),
     });
 
     // Calculate category breakdown
@@ -264,14 +299,21 @@ export class FlagAutoApprovalService {
       }
 
       // Fetch flags for category trends
-      if (day.flagIds && day.flagIds.length > 0) {
-        const flags = await db.query.contentFlags.findMany({
-          where: inArray(contentFlags.id, day.flagIds),
-        });
-        
-        flags.forEach(flag => {
-          categoryTrends[flag.flagType] = (categoryTrends[flag.flagType] || 0) + 1;
-        });
+      if (day.approvalCount && day.approvalCount > 0) {
+        const flagLinks = await db
+          .select({ flagId: flagAutoApprovalFlagLinks.flagId })
+          .from(flagAutoApprovalFlagLinks)
+          .where(eq(flagAutoApprovalFlagLinks.autoApprovalId, day.id));
+
+        if (flagLinks.length > 0) {
+          const flags = await db.query.contentFlags.findMany({
+            where: inArray(contentFlags.id, flagLinks.map((link) => link.flagId)),
+          });
+
+          flags.forEach(flag => {
+            categoryTrends[flag.flagType] = (categoryTrends[flag.flagType] || 0) + 1;
+          });
+        }
       }
     }
 
