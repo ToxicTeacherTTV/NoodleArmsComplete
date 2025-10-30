@@ -1,5 +1,4 @@
 import { sql, eq, inArray } from "drizzle-orm";
-import { sql, eq } from "drizzle-orm";
 import { db } from "../db";
 import {
   events,
@@ -87,7 +86,6 @@ interface MemoryWithOrientation {
 interface EventWithMemories {
   event: Event;
   memories: MemoryWithOrientation[];
-  memories: MemoryEntry[];
 }
 
 class EventTimelineAuditor {
@@ -154,20 +152,6 @@ class EventTimelineAuditor {
       event: eventRecord,
       memories: memoryMap.get(eventRecord.id) ?? [],
     }));
-    const enrichedEvents: EventWithMemories[] = await Promise.all(
-      eventRecords.map(async (eventRecord) => {
-        const linkedMemories = await db
-          .select({ memory: memoryEntries })
-          .from(memoryEventLinks)
-          .innerJoin(memoryEntries, eq(memoryEventLinks.memoryId, memoryEntries.id))
-          .where(eq(memoryEventLinks.eventId, eventRecord.id));
-
-        return {
-          event: eventRecord,
-          memories: linkedMemories.map((row) => row.memory),
-        };
-      })
-    );
 
     let inspectedMemories = 0;
     let updatesApplied = 0;
@@ -188,7 +172,6 @@ class EventTimelineAuditor {
       const hasOrientationConflict = this.hasOrientationConflict(orientationCounts);
 
       if (!eventDate && !hasOrientationConflict) {
-      if (!eventDate && !this.hasOrientationConflict(memories)) {
         skippedEvents.push({
           eventId: event.id,
           reason: 'No event date and no conflicting temporal cues',
@@ -197,7 +180,6 @@ class EventTimelineAuditor {
       }
 
       if (eventPosition === 'UNKNOWN' && !hasOrientationConflict) {
-      if (eventPosition === 'UNKNOWN' && !this.hasOrientationConflict(memories)) {
         skippedEvents.push({
           eventId: event.id,
           reason: 'Unable to determine event timeline',
@@ -208,11 +190,6 @@ class EventTimelineAuditor {
       const orientationMajority = this.resolveMajorityOrientation(orientationCounts);
 
       for (const { memory, orientation } of memories) {
-      const orientationCounts = this.countOrientations(memories);
-      const orientationMajority = this.resolveMajorityOrientation(orientationCounts);
-
-      for (const memory of memories) {
-        const orientation = this.classifyMemoryOrientation(memory);
         if (orientation === 'NONE' || orientation === 'AMBIGUOUS') {
           continue;
         }
@@ -409,15 +386,6 @@ class EventTimelineAuditor {
   private countOrientations(memories: MemoryWithOrientation[]): Record<'FUTURE' | 'PAST', number> {
     return memories.reduce(
       (acc, { orientation }) => {
-  private hasOrientationConflict(memories: MemoryEntry[]): boolean {
-    const counts = this.countOrientations(memories);
-    return counts.FUTURE > 0 && counts.PAST > 0;
-  }
-
-  private countOrientations(memories: MemoryEntry[]): Record<'FUTURE' | 'PAST', number> {
-    return memories.reduce(
-      (acc, memory) => {
-        const orientation = this.classifyMemoryOrientation(memory);
         if (orientation === 'FUTURE' || orientation === 'PAST') {
           acc[orientation] += 1;
         }

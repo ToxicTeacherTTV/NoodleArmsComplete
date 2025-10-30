@@ -3,10 +3,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { ChaosState, Document, MemoryStats, PersonalityState, TimelineAuditResult } from '@/types';
-import { AlertTriangle, BookOpen, Brain, Sparkles, Workflow } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import type { ChaosState, Document, MemoryStats, PersonalityState } from '@/types';
 
 type DocumentsByStatus = Record<'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED', number>;
 
@@ -145,6 +141,9 @@ export default function SystemOperationsSummary({
               <div className="flex flex-wrap gap-2 text-xs">
                 <Badge variant="secondary">Intensity {currentIntensity}</Badge>
                 <Badge variant="secondary">Spice {currentSpice === 'platform_safe' ? 'SAFE' : currentSpice.toUpperCase()}</Badge>
+              </div>
+            </div>
+          </div>
           <div className="rounded-lg border border-border/60 bg-muted/40 p-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
               <Brain className="h-4 w-4" /> Personality & Chaos
@@ -218,6 +217,8 @@ export default function SystemOperationsSummary({
               <AlertTriangle className="h-4 w-4 text-orange-500" /> Flagging System
             </div>
             <div className="space-y-2">
+            </div>
+          </div>
           <div className="rounded-lg border border-border/60 bg-muted/40 p-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
               <AlertTriangle className="h-4 w-4 text-orange-500" /> Flagging System

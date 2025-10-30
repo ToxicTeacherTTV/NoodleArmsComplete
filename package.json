@@ -11,7 +11,6 @@
     "db:push": "drizzle-kit push",
     "db:backfill-integrity": "tsx server/scripts/backfillDataIntegrity.ts",
     "audit:timelines": "tsx server/scripts/auditEventTimelines.ts"
-    "db:backfill-integrity": "tsx server/scripts/backfillDataIntegrity.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",
