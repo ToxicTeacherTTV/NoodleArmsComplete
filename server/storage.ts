@@ -718,11 +718,6 @@ export class DatabaseStorage implements IStorage {
           embeddingModel: sql`COALESCE(EXCLUDED.embedding_model, ${memoryEntries.embeddingModel})`,
           embeddingUpdatedAt: sql`COALESCE(EXCLUDED.embedding_updated_at, ${memoryEntries.embeddingUpdatedAt})`,
           
-          // === Legacy entity linking (deprecated, but preserve if present) ===
-          personId: sql`COALESCE(EXCLUDED.person_id, ${memoryEntries.personId})`,
-          placeId: sql`COALESCE(EXCLUDED.place_id, ${memoryEntries.placeId})`,
-          eventId: sql`COALESCE(EXCLUDED.event_id, ${memoryEntries.eventId})`,
-          
           // === Array merging (keywords, relationships) ===
           keywords: sql`ARRAY(SELECT DISTINCT unnest(COALESCE(${memoryEntries.keywords}, ARRAY[]::text[]) || COALESCE(EXCLUDED.keywords, ARRAY[]::text[])))`,
           relationships: sql`ARRAY(SELECT DISTINCT unnest(COALESCE(${memoryEntries.relationships}, ARRAY[]::text[]) || COALESCE(EXCLUDED.relationships, ARRAY[]::text[])))`,
@@ -870,10 +865,6 @@ export class DatabaseStorage implements IStorage {
         embeddingModel: memoryEntries.embeddingModel,
         embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
         searchVector: memoryEntries.searchVector,
-        // NEW: Entity linking fields
-        personId: memoryEntries.personId,
-        placeId: memoryEntries.placeId,
-        eventId: memoryEntries.eventId,
         createdAt: memoryEntries.createdAt,
         updatedAt: memoryEntries.updatedAt,
         // Add relevance score from full-text search
@@ -2075,10 +2066,6 @@ export class DatabaseStorage implements IStorage {
         embeddingModel: memoryEntries.embeddingModel,
         embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
         searchVector: memoryEntries.searchVector,
-        // NEW: Entity linking fields
-        personId: memoryEntries.personId,
-        placeId: memoryEntries.placeId,
-        eventId: memoryEntries.eventId,
         createdAt: memoryEntries.createdAt,
         updatedAt: memoryEntries.updatedAt,
         relevance: sql<number>`ts_rank(${memoryEntries.searchVector}, to_tsquery('english', ${searchQuery}))`.as('relevance')
@@ -2331,11 +2318,24 @@ export class DatabaseStorage implements IStorage {
       throw new Error('One or both people not found');
     }
 
-    // Update all memories that reference the duplicate to reference the primary
-    await db
-      .update(memoryEntries)
-      .set({ personId: primaryId })
-      .where(eq(memoryEntries.personId, duplicateId));
+    // Update all memory links that reference the duplicate to reference the primary
+    const duplicateLinks = await db
+      .select({ id: memoryPeopleLinks.id, memoryId: memoryPeopleLinks.memoryId })
+      .from(memoryPeopleLinks)
+      .where(eq(memoryPeopleLinks.personId, duplicateId));
+
+    if (duplicateLinks.length > 0) {
+      const newLinks = duplicateLinks.map((link) => ({
+        memoryId: link.memoryId,
+        personId: primaryId,
+      }));
+
+      if (newLinks.length > 0) {
+        await db.insert(memoryPeopleLinks).values(newLinks).onConflictDoNothing();
+      }
+
+      await db.delete(memoryPeopleLinks).where(eq(memoryPeopleLinks.personId, duplicateId));
+    }
 
     // Use provided mergedData if available, otherwise auto-merge
     let updateData: Partial<Person>;
@@ -2421,11 +2421,24 @@ export class DatabaseStorage implements IStorage {
       throw new Error('One or both places not found');
     }
 
-    // Update all memories that reference the duplicate
-    await db
-      .update(memoryEntries)
-      .set({ placeId: primaryId })
-      .where(eq(memoryEntries.placeId, duplicateId));
+    // Update all memory links that reference the duplicate
+    const duplicateLinks = await db
+      .select({ id: memoryPlaceLinks.id, memoryId: memoryPlaceLinks.memoryId })
+      .from(memoryPlaceLinks)
+      .where(eq(memoryPlaceLinks.placeId, duplicateId));
+
+    if (duplicateLinks.length > 0) {
+      const newLinks = duplicateLinks.map((link) => ({
+        memoryId: link.memoryId,
+        placeId: primaryId,
+      }));
+
+      if (newLinks.length > 0) {
+        await db.insert(memoryPlaceLinks).values(newLinks).onConflictDoNothing();
+      }
+
+      await db.delete(memoryPlaceLinks).where(eq(memoryPlaceLinks.placeId, duplicateId));
+    }
 
     // Use provided mergedData if available, otherwise auto-merge
     let updateData: Partial<Place>;
@@ -2496,11 +2509,24 @@ export class DatabaseStorage implements IStorage {
       throw new Error('One or both events not found');
     }
 
-    // Update all memories that reference the duplicate
-    await db
-      .update(memoryEntries)
-      .set({ eventId: primaryId })
-      .where(eq(memoryEntries.eventId, duplicateId));
+    // Update all memory links that reference the duplicate
+    const duplicateLinks = await db
+      .select({ id: memoryEventLinks.id, memoryId: memoryEventLinks.memoryId })
+      .from(memoryEventLinks)
+      .where(eq(memoryEventLinks.eventId, duplicateId));
+
+    if (duplicateLinks.length > 0) {
+      const newLinks = duplicateLinks.map((link) => ({
+        memoryId: link.memoryId,
+        eventId: primaryId,
+      }));
+
+      if (newLinks.length > 0) {
+        await db.insert(memoryEventLinks).values(newLinks).onConflictDoNothing();
+      }
+
+      await db.delete(memoryEventLinks).where(eq(memoryEventLinks.eventId, duplicateId));
+    }
 
     // Use provided mergedData if available, otherwise auto-merge
     let updateData: Partial<Event>;
