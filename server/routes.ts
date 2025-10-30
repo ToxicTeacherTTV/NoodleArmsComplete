@@ -32,6 +32,41 @@ import { prometheusMetrics } from "./services/prometheusMetrics.js";
 import { documentStageTracker } from "./services/documentStageTracker";
 import { documentDuplicateDetector } from "./services/documentDuplicateDetector";
 import { embeddingService } from "./services/embeddingService";
+import { eventTimelineAuditor } from "./services/eventTimelineAuditor";
+
+type DuplicateScanGroupSummary = {
+  masterId: string;
+  masterPreview: string;
+  duplicates: Array<{
+    id: string;
+    similarity: number;
+    preview: string;
+  }>;
+  avgSimilarity: number;
+};
+
+type HydratedDuplicateGroup = {
+  masterId: string;
+  masterContent: string;
+  masterEntry?: {
+    id: string;
+    content: string;
+    source: string | null;
+    createdAt: Date | string | null;
+    confidence: number | null;
+    importance: number | null;
+  };
+  duplicates: Array<{
+    id: string;
+    content: string;
+    similarity: number;
+    source: string | null;
+    createdAt: Date | string;
+    confidence: number | null;
+    importance: number | null;
+  }>;
+  avgSimilarity: number;
+};
 
 // CRITICAL SECURITY: Add file size limits and type validation to prevent DoS attacks
 const SUPPORTED_FILE_TYPES = [
@@ -1761,6 +1796,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       scanCompleted = true;
       console.log(`✅ Scan completed: ${results.duplicateGroups.length} groups, ${results.totalDuplicates} duplicates`);
 
+      const groupsForPersistence: DuplicateScanGroupSummary[] = results.duplicateGroups.map((group) => ({
+        masterId: group.masterId,
+        masterPreview: group.masterContent.slice(0, 280),
+        avgSimilarity: group.duplicates.length > 0
+          ? group.duplicates.reduce((sum, dup) => sum + (dup.similarity ?? 0), 0) / group.duplicates.length
+          : 1,
+        duplicates: group.duplicates.map((dup) => ({
+          id: dup.id,
+          similarity: dup.similarity ?? 1,
+          preview: dup.content.slice(0, 280)
+        }))
+      }));
+
       // Try to save scan results to database (may timeout on large scans)
       let savedScanId = null;
       let savedSuccessfully = true;
@@ -1781,7 +1829,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           similarityThreshold: Math.round(similarityThreshold * 100),
           totalGroupsFound: results.duplicateGroups.length,
           totalDuplicatesFound: results.totalDuplicates,
-          duplicateGroups: results.duplicateGroups,
+          duplicateGroups: groupsForPersistence,
           status: 'ACTIVE'
         }).returning();
 
@@ -1789,7 +1837,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`💾 Saved scan results to database: ID ${savedScanId}`);
       } catch (saveError: any) {
         savedSuccessfully = false;
-        console.warn(`⚠️ Failed to save scan results to database (likely timeout): ${saveError.message}`);
+        const timeoutDetected = saveError?.code === '57P01' || saveError?.code === '57014';
+        const reason = timeoutDetected ? 'database timeout/termination' : saveError?.message;
+        console.warn(`⚠️ Failed to save scan results to database (${reason})`);
         console.warn('   Returning results to client anyway - they can still work with them in-memory');
       }
 
@@ -1843,12 +1893,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ hasSavedScan: false });
       }
 
+      const summaries = (savedScan.duplicateGroups || []) as DuplicateScanGroupSummary[];
+
+      let hydratedGroups: HydratedDuplicateGroup[] = [];
+
+      if (summaries.length > 0) {
+        const idSet = new Set<string>();
+        for (const group of summaries) {
+          idSet.add(group.masterId);
+          group.duplicates.forEach((dup) => idSet.add(dup.id));
+        }
+
+        const allIds = Array.from(idSet);
+        const entries = allIds.length > 0
+          ? await db
+              .select()
+              .from(memoryEntries)
+              .where(inArray(memoryEntries.id, allIds))
+          : [];
+
+        const entryMap = new Map(entries.map((entry) => [entry.id, entry]));
+
+        hydratedGroups = summaries.map((summary) => {
+          const masterEntry = entryMap.get(summary.masterId);
+          const safeMaster = masterEntry
+            ? {
+                id: masterEntry.id,
+                content: masterEntry.content,
+                source: masterEntry.source ?? null,
+                createdAt: masterEntry.createdAt,
+                confidence: masterEntry.confidence ?? null,
+                importance: masterEntry.importance ?? null,
+              }
+            : undefined;
+
+          const duplicates = summary.duplicates.map((dup) => {
+            const duplicateEntry = entryMap.get(dup.id);
+            if (duplicateEntry) {
+              return {
+                id: duplicateEntry.id,
+                content: duplicateEntry.content,
+                similarity: dup.similarity,
+                source: duplicateEntry.source ?? null,
+                createdAt: duplicateEntry.createdAt,
+                confidence: duplicateEntry.confidence ?? null,
+                importance: duplicateEntry.importance ?? null,
+              };
+            }
+
+            return {
+              id: dup.id,
+              content: dup.preview,
+              similarity: dup.similarity,
+              source: 'unknown',
+              importance: 0,
+              createdAt: new Date().toISOString(),
+              confidence: null,
+            };
+          });
+
+          const masterContent = safeMaster?.content ?? summary.masterPreview;
+
+          return {
+            masterId: summary.masterId,
+            masterContent,
+            masterEntry: safeMaster,
+            duplicates,
+            avgSimilarity: summary.avgSimilarity,
+          };
+        });
+      }
+
       res.json({
         hasSavedScan: true,
         scanId: savedScan.id,
         scanDepth: savedScan.scanDepth === -1 ? 'ALL' : savedScan.scanDepth,
         similarityThreshold: savedScan.similarityThreshold / 100,
-        duplicateGroups: savedScan.duplicateGroups || [],
+        duplicateGroups: hydratedGroups,
         totalDuplicates: savedScan.totalDuplicatesFound,
         scannedCount: savedScan.scanDepth === -1 ? 'ALL' : savedScan.scanDepth,
         createdAt: savedScan.createdAt
@@ -4055,6 +4176,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/entities/events/timeline-health', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const result = await eventTimelineAuditor.audit({ profileId: profile.id, dryRun: true });
+      res.json(result);
+    } catch (error) {
+      console.error('Error auditing event timelines:', error);
+      res.status(500).json({ error: 'Failed to audit event timelines' });
+    }
+  });
+
+  app.post('/api/entities/events/timeline-repair', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const dryRun = Boolean(req.body?.dryRun);
+      const result = await eventTimelineAuditor.audit({ profileId: profile.id, dryRun });
+      res.json(result);
+    } catch (error) {
+      console.error('Error repairing event timelines:', error);
+      res.status(500).json({ error: 'Failed to repair event timelines' });
+    }
+  });
+
   // People routes
   app.post('/api/entities/people', async (req, res) => {
     try {
@@ -5583,12 +5735,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/podcast/episodes/:id', async (req, res) => {
     try {
       const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
       const episode = await storage.getPodcastEpisode(id);
-      
-      if (!episode) {
+
+      if (!episode || episode.profileId !== activeProfile.id) {
         return res.status(404).json({ error: 'Episode not found' });
       }
-      
+
       res.json(episode);
     } catch (error) {
       console.error('Error fetching podcast episode:', error);
@@ -5618,7 +5775,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const updates = req.body;
-      
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const episode = await storage.getPodcastEpisode(id);
+      if (!episode || episode.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Episode not found' });
+      }
+
       const updatedEpisode = await storage.updatePodcastEpisode(id, updates);
       res.json(updatedEpisode);
     } catch (error) {
@@ -5631,6 +5797,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/podcast/episodes/:id', async (req, res) => {
     try {
       const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const episode = await storage.getPodcastEpisode(id);
+      if (!episode || episode.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Episode not found' });
+      }
+
       await storage.deletePodcastEpisode(id);
       res.json({ success: true });
     } catch (error) {
@@ -5643,6 +5819,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/podcast/episodes/:episodeId/segments', async (req, res) => {
     try {
       const { episodeId } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const episode = await storage.getPodcastEpisode(episodeId);
+      if (!episode || episode.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Episode not found' });
+      }
+
       const segments = await storage.getEpisodeSegments(episodeId);
       res.json(segments);
     } catch (error) {
@@ -5655,6 +5841,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/podcast/segments', async (req, res) => {
     try {
       const segmentData = req.body;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      if (!segmentData?.episodeId) {
+        return res.status(400).json({ error: 'Episode ID is required' });
+      }
+
+      const episode = await storage.getPodcastEpisode(segmentData.episodeId);
+      if (!episode || episode.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Episode not found' });
+      }
+
       const segment = await storage.createPodcastSegment(segmentData);
       res.status(201).json(segment);
     } catch (error) {
@@ -5668,7 +5868,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const updates = req.body;
-      
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const segment = await storage.getPodcastSegment(id);
+      if (!segment) {
+        return res.status(404).json({ error: 'Segment not found' });
+      }
+
+      const episode = await storage.getPodcastEpisode(segment.episodeId);
+      if (!episode || episode.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Segment not found' });
+      }
+
       const updatedSegment = await storage.updatePodcastSegment(id, updates);
       res.json(updatedSegment);
     } catch (error) {
@@ -5681,6 +5895,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/podcast/segments/:id', async (req, res) => {
     try {
       const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const segment = await storage.getPodcastSegment(id);
+      if (!segment) {
+        return res.status(404).json({ error: 'Segment not found' });
+      }
+
+      const episode = await storage.getPodcastEpisode(segment.episodeId);
+      if (!episode || episode.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Segment not found' });
+      }
+
       await storage.deletePodcastSegment(id);
       res.json({ success: true });
     } catch (error) {
@@ -5693,10 +5922,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/podcast/episodes/:id/parse-segments', async (req, res) => {
     try {
       const { id } = req.params;
-      
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
       // Get the episode and its transcript
       const episode = await storage.getPodcastEpisode(id);
-      if (!episode) {
+      if (!episode || episode.profileId !== activeProfile.id) {
         return res.status(404).json({ error: 'Episode not found' });
       }
 
@@ -5758,10 +5991,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/podcast/episodes/:id/extract-facts', async (req, res) => {
     try {
       const { id } = req.params;
-      
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
       // Get the episode and its transcript
       const episode = await storage.getPodcastEpisode(id);
-      if (!episode) {
+      if (!episode || episode.profileId !== activeProfile.id) {
         return res.status(404).json({ error: 'Episode not found' });
       }
 
@@ -5811,15 +6048,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/podcast/episodes/:id/memories', async (req, res) => {
     try {
       const { id } = req.params;
-      
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
       const episode = await storage.getPodcastEpisode(id);
-      if (!episode) {
+      if (!episode || episode.profileId !== activeProfile.id) {
         return res.status(404).json({ error: 'Episode not found' });
       }
 
       const memories = await storage.getMemoriesBySource(
-        episode.profileId, 
-        id, 
+        activeProfile.id,
+        id,
         'podcast_episode'
       );
       

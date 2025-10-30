@@ -96,7 +96,11 @@ export const documents = pgTable("documents", {
   retrievalCount: integer("retrieval_count").default(0),
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
-});
+}, (table) => ({
+  uniqueContentHash: uniqueIndex("unique_document_content_hash_idx")
+    .on(table.profileId, table.contentHash)
+    .where(sql`${table.contentHash} IS NOT NULL`),
+}));
 
 export const consolidatedPersonalities = pgTable("consolidated_personalities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -130,7 +134,7 @@ export const memoryEntries = pgTable("memory_entries", {
   firstSeenAt: timestamp("first_seen_at").default(sql`now()`),
   lastSeenAt: timestamp("last_seen_at").default(sql`now()`),
   contradictionGroupId: varchar("contradiction_group_id"), // Groups conflicting facts together
-  canonicalKey: text("canonical_key"), // Unique key for fact deduplication
+  canonicalKey: text("canonical_key").notNull(), // Unique key for fact deduplication
   status: text("status").$type<'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'>().default('ACTIVE'),
   isProtected: boolean("is_protected").default(false), // Protected facts can't be deprecated by contradictions
   // Hierarchical fact support  
@@ -143,11 +147,6 @@ export const memoryEntries = pgTable("memory_entries", {
   embeddingUpdatedAt: timestamp("embedding_updated_at"), // When embedding was last generated
   // PostgreSQL Full-Text Search support
   searchVector: tsvector("search_vector"),
-  
-  // === NEW: Entity linking (nullable for backward compatibility) ===
-  personId: varchar("person_id").references(() => people.id),
-  placeId: varchar("place_id").references(() => places.id),
-  eventId: varchar("event_id").references(() => events.id),
   
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
@@ -180,7 +179,9 @@ export const people = pgTable("people", {
   description: text("description"), // AI-generated summary
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
-});
+}, (table) => ({
+  uniqueCanonicalName: uniqueIndex("unique_person_profile_name_idx").on(table.profileId, table.canonicalName),
+}));
 
 // The "Atlas" for all significant locations
 export const places = pgTable("places", {
@@ -191,7 +192,9 @@ export const places = pgTable("places", {
   description: text("description"),
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
-});
+}, (table) => ({
+  uniqueCanonicalName: uniqueIndex("unique_place_profile_name_idx").on(table.profileId, table.canonicalName),
+}));
 
 // The "Chronicle" for the timeline of events
 export const events = pgTable("events", {
@@ -203,7 +206,9 @@ export const events = pgTable("events", {
   isCanonical: boolean("is_canonical").default(true),
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
-});
+}, (table) => ({
+  uniqueCanonicalName: uniqueIndex("unique_event_profile_name_idx").on(table.profileId, table.canonicalName),
+}));
 
 // Junction tables for many-to-many memory-entity relationships
 export const memoryPeopleLinks = pgTable("memory_people_links", {
@@ -211,21 +216,27 @@ export const memoryPeopleLinks = pgTable("memory_people_links", {
   memoryId: varchar("memory_id").references(() => memoryEntries.id, { onDelete: 'cascade' }).notNull(),
   personId: varchar("person_id").references(() => people.id, { onDelete: 'cascade' }).notNull(),
   createdAt: timestamp("created_at").default(sql`now()`),
-});
+}, (table) => ({
+  uniqueMemoryPerson: uniqueIndex("unique_memory_person_link_idx").on(table.memoryId, table.personId),
+}));
 
 export const memoryPlaceLinks = pgTable("memory_place_links", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   memoryId: varchar("memory_id").references(() => memoryEntries.id, { onDelete: 'cascade' }).notNull(),
   placeId: varchar("place_id").references(() => places.id, { onDelete: 'cascade' }).notNull(),
   createdAt: timestamp("created_at").default(sql`now()`),
-});
+}, (table) => ({
+  uniqueMemoryPlace: uniqueIndex("unique_memory_place_link_idx").on(table.memoryId, table.placeId),
+}));
 
 export const memoryEventLinks = pgTable("memory_event_links", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   memoryId: varchar("memory_id").references(() => memoryEntries.id, { onDelete: 'cascade' }).notNull(),
   eventId: varchar("event_id").references(() => events.id, { onDelete: 'cascade' }).notNull(),
   createdAt: timestamp("created_at").default(sql`now()`),
-});
+}, (table) => ({
+  uniqueMemoryEvent: uniqueIndex("unique_memory_event_link_idx").on(table.memoryId, table.eventId),
+}));
 
 // Duplicate Scan Results - Persistent storage for deep scan results
 export const duplicateScanResults = pgTable("duplicate_scan_results", {
@@ -239,7 +250,11 @@ export const duplicateScanResults = pgTable("duplicate_scan_results", {
   status: text("status").$type<'ACTIVE' | 'ARCHIVED'>().default('ACTIVE'),
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
-});
+}, (table) => ({
+  uniqueActiveScope: uniqueIndex("unique_duplicate_scan_scope_idx")
+    .on(table.profileId, table.scanDepth, table.similarityThreshold)
+    .where(sql`${table.status} = 'ACTIVE'`),
+}));
 
 // Content Library - For stories, AITA posts, entertainment content (separate from facts)
 export const contentLibrary = pgTable("content_library", {
@@ -313,19 +328,6 @@ export const memoryEntriesRelations = relations(memoryEntries, ({ one }) => ({
   profile: one(profiles, {
     fields: [memoryEntries.profileId],
     references: [profiles.id],
-  }),
-  // NEW: Entity relations
-  person: one(people, {
-    fields: [memoryEntries.personId],
-    references: [people.id],
-  }),
-  place: one(places, {
-    fields: [memoryEntries.placeId],
-    references: [places.id],
-  }),
-  event: one(events, {
-    fields: [memoryEntries.eventId],
-    references: [events.id],
   }),
 }));
 
@@ -791,9 +793,8 @@ export const contentFlags = pgTable("content_flags", {
   
   // Automation and patterns
   triggerPattern: text("trigger_pattern"), // What regex/pattern triggered this flag
-  relatedFlags: text("related_flags").array(), // IDs of related flags for batch processing
   actionTaken: text("action_taken"), // What automated action was taken
-  
+
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 }, (table) => {
@@ -827,13 +828,21 @@ export const insertContentFlagSchema = createInsertSchema(contentFlags).omit({
 export type ContentFlag = typeof contentFlags.$inferSelect;
 export type InsertContentFlag = z.infer<typeof insertContentFlagSchema>;
 
+export const contentFlagRelations = pgTable("content_flag_relations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  flagId: varchar("flag_id").references(() => contentFlags.id, { onDelete: 'cascade' }).notNull(),
+  relatedFlagId: varchar("related_flag_id").references(() => contentFlags.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`),
+}, (table) => ({
+  uniqueRelation: uniqueIndex("unique_content_flag_relation_idx").on(table.flagId, table.relatedFlagId),
+}));
+
 // Auto-Approval Tracking
 export const flagAutoApprovals = pgTable("flag_auto_approvals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   profileId: varchar("profile_id").references(() => profiles.id).notNull(),
   approvalDate: text("approval_date").notNull(), // YYYY-MM-DD format
   approvalCount: integer("approval_count").default(0), // Number of auto-approvals for this date
-  flagIds: text("flag_ids").array(), // IDs of flags auto-approved on this date
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 }, (table) => {
@@ -844,6 +853,15 @@ export const flagAutoApprovals = pgTable("flag_auto_approvals", {
     ),
   };
 });
+
+export const flagAutoApprovalFlagLinks = pgTable("flag_auto_approval_flag_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  autoApprovalId: varchar("auto_approval_id").references(() => flagAutoApprovals.id, { onDelete: 'cascade' }).notNull(),
+  flagId: varchar("flag_id").references(() => contentFlags.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`),
+}, (table) => ({
+  uniqueAutoApprovalFlag: uniqueIndex("unique_auto_approval_flag_idx").on(table.autoApprovalId, table.flagId),
+}));
 
 export type FlagAutoApproval = typeof flagAutoApprovals.$inferSelect;
 
