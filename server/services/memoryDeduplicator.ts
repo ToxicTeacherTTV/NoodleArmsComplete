@@ -299,7 +299,7 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
         model: 'gemini-2.5-pro', // 🚫 NEVER Flash - hallucinates during merging
         contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
         config: {
-          maxOutputTokens: 1000,
+          maxOutputTokens: 3000, // Increased to account for Gemini's "thinking tokens"
           temperature: 0.3
         }
       });
