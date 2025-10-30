@@ -24,6 +24,18 @@ export interface DuplicateGroup {
 }
 
 export class MemoryDeduplicator {
+
+  private chunkArray<T>(items: T[], chunkSize: number): T[][] {
+    if (chunkSize <= 0) {
+      return [items];
+    }
+
+    const chunks: T[][] = [];
+    for (let i = 0; i < items.length; i += chunkSize) {
+      chunks.push(items.slice(i, i + chunkSize));
+    }
+    return chunks;
+  }
   
   /**
    * Calculate text similarity using multiple techniques
@@ -418,9 +430,16 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
     duplicateGroup: DuplicateGroup
   ): Promise<void> {
     console.log(`🔄 Merging duplicate group: master ${duplicateGroup.masterEntry.id} with ${duplicateGroup.duplicates.length} duplicates`);
-    
+
     try {
       await db.transaction(async (tx) => {
+        try {
+          await tx.execute(sql`SET LOCAL statement_timeout TO '5s'`);
+          await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout TO '3s'`);
+        } catch (timeoutError) {
+          console.warn('⚠️ Unable to set local timeouts for merge transaction - continuing anyway', timeoutError);
+        }
+
         // Update the master entry with merged data
         await tx
           .update(memoryEntries)
@@ -436,14 +455,22 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
             updatedAt: sql`now()`
           })
           .where(eq(memoryEntries.id, duplicateGroup.masterEntry.id));
-        
+
         // Delete duplicate entries
         if (duplicateGroup.duplicates.length > 0) {
-          await tx
-            .delete(memoryEntries)
-            .where(inArray(memoryEntries.id, duplicateGroup.duplicates.map(d => d.id)));
+          const CHUNK_SIZE = 50;
+          const chunks = this.chunkArray(duplicateGroup.duplicates, CHUNK_SIZE);
+
+          for (const chunk of chunks) {
+            const ids = chunk.map(d => d.id);
+            console.log(`   🗑️ Removing ${ids.length} duplicates in this chunk`);
+
+            await tx
+              .delete(memoryEntries)
+              .where(inArray(memoryEntries.id, ids));
+          }
         }
-        
+
         console.log(`✅ Successfully merged duplicate group`);
       });
     } catch (error) {
@@ -528,7 +555,7 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
     let mergedCount = 0;
     let successCount = 0;
     let errorCount = 0;
-    const MAX_GROUPS_PER_RUN = 10; // Only process 10 groups per run to stay well under timeout
+    const MAX_GROUPS_PER_RUN = 6; // Only process a handful of groups per run to stay well under timeout
     const DELAY_BETWEEN_GROUPS = 200; // Small delay between each group
     
     const groupsToProcess = duplicateGroups.slice(0, MAX_GROUPS_PER_RUN);
