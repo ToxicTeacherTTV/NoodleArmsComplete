@@ -32,6 +32,7 @@ import { prometheusMetrics } from "./services/prometheusMetrics.js";
 import { documentStageTracker } from "./services/documentStageTracker";
 import { documentDuplicateDetector } from "./services/documentDuplicateDetector";
 import { embeddingService } from "./services/embeddingService";
+import { eventTimelineAuditor } from "./services/eventTimelineAuditor";
 
 // CRITICAL SECURITY: Add file size limits and type validation to prevent DoS attacks
 const SUPPORTED_FILE_TYPES = [
@@ -4055,6 +4056,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/entities/events/timeline-health', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const result = await eventTimelineAuditor.audit({ profileId: profile.id, dryRun: true });
+      res.json(result);
+    } catch (error) {
+      console.error('Error auditing event timelines:', error);
+      res.status(500).json({ error: 'Failed to audit event timelines' });
+    }
+  });
+
+  app.post('/api/entities/events/timeline-repair', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const dryRun = Boolean(req.body?.dryRun);
+      const result = await eventTimelineAuditor.audit({ profileId: profile.id, dryRun });
+      res.json(result);
+    } catch (error) {
+      console.error('Error repairing event timelines:', error);
+      res.status(500).json({ error: 'Failed to repair event timelines' });
+    }
+  });
+
   // People routes
   app.post('/api/entities/people', async (req, res) => {
     try {
@@ -5583,12 +5615,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/podcast/episodes/:id', async (req, res) => {
     try {
       const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
       const episode = await storage.getPodcastEpisode(id);
-      
-      if (!episode) {
+
+      if (!episode || episode.profileId !== activeProfile.id) {
         return res.status(404).json({ error: 'Episode not found' });
       }
-      
+
       res.json(episode);
     } catch (error) {
       console.error('Error fetching podcast episode:', error);
@@ -5618,7 +5655,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const updates = req.body;
-      
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const episode = await storage.getPodcastEpisode(id);
+      if (!episode || episode.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Episode not found' });
+      }
+
       const updatedEpisode = await storage.updatePodcastEpisode(id, updates);
       res.json(updatedEpisode);
     } catch (error) {
@@ -5631,6 +5677,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/podcast/episodes/:id', async (req, res) => {
     try {
       const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const episode = await storage.getPodcastEpisode(id);
+      if (!episode || episode.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Episode not found' });
+      }
+
       await storage.deletePodcastEpisode(id);
       res.json({ success: true });
     } catch (error) {
@@ -5643,6 +5699,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/podcast/episodes/:episodeId/segments', async (req, res) => {
     try {
       const { episodeId } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const episode = await storage.getPodcastEpisode(episodeId);
+      if (!episode || episode.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Episode not found' });
+      }
+
       const segments = await storage.getEpisodeSegments(episodeId);
       res.json(segments);
     } catch (error) {
@@ -5655,6 +5721,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/podcast/segments', async (req, res) => {
     try {
       const segmentData = req.body;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      if (!segmentData?.episodeId) {
+        return res.status(400).json({ error: 'Episode ID is required' });
+      }
+
+      const episode = await storage.getPodcastEpisode(segmentData.episodeId);
+      if (!episode || episode.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Episode not found' });
+      }
+
       const segment = await storage.createPodcastSegment(segmentData);
       res.status(201).json(segment);
     } catch (error) {
@@ -5668,7 +5748,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const updates = req.body;
-      
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const segment = await storage.getPodcastSegment(id);
+      if (!segment) {
+        return res.status(404).json({ error: 'Segment not found' });
+      }
+
+      const episode = await storage.getPodcastEpisode(segment.episodeId);
+      if (!episode || episode.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Segment not found' });
+      }
+
       const updatedSegment = await storage.updatePodcastSegment(id, updates);
       res.json(updatedSegment);
     } catch (error) {
@@ -5681,6 +5775,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/podcast/segments/:id', async (req, res) => {
     try {
       const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const segment = await storage.getPodcastSegment(id);
+      if (!segment) {
+        return res.status(404).json({ error: 'Segment not found' });
+      }
+
+      const episode = await storage.getPodcastEpisode(segment.episodeId);
+      if (!episode || episode.profileId !== activeProfile.id) {
+        return res.status(404).json({ error: 'Segment not found' });
+      }
+
       await storage.deletePodcastSegment(id);
       res.json({ success: true });
     } catch (error) {
@@ -5693,10 +5802,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/podcast/episodes/:id/parse-segments', async (req, res) => {
     try {
       const { id } = req.params;
-      
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
       // Get the episode and its transcript
       const episode = await storage.getPodcastEpisode(id);
-      if (!episode) {
+      if (!episode || episode.profileId !== activeProfile.id) {
         return res.status(404).json({ error: 'Episode not found' });
       }
 
@@ -5758,10 +5871,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/podcast/episodes/:id/extract-facts', async (req, res) => {
     try {
       const { id } = req.params;
-      
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
       // Get the episode and its transcript
       const episode = await storage.getPodcastEpisode(id);
-      if (!episode) {
+      if (!episode || episode.profileId !== activeProfile.id) {
         return res.status(404).json({ error: 'Episode not found' });
       }
 
@@ -5811,15 +5928,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/podcast/episodes/:id/memories', async (req, res) => {
     try {
       const { id } = req.params;
-      
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
       const episode = await storage.getPodcastEpisode(id);
-      if (!episode) {
+      if (!episode || episode.profileId !== activeProfile.id) {
         return res.status(404).json({ error: 'Episode not found' });
       }
 
       const memories = await storage.getMemoriesBySource(
-        episode.profileId, 
-        id, 
+        activeProfile.id,
+        id,
         'podcast_episode'
       );
       
