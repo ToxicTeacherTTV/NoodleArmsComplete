@@ -29,6 +29,7 @@ import ContentIngestionPanel from "@/components/content-ingestion-panel";
 import { IntelligenceDashboard } from "@/components/intelligence-dashboard";
 import PodcastManagementPanel from "@/components/podcast-management-panel";
 import SystemOperationsSummary from "@/components/system-operations-summary";
+import type { ChaosState, MemoryStats, PersonalityState, Document as KnowledgeDocument, TimelineAuditResult } from "@/types";
 import type { ChaosState, MemoryStats, PersonalityState, Document as KnowledgeDocument } from "@/types";
 
 interface MemoryFact {
@@ -153,6 +154,47 @@ export default function BrainManagement() {
   const { data: personalityState } = useQuery<PersonalityState>({
     queryKey: ['/api/personality/state'],
     refetchInterval: 5000,
+  });
+
+  const { data: timelineHealth } = useQuery<TimelineAuditResult>({
+    queryKey: ['/api/entities/events/timeline-health'],
+    refetchInterval: 60000,
+  });
+
+  const timelineRepairMutation = useMutation({
+    mutationFn: async (dryRun = false): Promise<TimelineAuditResult> => {
+      const response = await fetch('/api/entities/events/timeline-repair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reconcile event timelines');
+      }
+
+      return response.json();
+    },
+    onSuccess: (result) => {
+      toast({
+        title: result.updatesApplied > 0 ? 'Timeline reconciled' : 'Timeline audit complete',
+        description: result.updatesApplied > 0
+          ? `Marked ${result.updatesApplied} memory fact${result.updatesApplied === 1 ? '' : 's'} as ambiguous.`
+          : 'No changes were required. All event facts look consistent.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/entities/events/timeline-health'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/high-confidence'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/medium-confidence'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/low-confidence'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Timeline reconciliation failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
   });
 
   // Entity system queries
@@ -1589,6 +1631,9 @@ export default function BrainManagement() {
           documents={documents}
           chaosState={chaosState}
           personalityState={personalityState}
+          timelineHealth={timelineHealth}
+          onRequestTimelineRepair={() => timelineRepairMutation.mutate()}
+          timelineRepairPending={timelineRepairMutation.isPending}
         />
 
         {/* Search Bar & Sorting Controls */}
