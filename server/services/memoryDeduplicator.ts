@@ -463,9 +463,18 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
     autoMergeThreshold: number = 0.9
   ): Promise<number> {
     console.log(`🚀 Auto-merging high-confidence duplicates using VECTOR EMBEDDINGS (threshold: ${autoMergeThreshold})`);
-    
+
+    const MAX_AUTOMERGE_CANDIDATES = 5000;
+
     // 🚀 Use vector-based detection (same as deep scan!)
-    const memories = await storage.getRecentMemoriesWithEmbeddings(profileId, 999999);
+    const memories = await storage.getRecentMemoriesWithEmbeddings(profileId, MAX_AUTOMERGE_CANDIDATES);
+
+    if (memories.length === MAX_AUTOMERGE_CANDIDATES) {
+      console.log(
+        `⚠️ Loaded ${MAX_AUTOMERGE_CANDIDATES} memories (cap reached). Run again after resolving current duplicates to process older entries.`
+      );
+    }
+
     console.log(`📊 Processing ${memories.length} memories with stored embeddings...`);
     
     const duplicateGroups: DuplicateGroup[] = [];
