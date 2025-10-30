@@ -32,6 +32,7 @@ import { prometheusMetrics } from "./services/prometheusMetrics.js";
 import { documentStageTracker } from "./services/documentStageTracker";
 import { documentDuplicateDetector } from "./services/documentDuplicateDetector";
 import { embeddingService } from "./services/embeddingService";
+import { eventTimelineAuditor } from "./services/eventTimelineAuditor";
 
 // CRITICAL SECURITY: Add file size limits and type validation to prevent DoS attacks
 const SUPPORTED_FILE_TYPES = [
@@ -4052,6 +4053,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching entities:', error);
       res.status(500).json({ error: 'Failed to fetch entities' });
+    }
+  });
+
+  app.get('/api/entities/events/timeline-health', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const result = await eventTimelineAuditor.audit({ profileId: profile.id, dryRun: true });
+      res.json(result);
+    } catch (error) {
+      console.error('Error auditing event timelines:', error);
+      res.status(500).json({ error: 'Failed to audit event timelines' });
+    }
+  });
+
+  app.post('/api/entities/events/timeline-repair', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const dryRun = Boolean(req.body?.dryRun);
+      const result = await eventTimelineAuditor.audit({ profileId: profile.id, dryRun });
+      res.json(result);
+    } catch (error) {
+      console.error('Error repairing event timelines:', error);
+      res.status(500).json({ error: 'Failed to repair event timelines' });
     }
   });
 
