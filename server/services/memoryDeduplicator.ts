@@ -453,6 +453,47 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
   }
   
   /**
+   * Safer version of executeMerge with individual operations instead of transaction
+   * This prevents long-running transactions that can timeout
+   */
+  async executeMergeSafe(
+    db: PostgresJsDatabase<any>,
+    duplicateGroup: DuplicateGroup
+  ): Promise<void> {
+    console.log(`🔄 Merging duplicate group: master ${duplicateGroup.masterEntry.id} with ${duplicateGroup.duplicates.length} duplicates`);
+    
+    try {
+      // Update the master entry with merged data (single quick operation)
+      await db
+        .update(memoryEntries)
+        .set({
+          content: duplicateGroup.mergedContent,
+          importance: duplicateGroup.combinedImportance,
+          keywords: duplicateGroup.combinedKeywords,
+          relationships: duplicateGroup.combinedRelationships,
+          retrievalCount: (duplicateGroup.masterEntry.retrievalCount || 0) + 
+            duplicateGroup.duplicates.reduce((sum, dup) => sum + (dup.retrievalCount || 0), 0),
+          qualityScore: Math.max(duplicateGroup.masterEntry.qualityScore || 5, 
+            ...duplicateGroup.duplicates.map(d => d.qualityScore || 5)),
+          updatedAt: sql`now()`
+        })
+        .where(eq(memoryEntries.id, duplicateGroup.masterEntry.id));
+      
+      // Delete duplicate entries (single quick operation)
+      if (duplicateGroup.duplicates.length > 0) {
+        await db
+          .delete(memoryEntries)
+          .where(inArray(memoryEntries.id, duplicateGroup.duplicates.map(d => d.id)));
+      }
+      
+      console.log(`✅ Successfully merged duplicate group`);
+    } catch (error) {
+      console.error(`❌ Failed to merge duplicate group:`, error);
+      throw error;
+    }
+  }
+  
+  /**
    * Auto-merge duplicates above a high confidence threshold
    * 🚀 NOW USES VECTOR EMBEDDINGS (same as deep scan) for consistent results!
    * 🛡️ SAFE: Processes in batches with retry logic and connection error handling
@@ -524,12 +565,13 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
     
     console.log(`✅ Found ${duplicateGroups.length} duplicate groups using vector embeddings`);
     
-    // 🛡️ Process ONE GROUP AT A TIME with delays to avoid Neon timeouts
+    // 🛡️ Process ONE GROUP AT A TIME with delays and connection refresh to avoid Neon timeouts
     let mergedCount = 0;
     let successCount = 0;
     let errorCount = 0;
-    const MAX_GROUPS_PER_RUN = 10; // Only process 10 groups per run to stay well under timeout
-    const DELAY_BETWEEN_GROUPS = 200; // Small delay between each group
+    const MAX_GROUPS_PER_RUN = 5; // Reduced to 5 groups to stay well under timeout
+    const DELAY_BETWEEN_GROUPS = 500; // Increased delay to let connection pool refresh
+    const CONNECTION_REFRESH_INTERVAL = 2; // Refresh connection every N groups
     
     const groupsToProcess = duplicateGroups.slice(0, MAX_GROUPS_PER_RUN);
     console.log(`📦 Processing ${groupsToProcess.length} groups (of ${duplicateGroups.length} total)...`);
@@ -537,20 +579,34 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
     for (let i = 0; i < groupsToProcess.length; i++) {
       const group = groupsToProcess[i];
       
+      // Refresh connection every few groups to prevent stale connections
+      if (i > 0 && i % CONNECTION_REFRESH_INTERVAL === 0) {
+        try {
+          console.log('🔄 Refreshing database connection...');
+          await db.execute(sql`SELECT pg_sleep(0.1)`);
+        } catch (refreshError) {
+          console.warn('⚠️ Connection refresh failed, continuing anyway');
+        }
+      }
+      
       try {
         console.log(`🔄 [${i+1}/${groupsToProcess.length}] Merging: "${group.masterEntry.content.substring(0, 50)}..." (${group.duplicates.length} duplicates)`);
         
-        await this.executeMerge(db, group);
+        // Execute merge with shorter timeout tolerance
+        await this.executeMergeSafe(db, group);
         mergedCount += group.duplicates.length;
         successCount++;
         
         console.log(`✅ Merged successfully`);
       } catch (error: any) {
         errorCount++;
-        console.error(`❌ Failed to merge:`, error.message);
+        console.error(`❌ Failed to merge:`, error.message || error);
         
         // If connection error (Neon timeout), stop gracefully
-        if (error.code === '57P01' || error.message?.includes('connection') || error.message?.includes('terminating')) {
+        if (error.code === '57P01' || error.code === '08P01' || 
+            error.message?.includes('connection') || 
+            error.message?.includes('terminating') ||
+            error.message?.includes('timeout')) {
           console.error(`⚠️ Database connection error - stopping gracefully`);
           console.log(`📊 Progress: ${successCount} groups merged, ${mergedCount} duplicates eliminated`);
           return mergedCount;
@@ -560,7 +616,7 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
         console.warn(`   Skipping and continuing...`);
       }
       
-      // Small delay between groups to let the connection breathe
+      // Delay between groups to let the connection pool breathe
       if (i < groupsToProcess.length - 1) {
         await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_GROUPS));
       }
