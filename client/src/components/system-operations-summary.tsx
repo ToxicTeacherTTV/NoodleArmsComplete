@@ -1,4 +1,4 @@
-import { AlertTriangle, BookOpen, Brain, Flame, Sparkles, Workflow } from 'lucide-react';
+import { AlertTriangle, BookOpen, Brain, Sparkles, Workflow } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { ChaosState, Document, MemoryStats, PersonalityState } from '@/types';
@@ -53,17 +53,10 @@ export default function SystemOperationsSummary({
 
   const effectiveChaos = chaosState?.effectiveLevel ?? chaosState?.level ?? 0;
   const manualOverrideActive = typeof chaosState?.manualOverride === 'number';
-  const chaosPresetSuggestion = personalityState?.chaosInfluence?.suggestedPreset
-    ?? personalityState?.chaosInfluence?.presetSuggestion;
-  const chaosSpiceCap = personalityState?.chaosInfluence?.spiceCap;
 
   const currentPreset = personalityState?.effectivePersonality.preset ?? 'Unknown';
   const currentIntensity = personalityState?.effectivePersonality.intensity?.toUpperCase?.() ?? '—';
   const currentSpice = personalityState?.effectivePersonality.spice ?? 'normal';
-  const basePreset = personalityState?.basePersonality.preset ?? 'Unknown';
-  const baseIntensity = personalityState?.basePersonality.intensity?.toUpperCase?.() ?? '—';
-  const baseSpice = personalityState?.basePersonality.spice ?? 'normal';
-  const baseDbDLens = personalityState?.basePersonality.dbd_lens;
 
   const factsPerConversation = memoryStats?.conversations
     ? (memoryStats.totalFacts / memoryStats.conversations).toFixed(1)
@@ -88,14 +81,7 @@ export default function SystemOperationsSummary({
   }
 
   if (personalityState?.chaosInfluence) {
-    const pieces = [personalityState.chaosInfluence.reason];
-    if (chaosPresetSuggestion) {
-      pieces.push(`suggests ${chaosPresetSuggestion}`);
-    }
-    if (chaosSpiceCap) {
-      pieces.push(`caps spice at ${chaosSpiceCap}`);
-    }
-    actionItems.push(`Chaos influence active: ${pieces.join(', ')}.`);
+    actionItems.push(`Chaos influence active: ${personalityState.chaosInfluence.reason}.`);
   }
 
   if (actionItems.length === 0) {
@@ -117,50 +103,21 @@ export default function SystemOperationsSummary({
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-lg border border-border/60 bg-muted/40 p-4 space-y-3">
+          <div className="rounded-lg border border-border/60 bg-muted/40 p-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
               <Brain className="h-4 w-4" /> Personality & Chaos
             </div>
-            <div className="space-y-2">
+            <div className="mt-3 space-y-2">
               <div className="text-2xl font-semibold">{currentPreset}</div>
               <div className="flex flex-wrap gap-2 text-xs">
                 <Badge variant="secondary">Intensity {currentIntensity}</Badge>
-                <Badge variant="secondary">Spice {currentSpice === 'platform_safe' ? 'SAFE' : currentSpice.toUpperCase()}</Badge>
+                <Badge variant="secondary">Spice {currentSpice.toUpperCase()}</Badge>
                 <Badge variant="outline">Chaos {Math.round(effectiveChaos)}%</Badge>
               </div>
               {chaosState?.mode && (
                 <p className="text-xs text-muted-foreground">
                   Mode: {chaosState.mode.replace(/_/g, ' ').toLowerCase()}
                 </p>
-              )}
-              <div className="rounded border border-border/60 bg-background/60 p-2 text-[11px] leading-relaxed text-muted-foreground">
-                <div className="font-medium text-foreground text-xs mb-1">Baseline</div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">Preset {basePreset}</Badge>
-                  <Badge variant="outline">Intensity {baseIntensity}</Badge>
-                  <Badge variant="outline">Spice {baseSpice === 'platform_safe' ? 'SAFE' : baseSpice.toUpperCase()}</Badge>
-                  <Badge variant={baseDbDLens ? 'secondary' : 'outline'}>DbD Lens {baseDbDLens ? 'ON' : 'OFF'}</Badge>
-                </div>
-              </div>
-              {personalityState?.chaosInfluence && (
-                <div className="rounded border border-dashed border-amber-300/70 bg-amber-50/70 dark:bg-amber-950/20 p-2 text-[11px] leading-relaxed">
-                  <div className="flex items-center gap-1 text-amber-700 dark:text-amber-200">
-                    <Flame className="h-3 w-3" />
-                    <span className="font-medium">Chaos influence</span>
-                  </div>
-                  <div className="mt-1 text-amber-800 dark:text-amber-100">{personalityState.chaosInfluence.reason}</div>
-                  <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-amber-700 dark:text-amber-200">
-                    {typeof personalityState.chaosInfluence.intensityDelta === 'number' && (
-                      <Badge variant="outline">Δ Intensity {personalityState.chaosInfluence.intensityDelta}</Badge>
-                    )}
-                    {chaosPresetSuggestion && (
-                      <Badge variant="outline">Suggests {chaosPresetSuggestion}</Badge>
-                    )}
-                    {chaosSpiceCap && (
-                      <Badge variant="outline">Spice cap {chaosSpiceCap === 'platform_safe' ? 'SAFE' : chaosSpiceCap.toUpperCase()}</Badge>
-                    )}
-                  </div>
-                </div>
               )}
             </div>
           </div>
@@ -185,11 +142,11 @@ export default function SystemOperationsSummary({
             </div>
           </div>
 
-          <div className="rounded-lg border border-border/60 bg-muted/40 p-4 space-y-3">
+          <div className="rounded-lg border border-border/60 bg-muted/40 p-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
               <AlertTriangle className="h-4 w-4 text-orange-500" /> Flagging System
             </div>
-            <div className="space-y-2">
+            <div className="mt-3 space-y-2">
               <div className="text-2xl font-semibold">{pendingFlags}</div>
               <p className="text-xs text-muted-foreground">Pending safety reviews</p>
               <div className="flex flex-wrap gap-2 text-xs">
@@ -199,27 +156,14 @@ export default function SystemOperationsSummary({
                   <Badge variant="outline">Top: {topFlagCategory.flagType}</Badge>
                 )}
               </div>
-              {flagAnalytics?.topFlagTypes && flagAnalytics.topFlagTypes.length > 0 && (
-                <div className="text-[11px] text-muted-foreground">
-                  <div className="font-medium text-xs text-foreground mb-1">Top flag categories</div>
-                  <ul className="space-y-1">
-                    {flagAnalytics.topFlagTypes.slice(0, 3).map(({ flagType, count }) => (
-                      <li key={flagType} className="flex items-center justify-between">
-                        <span>{flagType}</span>
-                        <span className="text-foreground font-medium">{count}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
           </div>
 
-          <div className="rounded-lg border border-border/60 bg-muted/40 p-4 space-y-3">
+          <div className="rounded-lg border border-border/60 bg-muted/40 p-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
               <BookOpen className="h-4 w-4" /> Document Ingestion
             </div>
-            <div className="space-y-2">
+            <div className="mt-3 space-y-2">
               <div className="text-2xl font-semibold">{completedDocuments}</div>
               <p className="text-xs text-muted-foreground">Docs fully processed</p>
               <div className="flex flex-wrap gap-2 text-xs">
@@ -229,24 +173,6 @@ export default function SystemOperationsSummary({
                 {failedDocuments > 0 && (
                   <Badge variant="destructive">Failed {failedDocuments}</Badge>
                 )}
-              </div>
-              <div className="grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
-                <div className="flex justify-between bg-background/60 px-2 py-1 rounded border border-border/40">
-                  <span>Pending</span>
-                  <span className="text-foreground font-medium">{docsByStatus.PENDING}</span>
-                </div>
-                <div className="flex justify-between bg-background/60 px-2 py-1 rounded border border-border/40">
-                  <span>Processing</span>
-                  <span className="text-foreground font-medium">{docsByStatus.PROCESSING}</span>
-                </div>
-                <div className="flex justify-between bg-background/60 px-2 py-1 rounded border border-border/40">
-                  <span>Completed</span>
-                  <span className="text-foreground font-medium">{docsByStatus.COMPLETED}</span>
-                </div>
-                <div className="flex justify-between bg-background/60 px-2 py-1 rounded border border-border/40">
-                  <span>Failed</span>
-                  <span className="text-foreground font-medium">{docsByStatus.FAILED}</span>
-                </div>
               </div>
             </div>
           </div>

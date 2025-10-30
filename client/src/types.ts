@@ -89,8 +89,6 @@ export interface PersonalityState {
     reason: string;
     intensityDelta: number;
     suggestedPreset?: string;
-    presetSuggestion?: string;
-    spiceCap?: 'platform_safe' | 'normal' | 'spicy';
   };
   effectivePersonality: {
     preset: string;
