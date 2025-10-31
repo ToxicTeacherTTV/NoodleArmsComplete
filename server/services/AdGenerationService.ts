@@ -15,6 +15,9 @@ interface AdGenerationRequest {
   category?: string;
   personalityFacet?: string;
   forceNew?: boolean;
+  manualSponsorName?: string;   // User-provided sponsor name
+  manualProductName?: string;    // User-provided product name
+  submittedBy?: string;          // Who suggested this (for community credits)
 }
 
 const DEFAULT_MODEL_STR = "claude-sonnet-4-5-20250929";
@@ -476,14 +479,19 @@ export class AdGenerationService {
 
   // Generate a new pre-roll ad using AI
   async generateAd(request: AdGenerationRequest): Promise<PrerollAd> {
-    const { profileId, category, personalityFacet } = request;
+    const { profileId, category, personalityFacet, manualSponsorName, manualProductName, submittedBy } = request;
     
     try {
       // Use provided facet or select a varied one for anti-repetition
       const selectedFacet = personalityFacet || this.selectVariedPersonalityFacet();
       
       // Generate completely original ad content using AI
-      const adContent = await this.generateOriginalAdContent(category, selectedFacet);
+      const adContent = await this.generateOriginalAdContent(
+        category, 
+        selectedFacet,
+        manualSponsorName,
+        manualProductName
+      );
       
       // Estimate duration (rough calculation: ~150 words per minute speaking)
       const wordCount = adContent.adScript.split(' ').length;
@@ -499,6 +507,8 @@ export class AdGenerationService {
         adScript: adContent.adScript,
         personalityFacet: selectedFacet,
         duration: estimatedDuration,
+        productionStatus: 'draft',
+        submittedBy: submittedBy || null,
         usageCount: 0,
         rating: null,
         isFavorite: false,
@@ -517,7 +527,12 @@ export class AdGenerationService {
 
   // 🎭 SIMPLIFIED AD GENERATION: Focus on comedy, not constraints
   // Fixes: Temperature 0.95 (up from 0.6), real examples, shorter scripts (300-600 chars), free creativity
-  private async generateOriginalAdContent(category?: string, personalityFacet?: string): Promise<{
+  private async generateOriginalAdContent(
+    category?: string, 
+    personalityFacet?: string,
+    manualSponsorName?: string,
+    manualProductName?: string
+  ): Promise<{
     sponsorName: string;
     productName: string;
     category: string;
@@ -547,7 +562,8 @@ Example 3 (Unhinged):
 "[UNHINGED] LISTEN UP! Frankie's Emergency Garage Doors! You need a garage door? BOOM - Frankie's got you! [screaming] You need it installed at 3 AM? FRANKIE DOESN'T SLEEP! [manic] Extra soundproof? FRANKIE ASKS NO QUESTIONS! [excited] My Uncle Carmine loves these doors - he's got seven of 'em, don't ask why! Call 1-800-GARAGES before the feds figure out what we're doin'!"
 
 NOW CREATE A NEW AD:
-- Pick a ridiculous sponsor name (avoid "Salvatore", avoid "and/&")
+${manualSponsorName ? `- REQUIRED: Use this exact sponsor name: "${manualSponsorName}"` : '- Pick a ridiculous sponsor name (avoid "Salvatore", avoid "and/&")'}
+${manualProductName ? `- REQUIRED: Product/service must be: "${manualProductName}"` : '- Invent an absurd product/service'}
 - 30-60 seconds (300-600 characters max)
 - Include a fake phone number, website, or promo code
 - Stay in character as Nicky
@@ -558,8 +574,8 @@ NOW CREATE A NEW AD:
 
 Return ONLY valid JSON:
 {
-  "sponsorName": "Business Name",
-  "productName": "What they sell",
+  "sponsorName": "${manualSponsorName || 'Business Name'}",
+  "productName": "${manualProductName || 'What they sell'}",
   "category": "${category || 'general'}",
   "adScript": "The actual ad read script with [emotion] tags"
 }`;
@@ -721,6 +737,62 @@ Return ONLY valid JSON:
   // Toggle favorite status
   async toggleFavorite(adId: string, isFavorite: boolean): Promise<void> {
     await storage.updatePrerollAd(adId, { isFavorite });
+  }
+
+  // 🎬 BATCH GENERATION: Generate multiple ads at once for cherry-picking
+  async generateBatch(request: AdGenerationRequest, count: number = 3): Promise<PrerollAd[]> {
+    if (count < 1 || count > 10) {
+      throw new Error('Batch count must be between 1 and 10');
+    }
+
+    const ads: PrerollAd[] = [];
+    console.log(`🎪 Generating batch of ${count} ads...`);
+
+    for (let i = 0; i < count; i++) {
+      try {
+        const ad = await this.generateAd(request);
+        ads.push(ad);
+        console.log(`✅ Generated ad ${i + 1}/${count}: "${ad.sponsorName}"`);
+      } catch (error) {
+        console.error(`❌ Failed to generate ad ${i + 1}/${count}:`, error);
+        // Continue with remaining ads even if one fails
+      }
+    }
+
+    return ads;
+  }
+
+  // 🎬 PRODUCTION STATUS: Update ad production status
+  async updateProductionStatus(
+    adId: string, 
+    status: 'draft' | 'approved' | 'recorded' | 'published' | 'rejected',
+    metadata?: {
+      audioFilePath?: string;
+      episodeId?: string;
+    }
+  ): Promise<void> {
+    const updateData: any = { productionStatus: status };
+    
+    if (metadata?.audioFilePath) {
+      updateData.audioFilePath = metadata.audioFilePath;
+    }
+    if (metadata?.episodeId) {
+      updateData.episodeId = metadata.episodeId;
+    }
+
+    await storage.updatePrerollAd(adId, updateData);
+    console.log(`🎬 Updated ad ${adId} status: ${status}`);
+  }
+
+  // 🎬 BULK STATUS UPDATE: Update multiple ads at once
+  async bulkUpdateStatus(
+    adIds: string[], 
+    status: 'draft' | 'approved' | 'recorded' | 'published' | 'rejected'
+  ): Promise<void> {
+    for (const adId of adIds) {
+      await this.updateProductionStatus(adId, status);
+    }
+    console.log(`🎬 Bulk updated ${adIds.length} ads to status: ${status}`);
   }
 
   // Get emotion profile for personality facet

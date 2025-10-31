@@ -83,6 +83,11 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
   const [selectedFacet, setSelectedFacet] = useState<string>('');
   const [viewingAd, setViewingAd] = useState<PrerollAd | null>(null);
   const [generatingAd, setGeneratingAd] = useState(false);
+  const [batchCount, setBatchCount] = useState<number>(3);
+  const [manualSponsorName, setManualSponsorName] = useState<string>('');
+  const [manualProductName, setManualProductName] = useState<string>('');
+  const [submittedBy, setSubmittedBy] = useState<string>('');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
 
   // Audio functionality
   const { speak, isSpeaking, isPaused, stop, pause, resume, replay, canReplay, saveAudio, canSave } = useElevenLabsSpeech();
@@ -113,7 +118,14 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
 
   // Generate new ad mutation
   const generateAdMutation = useMutation({
-    mutationFn: async (params: { category?: string; personalityFacet?: string; forceNew?: boolean }) => {
+    mutationFn: async (params: { 
+      category?: string; 
+      personalityFacet?: string; 
+      forceNew?: boolean;
+      manualSponsorName?: string;
+      manualProductName?: string;
+      submittedBy?: string;
+    }) => {
       const response = await apiRequest('POST', '/api/ads/generate', params);
       return response.json();
     },
@@ -128,10 +140,53 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/ads', profileId] });
       queryClient.invalidateQueries({ queryKey: ['/api/ads', profileId, 'stats'] });
       setGeneratingAd(false);
+      // Clear manual entry fields
+      setManualSponsorName('');
+      setManualProductName('');
+      setSubmittedBy('');
     },
     onError: (error: Error) => {
       toast({
         title: "Generation Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      setGeneratingAd(false);
+    },
+  });
+
+  // Generate batch of ads mutation
+  const generateBatchMutation = useMutation({
+    mutationFn: async (params: { 
+      category?: string; 
+      personalityFacet?: string;
+      count: number;
+      manualSponsorName?: string;
+      manualProductName?: string;
+      submittedBy?: string;
+    }) => {
+      const response = await apiRequest('POST', '/api/ads/generate-batch', params);
+      return response.json();
+    },
+    onMutate: () => {
+      setGeneratingAd(true);
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "🎪 Batch Generated!",
+        description: result.message || `Generated ${result.data.length} ads`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/ads', profileId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/ads', profileId, 'stats'] });
+      setGeneratingAd(false);
+      // Clear manual entry fields
+      setManualSponsorName('');
+      setManualProductName('');
+      setSubmittedBy('');
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Batch Generation Failed",
         description: error.message,
         variant: "destructive",
       });
@@ -183,9 +238,23 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
     generateAdMutation.mutate({
       category: selectedCategory || undefined,
       personalityFacet: selectedFacet || undefined,
-      forceNew: true
+      forceNew: true,
+      manualSponsorName: manualSponsorName || undefined,
+      manualProductName: manualProductName || undefined,
+      submittedBy: submittedBy || undefined
     });
-  }, [selectedCategory, selectedFacet, generateAdMutation]);
+  }, [selectedCategory, selectedFacet, manualSponsorName, manualProductName, submittedBy, generateAdMutation]);
+
+  const handleGenerateBatch = useCallback(() => {
+    generateBatchMutation.mutate({
+      category: selectedCategory || undefined,
+      personalityFacet: selectedFacet || undefined,
+      count: batchCount,
+      manualSponsorName: manualSponsorName || undefined,
+      manualProductName: manualProductName || undefined,
+      submittedBy: submittedBy || undefined
+    });
+  }, [selectedCategory, selectedFacet, batchCount, manualSponsorName, manualProductName, submittedBy, generateBatchMutation]);
 
   const handleRating = useCallback((adId: string, rating: number) => {
     rateAdMutation.mutate({ adId, rating });
@@ -284,12 +353,59 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
         )}
       </div>
 
+      {/* Manual Sponsor Entry - For Community Submissions */}
+      <Card className="border-purple-200 dark:border-purple-800">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-purple-600" />
+            Manual Sponsor Entry
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Type in sponsor names suggested by your community
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium">Sponsor Name *</label>
+              <Input
+                placeholder="e.g., Tony's Suspicious Tax Service"
+                value={manualSponsorName}
+                onChange={(e) => setManualSponsorName(e.target.value)}
+                data-testid="input-manual-sponsor"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Product/Service</label>
+              <Input
+                placeholder="e.g., Creative Bookkeeping"
+                value={manualProductName}
+                onChange={(e) => setManualProductName(e.target.value)}
+                data-testid="input-manual-product"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium">Submitted By (Optional)</label>
+            <Input
+              placeholder="e.g., @Username or Fan Name"
+              value={submittedBy}
+              onChange={(e) => setSubmittedBy(e.target.value)}
+              data-testid="input-submitted-by"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Give credit to the person who suggested this sponsor
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Generation Controls */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5" />
-            Generate New Ad
+            Generate Ads
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -327,24 +443,62 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
             </div>
           </div>
 
-          <Button 
-            onClick={handleGenerateAd}
-            disabled={generateAdMutation.isPending}
-            className="w-full"
-            data-testid="button-generate-ad"
-          >
-            {generateAdMutation.isPending ? (
-              <>
-                <Dice3 className="h-4 w-4 mr-2 animate-spin" />
-                Generating Nicky's Ad Magic...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4 mr-2" />
-                Generate Ad
-              </>
-            )}
-          </Button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <Button 
+              onClick={handleGenerateAd}
+              disabled={generateAdMutation.isPending || generateBatchMutation.isPending}
+              variant="default"
+              data-testid="button-generate-ad"
+            >
+              {generateAdMutation.isPending ? (
+                <>
+                  <Dice3 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Generate 1
+                </>
+              )}
+            </Button>
+
+            <Button 
+              onClick={handleGenerateBatch}
+              disabled={generateAdMutation.isPending || generateBatchMutation.isPending}
+              variant="outline"
+              data-testid="button-generate-batch"
+            >
+              {generateBatchMutation.isPending ? (
+                <>
+                  <Dice3 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Dice3 className="h-4 w-4 mr-2" />
+                  Generate {batchCount}
+                </>
+              )}
+            </Button>
+
+            <Select value={batchCount.toString()} onValueChange={(v) => setBatchCount(parseInt(v))}>
+              <SelectTrigger data-testid="select-batch-count">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[2, 3, 4, 5].map(count => (
+                  <SelectItem key={count} value={count.toString()}>
+                    {count} ads
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            💡 Tip: Generate multiple ads and pick your favorite! Audio is only created when you click Play.
+          </p>
         </CardContent>
       </Card>
 

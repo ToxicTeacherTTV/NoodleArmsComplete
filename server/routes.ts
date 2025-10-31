@@ -5336,13 +5336,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      const { category, personalityFacet, forceNew } = req.body;
+      const { category, personalityFacet, forceNew, manualSponsorName, manualProductName, submittedBy } = req.body;
       
       const adRequest = {
         profileId: activeProfile.id,
         category,
         personalityFacet,
-        forceNew
+        forceNew,
+        manualSponsorName,
+        manualProductName,
+        submittedBy
       };
       
       const newAd = await adGenerationService.generateAd(adRequest);
@@ -5350,6 +5353,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Ad generation failed:', error);
       res.status(500).json({ error: 'Failed to generate ad' });
+    }
+  });
+
+  // Generate a batch of ads for cherry-picking
+  app.post('/api/ads/generate-batch', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { category, personalityFacet, count = 3, manualSponsorName, manualProductName, submittedBy } = req.body;
+      
+      if (count < 1 || count > 10) {
+        return res.status(400).json({ error: 'Count must be between 1 and 10' });
+      }
+
+      const adRequest = {
+        profileId: activeProfile.id,
+        category,
+        personalityFacet,
+        forceNew: true,
+        manualSponsorName,
+        manualProductName,
+        submittedBy
+      };
+      
+      const ads = await adGenerationService.generateBatch(adRequest, count);
+      res.json({ 
+        data: ads,
+        message: `Generated ${ads.length} ads - pick your favorites!`
+      });
+    } catch (error) {
+      console.error('Batch ad generation failed:', error);
+      res.status(500).json({ error: 'Failed to generate batch of ads' });
     }
   });
 
@@ -5447,6 +5485,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Failed to get emotion profile:', error);
       res.status(500).json({ error: 'Failed to get emotion profile' });
+    }
+  });
+
+  // Update ad production status
+  app.post('/api/ads/:id/status', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, audioFilePath, episodeId } = req.body;
+      
+      const validStatuses = ['draft', 'approved', 'recorded', 'published', 'rejected'];
+      if (!status || !validStatuses.includes(status)) {
+        return res.status(400).json({ 
+          error: `Status must be one of: ${validStatuses.join(', ')}` 
+        });
+      }
+      
+      await adGenerationService.updateProductionStatus(id, status, {
+        audioFilePath,
+        episodeId
+      });
+      
+      res.json({ success: true, status });
+    } catch (error) {
+      console.error('Failed to update ad status:', error);
+      res.status(500).json({ error: 'Failed to update ad status' });
+    }
+  });
+
+  // Bulk update ad production status
+  app.post('/api/ads/bulk-status', async (req, res) => {
+    try {
+      const { adIds, status } = req.body;
+      
+      if (!Array.isArray(adIds) || adIds.length === 0) {
+        return res.status(400).json({ error: 'adIds must be a non-empty array' });
+      }
+      
+      const validStatuses = ['draft', 'approved', 'recorded', 'published', 'rejected'];
+      if (!status || !validStatuses.includes(status)) {
+        return res.status(400).json({ 
+          error: `Status must be one of: ${validStatuses.join(', ')}` 
+        });
+      }
+      
+      await adGenerationService.bulkUpdateStatus(adIds, status);
+      
+      res.json({ 
+        success: true, 
+        updatedCount: adIds.length,
+        status 
+      });
+    } catch (error) {
+      console.error('Failed to bulk update ad status:', error);
+      res.status(500).json({ error: 'Failed to bulk update ad status' });
     }
   });
 
