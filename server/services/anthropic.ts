@@ -4,7 +4,6 @@ import ChaosEngine from './chaosEngine.js';
 import { geminiService } from './gemini.js';
 import { contentFilter } from './contentFilter.js';
 import { varietyController } from './VarietyController.js';
-import { ContentSuggestionService } from './ContentSuggestionService.js';
 import { storyCompletionTracker } from './storyCompletionTracker.js';
 import { intrusiveThoughts } from './intrusiveThoughts.js';
 import { storage } from '../storage.js';
@@ -48,11 +47,9 @@ const ConsolidatedMemorySchema = z.object({
 
 class AnthropicService {
   private chaosEngine: ChaosEngine;
-  private contentSuggestionService: ContentSuggestionService;
 
   constructor() {
     this.chaosEngine = ChaosEngine.getInstance();
-    this.contentSuggestionService = new ContentSuggestionService();
   }
 
   // 🧠 Parse training examples to separate thinking/strategy from conversation style
@@ -598,27 +595,6 @@ class AnthropicService {
     trainingExamples: any[] = []
   ): Promise<AIResponse> {
     const startTime = Date.now();
-
-    // 🎯 NEW: Check if this is a content suggestion request
-    if (conversationId && profileId && this.contentSuggestionService.isContentSuggestionRequest(userMessage)) {
-      try {
-        console.log('🎪 Detected content suggestion request, generating suggestions...');
-        const suggestionResponse = await this.contentSuggestionService.generateSuggestions(
-          conversationId,
-          profileId,
-          userMessage
-        );
-        
-        return {
-          content: suggestionResponse.nickyResponse,
-          processingTime: Date.now() - startTime,
-          retrievedContext: `Content suggestions generated using ${suggestionResponse.variety_info.facet_used} personality facet`
-        };
-      } catch (error) {
-        console.error('❌ Content suggestion generation failed:', error);
-        // Fall through to regular processing if suggestion generation fails
-      }
-    }
 
     // Build context from memories and documents (moved outside try block for fallback access)
     let contextPrompt = "";

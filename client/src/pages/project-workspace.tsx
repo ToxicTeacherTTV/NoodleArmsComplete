@@ -180,18 +180,6 @@ export default function ProjectWorkspace() {
     },
     // 🚧 HIGH PRIORITY - NEXT EASY WINS
     {
-      id: 'priority-1',
-      title: 'Content Suggestion System - "What should we talk about?"',
-      description: 'When user asks "What should we talk about today?", Nicky suggests podcast topics based on personality facets, recent Reddit content, and unused memories. Interactive content planning.',
-      priority: 'HIGH',
-      status: 'PLANNING',
-      category: 'FEATURE',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      tags: ['content-suggestions', 'podcast', 'topics', 'interactive', 'planning'],
-      estimatedHours: 8
-    },
-    {
       id: 'priority-2',
       title: 'Pre-Roll Ad Generator',
       description: 'Comedic fake sponsor ads with Italian-American twist. Rotating ad templates using personality facets. New podcast content section alongside Brain Management.',
@@ -402,11 +390,11 @@ export default function ProjectWorkspace() {
     {
       id: '3',
       title: 'Podcast Content Management System',
-      description: 'Content suggestions, pre-roll ads, and enhanced podcast workflow',
+      description: 'Pre-roll ads and enhanced podcast workflow',
       targetDate: '2025-10-15',
       status: 'IN_PROGRESS',
       progress: 20,
-      tasks: ['Content suggestion system', 'Pre-roll ad generator', 'Memory persistence for podcast content', 'New podcast content dashboard']
+      tasks: ['Pre-roll ad generator', 'Memory persistence for podcast content', 'New podcast content dashboard']
     }
   ]);
 
@@ -436,7 +424,6 @@ SOLID FOUNDATIONS:
 ✅ Revolutionary lie taxonomy system
 
 HIGH PRIORITY NEXT WINS:
-🎯 Content Suggestion System ("What should we talk about today?")
 🎯 Pre-Roll Ad Generator (comedic Italian-American fake sponsors)
 🎯 Enhanced Memory Persistence for podcast content tracking
 🎯 New Podcast Content Dashboard section
