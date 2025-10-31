@@ -613,8 +613,14 @@ Return ONLY valid JSON:
       console.log('✅ Claude successfully generated ad content (fallback)');
     }
     
-    // Clean up code blocks if AI returns them
+    // Clean up code blocks and extract JSON if AI returns them
     textContent = textContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    
+    // Try to extract JSON object if there's extra content before/after
+    const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      textContent = jsonMatch[0];
+    }
     
     try {
       const adContent = JSON.parse(textContent);
