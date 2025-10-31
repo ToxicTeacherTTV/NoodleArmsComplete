@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -275,9 +276,9 @@ export function IntelligenceDashboard() {
       description: `Opening ${factIds.length} affected facts in memory management...`,
     });
     
-    console.log('Facts to review:', factIds);
-    // TODO: Navigate to Brain Management tab with factIds filter
-    // This could be enhanced to open a modal or filter the memory panel
+    // Navigate to Brain Management tab with factIds filter
+    const factIdsParam = encodeURIComponent(factIds.join(','));
+    window.location.href = `/brain?tab=memory&factIds=${factIdsParam}`;
   };
 
   const handleRunStoryReconstruction = async () => {
@@ -357,9 +358,13 @@ export function IntelligenceDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3">Analyzing memory patterns...</span>
+          <div className="space-y-4">
+            <Skeleton className="h-32 w-full" />
+            <div className="grid grid-cols-3 gap-4">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
           </div>
         </CardContent>
       </Card>

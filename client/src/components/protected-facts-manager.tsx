@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Trash2, Shield, Plus, Edit, Check, X } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -182,7 +183,11 @@ export function ProtectedFactsManager() {
           </div>
           
           {isLoading ? (
-            <div className="text-center py-4 text-muted-foreground">Loading protected facts...</div>
+            <div className="space-y-2">
+              <Skeleton className="h-16 w-full rounded-lg" />
+              <Skeleton className="h-16 w-full rounded-lg" />
+              <Skeleton className="h-16 w-full rounded-lg" />
+            </div>
           ) : protectedFacts.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Shield className="w-12 h-12 mx-auto mb-2 opacity-20" />

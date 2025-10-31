@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import type { MemoryEntry, MemoryStats } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
@@ -589,9 +590,10 @@ export default function MemoryPanel({
         {/* Memory Results */}
         <div className="space-y-2 max-h-60 overflow-y-auto chat-scroll" data-testid="memory-entries-list">
           {isLoading ? (
-            <div className="text-center text-muted-foreground py-4">
-              <i className="fas fa-spinner fa-spin mr-2"></i>
-              Loading memories...
+            <div className="space-y-2">
+              <Skeleton className="h-24 w-full rounded-lg" />
+              <Skeleton className="h-24 w-full rounded-lg" />
+              <Skeleton className="h-24 w-full rounded-lg" />
             </div>
           ) : !memoryEntries || (memoryEntries as any[])?.length === 0 ? (
             <div className="text-center text-muted-foreground py-4">
