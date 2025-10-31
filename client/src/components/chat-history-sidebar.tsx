@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 
@@ -124,9 +125,15 @@ export default function ChatHistorySidebar({
       <ScrollArea className="flex-1">
         <div className="p-2">
           {isLoading ? (
-            <div className="text-center text-muted-foreground py-8">
-              <i className="fas fa-spinner fa-spin mr-2"></i>
-              Loading...
+            <div className="space-y-4 px-2">
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <div className="space-y-2">
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                </div>
+              </div>
             </div>
           ) : conversations.length === 0 ? (
             <div className="text-center text-muted-foreground py-8 px-4">

@@ -163,7 +163,6 @@ export default function JazzDashboard() {
         
         // BUT: Auto-play IS enabled in STREAMING mode for interactive experience
         if (appMode === 'STREAMING' && streamSettings.voiceOutput) {
-          console.log('🔊 Auto-playing AI response in STREAMING mode');
           speakElevenLabs(response.content);
           setAiStatus('SPEAKING');
         }
@@ -234,16 +233,12 @@ export default function JazzDashboard() {
   useEffect(() => {
     // Always show live interim transcript, even when not listening (captures final results)
     const newPending = interimTranscript || transcript || '';
-    console.log('🔄 Setting pendingTranscript:', newPending, 'from interimTranscript:', interimTranscript, 'transcript:', transcript, 'appMode:', appMode);
     setPendingTranscript(newPending);
   }, [transcript, interimTranscript, appMode]);
 
   // Handle voice control (only in streaming mode) - MANUAL MODE
   const toggleListening = () => {
-    console.log('🔘 toggleListening clicked - appMode:', appMode, 'isListening:', isListening);
-    
     if (appMode !== 'STREAMING') {
-      console.log('❌ Not in STREAMING mode, returning early');
       return;
     }
     
@@ -253,7 +248,6 @@ export default function JazzDashboard() {
       
       // Capture final text from available sources to avoid race conditions
       const finalText = (transcript || interimTranscript || pendingTranscript).trim();
-      console.log('🛑 Stopping with finalText:', finalText);
       
       if (finalText && currentConversationId) {
         const userMessage: Message = {
@@ -283,12 +277,10 @@ export default function JazzDashboard() {
       setAiStatus('IDLE');
     } else {
       // START: Begin listening and clear any previous transcript
-      console.log('🎤 Starting to listen...');
       setPendingTranscript('');
       resetTranscript();
       startListening();
       setAiStatus('LISTENING');
-      console.log('✅ Called startListening() and set status to LISTENING');
     }
   };
 
