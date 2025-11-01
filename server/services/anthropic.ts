@@ -53,7 +53,28 @@ class AnthropicService {
   }
 
   // 🧠 Parse training examples to separate thinking/strategy from conversation style
-  private parseTrainingExamples(examples: any[]): { strategies: string[], conversations: string[] } {
+  // 🚀 NEW: Consolidates multiple examples into unified patterns for token efficiency
+  private async parseTrainingExamples(examples: any[]): Promise<{ 
+    strategies: string[], 
+    conversations: string[],
+    consolidatedStyle?: string 
+  }> {
+    // If we have 3+ examples, consolidate them into unified style guide
+    if (examples.length >= 3) {
+      try {
+        const consolidatedStyle = await this.consolidateTrainingStyle(examples);
+        return {
+          strategies: [],
+          conversations: [],
+          consolidatedStyle
+        };
+      } catch (error) {
+        console.warn('⚠️ Consolidation failed, falling back to individual examples:', error);
+        // Fall through to individual example parsing
+      }
+    }
+    
+    // Original parsing for < 3 examples or if consolidation fails
     const strategies: string[] = [];
     const conversations: string[] = [];
     
@@ -90,6 +111,78 @@ class AnthropicService {
       strategies: strategies.slice(0, 5), // Max 5 strategy examples
       conversations: conversations.slice(0, 8) // Max 8 conversation examples
     };
+  }
+
+  // 🎯 NEW: Consolidate multiple training examples into unified style guide
+  private async consolidateTrainingStyle(examples: any[]): Promise<string> {
+    const examplesText = examples
+      .map((ex, idx) => {
+        const content = ex.extractedContent || '';
+        return `Example ${idx + 1}:\n${content.substring(0, 1500)}`;
+      })
+      .join('\n\n---\n\n');
+
+    const prompt = `Analyze these ${examples.length} training conversation examples and create ONE unified style guide.
+
+${examplesText}
+
+Create a concise style guide that captures:
+1. **Tone & Voice**: How does this character speak? (aggressive, sarcastic, enthusiastic, etc.)
+2. **Recurring Patterns**: Phrases, word choices, speech quirks they always use
+3. **Response Strategies**: How do they typically handle questions, tangents, disagreements?
+4. **Emotional Range**: How do they express different emotions?
+5. **Unique Behaviors**: Character-specific habits or quirks
+
+Output format:
+**TONE & VOICE:**
+- [bullet points]
+
+**RECURRING PATTERNS:**
+- [bullet points]
+
+**RESPONSE STRATEGIES:**
+- [bullet points]
+
+**EMOTIONAL RANGE:**
+- [bullet points]
+
+**UNIQUE BEHAVIORS:**
+- [bullet points]
+
+Be specific and actionable. Extract the ESSENCE of the style, not just list examples.`;
+
+    try {
+      // Try Gemini first (free tier)
+      const geminiResponse = await geminiService.generateChatResponse(
+        prompt,
+        "You are a personality analysis expert. Extract unified behavioral patterns from multiple examples into one concise style guide.",
+        ''
+      );
+      
+      console.log(`✅ Consolidated ${examples.length} training examples into unified style guide (Gemini)`);
+      return geminiResponse.content;
+      
+    } catch (geminiError) {
+      // Fallback to Claude
+      console.warn('⚠️ Gemini failed, using Claude for consolidation');
+      
+      const response = await anthropic.messages.create({
+        model: DEFAULT_MODEL_STR,
+        max_tokens: 1500,
+        temperature: 0.3,
+        system: "You are a personality analysis expert. Extract unified behavioral patterns from multiple examples into one concise style guide.",
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
+      });
+
+      const content = Array.isArray(response.content) ? response.content[0] : response.content;
+      const textContent = content && 'text' in content ? content.text : '';
+      
+      console.log(`✅ Consolidated ${examples.length} training examples into unified style guide (Claude)`);
+      return textContent;
+    }
   }
 
   // 🚀 ENHANCED: Extract keywords from user message with conversation and personality context
@@ -753,30 +846,39 @@ class AnthropicService {
         }
       }
 
-      // 📚 NEW: Add training examples with separated strategy and style
+      // 📚 NEW: Add training examples with intelligent consolidation
       if (trainingExamples.length > 0) {
-        const parsedExamples = this.parseTrainingExamples(trainingExamples);
+        const parsedExamples = await this.parseTrainingExamples(trainingExamples);
         
-        // Add strategy/thinking patterns if found
-        if (parsedExamples.strategies.length > 0) {
-          contextPrompt += "\n\n🧠 RESPONSE STRATEGY PATTERNS:\n";
-          contextPrompt += "Learn this reasoning approach - how to think about crafting responses:\n\n";
-          parsedExamples.strategies.forEach((strategy, index) => {
-            contextPrompt += `Strategy ${index + 1}:\n${strategy}\n\n`;
-          });
-        }
-        
-        // Add conversation style examples
-        if (parsedExamples.conversations.length > 0) {
-          contextPrompt += "\n\n💬 CONVERSATION STYLE EXAMPLES:\n";
-          contextPrompt += "Study the tone, flow, cadence, and personality in these examples:\n\n";
-          parsedExamples.conversations.forEach((conversation, index) => {
-            contextPrompt += `Example ${index + 1}:\n${conversation}\n\n`;
-          });
-        }
-        
-        if (parsedExamples.strategies.length > 0 || parsedExamples.conversations.length > 0) {
-          contextPrompt += "Combine the strategic thinking patterns with the conversation style to craft your responses.\n";
+        // If we got a consolidated style guide, use that (more efficient!)
+        if (parsedExamples.consolidatedStyle) {
+          contextPrompt += "\n\n🎓 UNIFIED STYLE GUIDE (learned from training):\n";
+          contextPrompt += parsedExamples.consolidatedStyle;
+          contextPrompt += "\n\nApply this style guide to all your responses.\n";
+        } else {
+          // Fall back to individual examples if consolidation wasn't used
+          
+          // Add strategy/thinking patterns if found
+          if (parsedExamples.strategies.length > 0) {
+            contextPrompt += "\n\n🧠 RESPONSE STRATEGY PATTERNS:\n";
+            contextPrompt += "Learn this reasoning approach - how to think about crafting responses:\n\n";
+            parsedExamples.strategies.forEach((strategy: string, index: number) => {
+              contextPrompt += `Strategy ${index + 1}:\n${strategy}\n\n`;
+            });
+          }
+          
+          // Add conversation style examples
+          if (parsedExamples.conversations.length > 0) {
+            contextPrompt += "\n\n💬 CONVERSATION STYLE EXAMPLES:\n";
+            contextPrompt += "Study the tone, flow, cadence, and personality in these examples:\n\n";
+            parsedExamples.conversations.forEach((conversation: string, index: number) => {
+              contextPrompt += `Example ${index + 1}:\n${conversation}\n\n`;
+            });
+          }
+          
+          if (parsedExamples.strategies.length > 0 || parsedExamples.conversations.length > 0) {
+            contextPrompt += "Combine the strategic thinking patterns with the conversation style to craft your responses.\n";
+          }
         }
       }
 
