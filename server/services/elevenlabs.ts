@@ -25,9 +25,9 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   grumpy: {
     name: "Grumpy",
     settings: {
-      stability: 0.25,
+      stability: 0.0,  // Maximum creative for full expression
       similarity_boost: 0.85,
-      style: 0.6,
+      style: 0.75,  // Increased style for more character
       use_speaker_boost: true
     },
     performanceCues: {
@@ -39,9 +39,9 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   conspiratorial: {
     name: "Conspiratorial",
     settings: {
-      stability: 0.20,
+      stability: 0.0,  // Maximum creative for full expression
       similarity_boost: 0.75,
-      style: 0.8,
+      style: 0.90,  // High style for dramatic whispers
       use_speaker_boost: true
     },
     performanceCues: {
@@ -53,9 +53,9 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   reluctant: {
     name: "Reluctant",
     settings: {
-      stability: 0.40,
+      stability: 0.0,  // Maximum creative for full expression
       similarity_boost: 0.7,
-      style: 0.4,
+      style: 0.60,  // Moderate style for subtle reluctance
       use_speaker_boost: true
     },
     performanceCues: {
@@ -67,9 +67,9 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   warm: {
     name: "Warm",
     settings: {
-      stability: 0.35,
+      stability: 0.0,  // Maximum creative for full expression
       similarity_boost: 0.8,
-      style: 0.5,
+      style: 0.65,  // Moderate-high for genuine warmth
       use_speaker_boost: true
     },
     performanceCues: {
@@ -81,9 +81,9 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   excited: {
     name: "Excited",
     settings: {
-      stability: 0.25,
+      stability: 0.0,  // Maximum creative for full expression
       similarity_boost: 0.65,
-      style: 0.9,
+      style: 0.95,  // Very high style for energy
       use_speaker_boost: true
     },
     performanceCues: {
@@ -95,9 +95,9 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   manic: {
     name: "Manic",
     settings: {
-      stability: 0.15,
+      stability: 0.0,  // Maximum creative for full expression
       similarity_boost: 0.6,
-      style: 0.95,
+      style: 1.0,  // Maximum style for chaos
       use_speaker_boost: true
     },
     performanceCues: {
@@ -109,9 +109,9 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   deadpan: {
     name: "Deadpan",
     settings: {
-      stability: 0.50,
+      stability: 0.10,  // Slightly higher for monotone consistency, but still creative
       similarity_boost: 0.85,
-      style: 0.3,
+      style: 0.40,  // Lower style for flatness
       use_speaker_boost: true
     },
     performanceCues: {
@@ -123,9 +123,9 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   salesman: {
     name: "Salesman",
     settings: {
-      stability: 0.30,
+      stability: 0.0,  // Maximum creative for full expression
       similarity_boost: 0.75,
-      style: 0.7,
+      style: 0.85,  // High style for sales energy
       use_speaker_boost: true
     },
     performanceCues: {
@@ -137,9 +137,9 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   psycho: {
     name: "Psycho",
     settings: {
-      stability: 0.05,
+      stability: 0.0,  // Maximum creative for full expression
       similarity_boost: 0.50,
-      style: 1.0,
+      style: 1.0,  // Maximum style for unhinged chaos
       use_speaker_boost: true
     },
     performanceCues: {
