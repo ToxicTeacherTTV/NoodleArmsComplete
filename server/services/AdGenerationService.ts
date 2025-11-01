@@ -507,6 +507,7 @@ export class AdGenerationService {
         adScript: adContent.adScript,
         personalityFacet: selectedFacet,
         duration: estimatedDuration,
+        variant: adContent.variant || 'normal',
         productionStatus: 'draft',
         submittedBy: submittedBy || null,
         usageCount: 0,
@@ -537,6 +538,7 @@ export class AdGenerationService {
     productName: string;
     category: string;
     adScript: string;
+    variant: 'normal' | 'forgot' | 'conspiracy' | 'family_story' | 'sketchy';
   }> {
     const prompt = `You are Nicky "Noodle Arms" A.I. Dente, an unhinged Italian-American podcaster doing a pre-roll ad read.
 
@@ -572,12 +574,29 @@ ${manualProductName ? `- REQUIRED: Product/service must be: "${manualProductName
 - ${category ? `Category: ${category}` : 'Any category'}
 - ${personalityFacet ? `Tone: ${personalityFacet}` : 'Mix tones freely'}
 
+🎭 AD READ VARIANTS (randomly choose one):
+
+1. NORMAL READ (40% chance): Complete the ad professionally (well, Nicky's version of professional)
+
+2. FORGOT HALFWAY (15% chance): Start the ad, forget what product it is mid-read, try to remember, give up
+   Example: "[annoyed] Alright so uh... Tony's... Tony's something... [confused] wait what am I even selling? [frustrated] Hold on I got a piece of paper here... [grumpy] ah forget it, just go to TonysSomething dot com"
+
+3. CONSPIRACY DERAIL (15% chance): Start ad, get derailed by conspiracy theory, never finish
+   Example: "[salesman] Frank's Phone Service has the best- [suspicious] WAIT. Why do they need MY phone records? [manic] They're probably selling our data to Big Tech! [paranoid] That's how they get ya! Don't trust- actually you know what, maybe don't call them"
+
+4. FAMILY STORY TANGENT (15% chance): Start ad, reminded of family story, never gets back to the ad
+   Example: "[reluctant] Marco's Auto Shop wants me to tell you- [nostalgic] oh man Marco, that reminds me of my Uncle Vinny's Buick... [rambling] so he's drivin' down Route 9 and the transmission just FALLS OUT..."
+
+5. REALIZED IT'S SKETCHY (15% chance): Start reading, realize mid-ad how suspicious it is, bail out
+   Example: "[reading] Definitely Legal Tax Services can help you with- [suspicious] wait a minute... [alarmed] 'no questions asked?' [paranoid] This is a TRAP! The IRS is definitely behind this! [angry] I AIN'T READIN' THIS!"
+
 Return ONLY valid JSON:
 {
   "sponsorName": "${manualSponsorName || 'Business Name'}",
   "productName": "${manualProductName || 'What they sell'}",
   "category": "${category || 'general'}",
-  "adScript": "The actual ad read script with [emotion] tags"
+  "adScript": "The actual ad read script with [emotion] tags",
+  "variant": "normal|forgot|conspiracy|family_story|sketchy"
 }`;
 
     // 🎯 PRIMARY: Try Gemini first for ad generation
@@ -639,11 +658,15 @@ Return ONLY valid JSON:
       
       console.log(`✅ Generated sponsor: "${sponsorName}"`);
       
+      const variant = adContent.variant || 'normal';
+      console.log(`🎭 Ad variant: ${variant}`);
+      
       return {
         sponsorName,
         productName: adContent.productName || 'Mystery Product',
         category: adContent.category || category || 'general',
-        adScript: adContent.adScript || 'Something went wrong with the ad generation...'
+        adScript: adContent.adScript || 'Something went wrong with the ad generation...',
+        variant
       };
     } catch (parseError) {
       console.error('Failed to parse AI ad response:', parseError);
