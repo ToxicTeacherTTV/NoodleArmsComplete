@@ -564,7 +564,7 @@ Example 3 (Unhinged):
 NOW CREATE A NEW AD:
 ${manualSponsorName ? `- REQUIRED: Use this exact sponsor name: "${manualSponsorName}"` : '- Pick a ridiculous sponsor name (avoid "Salvatore", avoid "and/&")'}
 ${manualProductName ? `- REQUIRED: Product/service must be: "${manualProductName}"` : '- Invent an absurd product/service'}
-- 30-60 seconds (300-600 characters max)
+- 60-90 seconds (600-900 characters max)
 - Include a fake phone number, website, or promo code
 - Stay in character as Nicky
 - Be funny and absurd
