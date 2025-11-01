@@ -1019,6 +1019,7 @@ export const prerollAds = pgTable('preroll_ads', {
   adScript: text('ad_script').notNull(), // The generated ad content
   personalityFacet: text('personality_facet'), // Which facet was active during generation
   duration: integer('duration'), // Estimated duration in seconds
+  variant: text('variant').$type<'normal' | 'forgot' | 'conspiracy' | 'family_story' | 'sketchy'>().default('normal'), // Ad read variant (normal, forgot halfway, conspiracy derail, etc.)
   productionStatus: text('production_status').$type<'draft' | 'approved' | 'recorded' | 'published' | 'rejected'>().default('draft'), // Production workflow status
   audioFilePath: text('audio_file_path'), // Path to recorded audio file if exists
   episodeId: text('episode_id'), // Which episode this ad was published in

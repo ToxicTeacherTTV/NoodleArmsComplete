@@ -38,6 +38,7 @@ interface PrerollAd {
   adScript: string;
   personalityFacet?: string;
   duration?: number;
+  variant?: 'normal' | 'forgot' | 'conspiracy' | 'family_story' | 'sketchy';
   lastUsed?: string;
   usageCount: number;
   rating?: number;
@@ -284,6 +285,23 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
       alternative: '🔮'
     };
     return categoryMap[category] || '📢';
+  };
+
+  const getVariantBadge = (variant?: string) => {
+    const variantMap: Record<string, { label: string; color: string; icon: string }> = {
+      normal: { label: 'Normal', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: '📻' },
+      forgot: { label: 'Forgot Halfway', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: '🤔' },
+      conspiracy: { label: 'Conspiracy Derail', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: '🕵️' },
+      family_story: { label: 'Family Story', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', icon: '👨‍👩‍👧‍👦' },
+      sketchy: { label: 'Realized Sketchy', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: '⚠️' }
+    };
+    
+    const info = variantMap[variant || 'normal'] || variantMap.normal;
+    return (
+      <Badge variant="outline" className={`${info.color} text-xs border`}>
+        {info.icon} {info.label}
+      </Badge>
+    );
   };
 
   const StarRating = ({ rating, onRate, adId, readonly = false }: { 
@@ -535,6 +553,11 @@ export default function PrerollAdPanel({ profileId }: PrerollAdPanelProps) {
                         <div>
                           <h3 className="font-semibold text-sm">{ad.sponsorName}</h3>
                           <p className="text-xs text-muted-foreground">{ad.productName}</p>
+                          {ad.variant && ad.variant !== 'normal' && (
+                            <div className="mt-1">
+                              {getVariantBadge(ad.variant)}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
