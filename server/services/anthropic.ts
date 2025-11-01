@@ -53,7 +53,7 @@ class AnthropicService {
   }
 
   // 🧠 Parse training examples to separate thinking/strategy from conversation style
-  // 🚀 NEW: Consolidates multiple examples into unified patterns for token efficiency
+  // 🚀 NEW: Uses AI for intelligent pattern detection instead of regex
   private async parseTrainingExamples(examples: any[]): Promise<{ 
     strategies: string[], 
     conversations: string[],
@@ -74,43 +74,107 @@ class AnthropicService {
       }
     }
     
-    // Original parsing for < 3 examples or if consolidation fails
+    // 🎯 NEW: Use AI-powered parsing for < 3 examples or if consolidation fails
     const strategies: string[] = [];
     const conversations: string[] = [];
     
-    examples.forEach(example => {
-      if (!example.extractedContent) return;
+    for (const example of examples) {
+      if (!example.extractedContent) continue;
       
-      const content = example.extractedContent;
-      const strategyPattern = /^(Plotted|The user|I need to|I should|Let me|This|Key|Important|Note:|Strategy:|Approach:)[\s\S]*?(?=\n\n[^\n]|\[|User:|AI:|$)/gim;
-      const matches = content.match(strategyPattern);
-      
-      if (matches && matches.length > 0) {
-        // Found thinking blocks - separate them
-        const thinkingText = matches.join('\n\n').substring(0, 800); // Limit strategy length
-        strategies.push(thinkingText);
+      try {
+        const parsed = await this.intelligentlyParseExample(example.extractedContent);
         
-        // Remove thinking blocks to get pure conversation
-        let conversationText = content;
-        matches.forEach((match: string) => {
-          conversationText = conversationText.replace(match, '');
-        });
-        
-        // Clean up and add conversation
-        conversationText = conversationText.trim().substring(0, 1200);
-        if (conversationText.length > 50) {
-          conversations.push(conversationText);
+        if (parsed.strategy && parsed.strategy.length > 50) {
+          strategies.push(parsed.strategy.substring(0, 800));
         }
-      } else {
-        // No thinking blocks detected - treat as pure conversation
-        conversations.push(content.substring(0, 1200));
+        
+        if (parsed.conversation && parsed.conversation.length > 50) {
+          conversations.push(parsed.conversation.substring(0, 1200));
+        }
+      } catch (error) {
+        console.warn('⚠️ AI parsing failed for example, using as conversation:', error);
+        // Fallback: treat entire content as conversation
+        conversations.push(example.extractedContent.substring(0, 1200));
       }
-    });
+    }
     
     return { 
       strategies: strategies.slice(0, 5), // Max 5 strategy examples
       conversations: conversations.slice(0, 8) // Max 8 conversation examples
     };
+  }
+
+  // 🎯 NEW: Use AI to intelligently detect thinking vs conversation
+  private async intelligentlyParseExample(content: string): Promise<{
+    strategy: string;
+    conversation: string;
+  }> {
+    const prompt = `Analyze this training example and separate it into two parts:
+
+1. STRATEGY/THINKING: Internal reasoning, planning, meta-commentary about how to respond, notes about approach
+2. CONVERSATION: The actual dialogue, chat messages, spoken content
+
+Content to analyze:
+${content.substring(0, 2000)}
+
+Return ONLY valid JSON in this format:
+{
+  "strategy": "The internal thinking/planning text, or empty string if none found",
+  "conversation": "The actual dialogue/conversation text"
+}
+
+Examples:
+- Lines like "I need to be more aggressive here" = strategy
+- Lines like "Yo, what's good!" = conversation
+- Lines like "The user seems confused, let me clarify" = strategy
+- Lines like "User: Hey\nAI: Yo!" = conversation
+- Lines like "Plotted: Start with a joke" = strategy
+
+If the entire content is just conversation with no meta-thinking, put it all in "conversation" and leave "strategy" empty.`;
+
+    try {
+      // Try Gemini first (fast and free)
+      const geminiResponse = await geminiService.generateChatResponse(
+        prompt,
+        "You are a text analysis expert. Separate internal thinking from actual conversation. Return ONLY valid JSON.",
+        ''
+      );
+      
+      // Clean up response
+      let jsonText = geminiResponse.content.trim();
+      jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      
+      const parsed = JSON.parse(jsonText);
+      return {
+        strategy: parsed.strategy || '',
+        conversation: parsed.conversation || content
+      };
+      
+    } catch (geminiError) {
+      // Fallback to Claude
+      console.warn('⚠️ Gemini parsing failed, using Claude');
+      
+      const response = await anthropic.messages.create({
+        model: DEFAULT_MODEL_STR,
+        max_tokens: 1000,
+        temperature: 0.1, // Low temp for consistent parsing
+        system: "You are a text analysis expert. Separate internal thinking from actual conversation. Return ONLY valid JSON.",
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
+      });
+
+      const textContent = Array.isArray(response.content) ? response.content[0] : response.content;
+      let jsonText = textContent && 'text' in textContent ? textContent.text : '';
+      jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      
+      const parsed = JSON.parse(jsonText);
+      return {
+        strategy: parsed.strategy || '',
+        conversation: parsed.conversation || content
+      };
+    }
   }
 
   // 🎯 NEW: Consolidate multiple training examples into unified style guide
