@@ -27,6 +27,8 @@ ${characterContext ? `## Character Context:\n${characterContext}\n` : ''}
 
 ## 2. Core Directives
 ### DO:
+* **CRITICAL: ALWAYS start the response with [bronx] followed immediately by an emotion tag (e.g., [bronx][grumpy], [bronx][manic])**
+* **CRITICAL: Throughout the response, use double-tags [bronx][emotion] for every emotion change to maintain voice consistency**
 * Integrate audio tags from the list below to add expression and emotion
 * Ensure tags are contextually appropriate for Nicky's chaotic personality
 * Use diverse emotional expressions (grumpy, manic, conspiratorial, deadpan, etc.)
@@ -68,7 +70,7 @@ ${characterContext ? `## Character Context:\n${characterContext}\n` : ''}
 "Listen, I don't know what you want from me. This is ridiculous."
 
 **Enhanced:**
-"[grumpy] Listen, I don't know what you want from me. [exasperated] This is RIDICULOUS."
+"[bronx][grumpy] Listen, I don't know what you want from me. [bronx][exasperated] This is RIDICULOUS."
 
 ---
 
@@ -76,7 +78,7 @@ ${characterContext ? `## Character Context:\n${characterContext}\n` : ''}
 "My uncle Sal used to say the same thing. He was a smart guy."
 
 **Enhanced:**
-"[nostalgic] My uncle Sal used to say the same thing. [sighs] He was a smart guy..."
+"[bronx][nostalgic] My uncle Sal used to say the same thing. [sighs] He was a smart guy..."
 
 ---
 
@@ -84,7 +86,7 @@ ${characterContext ? `## Character Context:\n${characterContext}\n` : ''}
 "You think that's a coincidence? Wake up! They're controlling everything!"
 
 **Enhanced:**
-"[conspiratorial] You think that's a coincidence?! [manic] WAKE UP! [furious] They're controlling EVERYTHING!"
+"[bronx][conspiratorial] You think that's a coincidence?! [bronx][manic] WAKE UP! [bronx][furious] They're controlling EVERYTHING!"
 
 ## 5. Text to Enhance:
 ${text}
@@ -128,29 +130,35 @@ Reply ONLY with the enhanced text. Preserve every word exactly as written.`;
   /**
    * Quick enhance - adds basic emotion tags based on simple pattern matching
    * Faster but less sophisticated than full AI enhancement
+   * CRITICAL: Always uses [bronx][emotion] double-tag pattern for voice consistency
    */
   quickEnhance(text: string): string {
     let enhanced = text;
 
-    // Add grumpy tags to complaints
-    enhanced = enhanced.replace(/\b(Listen|Look|Alright)\b/gi, (match) => `[grumpy] ${match}`);
+    // Add [bronx] at the start if not present
+    if (!enhanced.trim().startsWith('[bronx]')) {
+      enhanced = `[bronx][grumpy] ${enhanced}`;
+    }
+
+    // Add grumpy double-tags to complaints
+    enhanced = enhanced.replace(/\b(Listen|Look|Alright)\b/gi, (match) => `[bronx][grumpy] ${match}`);
     
-    // Add exasperated tags to frustration
-    enhanced = enhanced.replace(/\b(ridiculous|stupid|idiotic|seriously)\b/gi, (match) => `${match} [exasperated]`);
+    // Add exasperated double-tags to frustration
+    enhanced = enhanced.replace(/\b(ridiculous|stupid|idiotic|seriously)\b/gi, (match) => `${match} [bronx][exasperated]`);
     
-    // Add manic tags to excitement
-    enhanced = enhanced.replace(/\b(amazing|incredible|unbelievable|holy)\b/gi, (match) => `[manic] ${match}`);
+    // Add manic double-tags to excitement
+    enhanced = enhanced.replace(/\b(amazing|incredible|unbelievable|holy)\b/gi, (match) => `[bronx][manic] ${match}`);
     
-    // Add conspiratorial tags to questions
+    // Add conspiratorial double-tags to questions
     enhanced = enhanced.replace(/(\?)/g, (match, offset, string) => {
       if (string.substring(Math.max(0, offset - 20), offset).includes('think') || 
           string.substring(Math.max(0, offset - 20), offset).includes('know')) {
-        return '? [conspiratorial]';
+        return '? [bronx][conspiratorial]';
       }
       return match;
     });
     
-    // Add sighs to ellipses
+    // Add sighs to ellipses (non-verbal sounds don't need bronx tag)
     enhanced = enhanced.replace(/\.\.\./g, '... [sighs]');
     
     return enhanced;

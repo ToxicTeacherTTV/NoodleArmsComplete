@@ -407,10 +407,13 @@ class ElevenLabsService {
             tagIndex++;
           }
           
+          // CRITICAL: Use [bronx][emotion] double-tag pattern for voice consistency
+          const doubleTag = `[bronx]${emotionTag}`;
+          
           if (result.trim()) {
-            result += ` ${emotionTag} ${currentSentence.trim()}`;
+            result += ` ${doubleTag} ${currentSentence.trim()}`;
           } else {
-            result += `${emotionTag} ${currentSentence.trim()}`;
+            result += `${doubleTag} ${currentSentence.trim()}`;
           }
           
           console.log(`🎭 Applied ${tagCycle[tagIndex % tagCycle.length] || 'hook'} tag to sentence ${sentenceCount}: "${currentSentence.substring(0, 30)}..."`);
