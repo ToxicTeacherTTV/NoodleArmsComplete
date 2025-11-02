@@ -875,54 +875,57 @@ ${coreIdentity}`;
       throw new Error("Gemini API key not configured");
     }
 
-    const model = APPROVED_MODELS.PRIMARY;
-    this.validateModel(model, 'analyzeContentForFlags');
-    
-    const response = await this.ai.models.generateContent({
-      model,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "object",
-          properties: {
-            flags: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  flagType: { type: "string" },
-                  priority: { type: "string", enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW"] },
-                  confidence: { type: "number" },
-                  reason: { type: "string" },
-                  extractedData: {
-                    type: "object",
-                    properties: {
-                      characterNames: { type: "array", items: { type: "string" } },
-                      relationships: { type: "array", items: { type: "string" } },
-                      emotions: { type: "array", items: { type: "string" } },
-                      topics: { type: "array", items: { type: "string" } },
-                      contradictions: { type: "array", items: { type: "string" } },
-                      patterns: { type: "array", items: { type: "string" } }
+    // 🔄 Use retry with backoff for quota/rate limit errors
+    return await this.retryWithBackoff(async () => {
+      const model = APPROVED_MODELS.PRIMARY;
+      this.validateModel(model, 'analyzeContentForFlags');
+      
+      const response = await this.ai.models.generateContent({
+        model,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: {
+              flags: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    flagType: { type: "string" },
+                    priority: { type: "string", enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW"] },
+                    confidence: { type: "number" },
+                    reason: { type: "string" },
+                    extractedData: {
+                      type: "object",
+                      properties: {
+                        characterNames: { type: "array", items: { type: "string" } },
+                        relationships: { type: "array", items: { type: "string" } },
+                        emotions: { type: "array", items: { type: "string" } },
+                        topics: { type: "array", items: { type: "string" } },
+                        contradictions: { type: "array", items: { type: "string" } },
+                        patterns: { type: "array", items: { type: "string" } }
+                      }
                     }
-                  }
-                },
-                required: ["flagType", "priority", "confidence", "reason"]
+                  },
+                  required: ["flagType", "priority", "confidence", "reason"]
+                }
               }
-            }
+            },
+            required: ["flags"]
           },
-          required: ["flags"]
+          temperature: 0.1 // Low temperature for consistent flagging
         },
-        temperature: 0.1 // Low temperature for consistent flagging
-      },
-      contents: [{ role: "user", parts: [{ text: prompt }] }], // Proper structured format
-    });
+        contents: [{ role: "user", parts: [{ text: prompt }] }], // Proper structured format
+      });
 
-    const rawJson = response.text;
-    if (!rawJson) {
-      throw new Error('Empty response from Gemini');
-    }
+      const rawJson = response.text;
+      if (!rawJson) {
+        throw new Error('Empty response from Gemini');
+      }
 
-    return JSON.parse(rawJson);
+      return JSON.parse(rawJson);
+    }, `analyzeContentForFlags(${contentType})`, 3); // 3 retries with exponential backoff
   }
 
   // NEW: Parse podcast segments from transcript for Nicky's memory system
@@ -1092,42 +1095,46 @@ Respond with ONLY a JSON array - no other text:
 ]`;
 
     try {
-      const model = APPROVED_MODELS.PRIMARY;
-      this.validateModel(model, 'extractPodcastFacts');
-      
-      const response = await this.ai.models.generateContent({
-        model,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                content: { type: "string" },
-                type: { type: "string", enum: ["TOPIC", "QUOTE", "FACT", "STORY", "MOMENT"] },
-                keywords: { type: "array", items: { type: "string" } },
-                importance: { type: "number", minimum: 1, maximum: 5 }
-              },
-              required: ["content", "type", "keywords", "importance"]
-            }
+      // 🔄 Use retry with backoff for quota/rate limit errors
+      return await this.retryWithBackoff(async () => {
+        const model = APPROVED_MODELS.PRIMARY;
+        this.validateModel(model, 'extractPodcastFacts');
+        
+        const response = await this.ai.models.generateContent({
+          model,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  content: { type: "string" },
+                  type: { type: "string", enum: ["TOPIC", "QUOTE", "FACT", "STORY", "MOMENT"] },
+                  keywords: { type: "array", items: { type: "string" } },
+                  importance: { type: "number", minimum: 1, maximum: 5 }
+                },
+                required: ["content", "type", "keywords", "importance"]
+              }
+            },
+            temperature: 0.3 // Higher creativity for fact extraction
           },
-          temperature: 0.3 // Higher creativity for fact extraction
-        },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-      });
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+        });
 
-      const rawJson = response.text;
-      if (rawJson) {
-        const facts = JSON.parse(rawJson);
-        console.log(`🧠 Extracted ${facts.length} facts from Episode ${episodeNumber}`);
-        return facts;
-      } else {
-        throw new Error("Empty response from Gemini");
-      }
+        const rawJson = response.text;
+        if (rawJson) {
+          const facts = JSON.parse(rawJson);
+          console.log(`🧠 Extracted ${facts.length} facts from Episode ${episodeNumber}`);
+          return facts;
+        } else {
+          throw new Error("Empty response from Gemini");
+        }
+      }, `extractPodcastFacts(Episode ${episodeNumber})`, 5); // 5 retries with exponential backoff
     } catch (error) {
-      console.error("Gemini fact extraction error:", error);
-      return []; // Return empty array if extraction fails
+      console.error(`❌ Gemini fact extraction error for Episode ${episodeNumber}:`, error);
+      console.warn(`⚠️ Returning empty array - fallback facts will be created`);
+      return []; // Return empty array if extraction fails - fallback will handle it
     }
   }
 
