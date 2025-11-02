@@ -4700,6 +4700,210 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Scan for duplicate entities
+  app.post('/api/entities/scan-duplicates', async (req, res) => {
+    try {
+      const profile = await storage.getActiveProfile();
+      if (!profile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      console.log('🔍 Scanning for duplicate entities...');
+
+      // Get all entities
+      const [people, places, events] = await Promise.all([
+        storage.getProfilePeople(profile.id),
+        storage.getProfilePlaces(profile.id),
+        storage.getProfileEvents(profile.id)
+      ]);
+
+      const duplicateGroups: any[] = [];
+
+      // Scan people for duplicates
+      for (let i = 0; i < people.length; i++) {
+        const primary = people[i];
+        const potentialDuplicates: any[] = [];
+
+        for (let j = i + 1; j < people.length; j++) {
+          const candidate = people[j];
+          
+          // Check name similarity
+          const nameSimilarity = calculateStringSimilarity(
+            primary.canonicalName.toLowerCase(),
+            candidate.canonicalName.toLowerCase()
+          );
+
+          // Check alias overlap
+          const primaryAliases = primary.aliases || [];
+          const candidateAliases = candidate.aliases || [];
+          const aliasMatch = primaryAliases.some((alias: string) =>
+            candidateAliases.some((cAlias: string) =>
+              alias.toLowerCase() === cAlias.toLowerCase()
+            )
+          ) || primaryAliases.some((alias: string) =>
+            alias.toLowerCase() === candidate.canonicalName.toLowerCase()
+          ) || candidateAliases.some((alias: string) =>
+            alias.toLowerCase() === primary.canonicalName.toLowerCase()
+          );
+
+          if (nameSimilarity > 0.75 || aliasMatch) {
+            potentialDuplicates.push({
+              id: candidate.id,
+              canonicalName: candidate.canonicalName,
+              disambiguation: candidate.disambiguation,
+              aliases: candidate.aliases,
+              similarity: Math.max(nameSimilarity, aliasMatch ? 0.9 : 0)
+            });
+          }
+        }
+
+        if (potentialDuplicates.length > 0) {
+          duplicateGroups.push({
+            type: 'person',
+            masterId: primary.id,
+            masterName: primary.canonicalName,
+            masterData: {
+              disambiguation: primary.disambiguation,
+              aliases: primary.aliases,
+              relationship: primary.relationship,
+              description: primary.description
+            },
+            duplicates: potentialDuplicates
+          });
+        }
+      }
+
+      // Scan places for duplicates
+      for (let i = 0; i < places.length; i++) {
+        const primary = places[i];
+        const potentialDuplicates: any[] = [];
+
+        for (let j = i + 1; j < places.length; j++) {
+          const candidate = places[j];
+          
+          const nameSimilarity = calculateStringSimilarity(
+            primary.canonicalName.toLowerCase(),
+            candidate.canonicalName.toLowerCase()
+          );
+
+          if (nameSimilarity > 0.75) {
+            potentialDuplicates.push({
+              id: candidate.id,
+              canonicalName: candidate.canonicalName,
+              locationType: candidate.locationType,
+              similarity: nameSimilarity
+            });
+          }
+        }
+
+        if (potentialDuplicates.length > 0) {
+          duplicateGroups.push({
+            type: 'place',
+            masterId: primary.id,
+            masterName: primary.canonicalName,
+            masterData: {
+              locationType: primary.locationType,
+              description: primary.description
+            },
+            duplicates: potentialDuplicates
+          });
+        }
+      }
+
+      // Scan events for duplicates
+      for (let i = 0; i < events.length; i++) {
+        const primary = events[i];
+        const potentialDuplicates: any[] = [];
+
+        for (let j = i + 1; j < events.length; j++) {
+          const candidate = events[j];
+          
+          const nameSimilarity = calculateStringSimilarity(
+            primary.canonicalName.toLowerCase(),
+            candidate.canonicalName.toLowerCase()
+          );
+
+          // Events with same date are more likely duplicates
+          const sameDate = primary.eventDate && candidate.eventDate &&
+            primary.eventDate === candidate.eventDate;
+
+          if (nameSimilarity > 0.75 || sameDate) {
+            potentialDuplicates.push({
+              id: candidate.id,
+              canonicalName: candidate.canonicalName,
+              eventDate: candidate.eventDate,
+              similarity: sameDate ? 0.95 : nameSimilarity
+            });
+          }
+        }
+
+        if (potentialDuplicates.length > 0) {
+          duplicateGroups.push({
+            type: 'event',
+            masterId: primary.id,
+            masterName: primary.canonicalName,
+            masterData: {
+              eventDate: primary.eventDate,
+              description: primary.description,
+              isCanonical: primary.isCanonical
+            },
+            duplicates: potentialDuplicates
+          });
+        }
+      }
+
+      console.log(`✅ Found ${duplicateGroups.length} potential duplicate groups`);
+
+      res.json({
+        success: true,
+        totalGroups: duplicateGroups.length,
+        duplicateGroups
+      });
+    } catch (error) {
+      console.error('Entity duplicate scan error:', error);
+      res.status(500).json({ error: 'Failed to scan for duplicate entities' });
+    }
+  });
+
+  // Helper function for string similarity (Levenshtein distance based)
+  function calculateStringSimilarity(str1: string, str2: string): number {
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    
+    if (longer.length === 0) return 1.0;
+    
+    const editDistance = levenshteinDistance(longer, shorter);
+    return (longer.length - editDistance) / longer.length;
+  }
+
+  function levenshteinDistance(str1: string, str2: string): number {
+    const matrix: number[][] = [];
+
+    for (let i = 0; i <= str2.length; i++) {
+      matrix[i] = [i];
+    }
+
+    for (let j = 0; j <= str1.length; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+
+    return matrix[str2.length][str1.length];
+  }
+
   // Batch extract entities from multiple memories
   app.post('/api/entities/batch-extract', async (req, res) => {
     try {

@@ -555,11 +555,37 @@ export default function BrainManagement() {
       setMergeMode(null);
       setSelectedForMerge([]);
       setShowMergeDialog(false);
+      // Remove from duplicate groups if shown
+      setEntityDuplicateGroups(prev => prev.filter(group => 
+        !(group.masterId === primaryId || group.duplicates.some((d: any) => d.id === primaryId || d.id === duplicateId))
+      ));
     },
     onError: (error) => {
       toast({
         title: "Merge Failed",
         description: error.message || "Failed to merge entities",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const scanEntityDuplicatesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/entities/scan-duplicates', {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setEntityDuplicateGroups(data.duplicateGroups || []);
+      setShowEntityDuplicates(true);
+      toast({
+        title: "Scan Complete",
+        description: `Found ${data.totalGroups} potential duplicate groups`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Scan Failed",
+        description: error.message || "Failed to scan for duplicates",
         variant: "destructive",
       });
     },
@@ -599,6 +625,11 @@ export default function BrainManagement() {
   const [showMergeEditDialog, setShowMergeEditDialog] = useState(false);
   const [mergeEditGroup, setMergeEditGroup] = useState<any>(null);
   const [mergeEditText, setMergeEditText] = useState("");
+
+  // Entity duplicates state
+  const [entityDuplicateGroups, setEntityDuplicateGroups] = useState<any[]>([]);
+  const [isLoadingEntityDuplicates, setIsLoadingEntityDuplicates] = useState(false);
+  const [showEntityDuplicates, setShowEntityDuplicates] = useState(false);
 
   // Load saved duplicate scan results on mount
   useEffect(() => {
@@ -1980,6 +2011,107 @@ export default function BrainManagement() {
                       </CardContent>
                     </Card>
                   </div>
+                )}
+
+                {/* Scan for Duplicates Button */}
+                {entities && (entities.people?.length > 0 || entities.places?.length > 0 || entities.events?.length > 0) && (
+                  <div className="flex justify-end mb-4">
+                    <Button
+                      onClick={() => {
+                        setIsLoadingEntityDuplicates(true);
+                        scanEntityDuplicatesMutation.mutate();
+                      }}
+                      disabled={isLoadingEntityDuplicates || scanEntityDuplicatesMutation.isPending}
+                      className="bg-purple-600 hover:bg-purple-700"
+                    >
+                      {(isLoadingEntityDuplicates || scanEntityDuplicatesMutation.isPending) ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Scanning...
+                        </>
+                      ) : (
+                        <>
+                          <Scan className="h-4 w-4 mr-2" />
+                          Scan for Duplicate Entities
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Duplicate Groups Display */}
+                {showEntityDuplicates && entityDuplicateGroups.length > 0 && (
+                  <Card className="mb-6 border-purple-200 dark:border-purple-800">
+                    <CardHeader className="bg-purple-50 dark:bg-purple-900/20">
+                      <CardTitle className="flex items-center justify-between">
+                        <span className="flex items-center">
+                          <AlertTriangle className="h-5 w-5 mr-2 text-purple-600" />
+                          Potential Duplicate Entities ({entityDuplicateGroups.length} groups)
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setShowEntityDuplicates(false)}
+                        >
+                          Hide
+                        </Button>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-4">
+                      <ScrollArea className="h-[400px]">
+                        <div className="space-y-4">
+                          {entityDuplicateGroups.map((group, idx) => (
+                            <Card key={idx} className="border-purple-100 dark:border-purple-800">
+                              <CardContent className="pt-4">
+                                <div className="mb-3">
+                                  <Badge variant="outline" className="mb-2">
+                                    {group.type.toUpperCase()}
+                                  </Badge>
+                                  <h4 className="font-semibold text-lg">
+                                    Master: {group.masterName}
+                                  </h4>
+                                  {group.masterData.disambiguation && (
+                                    <p className="text-sm text-gray-600">({group.masterData.disambiguation})</p>
+                                  )}
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Potential Duplicates ({group.duplicates.length}):
+                                  </p>
+                                  {group.duplicates.map((dup: any) => (
+                                    <div key={dup.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded border">
+                                      <div className="flex-1">
+                                        <p className="font-medium">{dup.canonicalName}</p>
+                                        <p className="text-xs text-gray-500">
+                                          Similarity: {(dup.similarity * 100).toFixed(0)}%
+                                        </p>
+                                      </div>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => {
+                                          mergeEntitiesMutation.mutate({
+                                            type: group.type,
+                                            primaryId: group.masterId,
+                                            duplicateId: dup.id
+                                          });
+                                        }}
+                                        disabled={mergeEntitiesMutation.isPending}
+                                        className="bg-purple-600 hover:bg-purple-700"
+                                      >
+                                        <Merge className="h-3 w-3 mr-1" />
+                                        Merge
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
                 )}
 
                 {/* Entity Management Tabs */}
