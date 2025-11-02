@@ -1,6 +1,6 @@
 // Intelligent city parser for podcast listener tracking
 
-import { COUNTRY_TO_CONTINENT, FAMOUS_CITIES } from "../../shared/listenerCities";
+import { COUNTRY_TO_CONTINENT, FAMOUS_CITIES, US_STATES, CANADIAN_PROVINCES } from "../../shared/listenerCities";
 
 export interface ParsedCityData {
   city: string;
@@ -25,6 +25,8 @@ export interface CityParseError {
  *  - "Toronto"
  *  - "Los Angeles, California"
  *  - "Berlin"
+ *  - "Vernal Utah" (auto-detects Utah = USA)
+ *  - "Springfield IL" (auto-detects IL = Illinois = USA)
  */
 export function parseCity(input: string): ParsedCityData | CityParseError {
   if (!input || input.trim().length === 0) {
@@ -40,23 +42,70 @@ export function parseCity(input: string): ParsedCityData | CityParseError {
 
   // Parse based on number of parts
   if (parts.length === 1) {
-    // Just city name - try to auto-detect
-    city = parts[0];
-    const famous = FAMOUS_CITIES[city];
-    if (famous) {
-      country = famous.country;
-      stateProvince = famous.stateProvince;
+    // Single part - could be "City" or "City State" (space-separated)
+    // First check if there's a space and the last word is a US state or Canadian province
+    const words = parts[0].split(' ');
+    if (words.length >= 2) {
+      const lastWord = words[words.length - 1];
+      const secondToLast = words.length >= 3 ? words[words.length - 2] : '';
+      
+      // Check for multi-word states like "New York" or "New Mexico"
+      const possibleMultiWordState = `${secondToLast} ${lastWord}`;
+      
+      if (US_STATES[possibleMultiWordState]) {
+        // Multi-word US state (e.g., "Salt Lake City New York")
+        city = words.slice(0, words.length - 2).join(' ');
+        stateProvince = US_STATES[possibleMultiWordState];
+        country = 'USA';
+      } else if (CANADIAN_PROVINCES[possibleMultiWordState]) {
+        // Multi-word Canadian province (e.g., "Corner Brook British Columbia")
+        city = words.slice(0, words.length - 2).join(' ');
+        stateProvince = CANADIAN_PROVINCES[possibleMultiWordState];
+        country = 'Canada';
+      } else if (US_STATES[lastWord]) {
+        // Single-word US state or abbreviation (e.g., "Vernal Utah" or "Springfield IL")
+        city = words.slice(0, -1).join(' ');
+        stateProvince = US_STATES[lastWord];
+        country = 'USA';
+      } else if (CANADIAN_PROVINCES[lastWord]) {
+        // Single-word Canadian province or abbreviation (e.g., "Toronto Ontario" or "Calgary AB")
+        city = words.slice(0, -1).join(' ');
+        stateProvince = CANADIAN_PROVINCES[lastWord];
+        country = 'Canada';
+      } else {
+        // No state detected, just a city name
+        city = parts[0];
+      }
+    } else {
+      // Single word, just city name
+      city = parts[0];
+    }
+    
+    // Try to auto-detect from famous cities if we don't have country yet
+    if (!country) {
+      const famous = FAMOUS_CITIES[city];
+      if (famous) {
+        country = famous.country;
+        stateProvince = stateProvince || famous.stateProvince;
+      }
     }
   } else if (parts.length === 2) {
     // "City, Country" or "City, State"
     city = parts[0];
     const secondPart = parts[1];
     
-    // Check if second part is a known country
-    if (COUNTRY_TO_CONTINENT[secondPart]) {
+    // Check if second part is a US state or Canadian province
+    if (US_STATES[secondPart]) {
+      stateProvince = US_STATES[secondPart];
+      country = 'USA';
+    } else if (CANADIAN_PROVINCES[secondPart]) {
+      stateProvince = CANADIAN_PROVINCES[secondPart];
+      country = 'Canada';
+    } else if (COUNTRY_TO_CONTINENT[secondPart]) {
+      // It's a known country
       country = secondPart;
     } else {
-      // Might be state, check famous cities
+      // Unknown state/country, treat as state and try to guess country
       stateProvince = secondPart;
       const famous = FAMOUS_CITIES[city];
       if (famous) {
