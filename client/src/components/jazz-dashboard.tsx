@@ -428,6 +428,15 @@ export default function JazzDashboard() {
                     <span className="hidden md:inline">🧠 Brain Management</span>
                     <span className="md:hidden">🧠</span>
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLocation('/listener-cities')}
+                    data-testid="button-listener-cities"
+                  >
+                    <span className="hidden md:inline">🗺️ Listener Cities</span>
+                    <span className="md:hidden">🗺️</span>
+                  </Button>
                 </div>
               </div>
             </div>
