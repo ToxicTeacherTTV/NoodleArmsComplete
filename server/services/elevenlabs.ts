@@ -330,18 +330,25 @@ class ElevenLabsService {
    */
   /**
    * Apply 5-stage emotional arc for natural progression
+   * Tags are applied to GROUPS of sentences (not every sentence)
    */
   public applyEmotionalArc(text: string, arc: {opening: string, rising: string, peak: string, falling: string, close: string}): string {
     const sentences = text.split(/([.!?]+)/).filter(part => part.trim());
     
     if (sentences.length === 0) return text;
     
-    console.log(`🎭 Applying emotional arc to ${sentences.length / 2} sentences`);
+    const totalSentences = Math.ceil(sentences.length / 2);
+    console.log(`🎭 Applying emotional arc to ${totalSentences} sentences across 5 stages`);
+    
+    const emotionStages = [arc.opening, arc.rising, arc.peak, arc.falling, arc.close];
+    
+    // Divide sentences into 5 groups
+    const sentencesPerStage = Math.max(1, Math.ceil(totalSentences / 5));
     
     let result = '';
     let currentSentence = '';
     let sentenceCount = 0;
-    const emotionStages = [arc.opening, arc.rising, arc.peak, arc.falling, arc.close];
+    let currentStage = -1;
     
     for (let i = 0; i < sentences.length; i++) {
       const part = sentences[i];
@@ -351,20 +358,25 @@ class ElevenLabsService {
         sentenceCount++;
         
         // Calculate which stage this sentence belongs to (0-4)
-        const totalSentences = Math.ceil(sentences.length / 2);
-        const stage = Math.min(4, Math.floor((sentenceCount - 1) / (totalSentences / 5)));
-        const emotionTag = emotionStages[stage];
+        const stage = Math.min(4, Math.floor((sentenceCount - 1) / sentencesPerStage));
         
-        // Apply [bronx][emotion] double-tag
-        const doubleTag = `[bronx]${emotionTag}`;
-        
-        if (result.trim()) {
-          result += ` ${doubleTag} ${currentSentence.trim()}`;
+        // Only add emotion tag at the START of each new stage (not every sentence)
+        if (stage !== currentStage) {
+          currentStage = stage;
+          const emotionTag = emotionStages[stage];
+          const doubleTag = `[bronx]${emotionTag}`;
+          
+          if (result.trim()) {
+            result += ` ${doubleTag} ${currentSentence.trim()}`;
+          } else {
+            result += `${doubleTag} ${currentSentence.trim()}`;
+          }
+          
+          console.log(`🎭 Stage ${stage + 1}/5 (${emotionTag}) starts at sentence ${sentenceCount}`);
         } else {
-          result += `${doubleTag} ${currentSentence.trim()}`;
+          // Same stage - just add sentence without tag
+          result += ` ${currentSentence.trim()}`;
         }
-        
-        console.log(`🎭 Stage ${stage + 1}/5 (${emotionTag}) → sentence ${sentenceCount}: "${currentSentence.substring(0, 40)}..."`);
         
         currentSentence = '';
       } else {
@@ -377,7 +389,7 @@ class ElevenLabsService {
       result += result.trim() ? ` ${currentSentence.trim()}` : currentSentence.trim();
     }
     
-    console.log(`🎭 AFTER emotional arc: "${result.substring(0, 80)}..."`);
+    console.log(`🎭 Applied 5 emotion tags across ${totalSentences} sentences`);
     return result;
   }
 
