@@ -1870,15 +1870,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       scanCompleted = true;
       console.log(`✅ Scan completed: ${results.duplicateGroups.length} groups, ${results.totalDuplicates} duplicates`);
 
-      const groupsForPersistence: DuplicateScanGroupSummary[] = results.duplicateGroups.map((group) => ({
+      // 🔧 STANDARDIZED FORMAT: Convert to consistent structure with avgSimilarity
+      const standardizedGroups = results.duplicateGroups.map((group) => ({
         masterId: group.masterId,
-        masterPreview: group.masterContent.slice(0, 280),
+        masterContent: group.masterContent,
         avgSimilarity: group.duplicates.length > 0
           ? group.duplicates.reduce((sum, dup) => sum + (dup.similarity ?? 0), 0) / group.duplicates.length
           : 1,
         duplicates: group.duplicates.map((dup) => ({
           id: dup.id,
-          similarity: dup.similarity ?? 1,
+          content: dup.content,
+          similarity: dup.similarity ?? 1
+        }))
+      }));
+
+      const groupsForPersistence: DuplicateScanGroupSummary[] = standardizedGroups.map((group) => ({
+        masterId: group.masterId,
+        masterPreview: group.masterContent.slice(0, 280),
+        avgSimilarity: group.avgSimilarity,
+        duplicates: group.duplicates.map((dup) => ({
+          id: dup.id,
+          similarity: dup.similarity,
           preview: dup.content.slice(0, 280)
         }))
       }));
@@ -1923,7 +1935,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         savedToDatabase: savedSuccessfully,
         message: `Scanned ${results.scannedCount} memories, found ${results.duplicateGroups.length} duplicate groups (${results.totalDuplicates} total duplicates)`,
         warning: savedSuccessfully ? undefined : 'Scan completed but results could not be saved to database due to timeout. You can still work with the results below.',
-        ...results
+        scannedCount: results.scannedCount,
+        totalDuplicates: results.totalDuplicates,
+        duplicateGroups: standardizedGroups // 🔧 Use standardized format
       });
     } catch (error: any) {
       console.error('Deep duplicate scan error:', error);
@@ -1931,13 +1945,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If scan completed but only saving failed, return partial success
       if (scanCompleted && results) {
         console.log('⚠️ Scan completed successfully but response failed - returning results anyway');
+        
+        // Recreate standardized groups for error case
+        const standardizedGroups = results.duplicateGroups.map((group) => ({
+          masterId: group.masterId,
+          masterContent: group.masterContent,
+          avgSimilarity: group.duplicates.length > 0
+            ? group.duplicates.reduce((sum, dup) => sum + (dup.similarity ?? 0), 0) / group.duplicates.length
+            : 1,
+          duplicates: group.duplicates.map((dup) => ({
+            id: dup.id,
+            content: dup.content,
+            similarity: dup.similarity ?? 1
+          }))
+        }));
+        
         return res.json({
           success: true,
           scanId: null,
           savedToDatabase: false,
           message: `Scanned ${results.scannedCount} memories, found ${results.duplicateGroups.length} duplicate groups (${results.totalDuplicates} total duplicates)`,
           warning: 'Scan completed but results could not be saved due to database timeout. You can still work with the results below.',
-          ...results
+          scannedCount: results.scannedCount,
+          totalDuplicates: results.totalDuplicates,
+          duplicateGroups: standardizedGroups
         });
       }
       
@@ -2038,12 +2069,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // 🔧 STANDARDIZED FORMAT: Ensure saved scans match fresh scan format
+      const standardizedGroups = hydratedGroups.map(group => ({
+        masterId: group.masterId,
+        masterContent: group.masterContent,
+        avgSimilarity: group.avgSimilarity,
+        duplicates: group.duplicates.map(dup => ({
+          id: dup.id,
+          content: dup.content,
+          similarity: dup.similarity
+        }))
+      }));
+
       res.json({
         hasSavedScan: true,
         scanId: savedScan.id,
         scanDepth: savedScan.scanDepth === -1 ? 'ALL' : savedScan.scanDepth,
         similarityThreshold: savedScan.similarityThreshold / 100,
-        duplicateGroups: hydratedGroups,
+        duplicateGroups: standardizedGroups,
         totalDuplicates: savedScan.totalDuplicatesFound,
         scannedCount: savedScan.scanDepth === -1 ? 'ALL' : savedScan.scanDepth,
         createdAt: savedScan.createdAt
@@ -3844,6 +3887,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error auto-merging duplicates:', error);
       res.status(500).json({ error: 'Failed to auto-merge duplicates' });
+    }
+  });
+
+  // Preview AI merge (doesn't actually merge, just returns suggestion)
+  app.post('/api/memory/preview-merge', async (req, res) => {
+    try {
+      const { masterEntryId, duplicateIds } = req.body;
+      
+      if (!masterEntryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
+        return res.status(400).json({ error: 'masterEntryId and duplicateIds are required' });
+      }
+
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
+
+      // Get the entries
+      const allIds = [masterEntryId, ...duplicateIds];
+      const entries = await db
+        .select()
+        .from(memoryEntries)
+        .where(inArray(memoryEntries.id, allIds));
+
+      if (entries.length !== allIds.length) {
+        return res.status(400).json({ error: 'Some memory entries not found' });
+      }
+
+      const masterEntry = entries.find(e => e.id === masterEntryId);
+      const duplicateEntries = entries.filter(e => e.id !== masterEntryId);
+
+      if (!masterEntry) {
+        return res.status(400).json({ error: 'Master entry not found' });
+      }
+
+      // Generate AI-powered merge suggestion
+      const mergedContent = await memoryDeduplicator.mergeContentWithAI(masterEntry, duplicateEntries);
+      
+      res.json({
+        success: true,
+        mergedContent,
+        originalMaster: masterEntry.content,
+        duplicates: duplicateEntries.map(d => d.content)
+      });
+    } catch (error) {
+      console.error('Error previewing merge:', error);
+      res.status(500).json({ error: 'Failed to preview merge' });
     }
   });
 
