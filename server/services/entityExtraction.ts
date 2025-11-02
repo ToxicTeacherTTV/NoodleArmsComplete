@@ -181,13 +181,19 @@ ONLY extract entities that are:
 1. Specific people, places, or events (not generic references)
 2. Important to Nicky's stories, relationships, or experiences
 3. Named or uniquely identifiable
-4. Not common gaming terms or generic locations
+
+DO extract:
+- Named game characters (Victor, The Trapper, Claudette) - these are specific entities
+- Named people (Nicky, The Host, specific developers)
+- Named places (Little Italy, specific restaurants, locations)
+- Named shows/media (Stranger Things, Dead by Daylight)
+- Specific events with dates or context
 
 DO NOT extract:
-- Generic gaming terms (survivors, killers, gens, hooks)
-- Common place types without specific names (restaurant, school)
-- Generic events (match, game, stream) unless specifically named
-- Pronouns or generic references (he, she, it, there)`;
+- Generic game mechanics (gens, hooks, perks) without specific names
+- Generic pronouns (he, she, it, they)
+- Generic place types without names (a restaurant, the school)
+- Generic role terms (survivor, killer) unless referring to a specific character`;
 
     try {
       const response = await this.retryWithBackoff(
