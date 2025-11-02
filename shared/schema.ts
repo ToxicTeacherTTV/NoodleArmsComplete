@@ -20,11 +20,9 @@ export const profiles = pgTable("profiles", {
   chaosMode: text("chaos_mode").$type<'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 'CONSPIRACY'>().default('FULL_PSYCHO'),
   voiceId: text("voice_id").default("pNInz6obpgDQGcFmaJgB"), // ElevenLabs voice ID, default Adam voice
   voiceSettings: json("voice_settings").$type<{
-    stability?: number;
-    similarity_boost?: number;
-    style?: number;
-    use_speaker_boost?: boolean;
-  }>().default(sql`'{"stability": 0.0, "similarity_boost": 0.75}'`),
+    stability?: number; // v3: Only accepts 0.0, 0.5, or 1.0
+    seed?: number; // Optional: for deterministic generation
+  }>().default(sql`'{"stability": 0.0}'`),
   personalityBaselines: jsonb("personality_baselines").$type<{
     [traitName: string]: {
       value: number;

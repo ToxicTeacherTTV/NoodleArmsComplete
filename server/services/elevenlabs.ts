@@ -193,9 +193,15 @@ class ElevenLabsService {
     const models = ["eleven_v3", "eleven_v2"]; // Try v3 first, fallback to v2
     let lastError: any;
     
+    // 🧹 CLEANUP: Strip deprecated v2 parameters for v3 compatibility
+    const cleanSettings = {
+      stability: settings?.stability ?? 0.0,
+      ...(settings?.seed && { seed: settings.seed })
+    };
+    
     for (const model of models) {
       try {
-        console.log(`🎵 ElevenLabs request: voice_id=${this.config.voiceId}, model=${model}, settings=${JSON.stringify(settings)}`);
+        console.log(`🎵 ElevenLabs request: voice_id=${this.config.voiceId}, model=${model}, settings=${JSON.stringify(cleanSettings)}`);
         
         const response = await fetch(
           `https://api.elevenlabs.io/v1/text-to-speech/${this.config.voiceId}`,
@@ -209,7 +215,7 @@ class ElevenLabsService {
             body: JSON.stringify({
               text: text,
               model_id: model,
-              voice_settings: settings,
+              voice_settings: cleanSettings,
             }),
           },
         );
