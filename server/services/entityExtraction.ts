@@ -46,13 +46,14 @@ class EntityExtractionService {
 
   /**
    * Retry helper for Gemini API calls with exponential backoff
+   * Respects API-provided retry delays for rate limits
    */
   private async retryWithBackoff<T>(
     operation: () => Promise<T>,
     operationName: string,
     maxRetries = 3
   ): Promise<T> {
-    const delays = [1000, 3000, 9000]; // 1s, 3s, 9s
+    const defaultDelays = [2000, 5000, 15000]; // 2s, 5s, 15s
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -66,7 +67,19 @@ class EntityExtractionService {
           throw error;
         }
         
-        const delay = delays[attempt] || delays[delays.length - 1]; // Use last delay if we exceed array
+        // Try to extract retry delay from API error response
+        let delay = defaultDelays[attempt] || defaultDelays[defaultDelays.length - 1];
+        
+        // Parse retry delay from error if available (e.g., "Please retry in 59.19s")
+        const errorMsg = error?.error?.message || error?.message || '';
+        const retryMatch = errorMsg.match(/retry in ([\d.]+)s/i);
+        if (retryMatch) {
+          const suggestedDelay = Math.ceil(parseFloat(retryMatch[1]) * 1000);
+          // Use suggested delay, but cap at 2 minutes for sanity
+          delay = Math.min(suggestedDelay, 120000);
+          console.log(`⏱️ API suggests ${suggestedDelay / 1000}s delay`);
+        }
+        
         console.warn(`⚠️ ${operationName} failed (attempt ${attempt + 1}/${maxRetries + 1}): ${error.message || error}`);
         console.log(`🔄 Retrying in ${delay / 1000}s...`);
         
