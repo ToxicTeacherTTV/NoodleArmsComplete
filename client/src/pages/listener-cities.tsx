@@ -415,12 +415,12 @@ export default function ListenerCitiesPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <Label>Continent</Label>
-              <Select value={filterContinent} onValueChange={setFilterContinent}>
+              <Select value={filterContinent || "all-continents"} onValueChange={(v) => setFilterContinent(v === "all-continents" ? "" : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Continents" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Continents</SelectItem>
+                  <SelectItem value="all-continents">All Continents</SelectItem>
                   {stats &&
                     Object.keys(stats.byContinents).map((continent) => (
                       <SelectItem key={continent} value={continent}>
@@ -433,12 +433,12 @@ export default function ListenerCitiesPage() {
 
             <div>
               <Label>Country</Label>
-              <Select value={filterCountry} onValueChange={setFilterCountry}>
+              <Select value={filterCountry || "all-countries"} onValueChange={(v) => setFilterCountry(v === "all-countries" ? "" : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Countries" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Countries</SelectItem>
+                  <SelectItem value="all-countries">All Countries</SelectItem>
                   {stats &&
                     Object.keys(stats.byCountries).map((country) => (
                       <SelectItem key={country} value={country}>
@@ -451,12 +451,12 @@ export default function ListenerCitiesPage() {
 
             <div>
               <Label>Region</Label>
-              <Select value={filterRegion} onValueChange={setFilterRegion}>
+              <Select value={filterRegion || "all-regions"} onValueChange={(v) => setFilterRegion(v === "all-regions" ? "" : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Regions" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Regions</SelectItem>
+                  <SelectItem value="all-regions">All Regions</SelectItem>
                   {stats &&
                     Object.keys(stats.byRegions).map((region) => (
                       <SelectItem key={region} value={region}>
