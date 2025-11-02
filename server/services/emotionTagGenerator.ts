@@ -203,30 +203,39 @@ Create a NATURAL emotional progression based on what the character is actually s
 
 CRITICAL RULES:
 1. Return ONLY JSON: {"opening": "[TAG]", "rising": "[TAG]", "peak": "[TAG]", "falling": "[TAG]", "close": "[TAG]"}
-2. Use DESCRIPTIVE action/delivery tags - tell the voice HOW to perform
-3. Read the CONTENT and match its ACTUAL emotional flow
-4. Use varied emotions - don't repeat the same tag
-5. NO accent/location words (no "bronx", "italian", "jersey")
-6. Tags should be lowercase in brackets: [frustrated] not [FRUSTRATED]
+2. Use VOCAL ACTION tags that tell the voice exactly HOW to sound
+3. Combine emotion + action for power: [frustrated sighs], [angry yelling], [excited laughs]
+4. Read the CONTENT and match its ACTUAL emotional flow
+5. Use varied tags - don't repeat the same action
+6. NO accent/location words (no "bronx", "italian", "jersey")
+7. Tags should be lowercase: [grumbling angrily] not [GRUMBLING ANGRILY]
 
-Available ElevenLabs v3 Audio Tags (choose what fits the content):
+ACTIONABLE ElevenLabs v3 Audio Tags - VOCAL ACTIONS ONLY:
 
-EMOTIONAL DELIVERY:
-- [happy], [sad], [excited], [angry], [frustrated], [annoyed], [exasperated]
-- [sarcastic], [curious], [mischievously], [thoughtful], [surprised]
-- [confident], [nervous], [worried], [sympathetic], [reassuring]
+LAUGHING/POSITIVE:
+- [laughs], [giggles], [chuckles], [snorts], [laughing happily], [chuckling mischievously]
 
-VOCAL ACTIONS:
-- [laughs], [laughing], [chuckles], [giggles], [snorts]
-- [sighs], [exhales], [inhales deeply], [clears throat]
-- [whispers], [shouts], [yelling], [muttering], [grumbling]
-- [crying], [sobbing], [sniffling]
+SIGHING/BREATHING:
+- [sighs], [frustrated sighs], [exhausted sighs], [sighs dramatically]
+- [exhales], [exhales sharply], [inhales deeply], [clears throat]
 
-INTENSITY:
-- [intense], [urgent], [calm], [relaxed], [energetic], [tired]
+SPEAKING STYLES (the most important):
+- [whispers], [whispers conspiratorially], [whispers urgently]
+- [grumbling], [grumbling angrily], [muttering]
+- [yelling], [shouting], [screaming], [angry yelling], [excited shouting]
+- [talking fast], [speaking slowly], [rambling]
 
-Example for conspiracy content:
-{"opening": "[curious]", "rising": "[whispers]", "peak": "[excited]", "falling": "[thoughtful]", "close": "[mischievously]"}
+EMOTIONAL VOCALIZATIONS:
+- [crying], [sobbing], [sniffling], [whimpering]
+- [growling], [snarling], [hissing]
+
+COMBO EXAMPLES (emotion + action):
+- [frustrated grumbling], [excited rambling], [angry muttering]
+- [nervous laughs], [tired sighs], [manic laughing]
+- [sarcastic muttering], [annoyed grumbling], [warm chuckles]
+
+Example for angry rant:
+{"opening": "[grumbling]", "rising": "[frustrated sighs]", "peak": "[angry yelling]", "falling": "[exhausted sighs]", "close": "[muttering angrily]"}
 
 Generate arc now:`;
   }
@@ -245,20 +254,24 @@ INTENSITY: ${context.intensity || 'medium'}
 
 Rules:
 1. Return ONLY JSON: {"hook": "[TAG]", "body": "[TAG]", "cta": "[TAG]"}
-2. Use DESCRIPTIVE action/delivery tags that tell the voice HOW to perform
-3. Match the personality and content mood
-4. Hook = opening energy, Body = main content, CTA = closing energy
-5. Tags should be lowercase: [frustrated] not [FRUSTRATED]
-6. Use ONLY vocal actions/emotions - NO accents, locations, or character names
+2. Use VOCAL ACTION tags - tell the voice exactly HOW to sound, not just emotions
+3. COMBINE emotion + action for power: [frustrated grumbling], [excited yelling]
+4. Match the personality and content mood with ACTIONS
+5. Tags should be lowercase: [angry muttering] not [ANGRY MUTTERING]
+6. Use ONLY vocal actions - NO accents, locations, or character names
 7. Do NOT include words like "bronx", "italian", "jersey"
 8. No explanation, just the JSON object
 
-Available tags: [happy], [sad], [excited], [angry], [frustrated], [annoyed], [sarcastic], [curious], [confident], [nervous], [laughs], [sighs], [whispers], [shouts], [grumbling], [intense], [urgent], [calm], [thoughtful], [mischievously]
+BEST TAGS (vocal actions):
+- Laughing: [laughs], [chuckles], [giggles], [nervous laughs], [manic laughing]
+- Sighing: [sighs], [frustrated sighs], [exhausted sighs], [dramatic sighs]
+- Speaking: [whispers], [grumbling], [muttering], [yelling], [shouting], [rambling]
+- Combos: [frustrated grumbling], [excited rambling], [angry yelling], [sarcastic muttering]
 
 Examples:
-- Aggressive ad: {"hook": "[confident]", "body": "[intense]", "cta": "[urgent]"}
-- Warm chat: {"hook": "[happy]", "body": "[curious]", "cta": "[reassuring]"}
-- Conspiracy content: {"hook": "[whispers]", "body": "[excited]", "cta": "[mischievously]"}
+- Aggressive ad: {"hook": "[talking fast]", "body": "[excited shouting]", "cta": "[yelling urgently]"}
+- Grumpy chat: {"hook": "[grumbling]", "body": "[frustrated muttering]", "cta": "[exhausted sighs]"}
+- Conspiracy: {"hook": "[whispers conspiratorially]", "body": "[excited rambling]", "cta": "[manic laughing]"}
 
 Generate tags now:`;
   }
@@ -289,28 +302,28 @@ Generate tags now:`;
     switch (context.contentType) {
       case 'ad':
         return {
-          opening: '[confident]',
-          rising: '[excited]',
-          peak: '[energetic]',
-          falling: '[intense]',
-          close: '[urgent]'
+          opening: '[talking fast]',
+          rising: '[excited shouting]',
+          peak: '[yelling enthusiastically]',
+          falling: '[speaking intensely]',
+          close: '[urgent whispers]'
         };
       case 'chat':
       case 'voice_response':
         return {
           opening: '[grumbling]',
-          rising: '[annoyed]',
-          peak: '[frustrated]',
-          falling: '[sarcastic]',
-          close: '[sighs]'
+          rising: '[frustrated sighs]',
+          peak: '[angry muttering]',
+          falling: '[sarcastic muttering]',
+          close: '[exhausted sighs]'
         };
       default:
         return {
-          opening: '[thoughtful]',
-          rising: '[curious]',
-          peak: '[excited]',
-          falling: '[reassuring]',
-          close: '[happy]'
+          opening: '[speaking thoughtfully]',
+          rising: '[talking curiously]',
+          peak: '[excited rambling]',
+          falling: '[chuckles]',
+          close: '[laughs warmly]'
         };
     }
   }
@@ -319,32 +332,32 @@ Generate tags now:`;
    * Get fallback tags based on context (old 3-tag system)
    */
   private getFallbackTags(context: EmotionTagContext): EmotionTags {
-    // Simple fallback based on content type - ElevenLabs v3 actionable tags
+    // Simple fallback based on content type - VOCAL ACTION tags only
     switch (context.contentType) {
       case 'ad':
         return {
-          hook: '[confident]',
-          body: '[excited]',
-          cta: '[urgent]'
+          hook: '[talking fast]',
+          body: '[excited shouting]',
+          cta: '[yelling urgently]'
         };
       case 'chat':
       case 'voice_response':
         return {
           hook: '[grumbling]',
-          body: '[sarcastic]',
-          cta: '[sighs]'
+          body: '[frustrated muttering]',
+          cta: '[exhausted sighs]'
         };
       case 'announcement':
         return {
-          hook: '[clear]',
-          body: '[informative]',
-          cta: '[reassuring]'
+          hook: '[speaking clearly]',
+          body: '[talking informatively]',
+          cta: '[chuckles warmly]'
         };
       default:
         return {
-          hook: '[thoughtful]',
-          body: '[curious]',
-          cta: '[happy]'
+          hook: '[speaking thoughtfully]',
+          body: '[talking curiously]',
+          cta: '[laughs]'
         };
     }
   }
