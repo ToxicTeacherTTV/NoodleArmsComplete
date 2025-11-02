@@ -1884,14 +1884,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }))
       }));
 
+      // For large scans, reduce preview size to help with database performance
+      const isLargeScan = results.totalDuplicates > 200;
+      const previewLength = isLargeScan ? 150 : 280;
+      
+      if (isLargeScan) {
+        console.log(`📦 Large scan detected (${results.totalDuplicates} duplicates), using shorter previews (${previewLength} chars)`);
+      }
+
       const groupsForPersistence: DuplicateScanGroupSummary[] = standardizedGroups.map((group) => ({
         masterId: group.masterId,
-        masterPreview: group.masterContent.slice(0, 280),
+        masterPreview: group.masterContent.slice(0, previewLength),
         avgSimilarity: group.avgSimilarity,
         duplicates: group.duplicates.map((dup) => ({
           id: dup.id,
           similarity: dup.similarity,
-          preview: dup.content.slice(0, 280)
+          preview: dup.content.slice(0, previewLength)
         }))
       }));
 
@@ -1900,33 +1908,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let savedSuccessfully = true;
       
       try {
-        // Archive previous scan results
-        await db.update(duplicateScanResults)
-          .set({ status: 'ARCHIVED' })
-          .where(and(
-            eq(duplicateScanResults.profileId, activeProfile.id),
-            eq(duplicateScanResults.status, 'ACTIVE')
-          ));
+        // Set a 15-second timeout for the save operation
+        const savePromise = (async () => {
+          // Archive previous scan results
+          await db.update(duplicateScanResults)
+            .set({ status: 'ARCHIVED' })
+            .where(and(
+              eq(duplicateScanResults.profileId, activeProfile.id),
+              eq(duplicateScanResults.status, 'ACTIVE')
+            ));
 
-        // Save new scan results to database
-        const [savedScan] = await db.insert(duplicateScanResults).values({
-          profileId: activeProfile.id,
-          scanDepth: scanDepth === 'ALL' ? -1 : scanDepth,
-          similarityThreshold: Math.round(similarityThreshold * 100),
-          totalGroupsFound: results.duplicateGroups.length,
-          totalDuplicatesFound: results.totalDuplicates,
-          duplicateGroups: groupsForPersistence,
-          status: 'ACTIVE'
-        }).returning();
+          // Save new scan results to database
+          const [savedScan] = await db.insert(duplicateScanResults).values({
+            profileId: activeProfile.id,
+            scanDepth: scanDepth === 'ALL' ? -1 : scanDepth,
+            similarityThreshold: Math.round(similarityThreshold * 100),
+            totalGroupsFound: results.duplicateGroups.length,
+            totalDuplicatesFound: results.totalDuplicates,
+            duplicateGroups: groupsForPersistence,
+            status: 'ACTIVE'
+          }).returning();
 
+          return savedScan;
+        })();
+
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Save operation timeout (15s)')), 15000);
+        });
+
+        const savedScan = await Promise.race([savePromise, timeoutPromise]) as any;
         savedScanId = savedScan.id;
         console.log(`💾 Saved scan results to database: ID ${savedScanId}`);
       } catch (saveError: any) {
         savedSuccessfully = false;
-        const timeoutDetected = saveError?.code === '57P01' || saveError?.code === '57014';
-        const reason = timeoutDetected ? 'database timeout/termination' : saveError?.message;
+        const timeoutDetected = saveError?.code === '57P01' || 
+                                saveError?.code === '57014' || 
+                                saveError?.message?.includes('timeout');
+        const reason = timeoutDetected ? 'database timeout (large dataset)' : saveError?.message;
         console.warn(`⚠️ Failed to save scan results to database (${reason})`);
         console.warn('   Returning results to client anyway - they can still work with them in-memory');
+        console.warn(`   💡 TIP: For large scans (${results.duplicateGroups.length} groups), consider merging groups to reduce size`);
       }
 
       res.json({
@@ -1934,7 +1955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         scanId: savedScanId,
         savedToDatabase: savedSuccessfully,
         message: `Scanned ${results.scannedCount} memories, found ${results.duplicateGroups.length} duplicate groups (${results.totalDuplicates} total duplicates)`,
-        warning: savedSuccessfully ? undefined : 'Scan completed but results could not be saved to database due to timeout. You can still work with the results below.',
+        warning: savedSuccessfully ? undefined : `⚠️ Scan completed successfully but results are too large to save (${results.totalDuplicates} duplicates). You can still work with the results below. TIP: Merge some groups to reduce the size, then re-scan.`,
         scannedCount: results.scannedCount,
         totalDuplicates: results.totalDuplicates,
         duplicateGroups: standardizedGroups // 🔧 Use standardized format
