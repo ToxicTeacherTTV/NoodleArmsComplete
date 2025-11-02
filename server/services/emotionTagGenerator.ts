@@ -221,9 +221,8 @@ SIGHING/BREATHING:
 
 SPEAKING STYLES (the most important):
 - [whispers], [whispers conspiratorially], [whispers urgently]
-- [grumbling], [grumbling angrily], [muttering]
-- [yelling], [shouting], [screaming], [angry yelling], [excited shouting]
-- [talking fast], [speaking slowly], [rambling]
+- [grumbling], [grumbling angrily], [muttering], [muttering sarcastically]
+- [talking fast], [speaking slowly], [rambling], [rambling excitedly]
 
 EMOTIONAL VOCALIZATIONS:
 - [crying], [sobbing], [sniffling], [whimpering]
@@ -234,8 +233,13 @@ COMBO EXAMPLES (emotion + action):
 - [nervous laughs], [tired sighs], [manic laughing]
 - [sarcastic muttering], [annoyed grumbling], [warm chuckles]
 
+IMPORTANT - For yelling/shouting:
+- DON'T use [yelling] or [shouting] tags
+- DO use ALL CAPS + exclamation points in the text itself
+- Example: "THIS IS CRAZY!" not "[yelling] this is crazy"
+
 Example for angry rant:
-{"opening": "[grumbling]", "rising": "[frustrated sighs]", "peak": "[angry yelling]", "falling": "[exhausted sighs]", "close": "[muttering angrily]"}
+{"opening": "[grumbling]", "rising": "[frustrated sighs]", "peak": "[angry muttering]", "falling": "[exhausted sighs]", "close": "[muttering angrily]"}
 
 Generate arc now:`;
   }
@@ -265,11 +269,13 @@ Rules:
 BEST TAGS (vocal actions):
 - Laughing: [laughs], [chuckles], [giggles], [nervous laughs], [manic laughing]
 - Sighing: [sighs], [frustrated sighs], [exhausted sighs], [dramatic sighs]
-- Speaking: [whispers], [grumbling], [muttering], [yelling], [shouting], [rambling]
-- Combos: [frustrated grumbling], [excited rambling], [angry yelling], [sarcastic muttering]
+- Speaking: [whispers], [grumbling], [muttering], [rambling], [talking fast]
+- Combos: [frustrated grumbling], [excited rambling], [angry muttering], [sarcastic muttering]
+
+IMPORTANT: For yelling/shouting, use ALL CAPS + ! in text, NOT tags
 
 Examples:
-- Aggressive ad: {"hook": "[talking fast]", "body": "[excited shouting]", "cta": "[yelling urgently]"}
+- Aggressive ad: {"hook": "[talking fast]", "body": "[excited rambling]", "cta": "[whispers urgently]"}
 - Grumpy chat: {"hook": "[grumbling]", "body": "[frustrated muttering]", "cta": "[exhausted sighs]"}
 - Conspiracy: {"hook": "[whispers conspiratorially]", "body": "[excited rambling]", "cta": "[manic laughing]"}
 
@@ -303,10 +309,10 @@ Generate tags now:`;
       case 'ad':
         return {
           opening: '[talking fast]',
-          rising: '[excited shouting]',
-          peak: '[yelling enthusiastically]',
-          falling: '[speaking intensely]',
-          close: '[urgent whispers]'
+          rising: '[excited rambling]',
+          peak: '[rambling intensely]',
+          falling: '[speaking urgently]',
+          close: '[whispers urgently]'
         };
       case 'chat':
       case 'voice_response':
@@ -337,8 +343,8 @@ Generate tags now:`;
       case 'ad':
         return {
           hook: '[talking fast]',
-          body: '[excited shouting]',
-          cta: '[yelling urgently]'
+          body: '[excited rambling]',
+          cta: '[whispers urgently]'
         };
       case 'chat':
       case 'voice_response':
