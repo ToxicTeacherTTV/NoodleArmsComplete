@@ -1017,7 +1017,33 @@ export default function BrainManagement() {
     },
   });
 
-  // Quick merge mutation (no editing, just merge)
+  // Preview merge mutation (gets AI suggestion)
+  const previewMergeMutation = useMutation({
+    mutationFn: async ({ masterEntryId, duplicateIds }: { masterEntryId: string; duplicateIds: string[] }) => {
+      const response = await fetch('/api/memory/preview-merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ masterEntryId, duplicateIds }),
+      });
+      if (!response.ok) throw new Error('Failed to preview merge');
+      return response.json();
+    },
+    onSuccess: (data, variables) => {
+      // Set the AI-suggested merge text and open dialog
+      setMergeEditText(data.mergedContent);
+      setMergeEditGroup({ masterEntryId: variables.masterEntryId, duplicateIds: variables.duplicateIds });
+      setShowMergeEditDialog(true);
+    },
+    onError: (error) => {
+      toast({
+        title: "Preview Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Quick merge mutation (no editing, just merge with AI)
   const quickMergeMutation = useMutation({
     mutationFn: async ({ masterEntryId, duplicateIds }: { masterEntryId: string; duplicateIds: string[] }) => {
       const response = await fetch('/api/memory/merge-group', {
@@ -1031,13 +1057,12 @@ export default function BrainManagement() {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
       
-      // Remove the merged group from duplicateGroups state
+      // 🔧 IMPROVED: Remove merged group using standardized masterId format
       const mergedIds = [variables.masterEntryId, ...variables.duplicateIds];
       setDuplicateGroups(prevGroups => 
         prevGroups.filter(group => {
-          // Keep groups that don't contain any of the merged memory IDs
           const groupMemoryIds = [
-            group.masterEntry?.id || group.masterId,
+            group.masterId, // Standardized format uses masterId
             ...(group.duplicates?.map((d: any) => d.id) || [])
           ].filter(Boolean);
           
@@ -1047,7 +1072,7 @@ export default function BrainManagement() {
       
       toast({
         title: "Group Merged",
-        description: `Successfully merged ${data.mergedCount} duplicates. Group removed from list.`,
+        description: `Successfully merged ${data.mergedCount} duplicates with AI. Group removed from list.`,
       });
     },
     onError: (error) => {
@@ -1059,9 +1084,9 @@ export default function BrainManagement() {
     },
   });
 
-  // Manual merge mutation
+  // Manual merge mutation (with edited content)
   const manualMergeMutation = useMutation({
-    mutationFn: async ({ primaryId, duplicateIds, mergedContent }: { primaryId: string; duplicateIds: string[]; mergedContent?: string }) => {
+    mutationFn: async ({ primaryId, duplicateIds, mergedContent }: { primaryId: string; duplicateIds: string[]; mergedContent: string }) => {
       const response = await fetch('/api/memory/merge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1073,13 +1098,12 @@ export default function BrainManagement() {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
       
-      // Remove the merged group from duplicateGroups state
+      // 🔧 IMPROVED: Remove merged group using standardized masterId format
       const mergedIds = [variables.primaryId, ...variables.duplicateIds];
       setDuplicateGroups(prevGroups => 
         prevGroups.filter(group => {
-          // Keep groups that don't contain any of the merged memory IDs
           const groupMemoryIds = [
-            group.masterEntry?.id,
+            group.masterId, // Standardized format uses masterId
             ...(group.duplicates?.map((d: any) => d.id) || [])
           ].filter(Boolean);
           
@@ -1094,7 +1118,7 @@ export default function BrainManagement() {
       
       toast({
         title: "Memories Merged",
-        description: `Successfully merged ${data.mergedCount} memories. Group removed from list.`,
+        description: `Successfully merged ${data.mergedCount} memories with your edits. Group removed from list.`,
       });
     },
     onError: (error) => {
@@ -2965,8 +2989,8 @@ export default function BrainManagement() {
                                   size="sm"
                                   variant="default"
                                   onClick={() => {
-                                    // Quick merge - no editing, just merge using PRIMARY as master
-                                    const masterEntryId = group.masterEntry?.id || group.masterId;
+                                    // 🔧 Quick merge - uses AI merging automatically, no editing
+                                    const masterEntryId = group.masterId; // Standardized format
                                     const duplicateIds = group.duplicates.map((d: any) => d.id);
                                     
                                     if (masterEntryId && duplicateIds.length > 0) {
@@ -2981,60 +3005,48 @@ export default function BrainManagement() {
                                   ) : (
                                     <Zap className="h-4 w-4 mr-1" />
                                   )}
-                                  Quick Merge
+                                  Quick Merge (AI)
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   onClick={() => {
-                                    // Handle both data structures: masterEntry object or masterId+masterContent
-                                    const masterContent = group.masterEntry?.content || group.masterContent || '';
-                                    const allTexts = [
-                                      masterContent,
-                                      ...group.duplicates.map((d: any) => d.content)
-                                    ].filter(Boolean);
+                                    // 🔧 NEW: Use AI preview to get smart merge suggestion
+                                    const masterEntryId = group.masterId; // Standardized format
+                                    const duplicateIds = group.duplicates.map((d: any) => d.id);
                                     
-                                    setMergeEditGroup(group);
-                                    setMergeEditText(allTexts.join('\n\n'));
-                                    setShowMergeEditDialog(true);
+                                    if (masterEntryId && duplicateIds.length > 0) {
+                                      previewMergeMutation.mutate({ masterEntryId, duplicateIds });
+                                    }
                                   }}
-                                  disabled={manualMergeMutation.isPending}
+                                  disabled={previewMergeMutation.isPending || manualMergeMutation.isPending}
                                   data-testid={`button-merge-group-${groupIndex}`}
                                 >
-                                  {manualMergeMutation.isPending ? (
+                                  {previewMergeMutation.isPending ? (
                                     <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                                   ) : (
                                     <Merge className="h-4 w-4 mr-1" />
                                   )}
-                                  Edit & Merge
+                                  {previewMergeMutation.isPending ? 'Getting AI Suggestion...' : 'Edit & Merge'}
                                 </Button>
                               </div>
                             </div>
                           </CardHeader>
                           <CardContent className="space-y-4">
-                            {/* Primary Memory - handle both masterEntry object and masterId+masterContent */}
-                            {(group.masterEntry || group.masterContent) && (
+                            {/* Primary Memory - standardized format */}
+                            {group.masterContent && (
                               <div className="border border-green-200 dark:border-green-700 rounded p-4 bg-green-50 dark:bg-green-900/20">
                                 <div className="flex items-center justify-between mb-2">
                                   <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
                                     PRIMARY
                                   </Badge>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    {group.masterEntry?.confidence != null && `Confidence: ${group.masterEntry.confidence}% | `}
-                                    {group.masterEntry && `Importance: ${group.masterEntry.importance || 0}`}
+                                    ID: {group.masterId.substring(0, 8)}...
                                   </div>
                                 </div>
                                 <p className="text-sm text-gray-900 dark:text-gray-100">
-                                  {group.masterEntry?.content || group.masterContent}
+                                  {group.masterContent}
                                 </p>
-                                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                  {group.masterEntry && (
-                                    <>Source: {group.masterEntry.source} • {new Date(group.masterEntry.createdAt).toLocaleDateString()}</>
-                                  )}
-                                  {!group.masterEntry && group.masterId && (
-                                    <>ID: {group.masterId.substring(0, 8)}...</>
-                                  )}
-                                </div>
                               </div>
                             )}
                             
@@ -4047,9 +4059,9 @@ export default function BrainManagement() {
       <Dialog open={showMergeEditDialog} onOpenChange={setShowMergeEditDialog}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Edit and Merge Duplicate Memories</DialogTitle>
+            <DialogTitle>AI-Assisted Merge - Review & Edit</DialogTitle>
             <DialogDescription>
-              All duplicate texts are shown below (one per section). Edit them as needed, then merge into a single memory.
+              The AI has intelligently combined all unique information from the duplicates below. Review and edit the merged text as needed before confirming.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -4092,11 +4104,18 @@ export default function BrainManagement() {
                   return;
                 }
                 
-                // Handle both data structures: masterEntry object or masterId
-                const primaryId = mergeEditGroup.masterEntry?.id || mergeEditGroup.masterId || mergeEditGroup.duplicates[0]?.id;
-                const duplicateIds = (mergeEditGroup.masterEntry || mergeEditGroup.masterId)
-                  ? mergeEditGroup.duplicates.map((d: any) => d.id)
-                  : mergeEditGroup.duplicates.slice(1).map((d: any) => d.id);
+                // 🔧 Use standardized format from preview mutation
+                const primaryId = mergeEditGroup.masterEntryId;
+                const duplicateIds = mergeEditGroup.duplicateIds;
+                
+                if (!primaryId || !duplicateIds || duplicateIds.length === 0) {
+                  toast({
+                    title: "Error",
+                    description: "Missing merge group data",
+                    variant: "destructive",
+                  });
+                  return;
+                }
                 
                 manualMergeMutation.mutate({
                   primaryId,
