@@ -203,16 +203,30 @@ Create a NATURAL emotional progression based on what the character is actually s
 
 CRITICAL RULES:
 1. Return ONLY JSON: {"opening": "[TAG]", "rising": "[TAG]", "peak": "[TAG]", "falling": "[TAG]", "close": "[TAG]"}
-2. ONE emotion word per tag - NO COMMAS, NO MULTIPLE WORDS
+2. Use DESCRIPTIVE action/delivery tags - tell the voice HOW to perform
 3. Read the CONTENT and match its ACTUAL emotional flow
 4. Use varied emotions - don't repeat the same tag
 5. NO accent/location words (no "bronx", "italian", "jersey")
-6. Uppercase tags: [GRUMPY] not [grumpy]
+6. Tags should be lowercase in brackets: [frustrated] not [FRUSTRATED]
 
-Available emotions: GRUMPY, ANNOYED, FURIOUS, EXASPERATED, MANIC, UNHINGED, PSYCHO, EXCITED, CONSPIRATORIAL, SUSPICIOUS, PARANOID, DEADPAN, SARCASTIC, RELUCTANT, WARM, GENUINE, NOSTALGIC, COMPOSED, INCREDULOUS, INDIGNANT, INTENSE, URGENT, CONFIDENT, PERSUASIVE, CONVERSATIONAL, EXPRESSIVE
+Available ElevenLabs v3 Audio Tags (choose what fits the content):
 
-Example for angry rant:
-{"opening": "[ANNOYED]", "rising": "[FURIOUS]", "peak": "[UNHINGED]", "falling": "[SARCASTIC]", "close": "[INTENSE]"}
+EMOTIONAL DELIVERY:
+- [happy], [sad], [excited], [angry], [frustrated], [annoyed], [exasperated]
+- [sarcastic], [curious], [mischievously], [thoughtful], [surprised]
+- [confident], [nervous], [worried], [sympathetic], [reassuring]
+
+VOCAL ACTIONS:
+- [laughs], [laughing], [chuckles], [giggles], [snorts]
+- [sighs], [exhales], [inhales deeply], [clears throat]
+- [whispers], [shouts], [yelling], [muttering], [grumbling]
+- [crying], [sobbing], [sniffling]
+
+INTENSITY:
+- [intense], [urgent], [calm], [relaxed], [energetic], [tired]
+
+Example for conspiracy content:
+{"opening": "[curious]", "rising": "[whispers]", "peak": "[excited]", "falling": "[thoughtful]", "close": "[mischievously]"}
 
 Generate arc now:`;
   }
@@ -231,18 +245,20 @@ INTENSITY: ${context.intensity || 'medium'}
 
 Rules:
 1. Return ONLY JSON: {"hook": "[TAG]", "body": "[TAG]", "cta": "[TAG]"}
-2. Use EXACTLY ONE emotion/delivery word per tag - NO COMMAS, NO MULTIPLE WORDS
+2. Use DESCRIPTIVE action/delivery tags that tell the voice HOW to perform
 3. Match the personality and content mood
 4. Hook = opening energy, Body = main content, CTA = closing energy
-5. Keep tags simple and TTS-friendly (uppercase preferred: [ANNOYED] not [annoyed])
-6. Use ONLY pure emotions/attitudes - NO accents, locations, or character names
-7. Do NOT include words like "bronx", "italian", "jersey" or any geographic/accent descriptors
+5. Tags should be lowercase: [frustrated] not [FRUSTRATED]
+6. Use ONLY vocal actions/emotions - NO accents, locations, or character names
+7. Do NOT include words like "bronx", "italian", "jersey"
 8. No explanation, just the JSON object
 
+Available tags: [happy], [sad], [excited], [angry], [frustrated], [annoyed], [sarcastic], [curious], [confident], [nervous], [laughs], [sighs], [whispers], [shouts], [grumbling], [intense], [urgent], [calm], [thoughtful], [mischievously]
+
 Examples:
-- Aggressive ad: {"hook": "[CONFIDENT]", "body": "[INTENSE]", "cta": "[URGENT]"}
-- Warm chat: {"hook": "[FRIENDLY]", "body": "[WARM]", "cta": "[ENCOURAGING]"}
-- Conspiracy content: {"hook": "[WHISPERING]", "body": "[CONSPIRATORIAL]", "cta": "[SERIOUS]"}
+- Aggressive ad: {"hook": "[confident]", "body": "[intense]", "cta": "[urgent]"}
+- Warm chat: {"hook": "[happy]", "body": "[curious]", "cta": "[reassuring]"}
+- Conspiracy content: {"hook": "[whispers]", "body": "[excited]", "cta": "[mischievously]"}
 
 Generate tags now:`;
   }
@@ -273,62 +289,62 @@ Generate tags now:`;
     switch (context.contentType) {
       case 'ad':
         return {
-          opening: '[CONFIDENT]',
-          rising: '[EXCITED]',
-          peak: '[PERSUASIVE]',
-          falling: '[INTENSE]',
-          close: '[URGENT]'
+          opening: '[confident]',
+          rising: '[excited]',
+          peak: '[energetic]',
+          falling: '[intense]',
+          close: '[urgent]'
         };
       case 'chat':
       case 'voice_response':
         return {
-          opening: '[GRUMPY]',
-          rising: '[ANNOYED]',
-          peak: '[FURIOUS]',
-          falling: '[SARCASTIC]',
-          close: '[INTENSE]'
+          opening: '[grumbling]',
+          rising: '[annoyed]',
+          peak: '[frustrated]',
+          falling: '[sarcastic]',
+          close: '[sighs]'
         };
       default:
         return {
-          opening: '[CONVERSATIONAL]',
-          rising: '[EXPRESSIVE]',
-          peak: '[ENGAGED]',
-          falling: '[THOUGHTFUL]',
-          close: '[WARM]'
+          opening: '[thoughtful]',
+          rising: '[curious]',
+          peak: '[excited]',
+          falling: '[reassuring]',
+          close: '[happy]'
         };
     }
   }
 
   /**
-   * Get fallback tags based on context
+   * Get fallback tags based on context (old 3-tag system)
    */
   private getFallbackTags(context: EmotionTagContext): EmotionTags {
-    // Simple fallback based on content type - SINGLE tags only
+    // Simple fallback based on content type - ElevenLabs v3 actionable tags
     switch (context.contentType) {
       case 'ad':
         return {
-          hook: '[CONFIDENT]',
-          body: '[PERSUASIVE]',
-          cta: '[URGENT]'
+          hook: '[confident]',
+          body: '[excited]',
+          cta: '[urgent]'
         };
       case 'chat':
       case 'voice_response':
         return {
-          hook: '[CONVERSATIONAL]',
-          body: '[EXPRESSIVE]',
-          cta: '[WARM]'
+          hook: '[grumbling]',
+          body: '[sarcastic]',
+          cta: '[sighs]'
         };
       case 'announcement':
         return {
-          hook: '[CLEAR]',
-          body: '[INFORMATIVE]',
-          cta: '[MEMORABLE]'
+          hook: '[clear]',
+          body: '[informative]',
+          cta: '[reassuring]'
         };
       default:
         return {
-          hook: '[NATURAL]',
-          body: '[ENGAGING]',
-          cta: '[AUTHENTIC]'
+          hook: '[thoughtful]',
+          body: '[curious]',
+          cta: '[happy]'
         };
     }
   }
