@@ -335,8 +335,67 @@ class ElevenLabsService {
    * Apply AI-generated emotion tags to text with proper 2-3 sentence distribution for podcast mode
    */
   /**
+   * Detect the ACTUAL emotional energy of text based on formatting/content
+   * This OVERRIDES the arc suggestion when text clearly demands different emotion
+   */
+  private detectTextEnergy(text: string): string | null {
+    const trimmed = text.trim();
+    
+    // ALL CAPS detection - screaming/yelling
+    const capsWords = trimmed.match(/\b[A-Z]{3,}\b/g) || [];
+    const capsRatio = capsWords.length / (trimmed.split(/\s+/).length || 1);
+    
+    // Check for sustained shouting (multiple caps words or high ratio)
+    if (capsRatio > 0.4 || capsWords.length >= 3) {
+      return '[yelling furiously]';
+    }
+    
+    // Check for profanity intensity (indicates frustration/anger)
+    const profanityPattern = /\b(fuck|shit|damn|hell|ass|bitch|goddamn)\w*/gi;
+    const profanityMatches = trimmed.match(profanityPattern) || [];
+    if (profanityMatches.length >= 3 && capsWords.length > 0) {
+      return '[yelling furiously]';
+    }
+    
+    // Ellipsis detection - trailing off, muttering
+    if (/\.{3,}$|…$/.test(trimmed)) {
+      return '[muttering angrily]';
+    }
+    
+    // Multiple exclamation/question marks - intense emotion
+    if (/[!?]{2,}/.test(trimmed)) {
+      if (capsWords.length > 0) {
+        return '[yelling furiously]';
+      } else {
+        return '[frustrated sighs]';
+      }
+    }
+    
+    // Whisper indicators - parentheses or specific phrases
+    if (/^\(.*\)$/.test(trimmed) || /\bwhisper\b/i.test(trimmed)) {
+      return '[whispers]';
+    }
+    
+    // Fast talking indicators - long run-on sentences with commas
+    const commaCount = (trimmed.match(/,/g) || []).length;
+    const wordCount = trimmed.split(/\s+/).length;
+    if (commaCount >= 3 && wordCount > 25) {
+      return '[rambling excitedly]';
+    }
+    
+    // Questioning/confused tone
+    if (/\?{1,2}$/.test(trimmed) && /\b(what|why|how|who|where|when)\b/i.test(trimmed)) {
+      return '[incredulous sputtering]';
+    }
+    
+    // No override needed - let arc decide
+    return null;
+  }
+
+  /**
    * Apply 5-stage emotional arc for natural progression
    * Tags are applied to GROUPS of sentences (not every sentence)
+   * BUT: Text energy OVERRIDES arc when formatting clearly indicates different emotion
    */
   public applyEmotionalArc(text: string, arc: {opening: string, rising: string, peak: string, falling: string, close: string}): string {
     const sentences = text.split(/([.!?]+)/).filter(part => part.trim());
@@ -369,7 +428,11 @@ class ElevenLabsService {
         // Only add emotion tag at the START of each new stage (not every sentence)
         if (stage !== currentStage) {
           currentStage = stage;
-          const emotionTag = emotionStages[stage];
+          
+          // 🔥 NEW: Detect actual text energy - overrides arc if needed
+          const detectedEnergy = this.detectTextEnergy(currentSentence);
+          const emotionTag = detectedEnergy || emotionStages[stage];
+          
           const doubleTag = `[bronx]${emotionTag}`;
           
           if (result.trim()) {
@@ -378,7 +441,11 @@ class ElevenLabsService {
             result += `${doubleTag} ${currentSentence.trim()}`;
           }
           
-          console.log(`🎭 Stage ${stage + 1}/5 (${emotionTag}) starts at sentence ${sentenceCount}`);
+          if (detectedEnergy) {
+            console.log(`🔥 Stage ${stage + 1}/5: Text energy OVERRIDE → ${detectedEnergy} (was ${emotionStages[stage]})`);
+          } else {
+            console.log(`🎭 Stage ${stage + 1}/5: Arc emotion → ${emotionTag}`);
+          }
         } else {
           // Same stage - just add sentence without tag
           result += ` ${currentSentence.trim()}`;
@@ -395,7 +462,7 @@ class ElevenLabsService {
       result += result.trim() ? ` ${currentSentence.trim()}` : currentSentence.trim();
     }
     
-    console.log(`🎭 Applied 5 emotion tags across ${totalSentences} sentences`);
+    console.log(`🎭 Applied emotion tags across ${totalSentences} sentences`);
     return result;
   }
 
