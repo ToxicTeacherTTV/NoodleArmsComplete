@@ -23,6 +23,7 @@ import { ContentCollectionManager } from './services/ingestion/ContentCollection
 import { adGenerationService } from './services/AdGenerationService';
 import { podcastFactExtractor } from './services/podcastFactExtractor';
 import { entityExtraction } from './services/entityExtraction';
+import { emotionEnhancer } from './services/emotionEnhancer';
 import { insertAutomatedSourceSchema, insertPendingContentSchema, insertAdTemplateSchema, insertPrerollAdSchema } from '@shared/schema';
 import multer from "multer";
 import { z } from "zod";
@@ -725,6 +726,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Chat error:', error);
       res.status(500).json({ error: 'Failed to generate response' });
+    }
+  });
+
+  // Emotion Enhancement endpoints
+  app.post('/api/enhance-text', async (req, res) => {
+    try {
+      const { text, mode, characterContext } = req.body;
+      
+      if (!text) {
+        return res.status(400).json({ error: 'Text is required' });
+      }
+
+      let enhancedText: string;
+      
+      if (mode === 'quick') {
+        // Fast pattern-based enhancement
+        enhancedText = emotionEnhancer.quickEnhance(text);
+        console.log('⚡ Quick emotion enhancement applied');
+      } else {
+        // Full AI-powered enhancement
+        enhancedText = await emotionEnhancer.enhanceText(text, characterContext);
+        console.log('🎭 AI emotion enhancement applied');
+      }
+
+      res.json({ 
+        original: text,
+        enhanced: enhancedText,
+        mode: mode || 'ai'
+      });
+    } catch (error) {
+      console.error('Enhancement error:', error);
+      res.status(500).json({ error: 'Failed to enhance text' });
+    }
+  });
+
+  app.post('/api/enhance-message', async (req, res) => {
+    try {
+      const { conversationId, messageIndex, mode } = req.body;
+      
+      if (!conversationId || messageIndex === undefined) {
+        return res.status(400).json({ error: 'Conversation ID and message index are required' });
+      }
+
+      // Get conversation messages
+      const messages = await storage.getConversationMessages(conversationId);
+      const message = messages[messageIndex];
+      
+      if (!message) {
+        return res.status(404).json({ error: 'Message not found' });
+      }
+
+      // Only enhance AI messages (type: AI or SYSTEM)
+      if (message.type !== 'AI') {
+        return res.status(400).json({ error: 'Can only enhance AI messages' });
+      }
+
+      let enhancedContent: string;
+      
+      if (mode === 'quick') {
+        enhancedContent = emotionEnhancer.quickEnhance(message.content);
+        console.log(`⚡ Quick enhanced message at index ${messageIndex}`);
+      } else {
+        // Get personality context for better enhancement
+        const activeProfile = await storage.getActiveProfile();
+        const characterContext = activeProfile ? 
+          `Nicky "Noodle Arms" A.I. Dente - unhinged Italian-American podcaster from the Bronx` : 
+          undefined;
+        
+        enhancedContent = await emotionEnhancer.enhanceText(message.content, characterContext);
+        console.log(`🎭 AI enhanced message at index ${messageIndex}`);
+      }
+
+      res.json({ 
+        messageIndex,
+        original: message.content,
+        enhanced: enhancedContent,
+        mode: mode || 'ai'
+      });
+    } catch (error) {
+      console.error('Message enhancement error:', error);
+      res.status(500).json({ error: 'Failed to enhance message' });
     }
   });
 
