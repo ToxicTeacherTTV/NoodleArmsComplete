@@ -277,3 +277,33 @@ Test with the 5 prompts - Nicky should answer directly.
 **STATUS: ✅ READY TO TEST**
 
 Run the 5 test prompts and report back with results!
+
+
+---
+
+#  EPISODE 73 PODCAST ISSUES - November 2, 2025
+
+##  **What Went Wrong**
+
+### 1. **'Where the Fuck Are the Viewers From' - Abuja, Nigeria Story**
+
+**The Problem:**
+- Story felt forced and boring
+- Got defensive when called out ('BORING?! YOU THINK...')
+- Didn't have concrete, vivid details
+- Character (Adebayo 'The Crocodile' Johnson) felt made up and flat
+- When Toxic said 'that guy isn't even real' - Nicky doubled down instead of pivoting
+
+**Why It Failed:**
+- Missing VIVID DETAILS that make stories memorable
+- Not enough CHAOS and ESCALATION
+- Defensive reaction broke the flow
+- No VICTOR involvement (he's usually central to these stories)
+
+### 2. **Bachelor Entity Edition Segment Issues**
+
+**The Problem:**
+- Too aggressive on disagreeing with Toxic's ratings
+- Not enough variety in emotion/vocal tags
+- Missing the FUN of the segment - felt combative instead of entertaining
+
