@@ -622,16 +622,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           let cleanedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
           
           // Apply emotion tags using the same logic as ElevenLabs
+          // Note: applySectionedDeliveryWithAI now applies [bronx][emotion] double-tags throughout
           const taggedContent = elevenlabsService.applySectionedDeliveryWithAI(cleanedContent, emotionTags);
           
-          // For podcast mode, prepend [bronx] tag to the final tagged response
-          if (mode === 'PODCAST' || hasBronxTag) {
-            processedContent = `[bronx] ${taggedContent}`;
-            console.log(`🎭 Applied sectioned emotion tags with [bronx] prefix for podcast mode`);
-          } else {
-            processedContent = taggedContent;
-            console.log(`🎭 Applied sectioned emotion tags for streaming mode`);
-          }
+          processedContent = taggedContent;
+          console.log(`🎭 Applied sectioned emotion tags with [bronx][emotion] double-tags throughout`);
           
           console.log(`🎭 Final tagged content: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
           
@@ -649,11 +644,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         processedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
         console.log(`🎭 Discord mode: No emotion tags applied, clean text only`);
       } else {
-        // CHAT mode or other modes: add [bronx] if not present but no emotion tags
-        if (!processedContent.includes('[bronx]')) {
+        // CHAT mode or other modes: ensure [bronx] tag at start for voice consistency
+        if (!processedContent.trim().startsWith('[bronx]')) {
           processedContent = `[bronx] ${processedContent}`;
         }
-        console.log(`🎭 Chat mode: Added [bronx] tag only`);
+        console.log(`🎭 Chat mode: Ensured [bronx] tag at start for voice consistency`);
       }
 
       const response = {
