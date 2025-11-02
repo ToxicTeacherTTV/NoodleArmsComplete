@@ -361,6 +361,59 @@ class ElevenLabsService {
   /**
    * Apply AI-generated emotion tags to text with proper 2-3 sentence distribution for podcast mode
    */
+  /**
+   * Apply 5-stage emotional arc for natural progression
+   */
+  public applyEmotionalArc(text: string, arc: {opening: string, rising: string, peak: string, falling: string, close: string}): string {
+    const sentences = text.split(/([.!?]+)/).filter(part => part.trim());
+    
+    if (sentences.length === 0) return text;
+    
+    console.log(`🎭 Applying emotional arc to ${sentences.length / 2} sentences`);
+    
+    let result = '';
+    let currentSentence = '';
+    let sentenceCount = 0;
+    const emotionStages = [arc.opening, arc.rising, arc.peak, arc.falling, arc.close];
+    
+    for (let i = 0; i < sentences.length; i++) {
+      const part = sentences[i];
+      
+      if (/[.!?]+/.test(part)) {
+        currentSentence += part;
+        sentenceCount++;
+        
+        // Calculate which stage this sentence belongs to (0-4)
+        const totalSentences = Math.ceil(sentences.length / 2);
+        const stage = Math.min(4, Math.floor((sentenceCount - 1) / (totalSentences / 5)));
+        const emotionTag = emotionStages[stage];
+        
+        // Apply [bronx][emotion] double-tag
+        const doubleTag = `[bronx]${emotionTag}`;
+        
+        if (result.trim()) {
+          result += ` ${doubleTag} ${currentSentence.trim()}`;
+        } else {
+          result += `${doubleTag} ${currentSentence.trim()}`;
+        }
+        
+        console.log(`🎭 Stage ${stage + 1}/5 (${emotionTag}) → sentence ${sentenceCount}: "${currentSentence.substring(0, 40)}..."`);
+        
+        currentSentence = '';
+      } else {
+        currentSentence += part;
+      }
+    }
+    
+    // Handle any remaining text
+    if (currentSentence.trim()) {
+      result += result.trim() ? ` ${currentSentence.trim()}` : currentSentence.trim();
+    }
+    
+    console.log(`🎭 AFTER emotional arc: "${result.substring(0, 80)}..."`);
+    return result;
+  }
+
   public applySectionedDeliveryWithAI(text: string, aiTags: {hook: string, body: string, cta: string}): string {
     // Split text into sentences but preserve punctuation - handles . ! ? endings
     const sentences = text.split(/([.!?]+)/).filter(part => part.trim());

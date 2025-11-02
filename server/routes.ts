@@ -602,7 +602,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const { emotionTagGenerator } = await import('./services/emotionTagGenerator');
           const { elevenlabsService } = await import('./services/elevenlabs');
           
-          const emotionTags = await emotionTagGenerator.generateEmotionTags({
+          // Generate 5-stage emotional arc for natural progression
+          const emotionalArc = await emotionTagGenerator.generateEmotionalArc({
             content: processedContent,
             personality: activeProfile.name,
             contentType: 'voice_response',
@@ -613,22 +614,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
           });
           
-          console.log(`🎭 Generated emotion tags: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
+          console.log(`🎭 Generated emotional arc: opening="${emotionalArc.opening}" rising="${emotionalArc.rising}" peak="${emotionalArc.peak}" falling="${emotionalArc.falling}" close="${emotionalArc.close}"`);
           
-          // First, preserve the [bronx] tag if present
-          const hasBronxTag = processedContent.includes('[bronx]');
-          
-          // Strip ALL existing emotion tags (including [bronx] temporarily) to prevent duplication
+          // Strip ALL existing emotion tags to prevent duplication
           let cleanedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
           
-          // Apply emotion tags using the same logic as ElevenLabs
-          // Note: applySectionedDeliveryWithAI now applies [bronx][emotion] double-tags throughout
-          const taggedContent = elevenlabsService.applySectionedDeliveryWithAI(cleanedContent, emotionTags);
+          // Apply emotional arc with natural progression
+          const taggedContent = elevenlabsService.applyEmotionalArc(cleanedContent, emotionalArc);
           
           processedContent = taggedContent;
-          console.log(`🎭 Applied sectioned emotion tags with [bronx][emotion] double-tags throughout`);
+          console.log(`🎭 Applied emotional arc with [bronx][emotion] double-tags for natural flow`);
           
-          console.log(`🎭 Final tagged content: hook="${emotionTags.hook}" body="${emotionTags.body}" cta="${emotionTags.cta}"`);
+          console.log(`🎭 Final emotional arc: opening="${emotionalArc.opening}" rising="${emotionalArc.rising}" peak="${emotionalArc.peak}" falling="${emotionalArc.falling}" close="${emotionalArc.close}"`);
           
         } catch (error) {
           console.warn('⚠️ Failed to generate emotion tags:', error);

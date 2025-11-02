@@ -14,6 +14,14 @@ interface EmotionTags {
   cta: string;
 }
 
+interface EmotionalArc {
+  opening: string;   // First 20% - Initial hook
+  rising: string;    // Next 20% - Building energy
+  peak: string;      // Middle 20% - Climax/intensity
+  falling: string;   // Next 20% - Transition down
+  close: string;     // Final 20% - Strong finish
+}
+
 interface CachedEmotionTag {
   tags: EmotionTags;
   timestamp: number;
@@ -26,7 +34,23 @@ class EmotionTagGenerator {
   private readonly MAX_CACHE_SIZE = 500;
 
   /**
-   * Generate contextual emotion tags using AI
+   * Generate emotional arc with 5 stages for natural progression
+   */
+  async generateEmotionalArc(context: EmotionTagContext): Promise<EmotionalArc> {
+    const cacheKey = this.createCacheKey(context) + '_arc';
+    
+    try {
+      const arc = await this.generateArcWithAI(context);
+      console.log(`🎭 Generated emotional arc: ${JSON.stringify(arc)}`);
+      return arc;
+    } catch (error) {
+      console.error('🎭 Emotional arc generation failed:', error);
+      return this.getFallbackArc(context);
+    }
+  }
+
+  /**
+   * Generate contextual emotion tags using AI (legacy 3-tag system)
    */
   async generateEmotionTags(context: EmotionTagContext): Promise<EmotionTags> {
     // Create cache key from context
@@ -57,6 +81,42 @@ class EmotionTagGenerator {
     } catch (error) {
       console.error('🎭 AI emotion tag generation failed:', error);
       return this.getFallbackTags(context);
+    }
+  }
+
+  /**
+   * Generate emotional arc using AI (5-stage progression)
+   */
+  private async generateArcWithAI(context: EmotionTagContext): Promise<EmotionalArc> {
+    const prompt = this.buildArcPrompt(context);
+    
+    const response = await anthropicService.generateResponse(
+      prompt,
+      'You are a voice emotion arc generator. Create a natural 5-stage emotional progression. Return only valid JSON.',
+      [],
+      [],
+      undefined,
+      'SIMPLE'
+    );
+    
+    try {
+      const jsonContent = this.extractJSON(response.content);
+      const parsed = JSON.parse(jsonContent);
+      
+      if (!parsed.opening || !parsed.rising || !parsed.peak || !parsed.falling || !parsed.close) {
+        throw new Error('Missing required emotional arc fields');
+      }
+      
+      return {
+        opening: this.sanitizeTag(parsed.opening),
+        rising: this.sanitizeTag(parsed.rising),
+        peak: this.sanitizeTag(parsed.peak),
+        falling: this.sanitizeTag(parsed.falling),
+        close: this.sanitizeTag(parsed.close)
+      };
+    } catch (error: any) {
+      console.warn('🎭 Arc parsing failed:', error);
+      throw new Error(`Failed to parse emotional arc: ${error?.message}`);
     }
   }
 
@@ -125,6 +185,39 @@ class EmotionTagGenerator {
   }
 
   /**
+   * Build AI prompt for emotional arc generation (5-stage)
+   */
+  private buildArcPrompt(context: EmotionTagContext): string {
+    return `Create a natural 5-stage emotional arc for this dialogue. Analyze the ACTUAL emotional flow of the content.
+
+CONTENT: "${context.content}"
+PERSONALITY: ${context.personality || 'Nicky - unhinged Italian-American podcaster'}
+CONTENT_TYPE: ${context.contentType}
+
+Create a NATURAL emotional progression based on what the character is actually saying:
+- opening: First 20% - How does it START?
+- rising: Next 20% - Energy building
+- peak: Middle 20% - Emotional climax
+- falling: Next 20% - Transition/shift
+- close: Final 20% - How does it END?
+
+CRITICAL RULES:
+1. Return ONLY JSON: {"opening": "[TAG]", "rising": "[TAG]", "peak": "[TAG]", "falling": "[TAG]", "close": "[TAG]"}
+2. ONE emotion word per tag - NO COMMAS, NO MULTIPLE WORDS
+3. Read the CONTENT and match its ACTUAL emotional flow
+4. Use varied emotions - don't repeat the same tag
+5. NO accent/location words (no "bronx", "italian", "jersey")
+6. Uppercase tags: [GRUMPY] not [grumpy]
+
+Available emotions: GRUMPY, ANNOYED, FURIOUS, EXASPERATED, MANIC, UNHINGED, PSYCHO, EXCITED, CONSPIRATORIAL, SUSPICIOUS, PARANOID, DEADPAN, SARCASTIC, RELUCTANT, WARM, GENUINE, NOSTALGIC, COMPOSED, INCREDULOUS, INDIGNANT, INTENSE, URGENT, CONFIDENT, PERSUASIVE, CONVERSATIONAL, EXPRESSIVE
+
+Example for angry rant:
+{"opening": "[ANNOYED]", "rising": "[FURIOUS]", "peak": "[UNHINGED]", "falling": "[SARCASTIC]", "close": "[INTENSE]"}
+
+Generate arc now:`;
+  }
+
+  /**
    * Build AI prompt for emotion tag generation
    */
   private buildPrompt(context: EmotionTagContext): string {
@@ -171,6 +264,39 @@ Generate tags now:`;
     };
 
     return isValidTag(tags.hook) && isValidTag(tags.body) && isValidTag(tags.cta);
+  }
+
+  /**
+   * Get fallback emotional arc
+   */
+  private getFallbackArc(context: EmotionTagContext): EmotionalArc {
+    switch (context.contentType) {
+      case 'ad':
+        return {
+          opening: '[CONFIDENT]',
+          rising: '[EXCITED]',
+          peak: '[PERSUASIVE]',
+          falling: '[INTENSE]',
+          close: '[URGENT]'
+        };
+      case 'chat':
+      case 'voice_response':
+        return {
+          opening: '[GRUMPY]',
+          rising: '[ANNOYED]',
+          peak: '[FURIOUS]',
+          falling: '[SARCASTIC]',
+          close: '[INTENSE]'
+        };
+      default:
+        return {
+          opening: '[CONVERSATIONAL]',
+          rising: '[EXPRESSIVE]',
+          peak: '[ENGAGED]',
+          falling: '[THOUGHTFUL]',
+          close: '[WARM]'
+        };
+    }
   }
 
   /**
