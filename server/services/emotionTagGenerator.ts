@@ -223,6 +223,7 @@ SPEAKING STYLES (the most important):
 - [whispers], [whispers conspiratorially], [whispers urgently]
 - [grumbling], [grumbling angrily], [muttering], [muttering sarcastically]
 - [talking fast], [speaking slowly], [rambling], [rambling excitedly]
+- [yelling], [yelling furiously], [yelling excitedly], [shouting], [shouting angrily]
 
 EMOTIONAL VOCALIZATIONS:
 - [crying], [sobbing], [sniffling], [whimpering]
@@ -231,15 +232,16 @@ EMOTIONAL VOCALIZATIONS:
 COMBO EXAMPLES (emotion + action):
 - [frustrated grumbling], [excited rambling], [angry muttering]
 - [nervous laughs], [tired sighs], [manic laughing]
-- [sarcastic muttering], [annoyed grumbling], [warm chuckles]
+- [yelling furiously], [shouting excitedly], [sarcastic muttering]
 
-IMPORTANT - For yelling/shouting:
-- DON'T use [yelling] or [shouting] tags
-- DO use ALL CAPS + exclamation points in the text itself
-- Example: "THIS IS CRAZY!" not "[yelling] this is crazy"
+IMPORTANT - For maximum yelling impact:
+- USE BOTH tag AND text formatting
+- Tag: [yelling furiously] or [shouting angrily]
+- Text: ALL CAPS + exclamation points
+- Example: "[yelling furiously] THIS IS CRAZY!" (both tag + caps)
 
 Example for angry rant:
-{"opening": "[grumbling]", "rising": "[frustrated sighs]", "peak": "[angry muttering]", "falling": "[exhausted sighs]", "close": "[muttering angrily]"}
+{"opening": "[grumbling]", "rising": "[frustrated sighs]", "peak": "[yelling furiously]", "falling": "[exhausted sighs]", "close": "[muttering angrily]"}
 
 Generate arc now:`;
   }
@@ -270,14 +272,15 @@ BEST TAGS (vocal actions):
 - Laughing: [laughs], [chuckles], [giggles], [nervous laughs], [manic laughing]
 - Sighing: [sighs], [frustrated sighs], [exhausted sighs], [dramatic sighs]
 - Speaking: [whispers], [grumbling], [muttering], [rambling], [talking fast]
+- Yelling: [yelling furiously], [yelling excitedly], [shouting angrily], [shouting urgently]
 - Combos: [frustrated grumbling], [excited rambling], [angry muttering], [sarcastic muttering]
 
-IMPORTANT: For yelling/shouting, use ALL CAPS + ! in text, NOT tags
+IMPORTANT: For yelling, use BOTH tag + text formatting for maximum impact
 
 Examples:
-- Aggressive ad: {"hook": "[talking fast]", "body": "[excited rambling]", "cta": "[whispers urgently]"}
+- Aggressive ad: {"hook": "[talking fast]", "body": "[yelling excitedly]", "cta": "[shouting urgently]"}
 - Grumpy chat: {"hook": "[grumbling]", "body": "[frustrated muttering]", "cta": "[exhausted sighs]"}
-- Conspiracy: {"hook": "[whispers conspiratorially]", "body": "[excited rambling]", "cta": "[manic laughing]"}
+- Angry rant: {"hook": "[grumbling]", "body": "[frustrated sighs]", "cta": "[yelling furiously]"}
 
 Generate tags now:`;
   }
@@ -310,7 +313,7 @@ Generate tags now:`;
         return {
           opening: '[talking fast]',
           rising: '[excited rambling]',
-          peak: '[rambling intensely]',
+          peak: '[yelling excitedly]',
           falling: '[speaking urgently]',
           close: '[whispers urgently]'
         };
@@ -319,7 +322,7 @@ Generate tags now:`;
         return {
           opening: '[grumbling]',
           rising: '[frustrated sighs]',
-          peak: '[angry muttering]',
+          peak: '[yelling furiously]',
           falling: '[sarcastic muttering]',
           close: '[exhausted sighs]'
         };
@@ -343,8 +346,8 @@ Generate tags now:`;
       case 'ad':
         return {
           hook: '[talking fast]',
-          body: '[excited rambling]',
-          cta: '[whispers urgently]'
+          body: '[yelling excitedly]',
+          cta: '[shouting urgently]'
         };
       case 'chat':
       case 'voice_response':
