@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { memoryCaches } from "./services/memoryCache";
-import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, insertDiscordServerSchema, insertDiscordMemberSchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags, duplicateScanResults, profiles } from "@shared/schema";
+import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, insertDiscordServerSchema, insertDiscordMemberSchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags, duplicateScanResults, profiles, listenerCities } from "@shared/schema";
 import { eq, and, sql, or, inArray, desc } from "drizzle-orm";
 import { db } from "./db";
 import { anthropicService } from "./services/anthropic";
@@ -6654,6 +6654,370 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error getting RSS config:', error);
       res.status(500).json({ error: 'Failed to get RSS config' });
+    }
+  });
+
+  // ========================================================================
+  // PODCAST LISTENER CITIES TRACKING
+  // "Where the fuck are the viewers from" segment support
+  // ========================================================================
+
+  // Get all listener cities with optional filters
+  app.get('/api/podcast/cities', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { country, continent, region, covered } = req.query;
+
+      let query = db
+        .select()
+        .from(listenerCities)
+        .where(eq(listenerCities.profileId, activeProfile.id));
+
+      // Apply filters
+      const conditions: any[] = [eq(listenerCities.profileId, activeProfile.id)];
+
+      if (country && typeof country === 'string') {
+        conditions.push(eq(listenerCities.country, country));
+      }
+      if (continent && typeof continent === 'string') {
+        conditions.push(eq(listenerCities.continent, continent));
+      }
+      if (region && typeof region === 'string') {
+        conditions.push(eq(listenerCities.region, region));
+      }
+      if (covered !== undefined) {
+        conditions.push(eq(listenerCities.isCovered, covered === 'true'));
+      }
+
+      const cities = await db
+        .select()
+        .from(listenerCities)
+        .where(and(...conditions))
+        .orderBy(listenerCities.country, listenerCities.city);
+
+      res.json(cities);
+    } catch (error) {
+      console.error('Error getting listener cities:', error);
+      res.status(500).json({ error: 'Failed to get listener cities' });
+    }
+  });
+
+  // Get a random uncovered city for Nicky to pick
+  app.get('/api/podcast/cities/random-uncovered', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { country, continent, region } = req.query;
+
+      const conditions: any[] = [
+        eq(listenerCities.profileId, activeProfile.id),
+        eq(listenerCities.isCovered, false)
+      ];
+
+      if (country && typeof country === 'string') {
+        conditions.push(eq(listenerCities.country, country));
+      }
+      if (continent && typeof continent === 'string') {
+        conditions.push(eq(listenerCities.continent, continent));
+      }
+      if (region && typeof region === 'string') {
+        conditions.push(eq(listenerCities.region, region));
+      }
+
+      const uncoveredCities = await db
+        .select()
+        .from(listenerCities)
+        .where(and(...conditions));
+
+      if (uncoveredCities.length === 0) {
+        return res.status(404).json({ error: 'No uncovered cities found' });
+      }
+
+      // Pick random city
+      const randomCity = uncoveredCities[Math.floor(Math.random() * uncoveredCities.length)];
+      res.json(randomCity);
+    } catch (error) {
+      console.error('Error getting random uncovered city:', error);
+      res.status(500).json({ error: 'Failed to get random city' });
+    }
+  });
+
+  // Get statistics about listener cities
+  app.get('/api/podcast/cities/stats', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const allCities = await db
+        .select()
+        .from(listenerCities)
+        .where(eq(listenerCities.profileId, activeProfile.id));
+
+      const stats = {
+        total: allCities.length,
+        covered: allCities.filter(c => c.isCovered).length,
+        uncovered: allCities.filter(c => !c.isCovered).length,
+        byContinents: {} as Record<string, number>,
+        byCountries: {} as Record<string, number>,
+        byRegions: {} as Record<string, number>,
+      };
+
+      allCities.forEach(city => {
+        stats.byContinents[city.continent] = (stats.byContinents[city.continent] || 0) + 1;
+        stats.byCountries[city.country] = (stats.byCountries[city.country] || 0) + 1;
+        if (city.region) {
+          stats.byRegions[city.region] = (stats.byRegions[city.region] || 0) + 1;
+        }
+      });
+
+      res.json(stats);
+    } catch (error) {
+      console.error('Error getting city stats:', error);
+      res.status(500).json({ error: 'Failed to get city statistics' });
+    }
+  });
+
+  // Add a single city manually
+  app.post('/api/podcast/cities', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { parseCity } = await import('./services/cityParser.js');
+      const { city, stateProvince, country } = req.body;
+
+      if (!city || typeof city !== 'string') {
+        return res.status(400).json({ error: 'City name is required' });
+      }
+
+      // Build input string for parser
+      const inputParts = [city];
+      if (stateProvince) inputParts.push(stateProvince);
+      if (country) inputParts.push(country);
+      const input = inputParts.join(', ');
+
+      // Parse and validate
+      const parsed = parseCity(input);
+      if ('error' in parsed) {
+        return res.status(400).json({ error: parsed.error, rawInput: parsed.rawInput });
+      }
+
+      // Check for duplicates
+      const existing = await db
+        .select()
+        .from(listenerCities)
+        .where(
+          and(
+            eq(listenerCities.profileId, activeProfile.id),
+            eq(listenerCities.city, parsed.city),
+            eq(listenerCities.country, parsed.country)
+          )
+        );
+
+      if (existing.length > 0) {
+        return res.status(409).json({ error: 'City already exists' });
+      }
+
+      // Insert
+      const [newCity] = await db
+        .insert(listenerCities)
+        .values({
+          profileId: activeProfile.id,
+          city: parsed.city,
+          stateProvince: parsed.stateProvince,
+          country: parsed.country,
+          continent: parsed.continent,
+          region: parsed.region,
+          isCovered: false,
+        })
+        .returning();
+
+      res.json(newCity);
+    } catch (error) {
+      console.error('Error adding city:', error);
+      res.status(500).json({ error: 'Failed to add city' });
+    }
+  });
+
+  // Import cities from CSV/text/document
+  app.post('/api/podcast/cities/import', upload.single('file'), async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { parseCitiesFromCSV, parseCitiesFromText, parseCitiesBulk } = await import('./services/cityParser.js');
+
+      let parsedCities;
+      let content = '';
+
+      if (req.file) {
+        // File upload
+        const filename = req.file.originalname.toLowerCase();
+        content = req.file.buffer.toString('utf-8');
+
+        if (filename.endsWith('.csv')) {
+          parsedCities = parseCitiesFromCSV(content);
+        } else if (filename.endsWith('.txt')) {
+          parsedCities = parseCitiesBulk(content);
+        } else if (filename.endsWith('.pdf') || filename.endsWith('.docx')) {
+          // For PDF/Word, we'd need specialized parsers
+          // For now, treat as text
+          parsedCities = parseCitiesFromText(content);
+        } else {
+          return res.status(400).json({ error: 'Unsupported file type' });
+        }
+      } else if (req.body.content) {
+        // Manual text input
+        content = req.body.content;
+        parsedCities = parseCitiesBulk(content);
+      } else {
+        return res.status(400).json({ error: 'No file or content provided' });
+      }
+
+      // Separate successes and failures
+      const successes = parsedCities.filter(p => 'city' in p);
+      const failures = parsedCities.filter(p => 'error' in p);
+
+      // Insert successful parses
+      const imported: any[] = [];
+      const skipped: any[] = [];
+
+      for (const parsed of successes) {
+        if ('city' in parsed) {
+          // Check for duplicates
+          const existing = await db
+            .select()
+            .from(listenerCities)
+            .where(
+              and(
+                eq(listenerCities.profileId, activeProfile.id),
+                eq(listenerCities.city, parsed.city),
+                eq(listenerCities.country, parsed.country)
+              )
+            );
+
+          if (existing.length > 0) {
+            skipped.push({ city: parsed.city, reason: 'Already exists' });
+            continue;
+          }
+
+          // Insert
+          const [newCity] = await db
+            .insert(listenerCities)
+            .values({
+              profileId: activeProfile.id,
+              city: parsed.city,
+              stateProvince: parsed.stateProvince,
+              country: parsed.country,
+              continent: parsed.continent,
+              region: parsed.region,
+              isCovered: false,
+            })
+            .returning();
+
+          imported.push(newCity);
+        }
+      }
+
+      res.json({
+        success: true,
+        imported: imported.length,
+        skipped: skipped.length,
+        failed: failures.length,
+        cities: imported,
+        errors: failures,
+        skippedCities: skipped,
+      });
+    } catch (error) {
+      console.error('Error importing cities:', error);
+      res.status(500).json({ error: 'Failed to import cities' });
+    }
+  });
+
+  // Update a city (mark as covered, add notes, etc.)
+  app.put('/api/podcast/cities/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { isCovered, coveredEpisode, notes } = req.body;
+
+      const updates: any = {};
+      if (isCovered !== undefined) {
+        updates.isCovered = isCovered;
+        if (isCovered) {
+          updates.coveredDate = new Date();
+        }
+      }
+      if (coveredEpisode !== undefined) updates.coveredEpisode = coveredEpisode;
+      if (notes !== undefined) updates.notes = notes;
+      updates.updatedAt = new Date();
+
+      const [updated] = await db
+        .update(listenerCities)
+        .set(updates)
+        .where(
+          and(
+            eq(listenerCities.id, id),
+            eq(listenerCities.profileId, activeProfile.id)
+          )
+        )
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: 'City not found' });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error('Error updating city:', error);
+      res.status(500).json({ error: 'Failed to update city' });
+    }
+  });
+
+  // Delete a city
+  app.delete('/api/podcast/cities/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const [deleted] = await db
+        .delete(listenerCities)
+        .where(
+          and(
+            eq(listenerCities.id, id),
+            eq(listenerCities.profileId, activeProfile.id)
+          )
+        )
+        .returning();
+
+      if (!deleted) {
+        return res.status(404).json({ error: 'City not found' });
+      }
+
+      res.json({ success: true, city: deleted });
+    } catch (error) {
+      console.error('Error deleting city:', error);
+      res.status(500).json({ error: 'Failed to delete city' });
     }
   });
 

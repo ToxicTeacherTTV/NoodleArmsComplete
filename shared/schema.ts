@@ -746,6 +746,30 @@ export const podcastSegments = pgTable("podcast_segments", {
   createdAt: timestamp("created_at").default(sql`now()`),
 });
 
+// Podcast Listener Cities Tracking
+export const listenerCities = pgTable("listener_cities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  city: text("city").notNull(),
+  stateProvince: text("state_province"), // Optional - not all countries have states/provinces
+  country: text("country").notNull(),
+  continent: text("continent").notNull(),
+  region: text("region"), // e.g., "Western Europe", "Southeast Asia"
+  isCovered: boolean("is_covered").default(false), // Has it been covered on "Where the fuck are the viewers from"
+  coveredDate: timestamp("covered_date"),
+  coveredEpisode: text("covered_episode"), // Episode number or title
+  notes: text("notes"), // Any additional notes about this city
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+}, (table) => ({
+  // Prevent duplicate cities for same profile
+  uniqueCityCountry: uniqueIndex("unique_city_country_idx").on(
+    table.profileId, 
+    table.city, 
+    table.country
+  ),
+}));
+
 // AI-Assisted Flagging System
 export const contentFlags = pgTable("content_flags", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1202,8 +1226,16 @@ export const insertPodcastSegmentSchema = createInsertSchema(podcastSegments).om
   createdAt: true,
 });
 
+export const insertListenerCitySchema = createInsertSchema(listenerCities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Podcast system types
 export type PodcastEpisode = typeof podcastEpisodes.$inferSelect;
 export type InsertPodcastEpisode = z.infer<typeof insertPodcastEpisodeSchema>;
 export type PodcastSegment = typeof podcastSegments.$inferSelect;
 export type InsertPodcastSegment = z.infer<typeof insertPodcastSegmentSchema>;
+export type ListenerCity = typeof listenerCities.$inferSelect;
+export type InsertListenerCity = z.infer<typeof insertListenerCitySchema>;

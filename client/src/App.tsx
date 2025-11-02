@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import JazzDashboard from "@/components/jazz-dashboard";
 import BrainManagement from "@/pages/brain-management";
 import ProjectWorkspace from "@/pages/project-workspace";
+import ListenerCities from "@/pages/listener-cities";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -14,6 +15,7 @@ function Router() {
       <Route path="/" component={JazzDashboard} />
       <Route path="/brain" component={BrainManagement} />
       <Route path="/workspace" component={ProjectWorkspace} />
+      <Route path="/listener-cities" component={ListenerCities} />
       <Route component={NotFound} />
     </Switch>
   );
