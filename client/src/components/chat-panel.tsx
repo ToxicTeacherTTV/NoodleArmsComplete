@@ -28,6 +28,7 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [enhancingMessage, setEnhancingMessage] = useState<string | null>(null);
 
   const rateMessageMutation = useMutation({
     mutationFn: async ({ messageId, rating }: { messageId: string; rating: number }) => {
@@ -67,6 +68,61 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
       });
     },
   });
+
+  const enhanceTextMutation = useMutation({
+    mutationFn: async ({ text, mode }: { text: string; mode?: 'quick' | 'ai' }) => {
+      const res = await fetch('/api/enhance-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, mode }),
+      });
+      if (!res.ok) throw new Error('Enhancement failed');
+      return res.json();
+    },
+    onSuccess: (data, variables) => {
+      toast({
+        title: variables.mode === 'quick' ? "⚡ Quick Enhanced" : "🎭 AI Enhanced",
+        description: "Text enhanced with emotion tags",
+        duration: 3000,
+      });
+      setEnhancingMessage(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Enhancement Failed",
+        description: error.message || "Could not enhance text",
+        variant: "destructive",
+      });
+      setEnhancingMessage(null);
+    },
+  });
+
+  const handleEnhanceMessage = async (messageId: string, text: string, mode: 'quick' | 'ai' = 'ai') => {
+    setEnhancingMessage(messageId);
+    try {
+      const result = await enhanceTextMutation.mutateAsync({ text, mode });
+      
+      // Show both original and enhanced in a dialog
+      toast({
+        title: mode === 'quick' ? "⚡ Quick Enhanced" : "🎭 AI Enhanced",
+        description: (
+          <div className="space-y-2 max-w-lg">
+            <div>
+              <strong>Original:</strong>
+              <div className="text-xs mt-1 p-2 bg-background/50 rounded">{result.original}</div>
+            </div>
+            <div>
+              <strong>Enhanced:</strong>
+              <div className="text-xs mt-1 p-2 bg-accent/10 rounded">{result.enhanced}</div>
+            </div>
+          </div>
+        ),
+        duration: 10000, // Longer duration to read both versions
+      });
+    } catch (error) {
+      // Error already handled by mutation
+    }
+  };
 
   const scrollToBottom = () => {
     // Force immediate scroll to ensure visibility
@@ -282,6 +338,20 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                               data-testid={`button-thumbs-down-${message.id}`}
                             >
                               <i className="fas fa-thumbs-down text-xs"></i>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEnhanceMessage(message.id, message.content, 'ai')}
+                              className="h-6 px-2 text-xs text-muted-foreground hover:text-purple-400 transition-colors"
+                              disabled={enhancingMessage === message.id}
+                              title="Add emotion tags with AI"
+                            >
+                              {enhancingMessage === message.id ? (
+                                <i className="fas fa-spinner fa-spin text-xs"></i>
+                              ) : (
+                                <i className="fas fa-wand-magic-sparkles text-xs"></i>
+                              )}
                             </Button>
                           </div>
                         )}
