@@ -9,10 +9,7 @@ interface ElevenLabsConfig {
 interface EmotionProfile {
   name: string;
   settings: {
-    stability: number;
-    similarity_boost: number;
-    style: number;
-    use_speaker_boost: boolean;
+    stability: number; // v3: ONLY accepts 0.0, 0.5, or 1.0
   };
   performanceCues: {
     hook: string;
@@ -25,10 +22,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   grumpy: {
     name: "Grumpy",
     settings: {
-      stability: 0.0,  // Maximum creative for full expression
-      similarity_boost: 0.85,
-      style: 0.75,  // Increased style for more character
-      use_speaker_boost: true
+      stability: 0.0  // "Creative" mode - maximum responsiveness to Audio Tags
     },
     performanceCues: {
       hook: "[annoyed, gruff]",
@@ -39,10 +33,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   conspiratorial: {
     name: "Conspiratorial",
     settings: {
-      stability: 0.0,  // Maximum creative for full expression
-      similarity_boost: 0.75,
-      style: 0.90,  // High style for dramatic whispers
-      use_speaker_boost: true
+      stability: 0.0  // "Creative" mode - maximum responsiveness to Audio Tags
     },
     performanceCues: {
       hook: "[whispering, confidential]",
@@ -53,10 +44,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   reluctant: {
     name: "Reluctant",
     settings: {
-      stability: 0.0,  // Maximum creative for full expression
-      similarity_boost: 0.7,
-      style: 0.60,  // Moderate style for subtle reluctance
-      use_speaker_boost: true
+      stability: 0.0  // "Creative" mode - maximum responsiveness to Audio Tags
     },
     performanceCues: {
       hook: "[under-the-breath]",
@@ -67,10 +55,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   warm: {
     name: "Warm",
     settings: {
-      stability: 0.0,  // Maximum creative for full expression
-      similarity_boost: 0.8,
-      style: 0.65,  // Moderate-high for genuine warmth
-      use_speaker_boost: true
+      stability: 0.0  // "Creative" mode - maximum responsiveness to Audio Tags
     },
     performanceCues: {
       hook: "[friendly, welcoming]",
@@ -81,10 +66,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   excited: {
     name: "Excited",
     settings: {
-      stability: 0.0,  // Maximum creative for full expression
-      similarity_boost: 0.65,
-      style: 0.95,  // Very high style for energy
-      use_speaker_boost: true
+      stability: 0.0  // "Creative" mode - maximum responsiveness to Audio Tags
     },
     performanceCues: {
       hook: "[excited, fast]",
@@ -95,10 +77,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   manic: {
     name: "Manic",
     settings: {
-      stability: 0.0,  // Maximum creative for full expression
-      similarity_boost: 0.6,
-      style: 1.0,  // Maximum style for chaos
-      use_speaker_boost: true
+      stability: 0.0  // "Creative" mode - maximum responsiveness to Audio Tags
     },
     performanceCues: {
       hook: "[unhinged, wild]",
@@ -109,10 +88,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   deadpan: {
     name: "Deadpan",
     settings: {
-      stability: 0.10,  // Slightly higher for monotone consistency, but still creative
-      similarity_boost: 0.85,
-      style: 0.40,  // Lower style for flatness
-      use_speaker_boost: true
+      stability: 0.0  // v3: Even deadpan uses 0.0 - the Audio Tags control the delivery
     },
     performanceCues: {
       hook: "[flat, monotone]",
@@ -123,10 +99,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   salesman: {
     name: "Salesman",
     settings: {
-      stability: 0.0,  // Maximum creative for full expression
-      similarity_boost: 0.75,
-      style: 0.85,  // High style for sales energy
-      use_speaker_boost: true
+      stability: 0.0  // "Creative" mode - maximum responsiveness to Audio Tags
     },
     performanceCues: {
       hook: "[HIGH-ENERGY, sales pitch]",
@@ -137,10 +110,7 @@ const EMOTION_PROFILES: { [key: string]: EmotionProfile } = {
   psycho: {
     name: "Psycho",
     settings: {
-      stability: 0.0,  // Maximum creative for full expression
-      similarity_boost: 0.50,
-      style: 1.0,  // Maximum style for unhinged chaos
-      use_speaker_boost: true
+      stability: 0.0  // "Creative" mode - maximum responsiveness to Audio Tags
     },
     performanceCues: {
       hook: "[UNHINGED, completely insane]",
@@ -194,13 +164,10 @@ class ElevenLabsService {
         // Apply AI-generated tags
         enhancedText = this.applySectionedDeliveryWithAI(text, aiTags);
         
-        // Use maximum expressiveness settings (lowest stability for most emotional range)
+        // v3-compatible settings: ONLY stability (0.0 = "Creative" mode for maximum Audio Tag responsiveness)
         settings = voiceSettings || {
-          stability: 0.0, // Maximum expressiveness - ZERO stability for wild delivery
-          similarity_boost: 0.65, // Lower for more variation and character
-          style: 1.0, // MAXIMUM style exaggeration - full Bronx Italian energy
-          use_speaker_boost: true,
-          seed: Math.floor(Math.random() * 1000000)
+          stability: 0.0, // "Creative" - maximum responsiveness to Audio Tags (v3 only accepts 0.0, 0.5, 1.0)
+          seed: Math.floor(Math.random() * 1000000) // Optional: for deterministic generation
         };
         
         console.log(`🎭 Applied AI emotion tags: ${JSON.stringify(aiTags)}`);
@@ -519,10 +486,9 @@ class ElevenLabsService {
       // Add randomized seed to prevent identical prosody
       seed: Math.floor(Math.random() * 1000000)
     } : {
-      stability: 0.0, // Maximum expressiveness for fallback
-      similarity_boost: 0.75,
-      style: 0.8,
-      use_speaker_boost: true,
+      // v3-compatible fallback: ONLY stability
+      stability: 0.0, // "Creative" mode for maximum Audio Tag responsiveness
+      seed: Math.floor(Math.random() * 1000000)
     });
   }
 
