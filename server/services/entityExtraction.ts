@@ -470,13 +470,19 @@ Be conservative with matches - only match if confidence > 0.7`;
     entitiesCreated: number;
   }> {
     try {
+      console.log(`🔍 DEBUG: Starting entity extraction for ${memoryContent.substring(0, 100)}...`);
+      
       // Get existing entities from database
       const existingEntities = await storage.getAllEntities(profileId);
+      console.log(`📚 DEBUG: Found ${existingEntities.people.length} people, ${existingEntities.places.length} places, ${existingEntities.events.length} events`);
       
       // Extract entities from memory content
+      console.log(`🤖 DEBUG: Calling extractEntitiesFromMemory...`);
       const extraction = await this.extractEntitiesFromMemory(memoryContent, existingEntities);
+      console.log(`✅ DEBUG: Extraction complete, found ${extraction.entities.length} entities`);
       
       if (extraction.entities.length === 0) {
+        console.log(`⚠️ DEBUG: No entities extracted, returning empty result`);
         return { personIds: [], placeIds: [], eventIds: [], entitiesCreated: 0 };
       }
 
