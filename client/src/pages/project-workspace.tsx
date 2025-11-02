@@ -72,7 +72,33 @@ export default function ProjectWorkspace() {
   
   // Mock data for now - would be connected to API later
   const [ideas, setIdeas] = useState<ProjectIdea[]>([
-    // ✅ COMPLETED FEATURES - RECENTLY COMPLETED
+    // ✅ COMPLETED FEATURES - RECENTLY COMPLETED (Nov 2025)
+    {
+      id: 'completed-recent-5',
+      title: 'ElevenLabs v3 Emotion System - Reactive Detection',
+      description: '[bronx][emotion] double-tag pattern, 5-stage emotional arc (opening/rising/peak/falling/close), reactive text energy detection overrides arc when ALL CAPS/profanity detected, vocal action tags like [yelling furiously] and [grumbling].',
+      priority: 'HIGH',
+      status: 'COMPLETED',
+      category: 'FEATURE',
+      createdAt: '2025-11-01',
+      updatedAt: new Date().toISOString(),
+      tags: ['elevenlabs', 'emotion', 'tts', 'v3', 'bronx-accent', 'reactive-detection'],
+      estimatedHours: 30,
+      actualHours: 35
+    },
+    {
+      id: 'completed-recent-6',
+      title: 'Duplicate Detection System Overhaul',
+      description: 'Vector-based duplicate scanning with persistent results, AI-powered intelligent merging, preview-before-merge workflow, standardized data format across fresh/saved scans, two-button UI (Quick Merge vs Edit & Merge).',
+      priority: 'HIGH',
+      status: 'COMPLETED',
+      category: 'FEATURE',
+      createdAt: '2025-11-02',
+      updatedAt: new Date().toISOString(),
+      tags: ['duplicate-detection', 'memory', 'ai-merge', 'persistence', 'brain-management'],
+      estimatedHours: 20,
+      actualHours: 22
+    },
     {
       id: 'completed-recent-1',
       title: 'Dynamic Personality System - Anti-Repetition Engine',
@@ -389,11 +415,21 @@ export default function ProjectWorkspace() {
     },
     {
       id: '3',
+      title: 'Voice & Memory Quality Improvements',
+      description: 'ElevenLabs v3 emotion system and duplicate detection',
+      targetDate: '2025-11-05',
+      completedDate: '2025-11-02',
+      status: 'COMPLETED',
+      progress: 100,
+      tasks: ['ElevenLabs v3 migration', 'Reactive emotion detection', 'Duplicate detection overhaul', 'AI merge preview workflow']
+    },
+    {
+      id: '4',
       title: 'Podcast Content Management System',
       description: 'Pre-roll ads and enhanced podcast workflow',
-      targetDate: '2025-10-15',
+      targetDate: '2025-11-20',
       status: 'IN_PROGRESS',
-      progress: 20,
+      progress: 25,
       tasks: ['Pre-roll ad generator', 'Memory persistence for podcast content', 'New podcast content dashboard']
     }
   ]);
@@ -401,13 +437,19 @@ export default function ProjectWorkspace() {
   const [notes, setNotes] = useState<ProjectNote[]>([
     {
       id: '1',
-      title: 'CURRENT STATUS: Nicky AI System - September 2025',
+      title: 'CURRENT STATUS: Nicky AI System - November 2025',
       content: `COMPREHENSIVE DEVELOPMENT STATUS
 
 CORE PHILOSOPHY:
 Nicky's lies and contradictions are FEATURES, not bugs. The system treats unreliability as a canonical character trait.
 
-RECENTLY COMPLETED BREAKTHROUGH FEATURES (Sept 2025):
+LATEST COMPLETED FEATURES (Nov 2025):
+✅ ElevenLabs v3 Emotion System - Reactive text energy detection with [bronx][emotion] tags
+✅ Duplicate Detection Overhaul - AI-powered merge with preview workflow
+✅ 5-Stage Emotional Arc - opening/rising/peak/falling/close with vocal action tags
+✅ Persistent Scan Results - Duplicate scans save to database, no re-scanning needed
+
+MAJOR FEATURES COMPLETED (Sept 2025):
 ✅ Dynamic Personality System - 10 personality facets with anti-repetition
 ✅ Enhanced Reddit Collection - 9 subreddits across 3 content streams
 ✅ Character Accuracy - Little Italy origins, tax purposes Jersey residence
@@ -418,7 +460,7 @@ SOLID FOUNDATIONS:
 ✅ PostgreSQL + Drizzle ORM architecture
 ✅ React + TypeScript frontend with shadcn/ui
 ✅ Node.js + Express backend
-✅ ElevenLabs voice synthesis (v3 API)
+✅ ElevenLabs voice synthesis (v3 API with emotion tags)
 ✅ Anthropic Claude API integration
 ✅ Enhanced memory retrieval with story context preservation
 ✅ Revolutionary lie taxonomy system
@@ -430,11 +472,13 @@ HIGH PRIORITY NEXT WINS:
 
 KEY SUCCESS METRICS:
 • Eliminated repetitive AI responses through personality facets
+• Reactive emotion detection overrides arc when text formatting indicates strong emotion
 • 60-70% DbD content, 30-40% other stories (target achieved)
 • Credit optimization through smart voice generation
 • 2-3 proactive Discord messages daily (no spam)
+• Duplicate detection with AI-powered intelligent merging
 
-This represents the current state as of September 2025 with major personality improvements completed.`,
+This represents the current state as of November 2025 with major TTS and memory improvements completed.`,
       category: 'GENERAL',
       createdAt: '2025-09-22',
       updatedAt: new Date().toISOString(),
@@ -451,12 +495,12 @@ This represents the current state as of September 2025 with major personality im
     },
     {
       id: '3',
-      title: 'ElevenLabs Integration Settings',
-      content: 'Successfully integrated ElevenLabs for improved voice synthesis. Optimal settings discovered: stability: 0.3, similarity_boost: 0.75, style: 0, use_speaker_boost: true. These settings provide the best balance of consistency and expressiveness for Nicky\'s character voice.',
+      title: 'ElevenLabs v3 Integration - Updated Settings',
+      content: 'Migrated to ElevenLabs v3 API (eleven_turbo_v2_5 model). V3 ONLY supports: stability (0.0/0.5/1.0) + optional seed. Removed deprecated v2 parameters (similarity_boost, style, use_speaker_boost). Emotion system uses [bronx][vocal_action] double-tag pattern with reactive text energy detection that overrides 5-stage emotional arc when content formatting indicates strong emotion (ALL CAPS, profanity, etc). Current default: stability 0.0 for maximum expressiveness.',
       category: 'TECHNICAL',
       createdAt: '2025-09-10',
-      updatedAt: new Date().toISOString(),
-      tags: ['voice', 'integration', 'elevenlabs', 'settings']
+      updatedAt: '2025-11-02',
+      tags: ['voice', 'integration', 'elevenlabs', 'v3', 'emotion-tags', 'bronx-accent']
     },
     {
       id: '4',
