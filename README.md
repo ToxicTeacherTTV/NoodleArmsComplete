@@ -1,253 +1,101 @@
 # AI-Powered Co-Host Application - Technical Overview
+# Nicky AI — AI-Powered Co-Host (Up-to-date README)
 
-## System Architecture Overview
+Last updated: 2025-11-03
 
-### Full Tech Stack Breakdown
-- **Database**: PostgreSQL (Neon serverless) with Drizzle ORM for type-safe operations
-- **Backend**: Node.js + Express.js with TypeScript, session-based storage
-- **Frontend**: React 19 + TypeScript with Vite, TanStack Query for state management
-- **External APIs**: 
-  - Google Gemini 2.5 Pro (PRIMARY - free tier) for all AI operations
-  - Anthropic Claude Sonnet 4.5 (FALLBACK - paid) for user-facing failsafe
-  - ElevenLabs for enhanced voice synthesis
-  - Discord.js for Discord bot integration
-  - Web Speech API for browser-based voice recognition
+This repository contains Nicky "Noodle Arms" — an AI-powered co-host application built to provide live voice interactions, podcast/story features, and Discord integration. The project combines a React frontend, a TypeScript/Express backend, PostgreSQL (Drizzle ORM), and multiple AI/voice providers (Gemini, Claude, ElevenLabs).
 
-### Database Schema Summary
+This README has been refreshed to reflect recent work and completed improvements. For more technical deep-dives, see `PROJECT_ROADMAP.md`, `NOTES.md`, and the docs in the `attached_assets/` folder.
 
-#### Core Tables
-- **`profiles`**: AI character definitions with personality settings
-- **`conversations`**: Chat session containers linking users to AI interactions
-- **`messages`**: Individual message records with type, content, and metadata
-- **`memory_entries`**: Knowledge base facts with importance scoring and categorization
-- **`documents`**: File storage with extracted content and processing status
+## What's new (recent, notable updates)
 
-#### Discord Integration Tables
-- **`discord_servers`**: Per-server behavior settings and proactive messaging controls
-- **`discord_members`**: User interaction tracking with fact association
-- **`discord_topic_triggers`**: Custom response triggers with probability settings
-- **`content_flags`**: Content filtering and moderation settings
+- Gemini-Primary Architecture Migration (Deployed, Oct 2025)
+  - Gemini 2.5 Pro is now PRIMARY for AI operations; Anthropic Claude Sonnet 4.5 is a paid failsafe.
+  - Expected cost reduction: ~90% for AI usage by routing free-tier Gemini where possible.
 
-#### Key Relationships
-- Profiles → Conversations (1:many): Each character can have multiple chat sessions
-- Conversations → Messages (1:many): Messages belong to specific conversations
-- Profiles → Memory Entries (1:many): Each character maintains its own knowledge base
-- Discord Servers → Members (1:many): Server-specific user tracking
-- Memory Entries → Parent Stories: Atomic facts link to narrative context
+- Memory Deduplication Fix (Completed Oct 2025)
+  - Implemented atomic UPSERTs, unique constraints on (profileId, canonicalKey), and metadata-merge logic.
+  - Cleaned up duplicate memories (example: removed 39 duplicate entries).
 
-### API Endpoint Structure and Patterns
+- Web Search Integration (Operational)
+  - SerpAPI primary integration with DuckDuckGo/Bing fallbacks for external knowledge ingestion.
 
-#### RESTful API Design
-- **Profiles**: `/api/profiles` - Character management and configuration
-- **Conversations**: `/api/conversations` - Chat session lifecycle
-- **Messages**: `/api/messages` - Individual message CRUD operations
-- **Memory**: `/api/memory` - Knowledge base management with retrieval and deletion
-- **Documents**: `/api/documents` - File upload and processing pipeline
-- **Discord**: `/api/discord` - Bot configuration and server management with migration support
-- **Personality**: `/api/personality` - Unified personality control system (state, updates)
-- **Chaos**: `/api/chaos` - Advisory personality influence system
+- Personality System Unification
+  - Unified PersonalityController with preset-based personalities (11 presets available).
+  - Migration tools that map legacy sliders/settings to presets.
 
-#### Standard Response Patterns
-```typescript
-// Success responses include data and metadata
-{ data: T, meta?: { total?, page?, limit? } }
+- Entity Linking, RAG improvements, and embedding readiness
+  - Many-to-many entity linking implemented; schema supports embeddings and semantic search (embeddings need population to enable hybrid semantic search).
 
-// Error responses follow consistent structure
-{ error: string, details?: any, code?: number }
+- Podcast Listener Cities feature
+  - `LISTENER_CITIES_README.md` documents the listener cities tracker used during the podcast segment (import, random pick, coverage tracking).
 
-// All endpoints support pagination where applicable
-?limit=50&offset=0&sortBy=createdAt&sortOrder=desc
-```
+For a fuller list of changes and the implementation plan, open `PROJECT_ROADMAP.md` (last updated Oct 17, 2025).
 
-### Advanced Memory & Intelligence Systems
+## Quick project summary
 
-#### Multi-Layer Intelligence Architecture
-1. **IntelligenceEngine**: Comprehensive analysis including fact clustering, personality drift detection, and source reliability scoring
-2. **MemoryDeduplicator**: Identifies and merges similar memories using Jaccard similarity, Levenshtein distance, and containment analysis
-3. **StoryReconstructor**: Groups related facts into coherent narratives with coherence scoring and event ordering
-4. **SmartContradictionDetector**: AI-powered resolution of conflicting information with importance weighting
+- Frontend: React + TypeScript + Vite. Components live under `client/src/`.
+- Backend: Node.js + Express + TypeScript. Server code under `server/`.
+- DB: PostgreSQL (Neon serverless) with Drizzle ORM. Schema in `shared/schema.ts`.
+- AI Providers: Gemini (PRIMARY), Claude (FALLBACK). Voice via ElevenLabs (with browser TTS fallback).
 
-#### Atomic Facts → Story Context → Intelligence Analysis
-1. **Fact Extraction**: AI processes conversations and documents to extract discrete facts
-2. **Story Context Preservation**: Facts retain narrative context to avoid disconnected knowledge
-3. **Confidence Scoring**: Importance ratings (1-999) with 999 reserved for protected facts
-4. **Intelligence Analysis**: Automatic clustering, reliability scoring, and contradiction detection
-5. **Retrieval System**: Keyword-based search with relevance weighting and semantic similarity
+## Quick start (local dev)
 
-#### Memory Categories
-- **FACT**: Concrete information about users, preferences, events
-- **PREFERENCE**: User likes, dislikes, behavioral patterns
-- **LORE**: Character background, personality traits, fictional elements
-- **CONTEXT**: Situational information, temporary states
+Prereqs: Node 18+, PostgreSQL (or Neon), .env with required API keys (Gemini/Claude/ElevenLabs/SerpAPI), and Drizzle configured.
 
-#### Memory Consolidation Process
-```typescript
-// Memory retrieval pipeline
-const relevantMemories = await memoryService.searchMemories(keywords, {
-  limit: 10,
-  includeStoryContext: true,
-  minImportance: 50
-});
+1. Install dependencies
 
-// AI-powered memory optimization
-const consolidatedFacts = await memoryService.consolidateMemories(profileId, {
-  removeDuplicates: true,
-  mergeRelated: true,
-  updateImportance: true
-});
-```
+   npm install
 
-### Advanced Content Generation Systems
+2. Dev server (frontend + backend hot run configured via scripts)
 
-#### Automated Content Creation Pipeline
-- **AdGenerationService**: Generates comedic fake sponsor content with Italian-American twist and rotating templates
-- **PodcastFactExtractor**: Extracts structured facts (TOPIC, QUOTE, FACT, STORY, MOMENT) from episode transcripts
-- **ContentCollectionManager**: Automated collection from Reddit, Steam News, and YouTube with active source management
-- **VarietyController**: 10-facet personality system ensuring varied responses with anti-repetition mechanisms
+   npm run dev
 
-### Integration Points
+3. Build for production
 
-#### Frontend ↔ Backend
-- **TanStack Query**: Automatic caching, background updates, optimistic updates
-- **Unified Personality Controls**: PersonalitySurgePanel and Discord management use same API endpoints
-- **Session Management**: Express sessions with PostgreSQL storage
+   npm run build
 
-#### Backend ↔ External APIs
-- **Gemini Service (PRIMARY)**: All AI operations use Gemini 2.5 Pro first (free tier)
-- **Claude Service (FALLBACK)**: User-facing features fallback to Claude Sonnet 4.5 on Gemini failures (paid failsafe)
-- **ElevenLabs Integration**: Voice synthesis with queue management and credit conservation modes
-- **Discord Bot Service**: Event-driven message processing with advanced behavior modulation and proactive messaging
-- **Content Ingestion**: Automated collection from multiple external sources with rate limiting
+4. Run production build
 
-#### Browser APIs
-- **Web Speech API**: Speech recognition with automatic restart and error handling
-- **Speech Synthesis API**: Text-to-speech with queue management for consistent playback
-- **Web Audio API**: Real-time voice activity detection and visualization
+   npm run start
 
-## Core Philosophy & Constraints
+Useful scripts (from `package.json`): `dev`, `build`, `start`, `check` (tsc), `db:push`.
 
-### WHY Contradictions Are Features
-The AI character is designed to be authentically chaotic and contradictory, reflecting real personality complexity:
+## Where to find things (docs & useful files)
 
-**Examples of Intentional Contradictions:**
-- Claiming to be tough while being emotionally sensitive about pasta
-- Obsessing over Dead by Daylight while pretending it's not important
-- Making grandiose statements about family business over trivial matters
-- Alternating between Italian pride and self-deprecating humor
+- Project roadmap and status: `PROJECT_ROADMAP.md` (detailed roadmap & completed items)
+- Development notes & ideas: `NOTES.md`
+- Listener cities feature guide: `LISTENER_CITIES_README.md`
+- SQL for listener cities migration: `add-listener-cities.sql`
+- Misc attachments and exports: `attached_assets/`
 
-**Implementation:**
-```typescript
-// Chaos Engine introduces deliberate personality drift
-const chaosModifier = chaosEngine.getPersonalityModifier();
-const enhancedPrompt = `${baseIdentity}\n\n${chaosModifier}`;
+## How we validated the recent changes
 
-// Behavior modulation allows real-time personality adjustments
-const effectiveBehavior = behaviorModulator.getEffectiveBehavior(serverId);
-```
+- Gemini migration: implemented across services with a standard try-fallback pattern (Gemini → Claude) and Prometheus metrics tracking of provider usage.
+- Memory dedupe: addressed by adding DB-level unique constraint + atomic UPSERTs and a merge strategy for metadata.
 
-### Unified Personality Control System
+## Recommended next steps (short-term)
 
-#### PersonalityController Architecture
-The application now uses a unified preset-based personality system that serves as the single source of truth across all interfaces:
+1. Populate the embedding vectors for all memories and enable hybrid semantic retrieval (high priority for better search results).
+2. Add a debug UI toggle that shows retrieved memories and relevance scores for each AI response (helps tune retrieval weights).
+3. Finish ElevenLabs voice tuning for podcast vs streaming modes to conserve credits.
 
-```typescript
-// Core personality presets with consistent behavior
-const PERSONALITY_PRESETS = {
-  'chill': { intensity: 30, spice: 20, dbdLens: 30 },
-  'roast_mode': { intensity: 85, spice: 90, dbdLens: 40 },
-  'storyteller': { intensity: 70, spice: 50, dbdLens: 80 },
-  'gaming_rage': { intensity: 95, spice: 85, dbdLens: 95 }
-  // ... 11 total presets
-};
-```
+## Contributing
 
-#### Migration from Legacy Systems
-- **Chat Interface**: ChaosMeter replaced with PersonalitySurgePanel
-- **Discord Interface**: Legacy behavior sliders (aggressiveness, responsiveness) converted to preset-aligned controls
-- **Automatic Migration**: Existing Discord server settings automatically mapped to equivalent presets
-- **Chaos Engine**: Converted from mutating controller to advisory influence layer
+If you want to contribute, please:
 
-#### Protected Core Traits (Always Consistent)
-- Italian heritage and pasta obsession
-- Dead by Daylight addiction
-- "Noodle Arms" physical characteristic
-- Basic family business references
-- Core moral framework (chaotic good)
+1. Open an issue describing the change or bug.
+2. Create a feature branch from `main`.
+3. Include tests (where applicable) and update docs if behavior changes.
 
-#### Acceptable Chaos Areas
-- Mood swings and emotional intensity
-- Specific game opinions and hot takes
-- Relationship dynamics with users
-- Random tangent topics
-- Severity of Italian accent in text
+## Contact / Further reading
 
-#### Lie Taxonomy Approach
-```typescript
-// Memory importance scoring prevents contradicting protected facts
-const PROTECTED_IMPORTANCE = 999;
-const HIGH_IMPORTANCE = 800-998;
-const MEDIUM_IMPORTANCE = 400-799;
-const LOW_IMPORTANCE = 1-399;
+- For product decisions and roadmap discussion: see `PROJECT_ROADMAP.md`.
+- For implementation notes and developer context: see `NOTES.md`.
+- For listener cities usage details: see `LISTENER_CITIES_README.md`.
 
-// Protected facts cannot be overridden by AI generation
-if (newFact.contradicts(existingFact) && existingFact.importance === 999) {
-  rejectFact(newFact);
-}
-```
+Thanks — the README was refreshed to include all major updates up through 2025-11-03. If you'd like me to expand any specific section (example: step-by-step embedding migration, or a condensed one-page README for external audiences), tell me which section to expand and I'll update it.
 
-### When to Auto-Process vs Manual Curation
-
-#### Automatic Processing
-- Document text extraction and chunking
-- Basic fact extraction from conversations
-- Routine memory importance scoring (1-799)
-- Standard conversation logging
-
-#### Manual Curation Required
-- Protected fact designation (999 importance)
-- Character core identity changes
-- Major personality trait modifications
-- Content moderation flag adjustments
-
-## Existing Systems Deep Dive
-
-### Document Processing Pipeline End-to-End
-
-1. **File Upload**: Multer middleware handles file validation and temporary storage
-2. **Type Detection**: MIME type analysis determines processing strategy
-3. **Content Extraction**:
-   ```typescript
-   // PDF processing with pdf-parse
-   const pdfData = await pdfParse(buffer);
-   const extractedText = pdfData.text;
-   
-   // Text chunking for knowledge base integration
-   const chunks = intelligentChunking(extractedText, {
-     maxChunkSize: 1000,
-     preserveContext: true
-   });
-   ```
-4. **Memory Integration**: Extracted content becomes searchable memory entries
-5. **Status Tracking**: Processing status updates via database and real-time UI
-
-### Memory Retrieval with Narrative Context Preservation
-
-```typescript
-// Enhanced memory retrieval maintains story coherence
-const memoryEntry = {
-  content: "User prefers thriller games",
-  storyContext: "Discovered during discussion about Dead by Daylight match",
-  parentStory: "User shared experience about getting scared by killer",
-  isAtomicFact: true,
-  importance: 650
-};
-
-// Retrieval includes parent narrative context
-const enrichedMemories = await storage.getRelevantMemories(keywords, {
-  includeParentStories: true,
-  preserveNarrativeFlow: true
-});
-```
 
 ### Contradiction Detection Flow
 
