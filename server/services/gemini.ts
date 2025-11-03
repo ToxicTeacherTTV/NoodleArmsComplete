@@ -156,6 +156,33 @@ class GeminiService {
     return 'general';
   }
 
+  /**
+   * Detect the topic/game context of a document for source-aware fact extraction
+   */
+  private detectDocumentContext(filename: string, content: string): string {
+    const lowerFilename = filename.toLowerCase();
+    const lowerContent = content.toLowerCase().substring(0, 2000); // Check first 2000 chars
+    
+    // Check for specific games/topics
+    if (lowerFilename.includes('arc raiders') || lowerContent.includes('arc raiders')) {
+      return 'Arc Raiders (tactical PvE extraction shooter)';
+    }
+    
+    if (lowerFilename.includes('dbd') || 
+        lowerFilename.includes('dead by daylight') || 
+        lowerContent.includes('dead by daylight') ||
+        lowerContent.includes('survivors') && lowerContent.includes('killers')) {
+      return 'Dead by Daylight (asymmetric horror game)';
+    }
+    
+    if (lowerFilename.includes('sabam') || lowerContent.includes('sabam')) {
+      return "Nicky's SABAM organization (Italian-American mafia family)";
+    }
+    
+    // Default: general Nicky lore
+    return "Nicky 'Noodle Arms' A.I. Dente's universe";
+  }
+
   // Enhanced hierarchical extraction methods with document-type awareness
   async extractStoriesFromDocument(content: string, filename: string): Promise<Array<{
     content: string;
@@ -168,6 +195,7 @@ class GeminiService {
     }
 
     const docType = this.detectDocumentType(filename, content);
+    const docContext = this.detectDocumentContext(filename, content);
     
     let extractionScope = '';
     
@@ -226,6 +254,8 @@ Extract comprehensively - this is building Nicky's knowledge base.`;
 
     const prompt = `You are extracting facts from "${filename}" to build a knowledge base about Nicky "Noodle Arms" A.I. Dente and his universe.
 
+🎯 DOCUMENT CONTEXT: This document is about ${docContext}
+
 ${extractionScope}
 
 Content:
@@ -238,21 +268,26 @@ Extract COMPLETE STORIES, ANECDOTES, and RICH CONTEXTS. Focus on:
 - Experiences and background context
 - Organizational details and hierarchy
 
+CRITICAL: When extracting facts, INCLUDE SOURCE CONTEXT in the content itself.
+- If this is about Arc Raiders: mention "in Arc Raiders" or "Arc Raiders character"
+- If this is about Dead by Daylight: mention "in Dead by Daylight" or "DBD character"
+- This prevents confusion between different games/topics
+
 For each story/narrative, provide:
-- content: The COMPLETE story/context (1-3 sentences max)
+- content: The COMPLETE story/context WITH SOURCE CONTEXT (1-3 sentences max)
 - type: STORY (incidents/events), LORE (backstory), or CONTEXT (situational background)
 - importance: 1-5 (5 being most important for character understanding)
-- keywords: 3-5 relevant keywords for retrieval
+- keywords: 3-5 relevant keywords for retrieval (INCLUDE game/topic name if relevant)
 
 Return as JSON array.
 
 Example format:
 [
   {
-    "content": "Uncle Gnocchi Stromboli The Third Esq. is a Don Level member of SABAM who claims to have invented Dead by Daylight. Despite being terrible at the game, everyone pretends he's amazing out of respect.",
+    "content": "In Arc Raiders, the Enforcer is a heavily armored playable character specialized in close-quarters combat. The character uses shield abilities to protect teammates during extractions.",
     "type": "LORE",
-    "importance": 5,
-    "keywords": ["uncle gnocchi", "sabam", "don level", "dbd", "respect"]
+    "importance": 4,
+    "keywords": ["arc raiders", "enforcer", "character", "shield", "combat"]
   }
 ]`;
 
@@ -314,22 +349,31 @@ EXTRACTION RULES:
 - Each fact must be 1-2 sentences MAXIMUM
 - Focus on specific, verifiable claims
 - Clear about WHO did WHAT
+- PRESERVE source context from the story (if it mentions "in Arc Raiders" or "in DBD", keep that context)
 
 Extract individual, verifiable claims from this story. Each atomic fact should be:
 - A single, specific claim
 - Independently verifiable
 - 1-2 sentences maximum (HARD LIMIT)
 - Clear about WHO/WHAT and WHAT happened
+- Include game/source context if present in the original story
 
 For each atomic fact, provide:
-- content: The specific atomic claim (max 2 sentences)
+- content: The specific atomic claim WITH source context if relevant (max 2 sentences)
 - type: "ATOMIC" (always)
 - importance: 1-5 based on how critical this detail is
-- keywords: 3-5 keywords for retrieval (include character names)
+- keywords: 3-5 keywords for retrieval (include game/source name if relevant)
 - storyContext: Brief note about which part of the story this relates to
 
 Examples from various stories:
 [
+  {
+    "content": "In Arc Raiders, the Enforcer character uses shield abilities to protect teammates during extractions",
+    "type": "ATOMIC",
+    "importance": 4,
+    "keywords": ["arc raiders", "enforcer", "shield", "teammates", "extraction"],
+    "storyContext": "Arc Raiders character abilities"
+  },
   {
     "content": "Uncle Gnocchi claims to have invented Dead by Daylight",
     "type": "ATOMIC",
@@ -338,18 +382,11 @@ Examples from various stories:
     "storyContext": "Uncle Gnocchi's legendary status"
   },
   {
-    "content": "Mama Marinara is the Supreme Don who secretly runs SABAM", 
-    "type": "ATOMIC",
-    "importance": 5,
-    "keywords": ["mama marinara", "supreme don", "sabam", "leader"],
-    "storyContext": "SABAM leadership structure"
-  },
-  {
-    "content": "Bruno Bolognese is actually one of the best Bubba players in DBD",
+    "content": "In DBD, Bruno Bolognese is actually one of the best Bubba players",
     "type": "ATOMIC",
     "importance": 3,
     "keywords": ["bruno", "bolognese", "bubba", "skill", "dbd"],
-    "storyContext": "Bruno's gaming ability"
+    "storyContext": "Bruno's gaming ability in Dead by Daylight"
   }
 ]
 
