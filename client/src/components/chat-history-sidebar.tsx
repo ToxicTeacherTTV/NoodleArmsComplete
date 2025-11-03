@@ -227,29 +227,29 @@ export default function ChatHistorySidebar({
                   <div className="space-y-1">
                     {convs.map((conv) => (
                       <div key={conv.id} className="group relative">
-                        <button
-                          onClick={() => onSelectConversation(conv.id)}
-                          className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                            conv.id === currentConversationId
-                              ? 'bg-primary text-primary-foreground'
-                              : 'hover:bg-muted text-foreground'
-                          }`}
-                          data-testid={`conversation-${conv.id}`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">
-                                {generateTitle(conv)}
-                              </p>
-                              <p className={`text-xs mt-1 ${
-                                conv.id === currentConversationId 
-                                  ? 'text-primary-foreground/70' 
-                                  : 'text-muted-foreground'
-                              }`}>
-                                {getRelativeTime(conv.createdAt)}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => onSelectConversation(conv.id)}
+                            className={`flex-1 text-left px-3 py-2 rounded-lg transition-colors ${
+                              conv.id === currentConversationId
+                                ? 'bg-primary text-primary-foreground'
+                                : 'hover:bg-muted text-foreground'
+                            }`}
+                            data-testid={`conversation-${conv.id}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">
+                                  {generateTitle(conv)}
+                                </p>
+                                <p className={`text-xs mt-1 ${
+                                  conv.id === currentConversationId 
+                                    ? 'text-primary-foreground/70' 
+                                    : 'text-muted-foreground'
+                                }`}>
+                                  {getRelativeTime(conv.createdAt)}
+                                </p>
+                              </div>
                               {conv.messageCount > 0 && (
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${
                                   conv.id === currentConversationId
@@ -260,19 +260,18 @@ export default function ChatHistorySidebar({
                                 </span>
                               )}
                             </div>
-                          </div>
-                        </button>
-                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          </button>
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className={`h-6 w-6 p-0 ${
+                                className={`h-8 w-8 p-0 shrink-0 ${
                                   conv.id === currentConversationId
                                     ? 'text-primary-foreground hover:bg-primary-foreground/20'
                                     : 'text-muted-foreground hover:bg-muted'
                                 }`}
+                                onClick={(e) => e.stopPropagation()}
                                 data-testid={`conversation-menu-${conv.id}`}
                               >
                                 <i className="fas fa-ellipsis-v text-xs"></i>
