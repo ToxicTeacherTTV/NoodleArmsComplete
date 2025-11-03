@@ -339,10 +339,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!activeProfile) {
         return res.status(404).json({ error: 'No active profile' });
       }
-      const conversations = await storage.listWebConversations(activeProfile.id);
+      const showArchived = req.query.archived === 'true';
+      const conversations = await storage.listWebConversations(activeProfile.id, showArchived);
       res.json(conversations);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch conversations' });
+    }
+  });
+
+  app.patch('/api/conversations/:id/archive', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isArchived } = req.body;
+      const updated = await storage.updateConversationArchiveStatus(id, isArchived);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update archive status' });
+    }
+  });
+
+  app.post('/api/conversations/:id/export', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { format = 'txt' } = req.body;
+      const messages = await storage.getConversationMessages(id);
+      const conversation = await storage.getConversationById(id);
+      
+      if (format === 'json') {
+        res.json({ conversation, messages });
+      } else {
+        let textContent = `Conversation: ${conversation?.title || 'Untitled'}\n`;
+        textContent += `Date: ${conversation?.createdAt}\n`;
+        textContent += `=`.repeat(60) + '\n\n';
+        
+        messages.forEach((msg: any) => {
+          const timestamp = new Date(msg.createdAt).toLocaleString();
+          const speaker = msg.type === 'USER' ? 'You' : 'Nicky';
+          textContent += `[${timestamp}] ${speaker}:\n${msg.content}\n\n`;
+        });
+        
+        res.setHeader('Content-Type', 'text/plain');
+        res.setHeader('Content-Disposition', `attachment; filename="chat-${id}.txt"`);
+        res.send(textContent);
+      }
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to export conversation' });
     }
   });
 

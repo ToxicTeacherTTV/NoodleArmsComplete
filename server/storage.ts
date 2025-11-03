@@ -350,6 +350,19 @@ export class DatabaseStorage implements IStorage {
     return conversation || undefined;
   }
 
+  async getConversationById(id: string): Promise<Conversation | undefined> {
+    return this.getConversation(id);
+  }
+
+  async updateConversationArchiveStatus(id: string, isArchived: boolean): Promise<Conversation> {
+    const [updated] = await db
+      .update(conversations)
+      .set({ isArchived })
+      .where(eq(conversations.id, id))
+      .returning();
+    return updated;
+  }
+
   async getConversationMessages(conversationId: string): Promise<Message[]> {
     return await db
       .select()
@@ -443,13 +456,14 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
-  async listWebConversations(profileId: string, limit = 50): Promise<Array<Conversation & { messageCount: number; firstMessage?: string }>> {
+  async listWebConversations(profileId: string, showArchived = false, limit = 50): Promise<Array<Conversation & { messageCount: number; firstMessage?: string }>> {
     // Get non-Discord conversations (GENERAL, PODCAST, STREAMING)
     const convos = await db
       .select()
       .from(conversations)
       .where(and(
         eq(conversations.profileId, profileId),
+        eq(conversations.isArchived, showArchived),
         or(
           eq(conversations.contentType, 'GENERAL'),
           eq(conversations.contentType, 'PODCAST'),
