@@ -235,9 +235,21 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                     >
                       {message.content}
                     </div>
-                    <div className="text-xs opacity-70 mt-1">
-                      You • {formatTime(message.createdAt)}
-                      {message.metadata?.voice && <i className="fas fa-microphone ml-2 text-accent"></i>}
+                    <div className="text-xs opacity-70 mt-1 flex items-center space-x-2">
+                      <span>
+                        You • {formatTime(message.createdAt)}
+                        {message.metadata?.voice && <i className="fas fa-microphone ml-2 text-accent"></i>}
+                      </span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(message.content);
+                          toast({ title: "Copied!", description: "Message copied to clipboard", duration: 2000 });
+                        }}
+                        className="text-muted-foreground hover:text-foreground transition-colors ml-2 pl-2 border-l border-border"
+                        data-testid={`copy-message-${message.id}`}
+                      >
+                        <i className="fas fa-copy text-xs"></i>
+                      </button>
                     </div>
                   </div>
                 ) : message.type === 'SYSTEM' ? (
@@ -352,6 +364,19 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                               ) : (
                                 <i className="fas fa-wand-magic-sparkles text-xs"></i>
                               )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                navigator.clipboard.writeText(message.content);
+                                toast({ title: "Copied!", description: "Message copied to clipboard", duration: 2000 });
+                              }}
+                              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                              title="Copy message"
+                              data-testid={`copy-ai-message-${message.id}`}
+                            >
+                              <i className="fas fa-copy text-xs"></i>
                             </Button>
                           </div>
                         )}
