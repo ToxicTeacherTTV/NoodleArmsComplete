@@ -41,6 +41,7 @@ export const conversations = pgTable("conversations", {
   profileId: varchar("profile_id").references(() => profiles.id).notNull(),
   sessionId: varchar("session_id"),
   title: text("title"), // AI-generated or user-provided conversation title
+  isArchived: boolean("is_archived").default(false), // Hide from main sidebar without deleting
   // NEW: Enhanced memory persistence fields
   contentType: text("content_type").$type<'PODCAST' | 'STREAMING' | 'DISCORD' | 'GENERAL'>().default('GENERAL'),
   topicTags: text("topic_tags").array(), // Topics discussed in this conversation
