@@ -60,7 +60,7 @@ Preferred communication style: Simple, everyday language.
 ### Document Processing Pipeline
 - **Upload and Parsing**: PDF documents parsed via `pdf-parse`.
 - **Intelligent Text Chunking**: Configurable chunk size (1000-1500 chars) with overlap and boundary detection.
-- **Knowledge Extraction**: AI processes chunks for facts, creates memories, identifies entities, and attributes to document/chunk ID.
+- **Source-Aware Knowledge Extraction**: AI automatically detects document context (Arc Raiders vs DBD vs SABAM vs general) and includes source information in extracted facts (e.g., "In Arc Raiders, the Enforcer uses shield abilities"). Facts include game/source in keywords for accurate retrieval and disambiguation.
 
 ### Intelligence Engine
 - **AI-Powered Memory Management**:
