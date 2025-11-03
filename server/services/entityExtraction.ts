@@ -138,8 +138,9 @@ CRITICAL INSTRUCTIONS:
 - Extract PEOPLE, PLACES, and EVENTS mentioned in the content
 - Provide disambiguation for entities with common names (e.g., "Sal the Butcher" vs "Sal my cousin")
 - Extract all alias/nickname variations mentioned
-- Include context clues that help distinguish between similar entities
+- Include SOURCE CONTEXT in disambiguation to distinguish between entities from different games/media (e.g., "Character from Arc Raiders" vs "Character from Dead by Daylight")
 - Focus on entities that are important to Nicky's stories and relationships
+- ALWAYS include the game/media/source name in the disambiguation field for game characters, media titles, and fictional entities
 
 MEMORY CONTENT TO ANALYZE:
 "${memoryContent}"
@@ -156,9 +157,9 @@ If you find entities that match existing ones, note the similarity in your analy
 For each detected entity, provide:
 - name: The canonical/primary name for this entity
 - type: PERSON, PLACE, or EVENT
-- disambiguation: Human-readable descriptor to distinguish from similar entities (e.g., "The Butcher", "From Little Italy", "The 1993 Incident")
+- disambiguation: Human-readable descriptor INCLUDING SOURCE/GAME NAME for game/media entities (e.g., "Character from Arc Raiders", "DBD Character", "Arc Raiders Game Mode", "From Little Italy", "The 1993 Incident")
 - aliases: All name variations/nicknames mentioned in the content
-- context: Relevant context about this entity from the memory
+- context: Relevant context about this entity from the memory, INCLUDING what game/media it's from
 - confidence: 0.0-1.0 confidence this is a distinct entity
 - mentions: Exact phrases from the memory that reference this entity
 
@@ -173,6 +174,15 @@ Return as JSON with this structure:
       "context": "Owns a butcher shop in Little Italy, involved in SABAM operations",
       "confidence": 0.95,
       "mentions": ["Sal the Butcher", "The Butcher", "Salami Sal"]
+    },
+    {
+      "name": "The Enforcer",
+      "type": "PERSON",
+      "disambiguation": "Character from Arc Raiders",
+      "aliases": ["Enforcer"],
+      "context": "Playable character in Arc Raiders, a tactical shooter game",
+      "confidence": 0.9,
+      "mentions": ["The Enforcer", "Enforcer character"]
     }
   ]
 }
@@ -183,17 +193,18 @@ ONLY extract entities that are:
 3. Named or uniquely identifiable
 
 DO extract:
-- Named game characters (Victor, The Trapper, Claudette) - these are specific entities
-- Named people (Nicky, The Host, specific developers)
-- Named places (Little Italy, specific restaurants, locations)
-- Named shows/media (Stranger Things, Dead by Daylight)
+- Named game characters with source context (e.g., "Victor (DBD Character)", "Raider (Arc Raiders Character)")
+- Named people (Nicky, The Host, specific developers, real people)
+- Named places (Little Italy, specific restaurants, locations, game maps with source context)
+- Named shows/media/games as EVENT entities (e.g., "Arc Raiders", "Dead by Daylight", "Stranger Things")
 - Specific events with dates or context
 
 DO NOT extract:
-- Generic game mechanics (gens, hooks, perks) without specific names
+- Generic game mechanics (gens, hooks, perks, abilities) without specific names
 - Generic pronouns (he, she, it, they)
 - Generic place types without names (a restaurant, the school)
-- Generic role terms (survivor, killer) unless referring to a specific character`;
+- Generic role terms (survivor, killer, raider) unless referring to a specific character
+- Generic gameplay terms (match, round, session) without specific context`;
 
     try {
       const response = await this.retryWithBackoff(

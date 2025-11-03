@@ -49,7 +49,7 @@ Preferred communication style: Simple, everyday language.
 - **Memory Types**: FACT, PREFERENCE, LORE, CONTEXT.
 - **Memory Importance Scoring**: AI-assigned 1-100 scale, decay over time, protected facts.
 - **Memory Consolidation**: Automatic merging of duplicate/similar memories (>90% vector similarity) via AI analysis.
-- **Entity Extraction and Linking**: AI extracts entities (Person, Place, Event, Organization, Concept) from content, linking them to memories.
+- **Entity Extraction and Linking**: AI extracts entities (Person, Place, Event, Organization, Concept) from content with source-aware disambiguation (e.g., "Character from Arc Raiders" vs "DBD Character"), linking them to memories.
 
 ### Podcast Processing Pipeline
 - **RSS Feed Auto-Sync**: Fetches and parses RSS feeds, extracts episode metadata, matches transcripts by filename or title similarity.
