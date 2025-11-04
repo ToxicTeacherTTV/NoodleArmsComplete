@@ -124,13 +124,15 @@ Guidelines:
 Return ONLY valid JSON.`;
 
     try {
-      const response = await geminiService.generateResponse(prompt, {
-        temperature: 0.3, // Low temperature for accuracy
-        maxTokens: 2000
-      });
+      const response = await geminiService.generateChatResponse(
+        prompt,
+        'You are a technical parser that extracts structured information from game patch notes.',
+        ''
+      );
       
-      // Parse JSON from response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      // Parse JSON from response content
+      const content = response.content;
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error('No JSON found in AI response');
       }
