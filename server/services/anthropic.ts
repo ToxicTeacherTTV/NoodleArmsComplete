@@ -792,6 +792,14 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
             // Regular fact without story context
             contextPrompt += `- ${memory.content}\n`;
           }
+          
+          // 🎙️ NEW: Include episode source if memory came from a podcast
+          if (memory.source === 'podcast_episode' && memory.temporalContext) {
+            contextPrompt += `  📍 From: ${memory.temporalContext}\n`;
+          } else if (memory.temporalContext) {
+            // Show temporal context for other sources too
+            contextPrompt += `  ⏰ When: ${memory.temporalContext}\n`;
+          }
         });
         
         // 🎯 Store knowledge gap info for later (we'll add instructions after web search)
