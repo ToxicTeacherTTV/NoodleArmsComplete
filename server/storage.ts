@@ -544,24 +544,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProfileDocuments(profileId: string): Promise<Document[]> {
-    // Optimized: Select only essential columns and limit to recent documents
+    // Optimized: Select all columns and limit to recent documents
     return await db
-      .select({
-        id: documents.id,
-        name: documents.name,
-        filename: documents.filename,
-        contentType: documents.contentType,
-        documentType: documents.documentType,
-        size: documents.size,
-        processingStatus: documents.processingStatus,
-        processingProgress: documents.processingProgress,
-        profileId: documents.profileId,
-        createdAt: documents.createdAt,
-        updatedAt: documents.updatedAt,
-        chunks: documents.chunks,
-        extractedContent: documents.extractedContent,
-        retrievalCount: documents.retrievalCount,
-      })
+      .select()
       .from(documents)
       .where(eq(documents.profileId, profileId))
       .orderBy(desc(documents.createdAt))

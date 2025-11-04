@@ -702,7 +702,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           processingTime: response.processingTime,
           retrieved_context: response.retrievedContext,
-          mode: mode,
           // Note: webSearch info stored separately (not in message metadata schema)
         },
       });
@@ -1061,15 +1060,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (patchResult.success) {
               console.log(`🎮 Processed ${patchResult.game} patch ${patchResult.version}: ${patchResult.changesStored} changes stored`);
               
-              // Update document metadata to indicate it was patch notes
-              await storage.updateDocument(document.id, {
-                metadata: {
-                  isPatchNotes: true,
-                  game: patchResult.game,
-                  version: patchResult.version,
-                  changesExtracted: patchResult.changesStored
-                }
-              });
+              // Note: Document already has processingMetadata field for patch info
+              // No need to update - it's tracked in memory entries
             }
           }
         } catch (error) {
@@ -2038,6 +2030,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           profileId: activeProfile.id,
           type: memory.type as any,
           content: memory.content,
+          canonicalKey: memory.content.toLowerCase().trim(),
           importance: memory.importance,
           confidence: 75, // Good confidence since extracted from conversation context
           supportCount: 1,
@@ -2301,7 +2294,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 content: duplicateEntry.content,
                 similarity: dup.similarity,
                 source: duplicateEntry.source ?? null,
-                createdAt: duplicateEntry.createdAt,
+                createdAt: duplicateEntry.createdAt ?? new Date(),
                 confidence: duplicateEntry.confidence ?? null,
                 importance: duplicateEntry.importance ?? null,
               };
@@ -2311,8 +2304,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               id: dup.id,
               content: dup.preview,
               similarity: dup.similarity,
-              source: 'unknown',
-              importance: 0,
+              source: null,
+              importance: null,
               createdAt: new Date().toISOString(),
               confidence: null,
             };
@@ -2387,6 +2380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           profileId: activeProfile.id,
           type: memory.type,
           content: memory.content,
+          canonicalKey: memory.content.toLowerCase().trim(),
           importance: memory.importance,
           confidence: 85, // High confidence since optimized from reliable sources
           supportCount: 1,
@@ -3481,6 +3475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             profileId: activeProfile.id,
             type: 'FACT',
             content: sentence.trim(),
+            canonicalKey: sentence.trim().toLowerCase(),
             importance: currentFact.importance || 5,
             confidence: currentFact.confidence || 50,
             supportCount: 1,
@@ -4510,6 +4505,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               profileId: profile.id,
               type: 'STORY',
               content: `${story.suggestedTitle}: ${story.suggestedSynopsis}`,
+              canonicalKey: story.suggestedTitle.toLowerCase(),
               importance: 5,
               confidence: 80,
               keywords: [story.suggestedTitle.toLowerCase(), 'reconstructed-story'],
