@@ -751,7 +751,14 @@ export class DiscordBotService {
         
         if (relevantMemories.length > 0) {
           const memoryContext = relevantMemories
-            .map(mem => `${mem.content} (${mem.type}, importance: ${mem.importance})`)
+            .map(mem => {
+              let memStr = `${mem.content} (${mem.type}, importance: ${mem.importance})`;
+              // 🎙️ Include episode source if from podcast
+              if (mem.source === 'podcast_episode' && mem.temporalContext) {
+                memStr += ` [From: ${mem.temporalContext}]`;
+              }
+              return memStr;
+            })
             .join('; ');
           contextParts.push(`Relevant memories about conversations: ${memoryContext}`);
         }

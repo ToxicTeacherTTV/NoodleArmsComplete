@@ -1518,6 +1518,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 🎙️ Get memories by source (e.g., podcast episode)
+  app.get('/api/memory/by-source/:source', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { source } = req.params;
+      const { sourceId } = req.query;
+      
+      const entries = await storage.getMemoryEntriesBySource(
+        activeProfile.id, 
+        source, 
+        sourceId as string | undefined
+      );
+      
+      res.json(entries);
+    } catch (error) {
+      console.error('Failed to fetch memories by source:', error);
+      res.status(500).json({ error: 'Failed to fetch memories by source' });
+    }
+  });
+
   // Delete individual memory entry
   app.delete('/api/memory/entries/:id', async (req, res) => {
     try {

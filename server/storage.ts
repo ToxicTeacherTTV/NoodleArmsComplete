@@ -138,6 +138,7 @@ export interface IStorage {
   addMemoryEntry(entry: InsertMemoryEntry): Promise<MemoryEntry>;
   getMemoryEntries(profileId: string, limit?: number): Promise<MemoryEntry[]>;
   searchMemoryEntries(profileId: string, query: string): Promise<MemoryEntry[]>;
+  getMemoryEntriesBySource(profileId: string, source: string, sourceId?: string): Promise<MemoryEntry[]>;
   deleteMemoryEntry(id: string): Promise<void>;
   clearProfileMemories(profileId: string): Promise<void>;
   incrementMemoryRetrieval(id: string): Promise<void>;
@@ -899,6 +900,24 @@ export class DatabaseStorage implements IStorage {
         desc(memoryEntries.supportCount)
       )
       .limit(50); // Limit results for performance
+  }
+
+  async getMemoryEntriesBySource(profileId: string, source: string, sourceId?: string): Promise<MemoryEntry[]> {
+    const conditions = [
+      eq(memoryEntries.profileId, profileId),
+      eq(memoryEntries.source, source),
+      eq(memoryEntries.status, 'ACTIVE')
+    ];
+    
+    if (sourceId) {
+      conditions.push(eq(memoryEntries.sourceId, sourceId));
+    }
+    
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(and(...conditions))
+      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
   }
 
   async deleteMemoryEntry(id: string): Promise<void> {
