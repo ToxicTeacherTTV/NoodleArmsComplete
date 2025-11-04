@@ -1048,6 +1048,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             
             await documentStageTracker.updateStage(document.id, 'embedding_generation', 'completed');
+            
+            // 🎮 NEW: Check if this is patch notes and process accordingly
+            const { patchNotesProcessor } = await import('./services/patchNotesProcessor');
+            const patchResult = await patchNotesProcessor.processPatchNotes(
+              storage,
+              activeProfile.id,
+              doc.extractedContent,
+              document.id
+            );
+            
+            if (patchResult.success) {
+              console.log(`🎮 Processed ${patchResult.game} patch ${patchResult.version}: ${patchResult.changesStored} changes stored`);
+              
+              // Update document metadata to indicate it was patch notes
+              await storage.updateDocument(document.id, {
+                metadata: {
+                  isPatchNotes: true,
+                  game: patchResult.game,
+                  version: patchResult.version,
+                  changesExtracted: patchResult.changesStored
+                }
+              });
+            }
           }
         } catch (error) {
           console.error('Document processing error:', error);
@@ -1219,6 +1242,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Failed to extract training from conversation:', error);
       res.status(500).json({ error: 'Failed to extract training examples from conversation' });
+    }
+  });
+
+  // 🎮 NEW: Process pasted text as patch notes
+  app.post('/api/patch-notes/process', async (req, res) => {
+    try {
+      const { text, game, version } = req.body;
+      
+      if (!text || typeof text !== 'string') {
+        return res.status(400).json({ error: 'Text content required' });
+      }
+      
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+      
+      const { patchNotesProcessor } = await import('./services/patchNotesProcessor');
+      const result = await patchNotesProcessor.processPatchNotes(
+        storage,
+        activeProfile.id,
+        text
+      );
+      
+      if (!result.success) {
+        return res.json({
+          success: false,
+          message: 'Text does not appear to be patch notes',
+          isPatches: false
+        });
+      }
+      
+      res.json({
+        success: true,
+        game: result.game,
+        version: result.version,
+        changesStored: result.changesStored,
+        message: `Processed ${result.game} patch ${result.version}: ${result.changesStored} changes stored`
+      });
+      
+    } catch (error) {
+      console.error('Failed to process patch notes:', error);
+      res.status(500).json({ error: 'Failed to process patch notes' });
     }
   });
 
