@@ -695,16 +695,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // Store the AI response
-      await storage.addMessage({
+      const savedMessage = await storage.addMessage({
         conversationId,
         type: 'AI' as const,
         content: response.content,
         metadata: {
           processingTime: response.processingTime,
           retrieved_context: response.retrievedContext,
+          mode: mode,
           // Note: webSearch info stored separately (not in message metadata schema)
         },
       });
+
+      // 📚 NEW: Auto-save high-quality messages as training examples
+      try {
+        const { messageTrainingCollector } = await import('./services/messageTrainingCollector');
+        
+        // Evaluate in background (don't block response)
+        setTimeout(async () => {
+          try {
+            const quality = await messageTrainingCollector.evaluateMessageQuality(savedMessage, {
+              userMessage: message,
+              conversationLength: messageCount + 1,
+              hasPositiveRating: false // Will be updated if user rates
+            });
+            
+            if (quality.isQuality) {
+              await messageTrainingCollector.saveMessageAsTraining(
+                storage,
+                savedMessage,
+                activeProfile.id,
+                {
+                  userMessage: message,
+                  conversationId,
+                  mode
+                }
+              );
+              console.log(`📚 Auto-saved message as training (score: ${quality.score})`);
+            }
+          } catch (error) {
+            console.warn('⚠️ Failed to auto-save message as training:', error);
+          }
+        }, 200);
+      } catch (error) {
+        console.warn('⚠️ Message training collector import failed:', error);
+      }
 
       // 🌐 ENHANCED: Post-response memory consolidation for web search results
       if (webSearchUsed && webSearchResults.length > 0) {
@@ -1110,6 +1145,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Training example creation error:', error);
       res.status(500).json({ error: 'Failed to create training example' });
+    }
+  });
+
+  // 📚 NEW: Save individual message as training example
+  app.post('/api/messages/:messageId/save-as-training', async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+      
+      // Get the message and its conversation
+      const message = await storage.getMessage(messageId);
+      if (!message) {
+        return res.status(404).json({ error: 'Message not found' });
+      }
+      
+      if (message.type !== 'AI') {
+        return res.status(400).json({ error: 'Only AI messages can be saved as training examples' });
+      }
+      
+      // Get conversation messages for context
+      const messages = await storage.getConversationMessages(message.conversationId);
+      const messageIndex = messages.findIndex(m => m.id === messageId);
+      const userMessage = messageIndex > 0 ? messages[messageIndex - 1] : undefined;
+      
+      // Use training collector to save
+      const { messageTrainingCollector } = await import('./services/messageTrainingCollector');
+      await messageTrainingCollector.saveMessageAsTraining(
+        storage,
+        message,
+        activeProfile.id,
+        {
+          userMessage: userMessage?.content,
+          conversationId: message.conversationId,
+          mode: (message as any).metadata?.mode || 'CHAT'
+        }
+      );
+      
+      res.json({ success: true, message: 'Message saved as training example' });
+    } catch (error) {
+      console.error('Failed to save message as training:', error);
+      res.status(500).json({ error: 'Failed to save message as training example' });
+    }
+  });
+  
+  // 📚 NEW: Batch process conversation messages for training
+  app.post('/api/conversations/:conversationId/extract-training', async (req, res) => {
+    try {
+      const { conversationId } = req.params;
+      const activeProfile = await storage.getActiveProfile();
+      
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+      
+      const { messageTrainingCollector } = await import('./services/messageTrainingCollector');
+      const result = await messageTrainingCollector.processConversationMessages(
+        storage,
+        conversationId,
+        activeProfile.id
+      );
+      
+      res.json({
+        success: true,
+        saved: result.saved,
+        evaluated: result.evaluated,
+        message: `Saved ${result.saved} out of ${result.evaluated} messages as training examples`
+      });
+    } catch (error) {
+      console.error('Failed to extract training from conversation:', error);
+      res.status(500).json({ error: 'Failed to extract training examples from conversation' });
     }
   });
 

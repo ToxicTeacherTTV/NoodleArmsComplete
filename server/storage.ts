@@ -101,6 +101,7 @@ export interface IStorage {
   createConversation(conversation: InsertConversation): Promise<Conversation>;
   getConversation(id: string): Promise<Conversation | undefined>;
   getConversationMessages(conversationId: string): Promise<Message[]>;
+  getMessage(id: string): Promise<Message | undefined>;
   addMessage(message: InsertMessage): Promise<Message>;
   updateMessageRating(messageId: string, rating: number): Promise<void>;
   getRecentMessages(conversationId: string, limit: number): Promise<Message[]>;
@@ -372,6 +373,14 @@ export class DatabaseStorage implements IStorage {
       .orderBy(messages.createdAt);
   }
 
+  async getMessage(id: string): Promise<Message | undefined> {
+    const [message] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, id));
+    return message || undefined;
+  }
+
   async addMessage(message: InsertMessage): Promise<Message> {
     const [newMessage] = await db
       .insert(messages)
@@ -560,7 +569,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTrainingExamples(profileId: string): Promise<Document[]> {
-    return await db
+    // 📚 ENHANCED: Increased from 10 to 50 for better training diversity
+    // Smart sampling: Get 100 candidates, then mix recent + sampled older examples
+    const allExamples = await db
       .select()
       .from(documents)
       .where(
@@ -571,7 +582,22 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(documents.createdAt))
-      .limit(10); // Limit to 10 most recent training examples
+      .limit(100); // Get more candidates for sampling
+    
+    if (allExamples.length <= 50) {
+      return allExamples; // If we have 50 or fewer, return all
+    }
+    
+    // Mix of recent (30) and sampled older (20) for variety
+    const recent = allExamples.slice(0, 30);
+    const older = allExamples.slice(30);
+    
+    // Random sample 20 from older set
+    const sampledOlder = older
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 20);
+    
+    return [...recent, ...sampledOlder];
   }
 
   async createConsolidatedPersonality(consolidation: InsertConsolidatedPersonality): Promise<ConsolidatedPersonality> {
