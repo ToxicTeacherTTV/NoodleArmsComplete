@@ -36,8 +36,15 @@ class EmotionTagGenerator {
   /**
    * Generate emotional arc with 5 stages for natural progression
    */
-  async generateEmotionalArc(context: EmotionTagContext): Promise<EmotionalArc> {
+  async generateEmotionalArc(context: EmotionTagContext, fast = false): Promise<EmotionalArc> {
     const cacheKey = this.createCacheKey(context) + '_arc';
+    
+    // 🚀 FAST PATH: Use rule-based generation for streaming (no AI call)
+    if (fast) {
+      const fastArc = this.generateFastEmotionalArc(context);
+      console.log(`🎭 Generated FAST emotional arc: ${JSON.stringify(fastArc)}`);
+      return fastArc;
+    }
     
     try {
       const arc = await this.generateArcWithAI(context);
@@ -47,6 +54,86 @@ class EmotionTagGenerator {
       console.error('🎭 Emotional arc generation failed:', error);
       return this.getFallbackArc(context);
     }
+  }
+
+  /**
+   * 🚀 FAST: Generate emotional arc using pattern matching (no AI call)
+   * Used for STREAMING mode to reduce latency by 1-3 seconds
+   */
+  private generateFastEmotionalArc(context: EmotionTagContext): EmotionalArc {
+    const { content, mood, intensity } = context;
+    
+    // Analyze content patterns
+    const hasQuestion = content.includes('?');
+    const hasExclamation = /!{1,}/.test(content);
+    const contentLength = content.length;
+    const isShort = contentLength < 100;
+    const isLong = contentLength > 400;
+    const hasMultipleSentences = (content.match(/[.!?]/g) || []).length > 2;
+    
+    // Pattern-based arc selection
+    
+    // AGGRESSIVE/ROAST MODE
+    if (mood === 'aggressive' || mood === 'chaotic') {
+      if (hasQuestion) {
+        return {
+          opening: 'bronx, skeptical',
+          rising: 'scoffs, dismissive',
+          peak: 'furious, heated',
+          falling: 'sarcastic, mocking',
+          close: 'mutters, eye roll'
+        };
+      }
+      return {
+        opening: 'bronx, dismissive',
+        rising: 'heated, building',
+        peak: 'furious',
+        falling: 'sarcastic',
+        close: 'mutters'
+      };
+    }
+    
+    // RELAXED/CHILL MODE
+    if (mood === 'relaxed' || intensity === 'low') {
+      return {
+        opening: 'bronx, casual',
+        rising: 'conversational',
+        peak: 'warm, friendly',
+        falling: 'relaxed',
+        close: 'content'
+      };
+    }
+    
+    // STORYTELLING (long content)
+    if (isLong || hasMultipleSentences) {
+      return {
+        opening: 'bronx, setting the scene',
+        rising: 'building tension',
+        peak: 'dramatic reveal',
+        falling: 'winding down',
+        close: 'reflective'
+      };
+    }
+    
+    // QUICK RESPONSE (short content)
+    if (isShort) {
+      return {
+        opening: 'bronx',
+        rising: 'casual',
+        peak: 'matter-of-fact',
+        falling: 'casual',
+        close: 'bronx'
+      };
+    }
+    
+    // BALANCED DEFAULT
+    return {
+      opening: 'bronx, engaging',
+      rising: 'passionate, building',
+      peak: hasExclamation ? 'intense, fired up' : 'emphatic',
+      falling: 'cooling down',
+      close: 'signature, confident'
+    };
   }
 
   /**

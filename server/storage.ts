@@ -553,9 +553,13 @@ export class DatabaseStorage implements IStorage {
       .limit(50); // Limit to most recent 50 documents
   }
 
-  async getTrainingExamples(profileId: string): Promise<Document[]> {
+  async getTrainingExamples(profileId: string, limit?: number): Promise<Document[]> {
     // 📚 ENHANCED: Increased from 10 to 50 for better training diversity
-    // Smart sampling: Get 100 candidates, then mix recent + sampled older examples
+    // 🚀 OPTIMIZATION: Allow custom limit for streaming mode (15 vs 50)
+    const targetLimit = limit || 50;
+    const candidateLimit = Math.min(targetLimit * 2, 100); // Get 2x candidates for sampling
+    
+    // Smart sampling: Get candidates, then mix recent + sampled older examples
     const allExamples = await db
       .select()
       .from(documents)
@@ -567,20 +571,23 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(documents.createdAt))
-      .limit(100); // Get more candidates for sampling
+      .limit(candidateLimit);
     
-    if (allExamples.length <= 50) {
-      return allExamples; // If we have 50 or fewer, return all
+    if (allExamples.length <= targetLimit) {
+      return allExamples; // If we have targetLimit or fewer, return all
     }
     
-    // Mix of recent (30) and sampled older (20) for variety
-    const recent = allExamples.slice(0, 30);
-    const older = allExamples.slice(30);
+    // Mix of recent (60%) and sampled older (40%) for variety
+    const recentCount = Math.floor(targetLimit * 0.6);
+    const olderCount = targetLimit - recentCount;
     
-    // Random sample 20 from older set
+    const recent = allExamples.slice(0, recentCount);
+    const older = allExamples.slice(recentCount);
+    
+    // Random sample from older set
     const sampledOlder = older
       .sort(() => Math.random() - 0.5)
-      .slice(0, 20);
+      .slice(0, olderCount);
     
     return [...recent, ...sampledOlder];
   }
