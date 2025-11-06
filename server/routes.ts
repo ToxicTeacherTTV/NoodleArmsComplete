@@ -443,9 +443,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Generate personality prompt with unified controls
       const { generatePersonalityPrompt } = await import('./types/personalityControl');
-
-      // 🎯 ENHANCED: Contextual memory retrieval with conversation flow and personality awareness
-      console.log(`🧠 Performing enhanced contextual memory retrieval for: "${message}"`);
       
       // 🚀 PERFORMANCE: Track timing for optimization measurement
       const perfTimers = {
@@ -455,6 +452,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         emotionTags: 0,
         total: Date.now()
       };
+      
+      // 🚀 STREAMING OPTIMIZATION: Check response cache first
+      const { responseCache } = await import('./services/responseCache');
+      const cacheKey = responseCache.getCacheKey(message, mode, activeProfile.id);
+      
+      if (responseCache.shouldCache(message, mode)) {
+        const cachedResponse = await responseCache.get(cacheKey);
+        
+        if (cachedResponse) {
+          // Return cached response instantly
+          perfTimers.total = Date.now() - perfTimers.total;
+          console.log(`⚡ CACHE HIT: Instant response (${perfTimers.total}ms) - saved ~5-10s`);
+          
+          return res.json({
+            content: cachedResponse,
+            processingTime: perfTimers.total,
+            cached: true,
+            retrievedContext: 'cached'
+          });
+        }
+      }
+
+      // 🎯 ENHANCED: Contextual memory retrieval with conversation flow and personality awareness
+      console.log(`🧠 Performing enhanced contextual memory retrieval for: "${message}"`);
       
       let searchBasedMemories: any[] = [];
       let enhancedSearchUsed = false;
@@ -736,6 +757,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? ` (🚀 OPTIMIZED: -${Math.round((perfTimers.memoryRetrieval + perfTimers.contextLoading + perfTimers.emotionTags) * 0.4)}ms estimated savings)`
         : '';
       console.log(`⚡ Performance: Memory=${perfTimers.memoryRetrieval}ms | Context=${perfTimers.contextLoading}ms | AI=${perfTimers.aiGeneration}ms | Emotions=${perfTimers.emotionTags}ms | TOTAL=${perfTimers.total}ms${savings}`);
+      
+      // 🚀 CACHE: Store cacheable responses for future requests
+      if (responseCache.shouldCache(message, mode)) {
+        responseCache.set(cacheKey, processedContent, mode);
+      }
 
       // Store the AI response
       const savedMessage = await storage.addMessage({
@@ -2040,6 +2066,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(stats);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch memory stats' });
+    }
+  });
+  
+  // 🚀 NEW: Response cache stats endpoint
+  app.get('/api/cache/stats', async (req, res) => {
+    try {
+      const { responseCache } = await import('./services/responseCache');
+      const stats = responseCache.getStats();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch cache stats' });
+    }
+  });
+  
+  // 🚀 NEW: Clear response cache endpoint
+  app.post('/api/cache/clear', async (req, res) => {
+    try {
+      const { responseCache } = await import('./services/responseCache');
+      responseCache.clear();
+      res.json({ success: true, message: 'Cache cleared' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to clear cache' });
     }
   });
 
