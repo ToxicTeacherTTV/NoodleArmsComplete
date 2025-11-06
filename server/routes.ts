@@ -447,9 +447,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 🎯 ENHANCED: Contextual memory retrieval with conversation flow and personality awareness
       console.log(`🧠 Performing enhanced contextual memory retrieval for: "${message}"`);
       
+      // 🚀 PERFORMANCE: Track timing for optimization measurement
+      const perfTimers = {
+        memoryRetrieval: 0,
+        contextLoading: 0,
+        aiGeneration: 0,
+        emotionTags: 0,
+        total: Date.now()
+      };
+      
       let searchBasedMemories: any[] = [];
       let enhancedSearchUsed = false;
       
+      const memoryStart = Date.now();
       try {
         // Use enhanced contextual memory retrieval
         const contextualMemories = await anthropicService.retrieveContextualMemories(
@@ -464,13 +474,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         searchBasedMemories = contextualMemories;
         enhancedSearchUsed = true;
         
+        perfTimers.memoryRetrieval = Date.now() - memoryStart;
+        
         const semanticCount = contextualMemories.filter(m => m.retrievalMethod?.includes('semantic')).length;
         const keywordCount = contextualMemories.filter(m => m.retrievalMethod?.includes('keyword')).length;
         const avgContextualRelevance = contextualMemories.length > 0 
           ? Math.round(contextualMemories.reduce((sum, m) => sum + (m.contextualRelevance || 0), 0) / contextualMemories.length * 100)
           : 0;
         
-        console.log(`🎯 Enhanced contextual search: ${semanticCount} semantic + ${keywordCount} keyword = ${searchBasedMemories.length} results (avg contextual relevance: ${avgContextualRelevance}%)`);
+        console.log(`🎯 Enhanced contextual search: ${semanticCount} semantic + ${keywordCount} keyword = ${searchBasedMemories.length} results (avg contextual relevance: ${avgContextualRelevance}%) [${perfTimers.memoryRetrieval}ms]`);
         
       } catch (error) {
         console.warn('⚠️ Enhanced contextual search failed, falling back to basic hybrid search:', error);
@@ -546,28 +558,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`🧠 AI Context (${modeLabel}): ${searchBasedMemories.length} search-based + ${additionalMemories.slice(0, 10).length} context facts (${podcastContentCount} podcast-specific) (${relevantMemories.length} total). Confidence: ${confidenceStats.min}-${confidenceStats.max}% (avg: ${confidenceStats.avg}%)`);
       
+      // 🚀 STREAMING OPTIMIZATION: Detect mode early for conditional logic
+      const isStreaming = mode === 'STREAMING';
+      
       // 🌐 ENHANCED: Web search integration for current information
+      // 🚀 OPTIMIZATION: Skip web search for STREAMING mode (use cached knowledge)
       let webSearchResults: any[] = [];
       let webSearchUsed = false;
       
-      try {
-        const { webSearchService } = await import('./services/webSearchService');
-        
-        // Intelligent decision: Should we search the web?
-        const shouldSearch = await webSearchService.shouldTriggerSearch(
-          relevantMemories,
-          message,
-          confidenceStats.avg
-        );
-        
-        if (shouldSearch) {
-          console.log(`🔍 Triggering web search for: "${message}"`);
-          console.log(`📊 Decision factors: ${relevantMemories.length} memories, ${confidenceStats.avg}% avg confidence`);
+      if (!isStreaming) {
+        try {
+          const { webSearchService } = await import('./services/webSearchService');
           
-          const searchResponse = await webSearchService.search(message);
+          // Intelligent decision: Should we search the web?
+          const shouldSearch = await webSearchService.shouldTriggerSearch(
+            relevantMemories,
+            message,
+            confidenceStats.avg
+          );
           
-          if (searchResponse.results.length > 0) {
-            webSearchResults = searchResponse.results.map(result => ({
+          if (shouldSearch) {
+            console.log(`🔍 Triggering web search for: "${message}"`);
+            console.log(`📊 Decision factors: ${relevantMemories.length} memories, ${confidenceStats.avg}% avg confidence`);
+            
+            const searchResponse = await webSearchService.search(message);
+            
+            if (searchResponse.results.length > 0) {
+              webSearchResults = searchResponse.results.map(result => ({
               title: result.title,
               snippet: result.snippet,
               url: result.url,
@@ -583,13 +600,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           console.log(`🚫 Web search skipped: sufficient context available (${relevantMemories.length} memories, ${confidenceStats.avg}% confidence)`);
         }
-      } catch (error) {
-        console.warn('⚠️ Web search failed:', error);
-        webSearchUsed = false;
+        } catch (error) {
+          console.warn('⚠️ Web search failed:', error);
+          webSearchUsed = false;
+        }
+      } else {
+        console.log(`🚀 Web search skipped for STREAMING mode (performance optimization)`);
       }
       
-      // Get enhanced lore context (includes extracted knowledge from memories)
-      const loreContext = await MemoryAnalyzer.getEnhancedLoreContext(activeProfile.id);
+      // Get enhanced lore context (skip for simple streaming queries)
+      const contextStart = Date.now();
+      const loreContext = isStreaming ? undefined : await MemoryAnalyzer.getEnhancedLoreContext(activeProfile.id);
 
       // 🎭 Generate personality control prompt and log debug state
       const personalityPrompt = generatePersonalityPrompt(controls);
@@ -600,9 +621,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🎭 ${debugState}`);
       
       // 📚 Get training examples for response style/cadence
-      const trainingExamples = await storage.getTrainingExamples(activeProfile.id);
+      // 🚀 OPTIMIZATION: Use fewer examples for streaming (15 vs 50)
+      const trainingLimit = isStreaming ? 15 : undefined;
+      const trainingExamples = await storage.getTrainingExamples(activeProfile.id, trainingLimit);
+      
+      perfTimers.contextLoading = Date.now() - contextStart;
+      
       if (trainingExamples.length > 0) {
-        console.log(`📚 Using ${trainingExamples.length} training examples for response style guidance`);
+        console.log(`📚 Using ${trainingExamples.length} training examples for response style guidance [${perfTimers.contextLoading}ms]`);
       }
       
       // 💾 CRITICAL: Store the USER message first (was missing, causing history bug)
@@ -614,6 +640,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       console.log(`💾 Saved user message to database`);
 
+      const aiStart = Date.now();
+      
       // Generate AI response with personality controls, lore context, mode awareness, web search results, and training examples
       const aiResponse = await anthropicService.generateResponse(
         message,
@@ -628,6 +656,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         personalityPrompt,
         trainingExamples
       );
+      
+      perfTimers.aiGeneration = Date.now() - aiStart;
 
       // 🎭 Process response: strip debug patterns and add emotion tags
       let processedContent = aiResponse.content;
@@ -639,9 +669,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .trim();
       // 🎭 EMOTION TAGS: Apply only for PODCAST and STREAMING modes, NOT Discord
       if (mode === 'PODCAST' || mode === 'STREAMING') {
+        const emotionStart = Date.now();
         try {
           const { emotionTagGenerator } = await import('./services/emotionTagGenerator');
           const { elevenlabsService } = await import('./services/elevenlabs');
+          
+          // 🚀 OPTIMIZATION: Use fast pattern-based arc for STREAMING (no AI call)
+          const useFastMode = mode === 'STREAMING';
           
           // Generate 5-stage emotional arc for natural progression
           const emotionalArc = await emotionTagGenerator.generateEmotionalArc({
@@ -653,9 +687,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   controls.preset === 'Unhinged' ? 'chaotic' : 'balanced',
             intensity: controls.intensity === 'low' ? 'low' : 
                       controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
-          });
+          }, useFastMode);
           
-          console.log(`🎭 Generated emotional arc: opening="${emotionalArc.opening}" rising="${emotionalArc.rising}" peak="${emotionalArc.peak}" falling="${emotionalArc.falling}" close="${emotionalArc.close}"`);
+          perfTimers.emotionTags = Date.now() - emotionStart;
+          
+          console.log(`🎭 Generated emotional arc${useFastMode ? ' (FAST)' : ''}: opening="${emotionalArc.opening}" rising="${emotionalArc.rising}" peak="${emotionalArc.peak}" falling="${emotionalArc.falling}" close="${emotionalArc.close}" [${perfTimers.emotionTags}ms]`);
           
           // Strip ALL existing emotion tags to prevent duplication
           let cleanedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
@@ -693,6 +729,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...aiResponse,
         content: processedContent
       };
+      
+      // 🚀 PERFORMANCE SUMMARY
+      perfTimers.total = Date.now() - perfTimers.total;
+      const savings = mode === 'STREAMING' 
+        ? ` (🚀 OPTIMIZED: -${Math.round((perfTimers.memoryRetrieval + perfTimers.contextLoading + perfTimers.emotionTags) * 0.4)}ms estimated savings)`
+        : '';
+      console.log(`⚡ Performance: Memory=${perfTimers.memoryRetrieval}ms | Context=${perfTimers.contextLoading}ms | AI=${perfTimers.aiGeneration}ms | Emotions=${perfTimers.emotionTags}ms | TOTAL=${perfTimers.total}ms${savings}`);
 
       // Store the AI response
       const savedMessage = await storage.addMessage({

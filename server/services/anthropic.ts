@@ -418,8 +418,9 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
         mode
       );
 
-      // 🎯 PHASE 1: Two-pass retrieval - get more candidates first (3x limit)
-      const candidateLimit = limit * 3;
+      // 🎯 PHASE 1: Two-pass retrieval - get more candidates first
+      // 🚀 OPTIMIZATION: Use 2x for STREAMING mode (faster), 3x for others (quality)
+      const candidateLimit = mode === 'STREAMING' ? limit * 2 : limit * 3;
       const { embeddingService } = await import('./embeddingService');
       const hybridResults = await embeddingService.hybridSearch(contextualQuery, profileId, candidateLimit);
       
@@ -759,9 +760,11 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
     
     try {
       // 💬 NEW: Add recent conversation history for context continuity
+      // 🚀 OPTIMIZATION: Use fewer messages for STREAMING mode (4 vs 8)
       if (conversationId) {
         try {
-          const recentMessages = await storage.getRecentMessages(conversationId, 8); // Last 8 messages for context
+          const messageLimit = mode === 'STREAMING' ? 4 : 8;
+          const recentMessages = await storage.getRecentMessages(conversationId, messageLimit);
           if (recentMessages.length > 0) {
             contextPrompt += "\n\nRECENT CONVERSATION:\n";
             recentMessages.forEach(msg => {
