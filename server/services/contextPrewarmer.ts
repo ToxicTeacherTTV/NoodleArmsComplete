@@ -36,7 +36,7 @@ class ContextPrewarmer {
       // Load everything in parallel
       const [trainingExamples, podcastMemories, loreContext] = await Promise.all([
         storage.getTrainingExamples(profileId), // Get all training examples
-        storage.getPodcastAwareMemories(profileId, 'CHAT', 15), // Get podcast-aware memories
+        storage.getPodcastAwareMemories(profileId, 'CHAT', 8), // 🚀 REDUCED: Get 8 podcast memories (was 15)
         MemoryAnalyzer.getEnhancedLoreContext(profileId) // Get lore context
       ]);
 
@@ -97,7 +97,7 @@ class ContextPrewarmer {
 
     // Cache miss - load fresh and warm for next time
     console.log('⚠️ Cache miss for podcast memories, loading fresh...');
-    const memories = await storage.getPodcastAwareMemories(profileId, mode, 15);
+    const memories = await storage.getPodcastAwareMemories(profileId, mode, 8);  // 🚀 REDUCED: 15→8
     
     // Don't block - warm cache in background for next request
     this.warmContext(profileId, storage).catch(err => 

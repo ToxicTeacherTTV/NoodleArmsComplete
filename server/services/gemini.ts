@@ -761,7 +761,12 @@ ${coreIdentity}`;
         try {
           console.log(`🔄 Gemini attempt ${attempt + 1}/3 with model: ${model}`);
           
-          response = await this.ai.models.generateContent({
+          // 🚀 OPTIMIZATION: Add 45-second timeout to prevent hanging
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Gemini API timeout after 45s')), 45000);
+          });
+          
+          const apiPromise = this.ai.models.generateContent({
             model,
             config: {
               systemInstruction: enhancedCoreIdentity,
@@ -770,6 +775,8 @@ ${coreIdentity}`;
             contents: fullPrompt,
           });
           
+          response = await Promise.race([apiPromise, timeoutPromise]) as any;
+          
           if (response?.text) {
             console.log(`✅ Gemini success with ${model} on attempt ${attempt + 1}`);
             break;
@@ -777,8 +784,8 @@ ${coreIdentity}`;
         } catch (modelError: any) {
           console.warn(`⚠️ ${model} failed (attempt ${attempt + 1}):`, modelError?.message || String(modelError));
           
-          // If it's not an overload error, don't retry
-          if (!modelError?.message?.includes('overloaded')) {
+          // If it's a timeout or not an overload error, don't retry
+          if (modelError?.message?.includes('timeout') || !modelError?.message?.includes('overloaded')) {
             break;
           }
         }

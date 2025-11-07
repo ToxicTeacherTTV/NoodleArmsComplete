@@ -492,7 +492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         loreContext,
         trainingExamples
       ] = await Promise.all([
-        // Memory retrieval
+        // Memory retrieval (🚀 REDUCED: 15→8 for speed with Gemini 2.5 Pro)
         (async () => {
           try {
             const memories = await anthropicService.retrieveContextualMemories(
@@ -501,7 +501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               conversationId,
               controls,
               mode,
-              15
+              8  // Reduced from 15 for faster Gemini processing
             );
             return { memories, enhanced: true, error: null };
           } catch (error) {
@@ -509,7 +509,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             try {
               const { embeddingService } = await import('./services/embeddingService');
-              const hybridResults = await embeddingService.hybridSearch(message, activeProfile.id, 15);
+              const hybridResults = await embeddingService.hybridSearch(message, activeProfile.id, 8);  // Also reduced
               
               const semanticMemories = hybridResults.semantic.map(result => ({
                 ...result,
@@ -553,7 +553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         })(),
         
-        // Podcast-aware memories (🔥 uses pre-warmed cache)
+        // Podcast-aware memories (🔥 uses pre-warmed cache, 🚀 REDUCED: 15→8)
         contextPrewarmer.getPodcastMemories(activeProfile.id, storage, mode),
         
         // Document search
