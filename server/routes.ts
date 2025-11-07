@@ -474,87 +474,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // 🎯 ENHANCED: Contextual memory retrieval with conversation flow and personality awareness
-      console.log(`🧠 Performing enhanced contextual memory retrieval for: "${message}"`);
+      // 🚀 PARALLEL OPTIMIZATION: Load all context simultaneously
+      console.log(`🧠 Starting parallel context loading for: "${message}"`);
       
-      let searchBasedMemories: any[] = [];
-      let enhancedSearchUsed = false;
+      const isStreaming = mode === 'STREAMING';
+      const contextStart = Date.now();
       
-      const memoryStart = Date.now();
-      try {
-        // Use enhanced contextual memory retrieval
-        const contextualMemories = await anthropicService.retrieveContextualMemories(
-          message,
-          activeProfile.id,
-          conversationId,
-          controls, // personality state
-          mode,
-          15
-        );
-        
-        searchBasedMemories = contextualMemories;
-        enhancedSearchUsed = true;
-        
-        perfTimers.memoryRetrieval = Date.now() - memoryStart;
-        
-        const semanticCount = contextualMemories.filter(m => m.retrievalMethod?.includes('semantic')).length;
-        const keywordCount = contextualMemories.filter(m => m.retrievalMethod?.includes('keyword')).length;
-        const avgContextualRelevance = contextualMemories.length > 0 
-          ? Math.round(contextualMemories.reduce((sum, m) => sum + (m.contextualRelevance || 0), 0) / contextualMemories.length * 100)
-          : 0;
-        
-        console.log(`🎯 Enhanced contextual search: ${semanticCount} semantic + ${keywordCount} keyword = ${searchBasedMemories.length} results (avg contextual relevance: ${avgContextualRelevance}%) [${perfTimers.memoryRetrieval}ms]`);
-        
-      } catch (error) {
-        console.warn('⚠️ Enhanced contextual search failed, falling back to basic hybrid search:', error);
-        
-        try {
-          // Fallback to existing hybrid search
-          const { embeddingService } = await import('./services/embeddingService');
-          const hybridResults = await embeddingService.hybridSearch(message, activeProfile.id, 15);
-          
-          const semanticMemories = hybridResults.semantic.map(result => ({
-            ...result,
-            relevanceScore: result.similarity * 100,
-            searchMethod: 'semantic'
-          }));
-          
-          const keywordMemories = hybridResults.keyword.map(result => ({
-            ...result, 
-            relevanceScore: 70,
-            searchMethod: 'keyword'
-          }));
-          
-          const seenIds = new Set();
-          const combinedResults = [];
-          
-          for (const result of semanticMemories) {
-            if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
-              seenIds.add(result.id);
-              combinedResults.push(result);
+      // 🎯 Load everything in parallel using Promise.all
+      const [
+        contextualMemoriesResult,
+        podcastAwareMemories,
+        relevantDocs,
+        loreContext,
+        trainingExamples
+      ] = await Promise.all([
+        // Memory retrieval
+        (async () => {
+          try {
+            const memories = await anthropicService.retrieveContextualMemories(
+              message,
+              activeProfile.id,
+              conversationId,
+              controls,
+              mode,
+              15
+            );
+            return { memories, enhanced: true, error: null };
+          } catch (error) {
+            console.warn('⚠️ Enhanced contextual search failed, falling back to hybrid search:', error);
+            
+            try {
+              const { embeddingService } = await import('./services/embeddingService');
+              const hybridResults = await embeddingService.hybridSearch(message, activeProfile.id, 15);
+              
+              const semanticMemories = hybridResults.semantic.map(result => ({
+                ...result,
+                relevanceScore: result.similarity * 100,
+                searchMethod: 'semantic'
+              }));
+              
+              const keywordMemories = hybridResults.keyword.map(result => ({
+                ...result, 
+                relevanceScore: 70,
+                searchMethod: 'keyword'
+              }));
+              
+              const seenIds = new Set();
+              const combinedResults = [];
+              
+              for (const result of semanticMemories) {
+                if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
+                  seenIds.add(result.id);
+                  combinedResults.push(result);
+                }
+              }
+              
+              for (const result of keywordMemories) {
+                if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
+                  seenIds.add(result.id);
+                  combinedResults.push(result);
+                }
+              }
+              
+              return { memories: combinedResults, enhanced: false, error: null };
+            } catch (fallbackError) {
+              console.warn('⚠️ Hybrid search also failed, using basic keyword search:', fallbackError);
+              const fallbackResults = await storage.searchEnrichedMemoryEntries(activeProfile.id, message);
+              return { 
+                memories: fallbackResults.filter(m => (m.confidence || 50) >= 60), 
+                enhanced: false, 
+                error: fallbackError 
+              };
             }
           }
-          
-          for (const result of keywordMemories) {
-            if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
-              seenIds.add(result.id);
-              combinedResults.push(result);
-            }
-          }
-          
-          searchBasedMemories = combinedResults;
-          console.log(`🧠 Fallback hybrid search: ${semanticMemories.length} semantic + ${keywordMemories.length} keyword = ${searchBasedMemories.length} results`);
-          
-        } catch (fallbackError) {
-          console.warn('⚠️ Hybrid search also failed, using basic keyword search:', fallbackError);
-          const fallbackResults = await storage.searchEnrichedMemoryEntries(activeProfile.id, message);
-          searchBasedMemories = fallbackResults.filter(m => (m.confidence || 50) >= 60);
-          enhancedSearchUsed = false;
-        }
-      }
+        })(),
+        
+        // Podcast-aware memories
+        storage.getPodcastAwareMemories(activeProfile.id, mode, 15),
+        
+        // Document search
+        documentProcessor.searchDocuments(activeProfile.id, message),
+        
+        // Lore context (skip for streaming)
+        isStreaming ? Promise.resolve(undefined) : MemoryAnalyzer.getEnhancedLoreContext(activeProfile.id),
+        
+        // Training examples (fewer for streaming)
+        storage.getTrainingExamples(activeProfile.id, isStreaming ? 15 : undefined)
+      ]);
       
-      // 📖 ENHANCED: Get podcast-aware memories as backup context
-      const podcastAwareMemories = await storage.getPodcastAwareMemories(activeProfile.id, mode, 15);
+      const parallelLoadTime = Date.now() - contextStart;
+      
+      // Process memory results
+      const searchBasedMemories = contextualMemoriesResult.memories;
+      const enhancedSearchUsed = contextualMemoriesResult.enhanced;
+      
+      perfTimers.memoryRetrieval = parallelLoadTime;
+      perfTimers.contextLoading = parallelLoadTime;
+      
+      const semanticCount = searchBasedMemories.filter(m => m.retrievalMethod?.includes('semantic')).length;
+      const keywordCount = searchBasedMemories.filter(m => m.retrievalMethod?.includes('keyword')).length;
+      const avgContextualRelevance = searchBasedMemories.length > 0 
+        ? Math.round(searchBasedMemories.reduce((sum, m) => sum + (m.contextualRelevance || 0), 0) / searchBasedMemories.length * 100)
+        : 0;
+      
+      console.log(`🎯 Enhanced contextual search: ${semanticCount} semantic + ${keywordCount} keyword = ${searchBasedMemories.length} results (avg contextual relevance: ${avgContextualRelevance}%)`);
+      
+      // Combine memories
       const seenIds = new Set(searchBasedMemories.map(m => m.id));
       const additionalMemories = podcastAwareMemories.filter(m => !seenIds.has(m.id));
       const relevantMemories = [...searchBasedMemories, ...additionalMemories.slice(0, 10)];
@@ -564,7 +589,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.incrementMemoryRetrieval(memory.id);
       }
       
-      const relevantDocs = await documentProcessor.searchDocuments(activeProfile.id, message);
+      console.log(`🚀 Parallel load complete: ${relevantMemories.length} memories + ${relevantDocs.length} docs + ${trainingExamples.length} training examples in ${parallelLoadTime}ms`);
       
       // Log confidence distribution for monitoring
       const confidenceStats = relevantMemories.length > 0 ? {
@@ -578,9 +603,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const modeLabel = mode === 'PODCAST' ? '🎙️  PODCAST MODE' : '💬 CHAT MODE';
       
       console.log(`🧠 AI Context (${modeLabel}): ${searchBasedMemories.length} search-based + ${additionalMemories.slice(0, 10).length} context facts (${podcastContentCount} podcast-specific) (${relevantMemories.length} total). Confidence: ${confidenceStats.min}-${confidenceStats.max}% (avg: ${confidenceStats.avg}%)`);
-      
-      // 🚀 STREAMING OPTIMIZATION: Detect mode early for conditional logic
-      const isStreaming = mode === 'STREAMING';
       
       // 🌐 ENHANCED: Web search integration for current information
       // 🚀 OPTIMIZATION: Skip web search for STREAMING mode (use cached knowledge)
@@ -628,10 +650,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         console.log(`🚀 Web search skipped for STREAMING mode (performance optimization)`);
       }
-      
-      // Get enhanced lore context (skip for simple streaming queries)
-      const contextStart = Date.now();
-      const loreContext = isStreaming ? undefined : await MemoryAnalyzer.getEnhancedLoreContext(activeProfile.id);
 
       // 🎭 Generate personality control prompt and log debug state
       const personalityPrompt = generatePersonalityPrompt(controls);
@@ -641,15 +659,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const debugState = generateDebugState(controls);
       console.log(`🎭 ${debugState}`);
       
-      // 📚 Get training examples for response style/cadence
-      // 🚀 OPTIMIZATION: Use fewer examples for streaming (15 vs 50)
-      const trainingLimit = isStreaming ? 15 : undefined;
-      const trainingExamples = await storage.getTrainingExamples(activeProfile.id, trainingLimit);
-      
-      perfTimers.contextLoading = Date.now() - contextStart;
-      
       if (trainingExamples.length > 0) {
-        console.log(`📚 Using ${trainingExamples.length} training examples for response style guidance [${perfTimers.contextLoading}ms]`);
+        console.log(`📚 Using ${trainingExamples.length} training examples for response style guidance`);
       }
       
       // 💾 CRITICAL: Store the USER message first (was missing, causing history bug)
