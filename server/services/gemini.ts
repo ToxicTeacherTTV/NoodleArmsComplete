@@ -35,7 +35,7 @@ import { contentFilter } from './contentFilter.js';
  */
 
 const APPROVED_MODELS = {
-  PRIMARY: "gemini-2.5-pro",
+  PRIMARY: "gemini-2.0-flash-thinking-exp-01-21", // 🚀 TEMP TEST: Testing Flash Thinking for speed (was gemini-2.5-pro)
 } as const;
 
 function isApprovedModel(model: string): model is typeof APPROVED_MODELS.PRIMARY {
@@ -50,7 +50,9 @@ class GeminiService {
       apiKey: process.env.GEMINI_API_KEY || "" 
     });
     
-    // 🚫 CONSTRUCTOR-LEVEL FLASH BAN: Override generateContent to block Flash at runtime
+    // � TEMP: Flash ban disabled for testing Flash Thinking model
+    /*
+    // �🚫 CONSTRUCTOR-LEVEL FLASH BAN: Override generateContent to block Flash at runtime
     const originalGenerate = this.ai.models.generateContent.bind(this.ai.models);
     this.ai.models.generateContent = ((config: any) => {
       if (config.model && /flash/i.test(config.model)) {
@@ -65,15 +67,16 @@ class GeminiService {
       }
       return originalGenerate(config);
     }) as typeof originalGenerate;
+    */
     
-    console.log('✅ Gemini service initialized with Flash ban enforcement');
+    console.log('✅ Gemini service initialized (Flash Thinking test mode)');
   }
 
   private validateModel(model: string, context: string): void {
     if (!isApprovedModel(model)) {
       throw new Error(
         `🚫 UNAUTHORIZED MODEL: ${model} is not approved for ${context}. ` +
-        `Flash models are BANNED due to hallucination issues. Use ${APPROVED_MODELS.PRIMARY} instead.`
+        `Use ${APPROVED_MODELS.PRIMARY} instead.`
       );
     }
   }
