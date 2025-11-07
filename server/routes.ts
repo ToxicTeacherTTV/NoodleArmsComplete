@@ -25,6 +25,7 @@ import { podcastFactExtractor } from './services/podcastFactExtractor';
 import { entityExtraction } from './services/entityExtraction';
 import { emotionEnhancer } from './services/emotionEnhancer';
 import { contextPrewarmer } from './services/contextPrewarmer';
+import { contextPruner } from './services/contextPruner';
 import { insertAutomatedSourceSchema, insertPendingContentSchema, insertAdTemplateSchema, insertPrerollAdSchema } from '@shared/schema';
 import multer from "multer";
 import { z } from "zod";
@@ -594,18 +595,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`🚀 Parallel load complete: ${relevantMemories.length} memories + ${relevantDocs.length} docs + ${trainingExamples.length} training examples in ${parallelLoadTime}ms`);
       
+      // ✂️ SMART CONTEXT PRUNING: Remove redundant info already in recent conversation
+      // Saves 1-2s by reducing tokens and preventing duplicate context
+      const recentMessages = await contextPruner.getRecentMessages(conversationId, storage, 8);
+      const memoryPruning = contextPruner.pruneMemories(relevantMemories, recentMessages, 8);
+      const docPruning = contextPruner.pruneDocuments(relevantDocs, recentMessages, 8);
+      
+      // Use pruned context for AI generation
+      const prunedMemories = memoryPruning.pruned;
+      const prunedDocs = docPruning.pruned;
+      const totalTokensSaved = memoryPruning.stats.savings + docPruning.stats.savings;
+      
+      console.log(`✂️  Total pruning: ${memoryPruning.stats.removed + docPruning.stats.removed} items removed, ~${totalTokensSaved} tokens saved`);
+      
       // Log confidence distribution for monitoring
-      const confidenceStats = relevantMemories.length > 0 ? {
-        min: Math.min(...relevantMemories.map(m => m.confidence || 50)),
-        max: Math.max(...relevantMemories.map(m => m.confidence || 50)),
-        avg: Math.round(relevantMemories.reduce((sum, m) => sum + (m.confidence || 50), 0) / relevantMemories.length)
+      const confidenceStats = prunedMemories.length > 0 ? {
+        min: Math.min(...prunedMemories.map(m => m.confidence || 50)),
+        max: Math.max(...prunedMemories.map(m => m.confidence || 50)),
+        avg: Math.round(prunedMemories.reduce((sum, m) => sum + (m.confidence || 50), 0) / prunedMemories.length)
       } : { min: 0, max: 0, avg: 0 };
       
       // 📖 NEW: Track podcast content prioritization
       const podcastContentCount = additionalMemories.filter(m => (m as any).isPodcastContent).length;
       const modeLabel = mode === 'PODCAST' ? '🎙️  PODCAST MODE' : '💬 CHAT MODE';
       
-      console.log(`🧠 AI Context (${modeLabel}): ${searchBasedMemories.length} search-based + ${additionalMemories.slice(0, 10).length} context facts (${podcastContentCount} podcast-specific) (${relevantMemories.length} total). Confidence: ${confidenceStats.min}-${confidenceStats.max}% (avg: ${confidenceStats.avg}%)`);
+      console.log(`🧠 AI Context (${modeLabel}): ${searchBasedMemories.length} search-based + ${additionalMemories.slice(0, 10).length} context facts (${podcastContentCount} podcast-specific) (${prunedMemories.length} after pruning). Confidence: ${confidenceStats.min}-${confidenceStats.max}% (avg: ${confidenceStats.avg}%)`);
       
       // 🌐 ENHANCED: Web search integration for current information
       // 🚀 OPTIMIZATION: Skip web search for STREAMING mode (use cached knowledge)
@@ -678,11 +692,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const aiStart = Date.now();
       
       // Generate AI response with personality controls, lore context, mode awareness, web search results, and training examples
+      // ✂️ Uses pruned memories/docs to reduce tokens and save processing time
       const aiResponse = await anthropicService.generateResponse(
         message,
         activeProfile.coreIdentity,
-        relevantMemories,
-        relevantDocs,
+        prunedMemories,
+        prunedDocs,
         loreContext,
         mode,
         conversationId,
@@ -771,6 +786,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? ` (🚀 OPTIMIZED: -${Math.round((perfTimers.memoryRetrieval + perfTimers.contextLoading + perfTimers.emotionTags) * 0.4)}ms estimated savings)`
         : '';
       console.log(`⚡ Performance: Memory=${perfTimers.memoryRetrieval}ms | Context=${perfTimers.contextLoading}ms | AI=${perfTimers.aiGeneration}ms | Emotions=${perfTimers.emotionTags}ms | TOTAL=${perfTimers.total}ms${savings}`);
+      console.log(`✂️  Context Pruning: ${memoryPruning.stats.removed + docPruning.stats.removed} items removed | ~${totalTokensSaved} tokens saved | ${Math.round(totalTokensSaved * 0.0015)}ms estimated time saved`);
       
       // 🚀 CACHE: Store cacheable responses for future requests
       if (responseCache.shouldCache(message, mode)) {
