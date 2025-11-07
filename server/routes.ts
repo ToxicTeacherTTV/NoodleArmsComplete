@@ -24,6 +24,7 @@ import { adGenerationService } from './services/AdGenerationService';
 import { podcastFactExtractor } from './services/podcastFactExtractor';
 import { entityExtraction } from './services/entityExtraction';
 import { emotionEnhancer } from './services/emotionEnhancer';
+import { contextPrewarmer } from './services/contextPrewarmer';
 import { insertAutomatedSourceSchema, insertPendingContentSchema, insertAdTemplateSchema, insertPrerollAdSchema } from '@shared/schema';
 import multer from "multer";
 import { z } from "zod";
@@ -475,12 +476,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // 🚀 PARALLEL OPTIMIZATION: Load all context simultaneously
+      // 🔥 PRE-WARMING: Uses cached data when available for instant access
       console.log(`🧠 Starting parallel context loading for: "${message}"`);
       
       const isStreaming = mode === 'STREAMING';
       const contextStart = Date.now();
       
       // 🎯 Load everything in parallel using Promise.all
+      // 🔥 Training examples, podcast memories, and lore use pre-warmed cache when available
       const [
         contextualMemoriesResult,
         podcastAwareMemories,
@@ -549,17 +552,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         })(),
         
-        // Podcast-aware memories
-        storage.getPodcastAwareMemories(activeProfile.id, mode, 15),
+        // Podcast-aware memories (🔥 uses pre-warmed cache)
+        contextPrewarmer.getPodcastMemories(activeProfile.id, storage, mode),
         
         // Document search
         documentProcessor.searchDocuments(activeProfile.id, message),
         
-        // Lore context (skip for streaming)
-        isStreaming ? Promise.resolve(undefined) : MemoryAnalyzer.getEnhancedLoreContext(activeProfile.id),
+        // Lore context (🔥 uses pre-warmed cache, skip for streaming)
+        isStreaming ? Promise.resolve(undefined) : contextPrewarmer.getLoreContext(activeProfile.id, storage),
         
-        // Training examples (fewer for streaming)
-        storage.getTrainingExamples(activeProfile.id, isStreaming ? 15 : undefined)
+        // Training examples (🔥 uses pre-warmed cache, fewer for streaming)
+        contextPrewarmer.getTrainingExamples(activeProfile.id, storage)
       ]);
       
       const parallelLoadTime = Date.now() - contextStart;
@@ -2080,7 +2083,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // 🚀 NEW: Response cache stats endpoint
+  // 🚀 Response cache stats endpoint
   app.get('/api/cache/stats', async (req, res) => {
     try {
       const { responseCache } = await import('./services/responseCache');
@@ -2091,7 +2094,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // 🚀 NEW: Clear response cache endpoint
+  // 🚀 Clear response cache endpoint
   app.post('/api/cache/clear', async (req, res) => {
     try {
       const { responseCache } = await import('./services/responseCache');
@@ -2099,6 +2102,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true, message: 'Cache cleared' });
     } catch (error) {
       res.status(500).json({ error: 'Failed to clear cache' });
+    }
+  });
+
+  // 🔥 Context pre-warming stats endpoint
+  app.get('/api/cache/prewarmer/stats', async (req, res) => {
+    try {
+      const stats = contextPrewarmer.getStats();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch pre-warmer stats' });
+    }
+  });
+
+  // 🔥 Refresh pre-warmed context endpoint
+  app.post('/api/cache/prewarmer/refresh', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+      
+      await contextPrewarmer.refresh(activeProfile.id, storage);
+      const stats = contextPrewarmer.getStats();
+      res.json({ success: true, message: 'Pre-warmed cache refreshed', stats });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to refresh pre-warmed cache' });
     }
   });
 

@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { elevenlabsService } from "./services/elevenlabs";
 import { discordBotService } from "./services/discordBot";
 import { prometheusMetrics } from "./services/prometheusMetrics.js";
+import { contextPrewarmer } from "./services/contextPrewarmer";
 
 const app = express();
 app.use(express.json());
@@ -119,6 +120,16 @@ app.use((req, res, next) => {
         }
       } else {
         log(`ℹ️ Discord bot not started - missing token or active profile`);
+      }
+
+      // 🔥 Pre-warm context cache for instant responses
+      if (activeProfile) {
+        try {
+          await contextPrewarmer.warmContext(activeProfile.id, storage);
+          log(`🔥 Context pre-warming complete for profile: ${activeProfile.name}`);
+        } catch (error) {
+          log(`⚠️ Failed to pre-warm context: ${error}`);
+        }
       }
     } catch (error) {
       log(`⚠️ Failed to initialize services: ${error}`);
