@@ -19,7 +19,7 @@ export default function PersonalitySurgePanel() {
   // Get personality state from unified controller
   const { data: personalityState, isLoading } = useQuery<PersonalityState>({
     queryKey: ['/api/personality/state'],
-    refetchInterval: 2000, // Refresh every 2 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds (was 2s - causing massive load)
   });
 
   // Temporary override mutation

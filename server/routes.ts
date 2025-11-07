@@ -787,6 +787,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : '';
       console.log(`⚡ Performance: Memory=${perfTimers.memoryRetrieval}ms | Context=${perfTimers.contextLoading}ms | AI=${perfTimers.aiGeneration}ms | Emotions=${perfTimers.emotionTags}ms | TOTAL=${perfTimers.total}ms${savings}`);
       console.log(`✂️  Context Pruning: ${memoryPruning.stats.removed + docPruning.stats.removed} items removed | ~${totalTokensSaved} tokens saved | ${Math.round(totalTokensSaved * 0.0015)}ms estimated time saved`);
+
       
       // 🚀 CACHE: Store cacheable responses for future requests
       if (responseCache.shouldCache(message, mode)) {
