@@ -419,8 +419,8 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
       );
 
       // 🎯 PHASE 1: Two-pass retrieval - get more candidates first
-      // 🚀 OPTIMIZATION: Use 2x for STREAMING mode (faster), 3x for others (quality)
-      const candidateLimit = mode === 'STREAMING' ? limit * 2 : limit * 3;
+      // 🚀 OPTIMIZATION: Reduced multiplier for STREAMING (1.5x vs 2x) for faster Gemini processing
+      const candidateLimit = mode === 'STREAMING' ? limit * 1.5 : limit * 3;
       const { embeddingService } = await import('./embeddingService');
       const hybridResults = await embeddingService.hybridSearch(contextualQuery, profileId, candidateLimit);
       
@@ -1083,15 +1083,24 @@ ${coreIdentity}`;
       enhancedCoreIdentity += `\n\n${chaosModifier}\n\n${varietyPrompt}`;
 
       // 🎯 PRIMARY: Try Gemini 2.5 Pro first (free, fast, proven quality)
+      // 🚀 OPTIMIZATION: 45-second timeout to prevent hanging
       console.log('🌟 Using Gemini 2.5 Pro as primary AI provider');
       const apiCallStart = Date.now();
       
       try {
-        const geminiResponse = await geminiService.generateChatResponse(
+        // Timeout wrapper - fallback to Claude if Gemini takes >45s
+        const GEMINI_TIMEOUT = 45000; // 45 seconds
+        const geminiPromise = geminiService.generateChatResponse(
           userMessage,
           enhancedCoreIdentity,
           contextPrompt
         );
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Gemini timeout after 45s')), GEMINI_TIMEOUT)
+        );
+        
+        const geminiResponse = await Promise.race([geminiPromise, timeoutPromise]) as any;
         
         const apiCallDuration = (Date.now() - apiCallStart) / 1000;
         

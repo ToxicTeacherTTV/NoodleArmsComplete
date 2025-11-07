@@ -554,9 +554,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTrainingExamples(profileId: string, limit?: number): Promise<Document[]> {
-    // 📚 ENHANCED: Increased from 10 to 50 for better training diversity
-    // 🚀 OPTIMIZATION: Allow custom limit for streaming mode (15 vs 50)
-    const targetLimit = limit || 50;
+    // 📚 OPTIMIZED: Reduced from 50 to 40 for faster Gemini 2.5 Pro processing
+    // 🚀 OPTIMIZATION: Allow custom limit for streaming mode (10 vs 40)
+    const targetLimit = limit || 40; // Reduced from 50
     const candidateLimit = Math.min(targetLimit * 2, 100); // Get 2x candidates for sampling
     
     // Smart sampling: Get candidates, then mix recent + sampled older examples
