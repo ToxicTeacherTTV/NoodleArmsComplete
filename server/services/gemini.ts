@@ -1,46 +1,28 @@
 import { GoogleGenAI } from "@google/genai";
 import { contentFilter } from './contentFilter.js';
+import { executeWithDefaultModel, executeWithProductionModel } from './modelSelector.js';
+import { getDefaultModel, isValidModel } from '../config/geminiModels.js';
 
 /**
- * 🚫 FLASH MODEL BAN ENFORCEMENT
+ * 🎯 INTELLIGENT MODEL SELECTION
  * 
- * **CRITICAL**: Flash models (gemini-*-flash, gemini-*-flash-exp) are PERMANENTLY BANNED.
+ * **HISTORY**: Flash models previously caused hallucination issues (269 false memories).
+ * **CURRENT APPROACH**: Controlled testing with automatic fallback chains.
  * 
- * **WHY**: Flash models caused catastrophic hallucinations:
- * - 269 false memories corrupted the knowledge base
- * - Extracted fake facts about real Discord users
- * - Created fabricated character relationships and lore
+ * **MODEL STRATEGY**:
+ * 1. Development: Use experimental/cheap models (gemini-2.0-flash-exp)
+ * 2. Production: Use standard Flash (gemini-2.5-flash) with Pro fallback
+ * 3. Critical operations: Force Pro model (extraction, analysis)
  * 
- * **ENFORCEMENT**:
- * 1. Only models in APPROVED_MODELS constant are allowed
- * 2. validateModel() MUST be called before every generateContent() call
- * 3. Any attempt to use non-approved models will throw an error
+ * **COST OPTIMIZATION**:
+ * - Flash: $0.075 per 1M tokens (17x cheaper than Pro)
+ * - Pro: $1.25 per 1M tokens (best quality)
+ * - Experimental: Free tier (testing only)
  * 
- * **DO THIS** ✅:
- * ```typescript
- * const model = APPROVED_MODELS.PRIMARY;
- * this.validateModel(model, 'methodName');
- * const response = await this.ai.models.generateContent({ model, ... });
- * ```
- * 
- * **NEVER DO THIS** ❌:
- * ```typescript
- * const response = await this.ai.models.generateContent({ 
- *   model: "gemini-2.5-flash", // BANNED - Will corrupt data!
- *   ...
- * });
- * ```
- * 
- * If you need to add a new approved model, update APPROVED_MODELS and document why.
+ * **AUTOMATIC FALLBACK**:
+ * If primary model fails/overloaded, automatically tries next model in chain.
+ * See modelSelector.ts for fallback logic.
  */
-
-const APPROVED_MODELS = {
-  PRIMARY: "gemini-2.0-flash-thinking-exp-01-21", // 🚀 TEMP TEST: Testing Flash Thinking for speed (was gemini-2.5-pro)
-} as const;
-
-function isApprovedModel(model: string): model is typeof APPROVED_MODELS.PRIMARY {
-  return Object.values(APPROVED_MODELS).includes(model as any);
-}
 
 class GeminiService {
   private ai: GoogleGenAI;
@@ -50,33 +32,16 @@ class GeminiService {
       apiKey: process.env.GEMINI_API_KEY || "" 
     });
     
-    // � TEMP: Flash ban disabled for testing Flash Thinking model
-    /*
-    // �🚫 CONSTRUCTOR-LEVEL FLASH BAN: Override generateContent to block Flash at runtime
-    const originalGenerate = this.ai.models.generateContent.bind(this.ai.models);
-    this.ai.models.generateContent = ((config: any) => {
-      if (config.model && /flash/i.test(config.model)) {
-        const error = new Error(
-          `🚫 FLASH MODEL BLOCKED: "${config.model}" is permanently banned.\n` +
-          `Reason: Flash models hallucinate facts and corrupt memory.\n` +
-          `Only gemini-2.5-pro is approved for use.\n` +
-          `Stack trace will show where this was called from.`
-        );
-        console.error(error.message);
-        throw error;
-      }
-      return originalGenerate(config);
-    }) as typeof originalGenerate;
-    */
-    
-    console.log('✅ Gemini service initialized (Flash Thinking test mode)');
+    const defaultModel = getDefaultModel();
+    console.log(`✅ Gemini service initialized with default model: ${defaultModel}`);
+    console.log(`   Environment: ${process.env.NODE_ENV || 'production'}`);
   }
 
   private validateModel(model: string, context: string): void {
-    if (!isApprovedModel(model)) {
+    if (!isValidModel(model)) {
       throw new Error(
-        `🚫 UNAUTHORIZED MODEL: ${model} is not approved for ${context}. ` +
-        `Use ${APPROVED_MODELS.PRIMARY} instead.`
+        `🚫 INVALID MODEL: ${model} is not a recognized model for ${context}. ` +
+        `Check geminiModels.ts for available models.`
       );
     }
   }
@@ -294,8 +259,8 @@ Example format:
   }
 ]`;
 
-    return await this.retryWithBackoff(async () => {
-      const model = APPROVED_MODELS.PRIMARY;
+    // Use intelligent model selection with fallback
+    return await executeWithDefaultModel(async (model) => {
       this.validateModel(model, 'extractStoriesFromDocument');
       
       const response = await this.ai.models.generateContent({
@@ -325,7 +290,7 @@ Example format:
       } else {
         throw new Error("Empty response from Gemini");
       }
-    }, `Extract stories from ${filename}`);
+    }, 'extraction'); // Purpose: extraction (fact extraction from documents)
   }
 
   async extractAtomicFactsFromStory(storyContent: string, storyContext: string): Promise<Array<{
@@ -396,8 +361,7 @@ Examples from various stories:
 Return as JSON array.`;
 
     try {
-      return await this.retryWithBackoff(async () => {
-        const model = APPROVED_MODELS.PRIMARY;
+      return await executeWithDefaultModel(async (model) => {
         this.validateModel(model, 'extractAtomicFactsFromStory');
         
         const response = await this.ai.models.generateContent({
@@ -428,7 +392,7 @@ Return as JSON array.`;
         } else {
           throw new Error("Empty response from Gemini");
         }
-      }, `Extract atomic facts from story`);
+      }, 'extraction'); // Purpose: extraction (atomic fact breakdown)
     } catch (error) {
       console.error("❌ Gemini atomic fact extraction error:", error);
       
@@ -503,11 +467,11 @@ Example format:
 ]`;
 
     try {
-      const model = APPROVED_MODELS.PRIMARY;
-      this.validateModel(model, 'extractFactsFromDocument');
-      
-      const response = await this.ai.models.generateContent({
-        model,
+      return await executeWithDefaultModel(async (model) => {
+        this.validateModel(model, 'extractFactsFromDocument');
+        
+        const response = await this.ai.models.generateContent({
+          model,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -533,6 +497,7 @@ Example format:
       } else {
         throw new Error("Empty response from Gemini");
       }
+    }, 'extraction'); // Purpose: extraction (legacy fact extraction)
     } catch (error) {
       console.error("Gemini fact extraction error:", error);
       throw new Error(`Failed to extract facts: ${error}`);
@@ -566,11 +531,11 @@ ${JSON.stringify(facts, null, 2)}
 Return the optimized facts as a JSON array. Keep the most important and unique information while eliminating redundancy.`;
 
     try {
-      const model = APPROVED_MODELS.PRIMARY;
-      this.validateModel(model, 'deduplicateAndOptimizeFacts');
-      
-      const response = await this.ai.models.generateContent({
-        model,
+      return await executeWithDefaultModel(async (model) => {
+        this.validateModel(model, 'deduplicateAndOptimizeFacts');
+        
+        const response = await this.ai.models.generateContent({
+          model,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -596,6 +561,7 @@ Return the optimized facts as a JSON array. Keep the most important and unique i
       } else {
         throw new Error("Empty response from Gemini");
       }
+    }, 'generation'); // Purpose: generation (optimize/dedup facts)
     } catch (error) {
       console.error("❌ Gemini optimization error:", error);
       
@@ -657,11 +623,11 @@ Response format:
 ]`;
 
     try {
-      const model = APPROVED_MODELS.PRIMARY;
-      this.validateModel(model, 'consolidateAndOptimizeMemories');
-      
-      const response = await this.ai.models.generateContent({
-        model,
+      return await executeWithDefaultModel(async (model) => {
+        this.validateModel(model, 'consolidateAndOptimizeMemories');
+        
+        const response = await this.ai.models.generateContent({
+          model,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -692,6 +658,7 @@ Response format:
       } else {
         throw new Error("Empty response from Gemini");
       }
+    }, 'generation'); // Purpose: generation (consolidate memories)
     } catch (error) {
       console.error("Gemini consolidation error:", error);
       // Return simplified version of original memories if consolidation fails
@@ -754,61 +721,36 @@ Use commas where grammatically appropriate to separate clauses and maintain read
 
 ${coreIdentity}`;
 
-      // Validate and use approved model with retry logic
-      const model = APPROVED_MODELS.PRIMARY;
-      this.validateModel(model, 'generateChatResponse');
-      
-      let response;
-      
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          console.log(`🔄 Gemini attempt ${attempt + 1}/3 with model: ${model}`);
-          
-          // 🚀 OPTIMIZATION: Add 45-second timeout to prevent hanging
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Gemini API timeout after 45s')), 45000);
-          });
-          
-          const apiPromise = this.ai.models.generateContent({
-            model,
-            config: {
-              systemInstruction: enhancedCoreIdentity,
-              temperature: 1.0, // Maximum creativity to match Anthropic
-            },
-            contents: fullPrompt,
-          });
-          
-          response = await Promise.race([apiPromise, timeoutPromise]) as any;
-          
-          if (response?.text) {
-            console.log(`✅ Gemini success with ${model} on attempt ${attempt + 1}`);
-            break;
-          }
-        } catch (modelError: any) {
-          console.warn(`⚠️ ${model} failed (attempt ${attempt + 1}):`, modelError?.message || String(modelError));
-          
-          // If it's a timeout or not an overload error, don't retry
-          if (modelError?.message?.includes('timeout') || !modelError?.message?.includes('overloaded')) {
-            break;
-          }
+      // Use intelligent model selection with fallback for chat
+      const chatResult = await executeWithDefaultModel(async (model) => {
+        this.validateModel(model, 'generateChatResponse');
+        
+        console.log(`🤖 Generating chat response with ${model}`);
+        
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Gemini API timeout after 45s')), 45000);
+        });
+        
+        const apiPromise = this.ai.models.generateContent({
+          model,
+          config: {
+            systemInstruction: enhancedCoreIdentity,
+            temperature: 1.0, // Maximum creativity to match Anthropic
+          },
+          contents: fullPrompt,
+        });
+        
+        const response = await Promise.race([apiPromise, timeoutPromise]);
+        
+        if (!response?.text) {
+          throw new Error('Empty response from Gemini');
         }
         
-        if (response?.text) break;
-        
-        // Wait before retrying (exponential backoff)
-        if (attempt < 2) {
-          const waitTime = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
-          console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-        }
-      }
-      
-      if (!response?.text) {
-        throw new Error('All Gemini models failed or are overloaded');
-      }
+        return response.text;
+      }, 'chat'); // Purpose: chat (conversational response)
 
-      // 🚫 Filter content to prevent cancel-worthy language while keeping profanity
-      const rawContent = response.text || '';
+      const rawContent = chatResult;
       const { filtered: filteredContent, wasFiltered } = contentFilter.filterContent(rawContent);
       
       if (wasFiltered) {
@@ -922,9 +864,8 @@ ${coreIdentity}`;
       throw new Error("Gemini API key not configured");
     }
 
-    // 🔄 Use retry with backoff for quota/rate limit errors
-    return await this.retryWithBackoff(async () => {
-      const model = APPROVED_MODELS.PRIMARY;
+    // Use production model for critical analysis tasks
+    return await executeWithProductionModel(async (model) => {
       this.validateModel(model, 'analyzeContentForFlags');
       
       const response = await this.ai.models.generateContent({
@@ -972,7 +913,7 @@ ${coreIdentity}`;
       }
 
       return JSON.parse(rawJson);
-    }, `analyzeContentForFlags(${contentType})`, 3); // 3 retries with exponential backoff
+    }, 'analysis'); // Purpose: analysis (content flagging)
   }
 
   // NEW: Parse podcast segments from transcript for Nicky's memory system
@@ -1044,11 +985,11 @@ Example format:
 ]`;
 
     try {
-      const model = APPROVED_MODELS.PRIMARY;
-      this.validateModel(model, 'extractPodcastSegments');
-      
-      const response = await this.ai.models.generateContent({
-        model,
+      return await executeWithDefaultModel(async (model) => {
+        this.validateModel(model, 'parseShowSegments');
+        
+        const response = await this.ai.models.generateContent({
+          model,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -1078,6 +1019,7 @@ Example format:
       } else {
         throw new Error("Empty response from Gemini");
       }
+    }, 'extraction'); // Purpose: extraction (podcast segments)
     } catch (error) {
       console.error("❌ Gemini segment parsing error:", error);
       
@@ -1142,9 +1084,8 @@ Respond with ONLY a JSON array - no other text:
 ]`;
 
     try {
-      // 🔄 Use retry with backoff for quota/rate limit errors
-      return await this.retryWithBackoff(async () => {
-        const model = APPROVED_MODELS.PRIMARY;
+      // Use default model for podcast fact extraction
+      return await executeWithDefaultModel(async (model) => {
         this.validateModel(model, 'extractPodcastFacts');
         
         const response = await this.ai.models.generateContent({
@@ -1177,7 +1118,7 @@ Respond with ONLY a JSON array - no other text:
         } else {
           throw new Error("Empty response from Gemini");
         }
-      }, `extractPodcastFacts(Episode ${episodeNumber})`, 5); // 5 retries with exponential backoff
+      }, 'extraction'); // Purpose: extraction (podcast facts)
     } catch (error) {
       console.error(`❌ Gemini fact extraction error for Episode ${episodeNumber}:`, error);
       console.warn(`⚠️ Returning empty array - fallback facts will be created`);
@@ -1231,11 +1172,11 @@ Return as JSON. If no new facts can be extracted, return empty array:
 }`;
 
     try {
-      const model = APPROVED_MODELS.PRIMARY;
-      this.validateModel(model, 'extractDiscordMemberFacts');
-      
-      const response = await this.ai.models.generateContent({
-        model,
+      return await executeWithDefaultModel(async (model) => {
+        this.validateModel(model, 'extractDiscordMemberFacts');
+        
+        const response = await this.ai.models.generateContent({
+          model,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -1267,6 +1208,7 @@ Return as JSON. If no new facts can be extracted, return empty array:
         return result.facts || [];
       }
       return [];
+    }, 'extraction'); // Purpose: extraction (Discord member facts)
     } catch (error) {
       console.error('Discord fact extraction error:', error);
       return [];
@@ -1327,18 +1269,19 @@ AI: ${aiResponse.substring(0, 200)}
 
 Title:`;
 
-      const model = APPROVED_MODELS.PRIMARY;
-      this.validateModel(model, 'generateConversationTitle');
-      
-      const result = await this.ai.models.generateContent({
-        model,
-        contents: prompt
-      });
-      
-      const title = result.text?.trim() || '';
-      
-      // Clean up the title - remove quotes, periods, extra whitespace
-      return title.replace(/^["']|["']$/g, '').replace(/\.$/, '').trim().substring(0, 60);
+      return await executeWithDefaultModel(async (model) => {
+        this.validateModel(model, 'generateConversationTitle');
+        
+        const result = await this.ai.models.generateContent({
+          model,
+          contents: prompt
+        });
+        
+        const title = result.text?.trim() || '';
+        
+        // Clean up the title - remove quotes, periods, extra whitespace
+        return title.replace(/^["']|["']$/g, '').replace(/\.$/, '').trim().substring(0, 60);
+      }, 'generation'); // Purpose: generation (title creation)
     } catch (error) {
       console.error('Error generating conversation title:', error);
       // Fallback: use first few words of user message
@@ -1352,41 +1295,23 @@ export async function generateLoreContent(prompt: string): Promise<any> {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
     
-    // 🚫 FLASH BAN ENFORCEMENT: Block Flash models at runtime
-    const originalGenerate = ai.models.generateContent.bind(ai.models);
-    ai.models.generateContent = ((config: any) => {
-      if (config.model && /flash/i.test(config.model)) {
-        const error = new Error(
-          `🚫 FLASH MODEL BLOCKED in generateLoreContent: "${config.model}" is permanently banned.\n` +
-          `Reason: Flash models hallucinate facts and corrupt memory.\n` +
-          `Only gemini-2.5-pro is approved for use.`
-        );
-        console.error(error.message);
-        throw error;
-      }
-      return originalGenerate(config);
-    }) as typeof originalGenerate;
-    
-    const model = APPROVED_MODELS.PRIMARY;
-    
-    if (!isApprovedModel(model)) {
-      throw new Error(`🚫 UNAUTHORIZED MODEL: ${model} is not approved. Flash models are BANNED.`);
-    }
-    
-    const response = await ai.models.generateContent({
-      model,
-      config: {
-        responseMimeType: "application/json",
-      },
-      contents: prompt,
-    });
+    // Use model selector for lore generation
+    return await executeWithDefaultModel(async (model) => {
+      const response = await ai.models.generateContent({
+        model,
+        config: {
+          responseMimeType: "application/json",
+        },
+        contents: prompt,
+      });
 
-    const rawJson = response.text;
-    if (rawJson) {
-      return JSON.parse(rawJson);
-    } else {
-      throw new Error("Empty response from model");
-    }
+      const rawJson = response.text;
+      if (rawJson) {
+        return JSON.parse(rawJson);
+      } else {
+        throw new Error("Empty response from model");
+      }
+    }, 'generation'); // Purpose: generation (lore content)
   } catch (error) {
     console.error('Lore generation error:', error);
     throw new Error(`Failed to generate lore: ${error}`);

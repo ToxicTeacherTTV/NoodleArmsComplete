@@ -1,4 +1,18 @@
 import { GoogleGenAI } from "@google/genai";
+import { executeWithProductionModel } from './modelSelector.js';
+import { getDefaultModel, isValidModel } from '../config/geminiModels.js';
+
+/**
+ * 🎯 ENTITY EXTRACTION SERVICE
+ * 
+ * This service uses production-ready models ONLY for critical entity extraction.
+ * Entity extraction is too important to risk with experimental models.
+ * 
+ * **MODEL STRATEGY**: 
+ * - Production: gemini-2.5-flash (standard, reliable)
+ * - Fallback: gemini-2.5-pro (premium quality if Flash fails)
+ * - Never uses experimental models (too risky for data accuracy)
+ */
 
 interface DetectedEntity {
   name: string;
@@ -28,20 +42,8 @@ class EntityExtractionService {
       apiKey: process.env.GEMINI_API_KEY || "" 
     });
     
-    // 🚫 FLASH BAN ENFORCEMENT: Block Flash models at runtime
-    const originalGenerate = this.ai.models.generateContent.bind(this.ai.models);
-    this.ai.models.generateContent = ((config: any) => {
-      if (config.model && /flash/i.test(config.model)) {
-        const error = new Error(
-          `🚫 FLASH MODEL BLOCKED in EntityExtractionService: "${config.model}" is permanently banned.\n` +
-          `Reason: Flash models hallucinate facts and corrupt memory.\n` +
-          `Only gemini-2.5-pro is approved for use.`
-        );
-        console.error(error.message);
-        throw error;
-      }
-      return originalGenerate(config);
-    }) as typeof originalGenerate;
+    const defaultModel = getDefaultModel();
+    console.log(`✅ Entity extraction service initialized with default model: ${defaultModel}`);
   }
 
   /**
@@ -207,51 +209,49 @@ DO NOT extract:
 - Generic gameplay terms (match, round, session) without specific context`;
 
     try {
-      const response = await this.retryWithBackoff(
-        async () => {
-          return await this.ai.models.generateContent({
-            model: "gemini-2.5-pro",
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: "object",
-                properties: {
-                  entities: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        name: { type: "string" },
-                        type: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
-                        disambiguation: { type: "string" },
-                        aliases: { type: "array", items: { type: "string" } },
-                        context: { type: "string" },
-                        confidence: { type: "number" },
-                        mentions: { type: "array", items: { type: "string" } }
-                      },
-                      required: ["name", "type", "disambiguation", "aliases", "context", "confidence", "mentions"]
-                    }
+      // Use production model for critical entity extraction (no experimental models)
+      return await executeWithProductionModel(async (model) => {
+        const response = await this.ai.models.generateContent({
+          model,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "object",
+              properties: {
+                entities: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      name: { type: "string" },
+                      type: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
+                      disambiguation: { type: "string" },
+                      aliases: { type: "array", items: { type: "string" } },
+                      context: { type: "string" },
+                      confidence: { type: "number" },
+                      mentions: { type: "array", items: { type: "string" } }
+                    },
+                    required: ["name", "type", "disambiguation", "aliases", "context", "confidence", "mentions"]
                   }
-                },
-                required: ["entities"]
-              }
-            },
-            contents: prompt,
-          });
-        },
-        "Entity extraction"
-      );
+                }
+              },
+              required: ["entities"]
+            }
+          },
+          contents: prompt,
+        });
 
-      const rawJson = response.text;
-      if (rawJson) {
-        const result = JSON.parse(rawJson);
-        return {
-          entities: result.entities || [],
-          suggestedLinks: {} // Will be filled by disambiguation logic
-        };
-      } else {
-        throw new Error("Empty response from Gemini");
-      }
+        const rawJson = response.text;
+        if (rawJson) {
+          const result = JSON.parse(rawJson);
+          return {
+            entities: result.entities || [],
+            suggestedLinks: {} // Will be filled by disambiguation logic
+          };
+        } else {
+          throw new Error("Empty response from Gemini");
+        }
+      }, 'extraction'); // Purpose: extraction (entity extraction from memories)
     } catch (error) {
       console.error("Entity extraction error:", error);
       return {
@@ -259,9 +259,7 @@ DO NOT extract:
         suggestedLinks: {}
       };
     }
-  }
-
-  /**
+  }  /**
    * Match detected entities against existing entities in the database
    */
   async disambiguateEntities(
@@ -326,72 +324,70 @@ Return as JSON:
 Be conservative with matches - only match if confidence > 0.7`;
 
     try {
-      const response = await this.retryWithBackoff(
-        async () => {
-          return await this.ai.models.generateContent({
-            model: "gemini-2.5-pro",
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: "object",
-                properties: {
-                  matches: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        detectedEntityName: { type: "string" },
-                        existingEntityId: { type: "string" },
-                        matchType: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
-                        confidence: { type: "number" },
-                        reason: { type: "string" }
-                      },
-                      required: ["detectedEntityName", "existingEntityId", "matchType", "confidence", "reason"]
-                    }
-                  },
-                  newEntities: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        name: { type: "string" },
-                        type: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
-                        disambiguation: { type: "string" },
-                        reason: { type: "string" }
-                      },
-                      required: ["name", "type", "disambiguation", "reason"]
-                    }
+      // Use production model for entity disambiguation (critical for data accuracy)
+      return await executeWithProductionModel(async (model) => {
+        const response = await this.ai.models.generateContent({
+          model,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "object",
+              properties: {
+                matches: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      detectedEntityName: { type: "string" },
+                      existingEntityId: { type: "string" },
+                      matchType: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
+                      confidence: { type: "number" },
+                      reason: { type: "string" }
+                    },
+                    required: ["detectedEntityName", "existingEntityId", "matchType", "confidence", "reason"]
                   }
                 },
-                required: ["matches", "newEntities"]
-              }
-            },
-            contents: prompt,
-          });
-        },
-        "Entity disambiguation"
-      );
+                newEntities: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      name: { type: "string" },
+                      type: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
+                      disambiguation: { type: "string" },
+                      reason: { type: "string" }
+                    },
+                    required: ["name", "type", "disambiguation", "reason"]
+                  }
+                }
+              },
+              required: ["matches", "newEntities"]
+            }
+          },
+          contents: prompt,
+        });
 
-      const rawJson = response.text;
-      if (rawJson) {
-        const result = JSON.parse(rawJson);
-        
-        // Convert to our expected format
-        const matches = result.matches.map((match: any) => ({
-          detectedEntity: detectedEntities.find(e => e.name === match.detectedEntityName) || detectedEntities[0],
-          existingEntityId: match.existingEntityId,
-          matchType: match.matchType as 'PERSON' | 'PLACE' | 'EVENT',
-          confidence: match.confidence
-        }));
+        const rawJson = response.text;
+        if (rawJson) {
+          const result = JSON.parse(rawJson);
+          
+          // Convert to our expected format
+          const matches = result.matches.map((match: any) => ({
+            detectedEntity: detectedEntities.find(e => e.name === match.detectedEntityName) || detectedEntities[0],
+            existingEntityId: match.existingEntityId,
+            matchType: match.matchType as 'PERSON' | 'PLACE' | 'EVENT',
+            confidence: match.confidence
+          }));
 
-        const newEntities = detectedEntities.filter(entity => 
-          !result.matches.some((match: any) => match.detectedEntityName === entity.name)
-        );
+          const newEntities = detectedEntities.filter(entity => 
+            !result.matches.some((match: any) => match.detectedEntityName === entity.name)
+          );
 
-        return { matches, newEntities };
-      } else {
-        throw new Error("Empty response from Gemini");
-      }
+          return { matches, newEntities };
+        } else {
+          throw new Error("Empty response from Gemini");
+        }
+      }, 'analysis'); // Purpose: analysis (entity disambiguation)
     } catch (error) {
       console.error("Entity disambiguation error:", error);
       return {
