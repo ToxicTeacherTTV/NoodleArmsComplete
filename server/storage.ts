@@ -774,11 +774,11 @@ export class DatabaseStorage implements IStorage {
       console.log(`✅ Created new memory: "${upsertedEntry.content.substring(0, 50)}..." (canonical: ${upsertedEntry.canonicalKey})`);
     }
 
-    // AI-Assisted Flagging: Analyze new memory content in background (only for truly new entries)
-    if (upsertedEntry.content && upsertedEntry.profileId && (!upsertedEntry.supportCount || upsertedEntry.supportCount === 1)) {
-      // Run flagging as background task to avoid slowing down memory creation
-      this.flagMemoryContentBackground(upsertedEntry);
-    }
+    // AI-Assisted Flagging: DISABLED - Hitting rate limits during bulk extractions
+    // TODO: Re-enable with proper rate limiting/batching or make it opt-in
+    // if (upsertedEntry.content && upsertedEntry.profileId && (!upsertedEntry.supportCount || upsertedEntry.supportCount === 1)) {
+    //   this.flagMemoryContentBackground(upsertedEntry);
+    // }
 
     // 🔢 AUTO-GENERATE EMBEDDINGS: Create vector embeddings in background
     if (upsertedEntry.content && !upsertedEntry.embedding) {

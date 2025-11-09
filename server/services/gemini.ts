@@ -757,27 +757,12 @@ ${coreIdentity}`;
         console.warn(`🚫 Gemini content filtered to prevent cancel-worthy language`);
       }
 
-      // 🚫 CRITICAL: Strip asterisk actions post-processing (last resort enforcement)
-      // Remove action descriptions, keep emphasized words/phrases
-      const asteriskPattern = /\*[^*]+\*/g;
-      const actionVerbs = ['waves', 'wave', 'winks', 'wink', 'leans', 'lean', 'gestures', 'gesture', 
-                          'nods', 'nod', 'shrugs', 'shrug', 'points', 'point', 'laughs', 'laugh',
-                          'sighs', 'sigh', 'smirks', 'smirk', 'grins', 'grin', 'rolls eyes', 
-                          'crosses arms', 'snaps fingers', 'adjusts'];
+      // 🚫 CRITICAL: Strip ALL asterisks (emphasis, actions, italics - TTS doesn't need them)
+      const asteriskPattern = /\*+([^*]+)\*+/g;
       
-      const strippedContent = filteredContent.replace(asteriskPattern, (match) => {
-        const content = match.slice(1, -1).toLowerCase();
-        
-        // Check if it contains action verbs - if so, remove it
-        const isAction = actionVerbs.some(verb => content.includes(verb));
-        
-        if (isAction) {
-          console.warn(`🚫 Stripped asterisk action from Gemini response: ${match}`);
-          return ''; // Remove action descriptions
-        }
-        
-        // Keep emphasized words/phrases (including catchphrases)
-        return match;
+      const strippedContent = filteredContent.replace(asteriskPattern, (match, innerText) => {
+        console.warn(`🚫 Stripped asterisks from Gemini response: ${match}`);
+        return innerText; // Keep the text, remove the asterisks
       }).replace(/\s{2,}/g, ' ').trim(); // Clean up extra spaces
 
       // ✅ CRITICAL: Fix missing punctuation (Gemini often skips periods)
