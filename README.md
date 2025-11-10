@@ -1,499 +1,477 @@
-# AI-Powered Co-Host Application - Technical Overview
-# Nicky AI — AI-Powered Co-Host (Up-to-date README)
+# Nicky AI — AI-Powered Co-Host Application
 
-Last updated: 2025-11-03
+**Last updated:** November 10, 2025
 
-This repository contains Nicky "Noodle Arms" — an AI-powered co-host application built to provide live voice interactions, podcast/story features, and Discord integration. The project combines a React frontend, a TypeScript/Express backend, PostgreSQL (Drizzle ORM), and multiple AI/voice providers (Gemini, Claude, ElevenLabs).
+This repository contains **Nicky "Noodle Arms" A.I. Dente** — an AI-powered co-host application built for live streaming, podcasting, and Discord integration. The application features real-time voice interaction, advanced memory systems, and dynamic personality control.
 
-This README has been refreshed to reflect recent work and completed improvements. For more technical deep-dives, see `PROJECT_ROADMAP.md`, `NOTES.md`, and the docs in the `attached_assets/` folder.
+**Tech Stack:** React + TypeScript + Vite frontend | Express + TypeScript backend | PostgreSQL (Neon) with Drizzle ORM | Gemini AI (primary) + Claude (fallback) | ElevenLabs voice synthesis
 
-## What's new (recent, notable updates)
+---
 
-- Gemini-Primary Architecture Migration (Deployed, Oct 2025)
-  - Gemini 2.5 Pro is now PRIMARY for AI operations; Anthropic Claude Sonnet 4.5 is a paid failsafe.
-  - Expected cost reduction: ~90% for AI usage by routing free-tier Gemini where possible.
+## 🎯 Current Architecture (November 2025)
 
-- Memory Deduplication Fix (Completed Oct 2025)
-  - Implemented atomic UPSERTs, unique constraints on (profileId, canonicalKey), and metadata-merge logic.
-  - Cleaned up duplicate memories (example: removed 39 duplicate entries).
+### **AI Provider Strategy**
+**Primary:** Gemini 2.5 Flash (free tier, 10 RPM, 250K TPM, 250 RPD)  
+**Fallback Chain:**
+1. `gemini-2.5-flash` (primary, production-ready)
+2. `gemini-2.5-pro` (if Flash rate-limited, 2 RPM on free tier)
+3. `gemini-2.0-flash-exp` (ultimate fallback, experimental)
+4. Claude Sonnet 4.5 (paid failsafe for critical failures)
 
-- Web Search Integration (Operational)
-  - SerpAPI primary integration with DuckDuckGo/Bing fallbacks for external knowledge ingestion.
+**Cost Impact:** ~85-90% reduction in AI costs vs Claude-only architecture  
+**Rate Limit Management:** Intelligent model selection with automatic fallback chains  
+**Quality Control:** Critical operations (personality consolidation, memory deduplication) force Gemini Pro to prevent hallucinations
 
-- Personality System Unification
-  - Unified PersonalityController with preset-based personalities (11 presets available).
-  - Migration tools that map legacy sliders/settings to presets.
+### **Recent Major Updates (Oct-Nov 2025)**
 
-- Entity Linking, RAG improvements, and embedding readiness
-  - Many-to-many entity linking implemented; schema supports embeddings and semantic search (embeddings need population to enable hybrid semantic search).
+✅ **Intelligent Model Selection System**
+- Automatic fallback chains based on rate limits
+- Cost tracking via Prometheus metrics
+- Purpose-based model selection (chat, extraction, analysis)
 
-- Podcast Listener Cities feature
-  - `LISTENER_CITIES_README.md` documents the listener cities tracker used during the podcast segment (import, random pick, coverage tracking).
+✅ **Performance Optimizations**
+- Response caching for instant repeated queries
+- Parallel context loading (3-5s savings)
+- Context pre-warming for 2-4s instant cache hits
+- Smart context pruning (1-2s token savings)
+- STREAMING mode optimizations (50-60% faster)
 
-For a fuller list of changes and the implementation plan, open `PROJECT_ROADMAP.md` (last updated Oct 17, 2025).
+✅ **Memory System Enhancements**
+- Atomic UPSERT with unique constraints prevents duplicates
+- Comprehensive metadata merging preserves all fields
+- Fixed: 39 duplicate memories removed (1544 → 1505 unique)
 
-## Quick project summary
+✅ **Training System**
+- Message-based training collection from conversations
+- AI-powered training example consolidation (3+ examples → unified style guide)
+- Intelligent parsing separates strategy from conversation style
 
-- Frontend: React + TypeScript + Vite. Components live under `client/src/`.
-- Backend: Node.js + Express + TypeScript. Server code under `server/`.
-- DB: PostgreSQL (Neon serverless) with Drizzle ORM. Schema in `shared/schema.ts`.
-- AI Providers: Gemini (PRIMARY), Claude (FALLBACK). Voice via ElevenLabs (with browser TTS fallback).
+For detailed changes, see `PROJECT_ROADMAP.md` (last updated Oct 17, 2025).
 
-## Quick start (local dev)
+---
 
-Prereqs: Node 18+, PostgreSQL (or Neon), .env with required API keys (Gemini/Claude/ElevenLabs/SerpAPI), and Drizzle configured.
+## 📁 Project Structure
 
-1. Install dependencies
-
-   npm install
-
-2. Dev server (frontend + backend hot run configured via scripts)
-
-   npm run dev
-
-3. Build for production
-
-   npm run build
-
-4. Run production build
-
-   npm run start
-
-Useful scripts (from `package.json`): `dev`, `build`, `start`, `check` (tsc), `db:push`.
-
-## Where to find things (docs & useful files)
-
-- Project roadmap and status: `PROJECT_ROADMAP.md` (detailed roadmap & completed items)
-- Development notes & ideas: `NOTES.md`
-- Listener cities feature guide: `LISTENER_CITIES_README.md`
-- SQL for listener cities migration: `add-listener-cities.sql`
-- Misc attachments and exports: `attached_assets/`
-
-## How we validated the recent changes
-
-- Gemini migration: implemented across services with a standard try-fallback pattern (Gemini → Claude) and Prometheus metrics tracking of provider usage.
-- Memory dedupe: addressed by adding DB-level unique constraint + atomic UPSERTs and a merge strategy for metadata.
-
-## Recommended next steps (short-term)
-
-1. Populate the embedding vectors for all memories and enable hybrid semantic retrieval (high priority for better search results).
-2. Add a debug UI toggle that shows retrieved memories and relevance scores for each AI response (helps tune retrieval weights).
-3. Finish ElevenLabs voice tuning for podcast vs streaming modes to conserve credits.
-
-## Contributing
-
-If you want to contribute, please:
-
-1. Open an issue describing the change or bug.
-2. Create a feature branch from `main`.
-3. Include tests (where applicable) and update docs if behavior changes.
-
-## Contact / Further reading
-
-- For product decisions and roadmap discussion: see `PROJECT_ROADMAP.md`.
-- For implementation notes and developer context: see `NOTES.md`.
-- For listener cities usage details: see `LISTENER_CITIES_README.md`.
-
-Thanks — the README was refreshed to include all major updates up through 2025-11-03. If you'd like me to expand any specific section (example: step-by-step embedding migration, or a condensed one-page README for external audiences), tell me which section to expand and I'll update it.
-
-
-### Contradiction Detection Flow
-
-1. **Fact Comparison**: New facts checked against existing knowledge base
-2. **Semantic Similarity**: AI-powered contradiction detection
-3. **Importance Weighting**: Higher importance facts take precedence
-4. **Resolution Strategy**: Merge, replace, or flag for manual review
-
-### Voice Synthesis Integration Patterns
-
-#### ElevenLabs Integration
-```typescript
-// Queue-based voice synthesis for consistent playback
-const voiceQueue = new Queue('voice-synthesis');
-voiceQueue.add('synthesize', {
-  text: message.content,
-  voiceId: profile.elevenLabsVoiceId,
-  stability: 0.5,
-  clarity: 0.8
-});
+```
+NoodleArmsComplete/
+├── client/src/           # React frontend
+│   ├── components/       # UI components (29 panels/dashboards)
+│   │   ├── jazz-dashboard.tsx          # Main application container
+│   │   ├── personality-surge-panel.tsx # Unified personality controls
+│   │   ├── memory-panel.tsx            # Memory management UI
+│   │   ├── discord-management-panel.tsx # Discord bot settings
+│   │   └── ...
+│   ├── lib/              # Utilities, hooks, API client
+│   └── pages/            # Route components
+├── server/
+│   ├── services/         # Business logic (45+ services)
+│   │   ├── anthropic.ts            # AI response generation
+│   │   ├── gemini.ts               # Gemini API integration
+│   │   ├── personalityController.ts # Personality management
+│   │   ├── embeddingService.ts     # Vector embeddings
+│   │   ├── discordBot.ts           # Discord integration
+│   │   └── ...
+│   ├── config/           # Model configuration, constants
+│   │   └── geminiModels.ts         # Model selection strategy
+│   ├── routes.ts         # API endpoints
+│   ├── storage.ts        # Database abstraction layer
+│   └── index.ts          # Express app entry point
+├── shared/
+│   ├── schema.ts         # Drizzle ORM schemas (15+ tables)
+│   └── types.ts          # Shared TypeScript types
+└── docs/                 # Documentation, roadmaps, notes
 ```
 
-#### Fallback to Browser TTS
-```typescript
-// Browser Speech Synthesis as backup
-if (!elevenLabsAvailable) {
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.voice = selectedVoice;
-  speechSynthesis.speak(utterance);
-}
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+
+- PostgreSQL (or Neon serverless account)
+- API keys: Gemini, Claude (optional), ElevenLabs, SerpAPI
+
+### Installation
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Configure environment variables
+# Create .env file with:
+# - DATABASE_URL (PostgreSQL connection string)
+# - GEMINI_API_KEY (primary AI provider)
+# - ANTHROPIC_API_KEY (fallback, optional on free tier)
+# - ELEVENLABS_API_KEY (voice synthesis)
+# - SERPAPI_API_KEY (web search)
+
+# 3. Push database schema
+npm run db:push
+
+# 4. Start development server
+npm run dev
 ```
 
-### Advanced Discord Bot Integration
+### Available Scripts
 
-#### Proactive Messaging System
-```typescript
-// Smart proactive messaging with daily limits and server-specific behavior
-class ProactiveMessaging {
-  private async considerProactiveMessage(): Promise<void> {
-    // Global daily limit: 2-3 messages across all servers
-    const dailyLimit = await this.checkGlobalDailyLimit();
-    if (dailyLimit.exceeded) return;
-    
-    // Server-specific behavior modulation
-    const effectiveBehavior = await behaviorModulator.getEffectiveBehavior(serverId);
-    const shouldSendMessage = Math.random() < (effectiveBehavior.responsiveness / 100);
-    
-    if (shouldSendMessage) {
-      await this.generateContextualMessage(server, channel);
-    }
-  }
-}
-```
-
-#### Dynamic Behavior Modulation
-```typescript
-// Real-time personality adjustment based on multiple factors
-class BehaviorModulator {
-  async getEffectiveBehavior(serverId: string): Promise<EffectiveBehavior> {
-    const server = await storage.getDiscordServer(serverId);
-    const drift = await this.calculateDrift(server); // Bounded random walk
-    const chaosMultiplier = await this.getChaosMultiplier(); // Global chaos state
-    const timeOfDayFactor = this.getTimeOfDayModulation(); // Circadian rhythm
-    
-    return this.combineFactors(server.baseValues, drift, chaosMultiplier, timeOfDayFactor);
-  }
-}
-```
-
-### Mode Switching (Podcast vs Stream vs Chat)
-
-#### Mode-Specific Behaviors & Voice Management
-- **Podcast Mode**: `voiceOutput: false` (manual generation to conserve credits), longer-form responses
-- **Stream Mode**: `voiceOutput: true` (auto-voice for real-time), quick reactions
-- **Chat Mode**: Conversational, memory-building interactions with optional voice
-
-#### Implementation
-```typescript
-// Mode affects AI prompt construction, response length, and voice synthesis
-const modeConfig = {
-  PODCAST: { 
-    maxTokens: 1024, temperature: 0.8, style: 'storytelling',
-    voiceOutput: false, // Manual voice generation
-    personalityIntensity: 'moderate' 
-  },
-  STREAM: { 
-    maxTokens: 256, temperature: 1.0, style: 'reactive',
-    voiceOutput: true, // Auto-voice enabled
-    personalityIntensity: 'high'
-  },
-  CHAT: { 
-    maxTokens: 512, temperature: 0.9, style: 'conversational',
-    voiceOutput: 'optional', // User preference
-    personalityIntensity: 'adaptive'
-  }
-};
-```
-
-## Development Patterns
-
-### Code Organization Conventions
-
-#### Frontend Structure
-```
-client/src/
-├── components/          # Reusable UI components
-│   ├── ui/             # shadcn/ui components
-│   ├── personality-surge-panel.tsx  # Unified chat personality controls
-│   ├── discord-management-panel.tsx  # Discord server personality settings
-│   ├── jazz-dashboard.tsx  # Main application container
-│   └── [feature]/      # Feature-specific components
-├── pages/              # Route-level components
-├── lib/                # Utilities and configurations
-└── hooks/              # Custom React hooks
-```
-
-#### Backend Structure
-```
-server/
-├── services/           # Business logic and external integrations
-│   ├── personalityController.ts  # Unified personality management
-│   ├── chaosEngine.ts  # Advisory personality influence
-│   └── [other services]/
-├── types/
-│   └── personalityControl.ts  # Personality system type definitions
-├── routes.ts          # API endpoint definitions (includes personality & memory endpoints)
-├── storage.ts         # Database abstraction layer
-└── index.ts           # Application entry point
-```
-
-#### Shared Structure
-```
-shared/
-├── schema.ts          # Database schema and types
-└── types.ts           # Shared TypeScript interfaces
-```
-
-### How to Add New Features Without Breaking Character Consistency
-
-1. **Update Schema First**: Define data model in `shared/schema.ts`
-2. **Extend Storage Interface**: Add CRUD operations to `server/storage.ts`
-3. **Create API Endpoints**: Add routes following RESTful patterns
-4. **Integrate with PersonalityController**: Ensure new features work with unified personality system
-5. **Build Frontend Components**: Follow existing UI patterns and use unified personality controls
-6. **Test Character Integration**: Ensure new features enhance rather than contradict personality
-
-#### Recent Bug Fixes and System Improvements
-- **Protected Facts Deletion**: Fixed missing `DELETE /api/memory/entries/:id` endpoint
-- **Personality System Unification**: Consolidated all personality controls through single PersonalityController
-- **Discord Migration**: Automatic conversion of legacy behavior settings to preset-based system
-
-#### Example: Adding Beef Tracker Feature
-```typescript
-// 1. Schema definition
-export const beefTrackers = pgTable("beef_trackers", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
-  targetUser: text("target_user").notNull(),
-  grievance: text("grievance").notNull(),
-  intensity: integer("intensity").default(50),
-  status: text("status").$type<'ACTIVE' | 'RESOLVED' | 'ESCALATED'>().default('ACTIVE'),
-});
-
-// 2. Storage methods
-async createBeefTracker(data: InsertBeefTracker): Promise<BeefTracker>
-async getActiveBeefs(profileId: string): Promise<BeefTracker[]>
-async updateBeefIntensity(id: string, intensity: number): Promise<void>
-
-// 3. API endpoints
-GET /api/beefs - List active beefs
-POST /api/beefs - Create new beef
-PATCH /api/beefs/:id - Update beef status/intensity
-
-// 4. Frontend integration
-const { data: activeBeefs } = useQuery({
-  queryKey: ['/api/beefs', profileId],
-  enabled: !!profileId
-});
-```
-
-### Testing Approaches for AI Personality Systems
-
-#### Unit Testing
-- **Fact Extraction**: Test memory creation from sample conversations
-- **Contradiction Detection**: Verify consistency enforcement
-- **Behavior Modulation**: Test personality drift calculations
-
-#### Integration Testing
-- **API Endpoint Coverage**: Test all CRUD operations
-- **External Service Mocking**: Mock Anthropic/ElevenLabs for consistent testing
-- **Database Transactions**: Verify data integrity
-
-#### Personality Testing
-```typescript
-// Test character consistency across interactions
-describe('Character Consistency', () => {
-  it('maintains Italian obsession regardless of topic', async () => {
-    const responses = await testMultipleConversations([
-      'What do you think about sports?',
-      'Tell me about technology',
-      'What's your favorite movie?'
-    ]);
-    
-    responses.forEach(response => {
-      expect(response).toContainItalianReference();
-    });
-  });
-});
-```
-
-### Error Handling for External API Failures
-
-#### AI Service Fallback Chain (Gemini → Claude)
-```typescript
-try {
-  // PRIMARY: Try Gemini 2.5 Pro first (free tier)
-  return await geminiService.generateResponse(prompt);
-} catch (geminiError) {
-  console.log('🔄 Gemini failed, falling back to Claude Sonnet 4.5');
-  try {
-    // FALLBACK: Claude Sonnet 4.5 (paid failsafe)
-    return await anthropic.messages.create(request);
-  } catch (claudeError) {
-    // GRACEFUL DEGRADATION: Return fallback response
-    console.error('Both AI services failed');
-    return fallbackResponse;
-  }
-}
-```
-
-#### ElevenLabs Service Graceful Degradation
-```typescript
-async synthesizeVoice(text: string): Promise<AudioBuffer | null> {
-  try {
-    return await elevenLabsService.generate(text);
-  } catch (error) {
-    console.warn('ElevenLabs unavailable, falling back to browser TTS');
-    return null; // Frontend will use Speech Synthesis API
-  }
-}
-```
-
-#### Discord Bot Resilience
-```typescript
-// Automatic reconnection and error recovery
-client.on('error', (error) => {
-  console.error('Discord client error:', error);
-  setTimeout(() => this.initializeBot(), 5000); // Reconnect after 5s
-});
-
-client.on('disconnect', () => {
-  console.log('Discord bot disconnected, attempting reconnection...');
-  this.initializeBot();
-});
-```
-
-## Integration Examples
-
-### Discord Bot Feature Implementation
-
-#### Channel-Aware Content Selection
-```typescript
-// Bot analyzes channel names for contextual relevance
-const getChannelContext = (channelName: string): ContentType[] => {
-  if (channelName.includes('dbd') || channelName.includes('dead')) {
-    return ['dbd', 'aggressive'];
-  }
-  if (channelName.includes('food') || channelName.includes('italian')) {
-    return ['italian', 'family_business'];
-  }
-  return ['random'];
-};
-
-// Proactive messaging respects channel themes
-const proactiveMessage = await generateContextualMessage(channel, server);
-```
-
-#### Behavior Modulation System
-```typescript
-// Dynamic personality adjustments based on server settings
-class BehaviorModulator {
-  async getEffectiveBehavior(serverId: string): Promise<EffectiveBehavior> {
-    const server = await storage.getDiscordServer(serverId);
-    const baseValues = {
-      aggressiveness: server.aggressiveness,
-      responsiveness: server.responsiveness,
-      italianIntensity: server.italianIntensity
-    };
-    
-    // Apply drift and chaos modifiers
-    const driftedValues = this.applyDrift(baseValues, server.driftMomentum);
-    const chaosAdjusted = this.applyChaos(driftedValues);
-    
-    return chaosAdjusted;
-  }
-}
-```
-
-### Database Queries That Maintain Story Context
-
-#### Memory Retrieval with Narrative Preservation
-```sql
--- Enhanced query includes parent story context
-SELECT 
-  m.*,
-  parent.content as parent_story_content,
-  parent.story_context as parent_story_context
-FROM memory_entries m
-LEFT JOIN memory_entries parent ON m.parent_story_id = parent.id
-WHERE m.profile_id = $1
-  AND (m.content ILIKE ANY($2) OR m.keywords && $3)
-ORDER BY m.importance DESC, m.created_at DESC
-LIMIT $4;
-```
-
-#### Conversation Context Building
-```typescript
-// Build conversation context with memory integration
-const buildConversationContext = async (
-  conversationId: string,
-  profileId: string
-): Promise<string> => {
-  const recentMessages = await storage.getConversationMessages(conversationId, 10);
-  const relevantMemories = await storage.searchMemories(
-    extractKeywords(recentMessages),
-    profileId
-  );
-  
-  return {
-    messageHistory: recentMessages,
-    relevantContext: relevantMemories,
-    personalityState: await chaosEngine.getCurrentState()
-  };
-};
-```
-
-### Proper Confidence Scoring Implementation
-
-#### Importance-Based Fact Hierarchy
-```typescript
-const IMPORTANCE_LEVELS = {
-  PROTECTED: 999,        // Core identity, never override
-  CRITICAL: 800-998,     // Major personality traits
-  HIGH: 600-799,         // Important preferences/facts
-  MEDIUM: 300-599,       // Regular conversation facts
-  LOW: 1-299,           // Casual mentions, temporary states
-  TEMPORARY: 0          // Auto-expire after time period
-};
-
-// Fact creation with automatic importance scoring
-const createMemoryEntry = async (
-  content: string,
-  category: MemoryCategory,
-  context?: string
-): Promise<MemoryEntry> => {
-  const importance = await calculateImportance(content, category, context);
-  
-  return storage.createMemoryEntry({
-    content,
-    category,
-    importance,
-    storyContext: context,
-    confidence: calculateConfidence(content, existingMemories)
-  });
-};
-```
-
-#### Contradiction Resolution with Importance Weighting
-```typescript
-const resolveContradiction = async (
-  newFact: MemoryEntry,
-  conflictingFact: MemoryEntry
-): Promise<void> => {
-  if (conflictingFact.importance === 999) {
-    // Protected fact - reject new information
-    console.log(`Rejecting fact that contradicts protected memory: ${conflictingFact.content}`);
-    return;
-  }
-  
-  if (newFact.importance > conflictingFact.importance) {
-    // Update existing fact with new information
-    await storage.updateMemoryEntry(conflictingFact.id, {
-      content: newFact.content,
-      importance: Math.max(newFact.importance, conflictingFact.importance),
-      lastUpdated: new Date()
-    });
-  } else {
-    // Keep existing fact, flag for manual review
-    await storage.createContentFlag({
-      profileId: newFact.profileId,
-      contentType: 'MEMORY_CONFLICT',
-      content: `New: ${newFact.content} vs Existing: ${conflictingFact.content}`,
-      flagType: 'REVIEW_REQUIRED'
-    });
-  }
-};
+```bash
+npm run dev              # Start dev server (frontend + backend)
+npm run build            # Production build (Vite + esbuild)
+npm run start            # Run production build
+npm run check            # TypeScript type checking
+npm run db:push          # Push schema changes to database
+npm run db:backfill-integrity  # Backfill data integrity checks
+npm run audit:timelines  # Audit event timeline consistency
 ```
 
 ---
 
-*This technical overview is maintained as a living document and should be updated as the application evolves. Last updated: September 19, 2025*
+## 🧠 Core Features
+
+### **1. Advanced Memory System**
+- **Storage:** 1,505+ unique memories with atomic UPSERT preventing duplicates
+- **Types:** FACT, PREFERENCE, LORE, CONTEXT, STORY, ATOMIC
+- **Importance Scoring:** 0-999 (protected facts at 999)
+- **Hybrid Retrieval:** ✅ **Keyword + semantic search ACTIVE** (Gemini text-embedding-004)
+- **Vector Embeddings:** ✅ **IMPLEMENTED** - Automatic embedding generation for new memories
+- **Semantic Search:** Finds related memories by meaning, not just keywords
+- **Deduplication:** Canonical key system with comprehensive metadata merging
+- **Background Processing:** Embeddings generated automatically without blocking memory creation
+
+### **2. Dynamic Personality Control**
+- **11 Preset Personalities:** Roast Mode, Chill Nicky, Storytime, Gaming Rage, FULL_PSYCHO, etc.
+- **Chaos Engine:** Dynamic personality drift with advisory influence (not forced)
+- **Variety Controller:** 4 facet system (aggressive, storyteller, analytical, chaotic)
+- **Scene Cards:** Contextual prompts for storylet generation
+- **Training System:** AI-powered consolidation of conversation examples into unified style guides
+
+### **3. Discord Bot Integration**
+- **Proactive Messaging:** Context-aware engagement (2-3 messages/day global limit)
+- **Behavior Modulation:** Server-specific personality adjustments
+- **Drift System:** Bounded random walk for personality evolution
+- **Channel Awareness:** Topic detection from channel names
+- **Member Tracking:** Automatic fact extraction from server interactions
+
+### **4. Podcast & Content Management**
+- **RSS Sync:** Automatic episode import and processing
+- **Fact Extraction:** AI-powered memory creation from podcast content
+- **Listener Cities:** Geographic tracking with random selection feature
+- **Episode Memories:** Source attribution for podcast-derived facts
+- **Preroll Ads:** Dynamic ad generation with TTS support
+
+### **5. Document Processing Pipeline**
+- **Supported Formats:** PDF, DOCX, TXT, Markdown
+- **Stage Tracking:** Uploaded → Processing → Analyzing → Completed
+- **Entity Extraction:** People, places, events with relationship linking
+- **Duplicate Detection:** 85% similarity threshold with metadata merging
+- **Memory Generation:** Automatic knowledge base population from documents
+
+### **6. Voice & TTS**
+- **Primary:** ElevenLabs API v3 (stability: 0.3-0.75, similarity: 0.75-0.8)
+- **Fallback:** Browser Speech Synthesis API
+- **Mode-Specific Settings:**
+  - PODCAST: Manual voice generation (credit conservation)
+  - STREAMING: Auto-voice for reactions <300 chars
+  - CHAT: Optional voice output
+- **Emotion Tags:** TTS instructions like `[scoffs]`, `[furious]`, `[mutters]`
+
+### **7. Intelligence & Analytics**
+- **Fact Clustering:** AI-powered semantic grouping of related memories
+- **Personality Drift Analysis:** Track personality evolution over time
+- **Contradiction Detection:** Smart resolution with importance weighting
+- **Prometheus Metrics:** LLM call tracking, token usage, cost estimation
+- **Performance Monitoring:** Response times, cache hit rates, error rates
+
+---
+
+## 🎮 Mode-Specific Behaviors
+
+### **PODCAST Mode**
+```typescript
+{
+  maxTokens: 1024,
+  temperature: 0.8,
+  style: 'storytelling',
+  voiceOutput: false,  // Manual generation
+  personalityIntensity: 'moderate',
+  responseShape: 'long-form narrative'
+}
+```
+
+### **STREAMING Mode**
+```typescript
+{
+  maxTokens: 256,
+  temperature: 1.0,
+  style: 'reactive',
+  voiceOutput: true,   // Auto-voice enabled
+  personalityIntensity: 'high',
+  responseShape: 'quick reactions',
+  optimizations: {
+    contextPruning: true,
+    parallelLoading: true,
+    responseCache: true
+  }
+}
+```
+
+### **CHAT Mode**
+```typescript
+{
+  maxTokens: 512,
+  temperature: 0.9,
+  style: 'conversational',
+  voiceOutput: 'optional',
+  personalityIntensity: 'adaptive',
+  responseShape: 'balanced dialogue'
+}
+```
+
+---
+
+## 🔧 Configuration & Environment
+
+### **Required Environment Variables**
+```bash
+# Database
+DATABASE_URL="postgresql://user:pass@host/db"
+
+# AI Providers
+GEMINI_API_KEY="your-gemini-key"           # PRIMARY
+ANTHROPIC_API_KEY="your-claude-key"        # FALLBACK (optional on free tier)
+
+# Voice Synthesis
+ELEVENLABS_API_KEY="your-elevenlabs-key"
+
+# Web Search
+SERPAPI_API_KEY="your-serpapi-key"
+
+# Discord Bot
+DISCORD_BOT_TOKEN="your-discord-token"
+```
+
+### **Optional Configuration**
+```bash
+# Model Selection (override defaults)
+GEMINI_DEFAULT_MODEL="gemini-2.5-flash"    # Default: gemini-2.5-flash
+GEMINI_DEV_MODEL="gemini-2.0-flash-exp"    # Dev only: experimental models
+NODE_ENV="production"                       # production | development
+```
+
+---
+
+## 📊 Database Schema Highlights
+
+### **Core Tables** (15 total)
+- `profiles` - AI personality configurations
+- `conversations` - Conversation sessions with mode tracking
+- `messages` - Chat history with voice output flags
+- `memory_entries` - Knowledge base (1,505+ entries)
+  - Vector embedding columns (ready for population)
+  - Canonical key for deduplication
+  - Importance scoring (0-999)
+- `documents` - Uploaded files with processing stages
+- `training_examples` - Conversation-based training data
+- `podcast_episodes` - RSS-synced episode metadata
+- `listener_cities` - Geographic tracking
+- `discord_servers` - Bot behavior per server
+
+### **Entity Relationship Tables**
+- `people`, `places`, `events` - Extracted entities
+- `memory_people_links`, `memory_place_links`, `memory_event_links` - Many-to-many relationships
+
+### **System Tables**
+- `content_flags` - AI-flagged content for review
+- `event_timelines` - Ordered event sequences
+- `preroll_ads` - Dynamic ad generation
+
+---
+
+
+## 🚨 Known Issues & Limitations
+
+### **⚠️ High Priority**
+1. **Gemini Free Tier Rate Limits**
+   - `gemini-2.5-flash`: 10 RPM, 250 RPD (frequently hit with multiple users)
+   - `gemini-2.5-pro`: 2 RPM, 50 RPD (very limited on free tier)
+   - **Current Behavior:** Falls back to `gemini-2.0-flash-exp` (experimental, lower quality)
+   - **Impact:** Quality degradation during high-traffic periods
+   - **Solution:** Consider paid tier ($250 spend = Tier 2: 1000 RPM, 4M RPM, 10K RPD)
+   - **Status:** Operating on free tier, monitoring usage patterns
+
+2. **Embedding Service Backfill**
+   - ✅ Service implemented and active for new memories
+   - ⚠️ Existing 1,505 memories need bulk embedding generation
+   - **Workaround:** Manual endpoint available: `POST /api/memories/generate-embeddings`
+   - **Impact:** Older memories use keyword-only search until backfilled
+   - **Solution:** Run bulk backfill script (takes ~30 mins with rate limiting)
+
+3. **Memory Retrieval Tuning**
+   - Recency bias may overshadow important older memories
+   - Diversity scoring can filter out relevant duplicates
+   - Debug UI shows retrieved memories but not detailed scoring
+   - **Ongoing:** A/B testing hybrid search weight configurations
+
+### **🔧 Medium Priority**
+1. **ElevenLabs Credit Management**
+   - Auto-voice in STREAMING mode can burn credits quickly
+   - Need smarter heuristics for when to generate voice
+   - Consider character count + importance thresholds
+
+2. **Discord Bot Proactivity**
+   - Current trigger: random probability
+   - Needs: context-aware triggering (keywords, channel activity)
+   - Daily limit (2-3 messages) may be too conservative
+
+3. **Personality Drift Unpredictability**
+   - Chaos Engine adds randomness that may reduce consistency
+   - Consider making it optional or reducing influence
+
+### **📋 Low Priority**
+1. **Training Example Consolidation**
+   - Requires 3+ examples before consolidating
+   - Quality varies based on example selection
+   - May need manual curation for best results
+
+2. **Document Processing**
+   - Large PDFs (>100 pages) can timeout
+   - Entity extraction may miss nuanced relationships
+   - Duplicate detection threshold (85%) may need tuning
+
+---
+
+## 📈 Recommended Next Steps
+
+### **Week 1: Optimize Performance & Cost**
+1. **Run embedding backfill** for existing 1,505 memories
+   - Endpoint: `POST /api/memories/generate-embeddings`
+   - Expected time: ~30 minutes with rate limiting
+   - Benefit: Full semantic search across all memories
+
+2. **Monitor Gemini rate limits** and evaluate paid tier
+   - Track fallback frequency to experimental models
+   - Measure quality degradation during peak usage
+   - Decision point: Upgrade if >20% of requests use experimental fallback
+
+3. **Optimize STREAMING mode** further
+   - Current: 1.5x candidate multiplier
+   - Test: 1.2x multiplier for even faster responses
+   - Monitor: Ensure retrieval quality maintained
+
+### **Week 2: UI & User Experience**
+1. **Add memory retrieval debug panel**
+   - Show which memories influenced each response
+   - Display semantic similarity scores
+   - Allow toggling search strategies (keyword vs semantic weight)
+
+2. **Build memory management enhancements**
+   - "Find Duplicates" UI button (backend ready)
+   - Inline editing for content, importance, category
+   - View which conversation created each memory
+
+3. **Memory analytics dashboard**
+   - Total memories by category (pie chart)
+   - Memory growth over time (line graph)
+   - Top 10 most-referenced memories
+
+### **Week 3: Quality & Reliability**
+1. **Smart auto-voice heuristics**
+   - Only auto-generate for messages <200 chars
+   - Skip if user is in PODCAST mode
+   - Add UI toggle for auto-voice enable/disable
+
+2. **Context-aware Discord bot**
+   - Replace random triggers with keyword detection
+   - Increase daily limit to 5 messages if context-driven
+   - Add cooldown per channel (45+ minutes)
+
+3. **Personality preset evaluation**
+   - Test each of 11 presets in actual usage
+   - Rate usefulness and user satisfaction
+   - Consolidate to 3-5 most effective presets
+
+---
+
+## 📚 Documentation
+
+### **Core Documentation**
+- **`PROJECT_ROADMAP.md`** - Detailed roadmap, completed features, implementation notes
+- **`NOTES.md`** - Development context, architectural decisions
+- **`LISTENER_CITIES_README.md`** - Listener cities feature guide
+- **`GEMINI_COST_OPTIMIZATION.md`** - Model selection strategies, cost analysis
+- **`PERSONALITY_FIX_GUIDE.md`** - Personality tuning recommendations
+
+### **Database & Schema**
+- **`shared/schema.ts`** - Complete Drizzle ORM schema (15 tables)
+- **`add-listener-cities.sql`** - SQL migration for listener cities
+- **`fix-preroll-ads.sql`** - Preroll ad schema fixes
+
+### **Attached Assets** (Historical Context)
+- Training data exports
+- Nicky personality notes
+- Lore brain restructuring documents
+- DbD integration specifications
+
+---
+
+## 🤝 Contributing
+
+### **Development Workflow**
+1. **Create issue** describing the change or bug
+2. **Branch from `main`**: `git checkout -b feature/your-feature`
+3. **Make changes** with clear commit messages
+4. **Run type checking**: `npm run check`
+5. **Test locally**: `npm run dev`
+6. **Submit PR** with description of changes
+
+### **Code Style**
+- TypeScript for all new code
+- Use Drizzle ORM for database operations
+- Follow existing service patterns (try/catch with fallbacks)
+- Add JSDoc comments for public APIs
+- Keep functions focused and testable
+
+### **Testing Guidelines**
+- Unit tests for business logic
+- Integration tests for API endpoints
+- Manual testing for personality/character features
+- Document any breaking changes
+
+---
+
+## 📞 Support & Contact
+
+### **Issues & Bug Reports**
+Open an issue on GitHub with:
+- Clear description of the problem
+- Steps to reproduce
+- Expected vs actual behavior
+- Environment details (Node version, OS, etc.)
+
+### **Feature Requests**
+Check `PROJECT_ROADMAP.md` first - your idea might already be planned!  
+If not, open an issue with:
+- Use case / problem being solved
+- Proposed solution
+- Priority level (your opinion)
+
+### **Questions & Discussions**
+For general questions about the codebase or architecture, see:
+- **Technical details**: `NOTES.md`
+- **Roadmap questions**: `PROJECT_ROADMAP.md`
+- **Personality tuning**: `PERSONALITY_FIX_GUIDE.md`
+
+---
+
+## 📄 License
+
+MIT License - See `LICENSE` file for details
+
+---
+
+**Last Updated:** November 10, 2025  
+**Current Version:** 1.0.0  
+**Status:** Production (with known rate limit challenges on free tier)
+
+---
+
+*This README is maintained as a living document. For the most up-to-date technical details, see the roadmap and notes files. If you notice outdated information, please open an issue or PR.*
+
