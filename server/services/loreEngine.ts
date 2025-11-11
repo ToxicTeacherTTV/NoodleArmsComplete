@@ -250,7 +250,7 @@ Format as JSON:
       .where(eq(loreCharacters.profileId, profileId));
 
     const lastEvent = existingEvents
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0];
 
     const timeSinceLastLore = lastEvent 
       ? (Date.now() - new Date(lastEvent.createdAt || new Date().toISOString()).getTime()) / (1000 * 60 * 60)

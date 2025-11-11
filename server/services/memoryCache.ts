@@ -101,7 +101,9 @@ export class MemoryCache<T = any> {
   invalidatePattern(pattern: string | RegExp): void {
     const regex = typeof pattern === 'string' ? new RegExp(pattern) : pattern;
     
-    for (const key of this.cache.keys()) {
+    // Convert iterator to array for compatibility
+    const keys = Array.from(this.cache.keys());
+    for (const key of keys) {
       if (regex.test(key)) {
         this.cache.delete(key);
       }
@@ -137,7 +139,9 @@ export class MemoryCache<T = any> {
     let oldestKey: string | null = null;
     let oldestTimestamp = Date.now();
 
-    for (const [key, entry] of this.cache.entries()) {
+    // Convert iterator to array for compatibility
+    const entries = Array.from(this.cache.entries());
+    for (const [key, entry] of entries) {
       if (entry.timestamp < oldestTimestamp) {
         oldestTimestamp = entry.timestamp;
         oldestKey = key;
@@ -156,7 +160,9 @@ export class MemoryCache<T = any> {
     const now = Date.now();
     const keysToDelete: string[] = [];
 
-    for (const [key, entry] of this.cache.entries()) {
+    // Convert iterator to array for compatibility
+    const entries = Array.from(this.cache.entries());
+    for (const [key, entry] of entries) {
       if (now - entry.timestamp > this.ttlMs) {
         keysToDelete.push(key);
       }
