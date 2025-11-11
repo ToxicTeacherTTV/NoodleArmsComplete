@@ -526,22 +526,8 @@ class DocumentProcessor {
           storyIds.push(storyFact.id);
           console.log(`📚 Stored story: ${story.content.substring(0, 60)}...`);
           
-          // 🔗 Extract and link entities for this story
-          try {
-            const entityLinks = await entityExtraction.processMemoryForEntityLinking(
-              story.content, 
-              profileId, 
-              storage
-            );
-            
-            if (entityLinks.personIds.length > 0 || entityLinks.placeIds.length > 0 || entityLinks.eventIds.length > 0) {
-              await storage.linkMemoryToEntities(storyFact.id, entityLinks);
-              console.log(`🔗 Linked story to ${entityLinks.entitiesCreated} entities`);
-            }
-          } catch (error) {
-            console.error(`❌ Failed to link entities for story:`, error);
-            // Continue processing - don't fail the whole reprocessing
-          }
+          // � OPTIMIZATION: Skip per-memory entity extraction, batch it at the end
+          // Entities will be extracted in one batch after all memories are created
         } else {
           console.warn(`⚠️ Failed to store story, skipping atomic fact extraction for this story`);
         }
@@ -550,6 +536,7 @@ class DocumentProcessor {
       // PASS 2: Extract atomic facts from each story
       console.log(`🔬 Pass 2: Extracting atomic facts from stories...`);
       let totalAtomicFacts = 0;
+      const atomicFactIds: string[] = []; // Track atomic fact IDs for batched entity extraction
       
       for (let i = 0; i < stories.length; i++) {
         const story = stories[i];
@@ -583,26 +570,14 @@ class DocumentProcessor {
               storyContext: atomicFact.storyContext,
             });
             
+            if (atomicMemory?.id) {
+              atomicFactIds.push(atomicMemory.id); // Track for batch entity extraction
+            }
+            
             totalAtomicFacts++;
             
-            // 🔗 Extract and link entities for this atomic fact
-            if (atomicMemory?.id) {
-              try {
-                const entityLinks = await entityExtraction.processMemoryForEntityLinking(
-                  atomicFact.content, 
-                  profileId, 
-                  storage
-                );
-                
-                if (entityLinks.personIds.length > 0 || entityLinks.placeIds.length > 0 || entityLinks.eventIds.length > 0) {
-                  await storage.linkMemoryToEntities(atomicMemory.id, entityLinks);
-                  console.log(`🔗 Linked atomic fact to ${entityLinks.entitiesCreated} entities`);
-                }
-              } catch (error) {
-                console.error(`❌ Failed to link entities for atomic fact:`, error);
-                // Continue processing - don't fail the whole reprocessing
-              }
-            }
+            // � OPTIMIZATION: Skip per-memory entity extraction, batch it at the end
+            // Entities will be extracted in one batch after all memories are created
           }
         } catch (error) {
           console.error(`❌ Failed to extract atomic facts from story ${i + 1}:`, error);
@@ -612,6 +587,143 @@ class DocumentProcessor {
       
       console.log(`🎉 Hierarchical extraction complete!`);
       console.log(`📊 Results: ${stories.length} stories, ${totalAtomicFacts} atomic facts`);
+      
+      // 🚀 BATCHED ENTITY EXTRACTION: Extract entities once for ALL memories (stories + atomic facts)
+      const allMemoryIds = [...storyIds, ...atomicFactIds].filter(id => id);
+      console.log(`🔗 Starting batched entity extraction for all ${allMemoryIds.length} memories...`);
+      try {
+        // Get all the memories we just created
+        const allMemoriesFromDb = await storage.getMemoryEntries(profileId, 10000);
+        const allMemories = allMemoriesFromDb
+          .filter(m => allMemoryIds.includes(m.id))
+          .map(m => ({ id: m.id, content: m.content }));
+        
+        if (allMemories.length > 0) {
+          // Get existing entities ONCE
+          const existingEntitiesRaw = await storage.getAllEntities(profileId);
+          
+          // Convert null to undefined for type compatibility
+          const existingEntities = {
+            people: existingEntitiesRaw.people.map(p => ({
+              id: p.id,
+              canonicalName: p.canonicalName,
+              disambiguation: p.disambiguation ?? undefined,
+              aliases: p.aliases ?? undefined
+            })),
+            places: existingEntitiesRaw.places.map(p => ({
+              id: p.id,
+              canonicalName: p.canonicalName,
+              locationType: p.locationType ?? undefined,
+              description: p.description ?? undefined
+            })),
+            events: existingEntitiesRaw.events.map(e => ({
+              id: e.id,
+              canonicalName: e.canonicalName,
+              eventDate: e.eventDate ?? undefined,
+              description: e.description ?? undefined
+            }))
+          };
+          
+          console.log(`📚 Found ${existingEntities.people.length} people, ${existingEntities.places.length} places, ${existingEntities.events.length} events`);
+          
+          // Extract entities from ALL memories in one batch
+          const batchResults = await entityExtraction.extractEntitiesFromMultipleMemories(
+            allMemories,
+            existingEntities
+          );
+          
+          let totalEntitiesLinked = 0;
+          
+          // Process results and link entities
+          for (const result of batchResults) {
+            if (result.entities.length > 0) {
+              // Disambiguate this memory's entities
+              const disambiguation = await entityExtraction.disambiguateEntities(
+                result.entities,
+                existingEntities
+              );
+              
+              const personIds: string[] = [];
+              const placeIds: string[] = [];
+              const eventIds: string[] = [];
+              let entitiesCreated = 0;
+              
+              // Process matches
+              for (const match of disambiguation.matches) {
+                if (match.confidence > 0.7) {
+                  if (match.matchType === 'PERSON') personIds.push(match.existingEntityId);
+                  else if (match.matchType === 'PLACE') placeIds.push(match.existingEntityId);
+                  else if (match.matchType === 'EVENT') eventIds.push(match.existingEntityId);
+                }
+              }
+              
+              // Create new entities
+              for (const newEntity of disambiguation.newEntities) {
+                try {
+                  if (newEntity.type === 'PERSON') {
+                    const created = await storage.createPerson({
+                      profileId,
+                      canonicalName: newEntity.name,
+                      disambiguation: newEntity.disambiguation,
+                      aliases: newEntity.aliases,
+                      relationship: '',
+                      description: newEntity.context
+                    });
+                    if (created?.id) {
+                      personIds.push(created.id);
+                      entitiesCreated++;
+                    }
+                  } else if (newEntity.type === 'PLACE') {
+                    const created = await storage.createPlace({
+                      profileId,
+                      canonicalName: newEntity.name,
+                      locationType: newEntity.disambiguation,
+                      description: newEntity.context
+                    });
+                    if (created?.id) {
+                      placeIds.push(created.id);
+                      entitiesCreated++;
+                    }
+                  } else if (newEntity.type === 'EVENT') {
+                    const created = await storage.createEvent({
+                      profileId,
+                      canonicalName: newEntity.name,
+                      eventDate: newEntity.disambiguation,
+                      description: newEntity.context,
+                      isCanonical: true
+                    });
+                    if (created?.id) {
+                      eventIds.push(created.id);
+                      entitiesCreated++;
+                    }
+                  }
+                } catch (error) {
+                  console.error(`Error creating ${newEntity.type}:`, error);
+                }
+              }
+              
+              // Link this memory to its entities
+              if (personIds.length > 0 || placeIds.length > 0 || eventIds.length > 0) {
+                await storage.linkMemoryToEntities(result.memoryId, {
+                  personIds,
+                  placeIds,
+                  eventIds
+                });
+                totalEntitiesLinked++;
+              }
+              
+              if (entitiesCreated > 0) {
+                console.log(`✨ Created ${entitiesCreated} new entities for memory ${result.memoryId.substring(0, 8)}`);
+              }
+            }
+          }
+          
+          console.log(`✅ Batched entity extraction complete: linked ${totalEntitiesLinked} memories to entities`);
+        }
+      } catch (error) {
+        console.error(`❌ Batched entity extraction failed:`, error);
+        // Don't fail the whole reprocessing
+      }
       
       // Run contradiction detection on atomic facts
       console.log(`🔍 Running contradiction detection...`);
