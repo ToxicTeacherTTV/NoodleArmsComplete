@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Message, MemoryEntry } from '@shared/schema';
 import ChaosEngine from './chaosEngine.js';
-import { geminiService } from './gemini.js';
+// geminiService import removed to break circular dependency - use dynamic import where needed
 import { contentFilter } from './contentFilter.js';
 import { varietyController } from './VarietyController.js';
 import { storyCompletionTracker } from './storyCompletionTracker.js';
@@ -133,7 +133,8 @@ Examples:
 If the entire content is just conversation with no meta-thinking, put it all in "conversation" and leave "strategy" empty.`;
 
     try {
-      // Try Gemini first (fast and free)
+      // Try Gemini first (fast and free) - use dynamic import to avoid circular dependency
+      const { geminiService } = await import('./gemini.js');
       const geminiResponse = await geminiService.generateChatResponse(
         prompt,
         "You are a text analysis expert. Separate internal thinking from actual conversation. Return ONLY valid JSON.",
@@ -216,7 +217,8 @@ Output format:
 Be specific and actionable. Extract the ESSENCE of the style, not just list examples.`;
 
     try {
-      // Try Gemini first (free tier)
+      // Try Gemini first (free tier) - use dynamic import to avoid circular dependency
+      const { geminiService } = await import('./gemini.js');
       const geminiResponse = await geminiService.generateChatResponse(
         prompt,
         "You are a personality analysis expert. Extract unified behavioral patterns from multiple examples into one concise style guide.",
@@ -1203,6 +1205,8 @@ ${coreIdentity}`;
         console.error(`${'='.repeat(80)}\n`);
         
         try {
+          // Dynamic import to avoid circular dependency
+          const { geminiService } = await import('./gemini.js');
           const geminiCallStart = Date.now();
           const geminiResponse = await geminiService.generateChatResponse(
             userMessage,
@@ -1555,8 +1559,9 @@ ${conversationHistory}`;
         textContent = content && 'text' in content ? content.text : '';
         console.log('✅ Claude successfully consolidated memories');
       } catch (claudeError) {
-        // 🔄 FALLBACK: Use Gemini if Claude fails
+        // 🔄 FALLBACK: Use Gemini if Claude fails - dynamic import to avoid circular dependency
         console.warn('❌ Claude consolidation failed, falling back to Gemini:', claudeError);
+        const { geminiService } = await import('./gemini.js');
         const geminiResponse = await geminiService.generateChatResponse(prompt, '', '');
         textContent = geminiResponse.content;
         console.log('✅ Gemini successfully consolidated memories (fallback)');
@@ -1693,6 +1698,9 @@ Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
         console.log('⚠️ Anthropic credits low, falling back to Gemini for pattern extraction');
         
         try {
+          // Dynamically import geminiService to avoid circular dependency
+          const { geminiService } = await import('./gemini.js');
+          
           // Fallback to Gemini Pro (NEVER Flash - pattern extraction affects core identity)
           const geminiResponse = await geminiService['ai'].models.generateContent({
             model: 'gemini-2.5-pro', // 🚫 NEVER Flash - corrupts personality patterns
