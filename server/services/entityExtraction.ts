@@ -5,13 +5,15 @@ import { getDefaultModel, isValidModel } from '../config/geminiModels.js';
 /**
  * 🎯 ENTITY EXTRACTION SERVICE
  * 
- * This service uses production-ready models ONLY for critical entity extraction.
- * Entity extraction is too important to risk with experimental models.
+ * **2025 UPDATE**: Now uses executeWithProductionModel which routes through Gemini service.
+ * Gemini service now delegates RAG operations to Claude Sonnet 4.5 for superior quality.
  * 
- * **MODEL STRATEGY**: 
- * - Production: gemini-2.5-flash (standard, reliable)
- * - Fallback: gemini-2.5-pro (premium quality if Flash fails)
- * - Never uses experimental models (too risky for data accuracy)
+ * **EXTRACTION FLOW**: 
+ * 1. This service calls executeWithProductionModel (Gemini wrapper)
+ * 2. For extraction tasks, Gemini routes to Claude Sonnet 4.5
+ * 3. If Claude fails, falls back to Gemini 2.0 Flash
+ * 
+ * Entity extraction is critical - using best available models only.
  */
 
 interface DetectedEntity {
