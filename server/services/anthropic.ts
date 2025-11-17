@@ -1082,44 +1082,47 @@ ${coreIdentity}`;
       
       enhancedCoreIdentity += `\n\n${chaosModifier}\n\n${varietyPrompt}`;
 
-      // 🎯 PRIMARY: Try Gemini 2.5 Pro first (free, fast, proven quality)
-      // 🚀 OPTIMIZATION: 45-second timeout to prevent hanging
-      console.log('🌟 Using Gemini 2.5 Pro as primary AI provider');
+      // 🎯 PRIMARY: Use Claude Sonnet 4.5 for superior quality
+      // Gemini kept as fallback for when Claude fails
+      console.log('🌟 Using Claude Sonnet 4.5 as primary AI provider');
       const apiCallStart = Date.now();
       
       try {
-        // Timeout wrapper - fallback to Claude if Gemini takes >45s
-        const GEMINI_TIMEOUT = 45000; // 45 seconds
-        const geminiPromise = geminiService.generateChatResponse(
-          userMessage,
-          enhancedCoreIdentity,
-          contextPrompt
-        );
-        
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Gemini timeout after 45s')), GEMINI_TIMEOUT)
-        );
-        
-        const geminiResponse = await Promise.race([geminiPromise, timeoutPromise]) as any;
+        // PRIMARY: Claude Sonnet 4.5
+        const response = await anthropic.messages.create({
+          model: DEFAULT_MODEL_STR,
+          max_tokens: 1024,
+          temperature: 1.0,
+          system: enhancedCoreIdentity,
+          messages: [
+            {
+              role: 'user',
+              content: fullPrompt
+            }
+          ],
+        });
         
         const apiCallDuration = (Date.now() - apiCallStart) / 1000;
         
-        // 📊 Track metrics for successful Gemini call
+        // 📊 Track metrics for successful Claude call
         prometheusMetrics.trackLLMCall({
-          provider: 'gemini',
-          model: 'gemini-2.5-pro',
+          provider: 'claude',
+          model: DEFAULT_MODEL_STR,
           type: 'chat',
-          inputTokens: 0, // Gemini doesn't expose token counts
-          outputTokens: 0,
+          inputTokens: response.usage?.input_tokens || 0,
+          outputTokens: response.usage?.output_tokens || 0,
           durationSeconds: apiCallDuration
         });
         
-        console.log('✅ Gemini 2.5 Pro successfully generated response');
+        console.log('✅ Claude Sonnet 4.5 successfully generated response');
         const processingTime = Date.now() - startTime;
-        const content = geminiResponse.content;
+        
+        // Extract content from Claude response
+        const content = Array.isArray(response.content) ? response.content[0] : response.content;
+        const textContent = content && 'text' in content ? content.text : '';
         
         // 🚫 Filter content to prevent cancel-worthy language while keeping profanity
-        const rawContent = typeof content === 'string' ? content : '';
+        const rawContent = typeof textContent === 'string' ? textContent : '';
         const { filtered: filteredContent, wasFiltered } = contentFilter.filterContent(rawContent);
         
         if (wasFiltered) {
@@ -1190,47 +1193,40 @@ ${coreIdentity}`;
           retrievedContext: contextPrompt || undefined,
         };
         
-      } catch (geminiError) {
-        // 🔄 FALLBACK: Gemini failed, fall back to Claude Sonnet (premium failsafe)
-        console.error('❌ Gemini API error:', geminiError);
+      } catch (claudeError) {
+        // 🔄 FALLBACK: Claude failed, fall back to Gemini (free backup)
+        console.error('❌ Claude API error:', claudeError);
         console.error(`\n${'='.repeat(80)}`);
-        console.error(`🚨 GEMINI FAILED - FALLING BACK TO CLAUDE SONNET (PREMIUM FAILSAFE)`);
-        console.error(`   Error: ${geminiError instanceof Error ? geminiError.message : String(geminiError)}`);
-        console.error(`   💰 Note: Claude Sonnet is a paid service - Gemini is preferred when available`);
+        console.error(`🚨 CLAUDE FAILED - FALLING BACK TO GEMINI (FREE BACKUP)`);
+        console.error(`   Error: ${claudeError instanceof Error ? claudeError.message : String(claudeError)}`);
+        console.error(`   � Note: Gemini is free but may have lower quality - Claude preferred`);
         console.error(`${'='.repeat(80)}\n`);
         
         try {
-          const claudeCallStart = Date.now();
-          const response = await anthropic.messages.create({
-            model: DEFAULT_MODEL_STR,
-            max_tokens: 1024,
-            temperature: 1.0,
-            system: enhancedCoreIdentity,
-            messages: [
-              {
-                role: 'user',
-                content: fullPrompt
-              }
-            ],
-          });
+          const geminiCallStart = Date.now();
+          const geminiResponse = await geminiService.generateChatResponse(
+            userMessage,
+            enhancedCoreIdentity,
+            contextPrompt
+          );
           
-          const claudeCallDuration = (Date.now() - claudeCallStart) / 1000;
+          const geminiCallDuration = (Date.now() - geminiCallStart) / 1000;
           
-          // 📊 Track metrics for Claude fallback
+          // 📊 Track metrics for Gemini fallback
           prometheusMetrics.trackLLMCall({
-            provider: 'claude',
-            model: DEFAULT_MODEL_STR,
+            provider: 'gemini',
+            model: 'gemini-2.0-flash',
             type: 'chat',
-            inputTokens: response.usage?.input_tokens || 0,
-            outputTokens: response.usage?.output_tokens || 0,
-            durationSeconds: claudeCallDuration
+            inputTokens: 0, // Gemini doesn't expose token counts
+            outputTokens: 0,
+            durationSeconds: geminiCallDuration
           });
           
-          console.log('✅ Claude Sonnet successfully generated fallback response');
+          console.log('✅ Gemini successfully generated fallback response');
           const processingTime = Date.now() - startTime;
-          const content = Array.isArray(response.content) 
-            ? (response.content[0] as any).text 
-            : (response.content as any);
+          
+          // Extract content from Gemini response
+          const content = geminiResponse.content;
           
           // 🚫 Filter content
           const rawContent = typeof content === 'string' ? content : '';
@@ -1538,18 +1534,11 @@ If no significant information is found, return an empty array: []
 Conversation:
 ${conversationHistory}`;
 
-      // 🎯 PRIMARY: Try Gemini first for memory consolidation
+      // 🎯 PRIMARY: Use Claude for memory consolidation
       let textContent: string;
       
       try {
-        console.log('🌟 Using Gemini for memory consolidation');
-        const geminiResponse = await geminiService.generateChatResponse(prompt, '', '');
-        textContent = geminiResponse.content;
-        console.log('✅ Gemini successfully consolidated memories');
-      } catch (geminiError) {
-        // 🔄 FALLBACK: Use Claude if Gemini fails
-        console.warn('❌ Gemini consolidation failed, falling back to Claude:', geminiError);
-        
+        console.log('🌟 Using Claude Sonnet 4.5 for memory consolidation');
         const response = await anthropic.messages.create({
           model: DEFAULT_MODEL_STR,
           max_tokens: 1024,
@@ -1564,7 +1553,13 @@ ${conversationHistory}`;
 
         const content = Array.isArray(response.content) ? response.content[0] : response.content;
         textContent = content && 'text' in content ? content.text : '';
-        console.log('✅ Claude successfully consolidated memories (fallback)');
+        console.log('✅ Claude successfully consolidated memories');
+      } catch (claudeError) {
+        // 🔄 FALLBACK: Use Gemini if Claude fails
+        console.warn('❌ Claude consolidation failed, falling back to Gemini:', claudeError);
+        const geminiResponse = await geminiService.generateChatResponse(prompt, '', '');
+        textContent = geminiResponse.content;
+        console.log('✅ Gemini successfully consolidated memories (fallback)');
       }
       
       try {
@@ -1777,6 +1772,7 @@ Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
     importance: number;
     keywords: string[];
   }>> {
+    console.log(`📚 Extracting stories from "${filename}" using Claude Sonnet 4.5...`);
     const prompt = `You are extracting facts from "${filename}" to build a knowledge base about Nicky "Noodle Arms" A.I. Dente and his universe.
 
 Content:
@@ -1823,7 +1819,9 @@ Return ONLY valid JSON array, no other text:
       const text = response.content[0].type === 'text' ? response.content[0].text : '';
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        const stories = JSON.parse(jsonMatch[0]);
+        console.log(`✅ Claude extracted ${stories.length} stories from "${filename}"`);
+        return stories;
       }
       throw new Error('No valid JSON in response');
     } catch (error) {
@@ -1842,6 +1840,7 @@ Return ONLY valid JSON array, no other text:
     keywords: string[];
     storyContext: string;
   }>> {
+    console.log(`🔬 Extracting atomic facts using Claude Sonnet 4.5...`);
     const prompt = `Break down this narrative into ATOMIC FACTS about Nicky "Noodle Arms" A.I. Dente and his universe.
 
 Story Context: ${storyContext}
@@ -1886,7 +1885,9 @@ Return ONLY valid JSON array, no other text:
       const text = response.content[0].type === 'text' ? response.content[0].text : '';
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        const facts = JSON.parse(jsonMatch[0]);
+        console.log(`✅ Claude extracted ${facts.length} atomic facts`);
+        return facts;
       }
       throw new Error('No valid JSON in response');
     } catch (error) {
@@ -1912,6 +1913,8 @@ Return ONLY valid JSON array, no other text:
     source?: string;
   }>> {
     if (memories.length === 0) return [];
+    
+    console.log(`🧠 Consolidating ${memories.length} memories using Claude Sonnet 4.5...`);
 
     const prompt = `Optimize this knowledge base for Nicky "Noodle Arms" A.I. Dente.
 
@@ -1950,6 +1953,7 @@ Return optimized memory entries as JSON array:
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const consolidated = JSON.parse(jsonMatch[0]);
+        console.log(`✅ Claude consolidated ${memories.length} → ${consolidated.length} optimized memories`);
         return consolidated.map((item: any) => ({
           ...item,
           type: item.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT',
