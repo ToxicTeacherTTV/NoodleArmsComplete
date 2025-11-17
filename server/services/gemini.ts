@@ -6,23 +6,28 @@ import { getDefaultModel, isValidModel } from '../config/geminiModels.js';
 /**
  * 🎯 INTELLIGENT MODEL SELECTION
  * 
- * **HISTORY**: Flash models previously caused hallucination issues (269 false memories).
- * **CURRENT APPROACH**: Controlled testing with automatic fallback chains.
+ * **2025 UPDATE**: Primary RAG operations now route to Claude Sonnet 4.5 for superior quality.
+ * Gemini is used as fallback and for non-critical operations.
  * 
  * **MODEL STRATEGY**:
- * 1. Development: Use experimental/cheap models (gemini-2.0-flash-exp)
- * 2. Production: Use standard Flash (gemini-2.5-flash) with Pro fallback
- * 3. Critical operations: Force Pro model (extraction, analysis)
+ * 1. RAG Operations (extraction, consolidation): Claude Sonnet 4.5 (PRIMARY)
+ * 2. Chat Fallback: Gemini 2.0 Flash (when Claude fails)
+ * 3. Non-critical: Gemini 2.0 Flash (title generation, etc.)
  * 
  * **COST OPTIMIZATION**:
- * - Flash: $0.075 per 1M tokens (17x cheaper than Pro)
- * - Pro: $1.25 per 1M tokens (best quality)
- * - Experimental: Free tier (testing only)
- * 
- * **AUTOMATIC FALLBACK**:
- * If primary model fails/overloaded, automatically tries next model in chain.
- * See modelSelector.ts for fallback logic.
+ * - Claude Sonnet 4.5: $3 input / $15 output per 1M tokens (best quality)
+ * - Gemini Flash: $0.075 per 1M tokens (17x cheaper, fallback use)
  */
+
+// Import anthropicService for RAG delegation (avoid circular dependency issues)
+let anthropicService: any = null;
+async function getAnthropicService() {
+  if (!anthropicService) {
+    const module = await import('./anthropic.js');
+    anthropicService = module.anthropicService;
+  }
+  return anthropicService;
+}
 
 class GeminiService {
   private ai: GoogleGenAI;
@@ -151,8 +156,25 @@ class GeminiService {
     return "Nicky 'Noodle Arms' A.I. Dente's universe";
   }
 
-  // Enhanced hierarchical extraction methods with document-type awareness
+  // Enhanced hierarchical extraction methods - NOW ROUTE TO CLAUDE FOR QUALITY
   async extractStoriesFromDocument(content: string, filename: string): Promise<Array<{
+    content: string;
+    type: 'STORY' | 'LORE' | 'CONTEXT';
+    importance: number;
+    keywords: string[];
+  }>> {
+    console.log('🎯 Routing story extraction to Claude Sonnet 4.5...');
+    try {
+      const claude = await getAnthropicService();
+      return await claude.extractStoriesFromDocument(content, filename);
+    } catch (claudeError) {
+      console.warn('⚠️ Claude extraction failed, using Gemini fallback:', claudeError);
+      return this.extractStoriesFromDocumentGemini(content, filename);
+    }
+  }
+
+  // Original Gemini implementation kept as fallback
+  private async extractStoriesFromDocumentGemini(content: string, filename: string): Promise<Array<{
     content: string;
     type: 'STORY' | 'LORE' | 'CONTEXT';
     importance: number;
@@ -294,6 +316,24 @@ Example format:
   }
 
   async extractAtomicFactsFromStory(storyContent: string, storyContext: string): Promise<Array<{
+    content: string;
+    type: 'ATOMIC';
+    importance: number;
+    keywords: string[];
+    storyContext: string;
+  }>> {
+    console.log('🎯 Routing atomic fact extraction to Claude Sonnet 4.5...');
+    try {
+      const claude = await getAnthropicService();
+      return await claude.extractAtomicFactsFromStory(storyContent, storyContext);
+    } catch (claudeError) {
+      console.warn('⚠️ Claude extraction failed, using Gemini fallback:', claudeError);
+      return this.extractAtomicFactsFromStoryGemini(storyContent, storyContext);
+    }
+  }
+
+  // Original Gemini implementation kept as fallback
+  private async extractAtomicFactsFromStoryGemini(storyContent: string, storyContext: string): Promise<Array<{
     content: string;
     type: 'ATOMIC';
     importance: number;
@@ -585,6 +625,29 @@ Return the optimized facts as a JSON array. Keep the most important and unique i
   }
 
   async consolidateAndOptimizeMemories(memories: Array<{
+    id: string;
+    type: string;
+    content: string;
+    importance: number;
+    source?: string;
+  }>): Promise<Array<{
+    type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
+    content: string;
+    importance: number;
+    source?: string;
+  }>> {
+    console.log('🎯 Routing memory consolidation to Claude Sonnet 4.5...');
+    try {
+      const claude = await getAnthropicService();
+      return await claude.consolidateAndOptimizeMemories(memories);
+    } catch (claudeError) {
+      console.warn('⚠️ Claude consolidation failed, using Gemini fallback:', claudeError);
+      return this.consolidateAndOptimizeMemoriesGemini(memories);
+    }
+  }
+
+  // Original Gemini implementation kept as fallback
+  private async consolidateAndOptimizeMemoriesGemini(memories: Array<{
     id: string;
     type: string;
     content: string;
@@ -1023,8 +1086,25 @@ Example format:
     }
   }
 
-  // NEW: Extract facts from podcast episodes without personality interference
+  // Extract podcast facts - NOW ROUTES TO CLAUDE
   async extractPodcastFacts(transcript: string, episodeNumber: number, episodeTitle: string): Promise<Array<{
+    content: string;
+    type: 'TOPIC' | 'QUOTE' | 'FACT' | 'STORY' | 'MOMENT';
+    keywords: string[];
+    importance: number;
+  }>> {
+    console.log('🎯 Routing podcast fact extraction to Claude Sonnet 4.5...');
+    try {
+      const claude = await getAnthropicService();
+      return await claude.extractPodcastFacts(transcript, episodeNumber, episodeTitle);
+    } catch (claudeError) {
+      console.warn('⚠️ Claude extraction failed, using Gemini fallback:', claudeError);
+      return this.extractPodcastFactsGemini(transcript, episodeNumber, episodeTitle);
+    }
+  }
+
+  // Original Gemini implementation kept as fallback
+  private async extractPodcastFactsGemini(transcript: string, episodeNumber: number, episodeTitle: string): Promise<Array<{
     content: string;
     type: 'TOPIC' | 'QUOTE' | 'FACT' | 'STORY' | 'MOMENT';
     keywords: string[];
@@ -1112,9 +1192,27 @@ Respond with ONLY a JSON array - no other text:
   }
 
   /**
-   * Extract facts about a Discord member from their message
+   * Extract facts about a Discord member - NOW ROUTES TO CLAUDE
    */
   async extractDiscordMemberFacts(
+    username: string,
+    message: string,
+    existingFacts: string[] = []
+  ): Promise<Array<{ fact: string; confidence: number; category: string }>> {
+    console.log('🎯 Routing Discord member fact extraction to Claude Sonnet 4.5...');
+    try {
+      const claude = await getAnthropicService();
+      return await claude.extractDiscordMemberFacts(username, message, existingFacts);
+    } catch (claudeError) {
+      console.warn('⚠️ Claude extraction failed, using Gemini fallback:', claudeError);
+      return this.extractDiscordMemberFactsGemini(username, message, existingFacts);
+    }
+  }
+
+  /**
+   * Original Gemini implementation kept as fallback
+   */
+  private async extractDiscordMemberFactsGemini(
     username: string,
     message: string,
     existingFacts: string[] = []

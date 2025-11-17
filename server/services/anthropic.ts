@@ -1637,128 +1637,7 @@ Please return an optimized, well-organized knowledge base that maintains all imp
     }
   }
 
-  async consolidateAndOptimizeMemories(memories: MemoryEntry[]): Promise<Array<{
-    type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
-    content: string;
-    importance: number;
-    source?: string;
-  }>> {
-    try {
-      // Group memories by source to maintain context
-      const memoryGroups: { [key: string]: MemoryEntry[] } = {};
-      memories.forEach(memory => {
-        const source = memory.source || 'unknown';
-        if (!memoryGroups[source]) memoryGroups[source] = [];
-        memoryGroups[source].push(memory);
-      });
-
-      const consolidatedMemories: Array<{
-        type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
-        content: string;
-        importance: number;
-        source?: string;
-      }> = [];
-
-      // Process each source group
-      for (const [source, sourceMemories] of Object.entries(memoryGroups)) {
-        const memoryContent = sourceMemories
-          .map(memory => `[${memory.type}] ${memory.content}`)
-          .join('\n');
-
-        const prompt = `You are consolidating fragmented memories into coherent knowledge entries. Take these memory fragments and create well-organized, comprehensive entries that preserve all important information while eliminating redundancy.
-
-Rules:
-1. Combine related fragments into single, coherent entries
-2. Preserve all character details, preferences, and lore
-3. Maintain context and relationships between facts
-4. Return ONLY a JSON array of objects with this exact structure:
-[
-  {
-    "type": "FACT|PREFERENCE|LORE|CONTEXT",
-    "content": "consolidated content here",
-    "importance": 1-5,
-    "source": "${source}"
-  }
-]
-
-Memory fragments to consolidate:
-${memoryContent}
-
-Return the consolidated memories as a JSON array:`;
-
-        const response = await anthropic.messages.create({
-          model: DEFAULT_MODEL_STR,
-          max_tokens: 3000,
-          temperature: 0.8, // Moderate creativity for memory consolidation
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-        });
-
-        const content = Array.isArray(response.content) ? response.content[0] : response.content;
-        const textContent = content && 'text' in content ? content.text : '';
-        
-        try {
-          // Remove markdown code blocks if present
-          const cleanedText = textContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-          const consolidatedGroup = JSON.parse(cleanedText);
-          if (Array.isArray(consolidatedGroup)) {
-            consolidatedMemories.push(...consolidatedGroup.map(item => ({
-              ...item,
-              type: item.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT'
-            })));
-          }
-        } catch (parseError) {
-          console.error('Failed to parse consolidated memories for source:', source, parseError);
-          // Fallback: keep original memories with reduced importance
-          sourceMemories.forEach(memory => {
-            // Map extended types to base types
-            let baseType: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT' = 'FACT';
-            if (['FACT', 'PREFERENCE', 'LORE', 'CONTEXT'].includes(memory.type)) {
-              baseType = memory.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
-            } else if (memory.type === 'STORY') {
-              baseType = 'LORE';
-            } else if (memory.type === 'ATOMIC') {
-              baseType = 'FACT';
-            }
-            
-            consolidatedMemories.push({
-              type: baseType,
-              content: memory.content,
-              importance: Math.max(1, (memory.importance || 3) - 1),
-              source: memory.source || undefined
-            });
-          });
-        }
-      }
-
-      return consolidatedMemories;
-    } catch (error) {
-      console.error('Memory consolidation error:', error);
-      // Fallback: return original memories
-      return memories.map(memory => {
-        // Map extended types to base types
-        let baseType: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT' = 'FACT';
-        if (['FACT', 'PREFERENCE', 'LORE', 'CONTEXT'].includes(memory.type)) {
-          baseType = memory.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
-        } else if (memory.type === 'STORY') {
-          baseType = 'LORE';
-        } else if (memory.type === 'ATOMIC') {
-          baseType = 'FACT';
-        }
-        
-        return {
-          type: baseType,
-          content: memory.content,
-          importance: memory.importance || 3,
-          source: memory.source || undefined
-        };
-      });
-    }
-  }
+  // consolidateAndOptimizeMemories moved to end of class with Claude RAG methods
 
   /**
    * Extract personality patterns from training example for merging into core identity
@@ -1886,6 +1765,345 @@ Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
       }
     } catch (error) {
       console.error('❌ Error tracking story completion:', error);
+    }
+  }
+
+  /**
+   * 🎯 CLAUDE RAG: Extract stories from documents (replaces Gemini)
+   */
+  async extractStoriesFromDocument(content: string, filename: string): Promise<Array<{
+    content: string;
+    type: 'STORY' | 'LORE' | 'CONTEXT';
+    importance: number;
+    keywords: string[];
+  }>> {
+    const prompt = `You are extracting facts from "${filename}" to build a knowledge base about Nicky "Noodle Arms" A.I. Dente and his universe.
+
+Content:
+${content.substring(0, 8000)} ${content.length > 8000 ? '...(truncated)' : ''}
+
+Extract COMPLETE STORIES, ANECDOTES, and RICH CONTEXTS. Focus on:
+- Character backstory narratives 
+- Incidents and events described
+- Character interactions and relationships
+- Experiences and background context
+- Organizational details and hierarchy
+
+CRITICAL: When extracting facts, INCLUDE SOURCE CONTEXT in the content itself.
+- If this is about a game (Arc Raiders, DBD, etc): mention the game name
+- If this is about characters: mention their role/relationship
+
+For each story/narrative, provide:
+- content: The COMPLETE story/context WITH SOURCE CONTEXT (1-3 sentences max)
+- type: STORY (incidents/events), LORE (backstory), or CONTEXT (situational background)
+- importance: 1-5 (5 being most important for character understanding)
+- keywords: 3-5 relevant keywords for retrieval (INCLUDE game/topic name if relevant)
+
+Return ONLY valid JSON array, no other text:
+[
+  {
+    "content": "story here",
+    "type": "LORE",
+    "importance": 4,
+    "keywords": ["keyword1", "keyword2"]
+  }
+]`;
+
+    try {
+      const response = await anthropic.messages.create({
+        model: DEFAULT_MODEL_STR,
+        max_tokens: 4096,
+        temperature: 0.3,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
+      });
+
+      const text = response.content[0].type === 'text' ? response.content[0].text : '';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      throw new Error('No valid JSON in response');
+    } catch (error) {
+      console.error('❌ Claude story extraction error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 🎯 CLAUDE RAG: Extract atomic facts from stories (replaces Gemini)
+   */
+  async extractAtomicFactsFromStory(storyContent: string, storyContext: string): Promise<Array<{
+    content: string;
+    type: 'ATOMIC';
+    importance: number;
+    keywords: string[];
+    storyContext: string;
+  }>> {
+    const prompt = `Break down this narrative into ATOMIC FACTS about Nicky "Noodle Arms" A.I. Dente and his universe.
+
+Story Context: ${storyContext}
+Full Story: ${storyContent}
+
+Extract individual, verifiable claims from this story. Each atomic fact should be:
+- A single, specific claim
+- Independently verifiable
+- 1-2 sentences maximum
+- Clear about WHO/WHAT and WHAT happened
+- Include game/source context if present
+
+For each atomic fact:
+- content: The specific atomic claim WITH source context (max 2 sentences)
+- type: "ATOMIC" (always)
+- importance: 1-5 based on how critical this detail is
+- keywords: 3-5 keywords for retrieval (include game/source name if relevant)
+- storyContext: Brief note about which part of the story this relates to
+
+Return ONLY valid JSON array, no other text:
+[
+  {
+    "content": "atomic fact here",
+    "type": "ATOMIC",
+    "importance": 3,
+    "keywords": ["keyword1", "keyword2"],
+    "storyContext": "context snippet"
+  }
+]`;
+
+    try {
+      const response = await anthropic.messages.create({
+        model: DEFAULT_MODEL_STR,
+        max_tokens: 4096,
+        temperature: 0.2,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
+      });
+
+      const text = response.content[0].type === 'text' ? response.content[0].text : '';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      throw new Error('No valid JSON in response');
+    } catch (error) {
+      console.error('❌ Claude atomic fact extraction error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 🎯 CLAUDE RAG: Consolidate and optimize memories (replaces Gemini)
+   * Handles both MemoryEntry[] and generic memory objects
+   */
+  async consolidateAndOptimizeMemories(memories: MemoryEntry[] | Array<{
+    id: string;
+    type: string;
+    content: string;
+    importance: number;
+    source?: string;
+  }>): Promise<Array<{
+    type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
+    content: string;
+    importance: number;
+    source?: string;
+  }>> {
+    if (memories.length === 0) return [];
+
+    const prompt = `Optimize this knowledge base for Nicky "Noodle Arms" A.I. Dente.
+
+Consolidate and optimize these memory entries by:
+1. Removing exact duplicates and near-duplicates
+2. Merging related facts into comprehensive entries
+3. Improving clarity and organization
+4. Maintaining all important character details
+5. Ensuring each fact is unique and valuable
+
+Memory entries:
+${memories.map(m => `[${m.type}] ${m.content} (importance: ${m.importance || 3})`).join('\n')}
+
+Return optimized memory entries as JSON array:
+[
+  {
+    "content": "consolidated fact",
+    "type": "FACT",
+    "importance": 4,
+    "source": "consolidation"
+  }
+]`;
+
+    try {
+      const response = await anthropic.messages.create({
+        model: DEFAULT_MODEL_STR,
+        max_tokens: 4096,
+        temperature: 0.2,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
+      });
+
+      const text = response.content[0].type === 'text' ? response.content[0].text : '';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const consolidated = JSON.parse(jsonMatch[0]);
+        return consolidated.map((item: any) => ({
+          ...item,
+          type: item.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT',
+          source: item.source || 'consolidation'
+        }));
+      }
+      throw new Error('No valid JSON in response');
+    } catch (error) {
+      console.error('❌ Claude consolidation error:', error);
+      return memories.map(m => {
+        // Map extended types to base types
+        let baseType: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT' = 'FACT';
+        const memType = m.type;
+        if (['FACT', 'PREFERENCE', 'LORE', 'CONTEXT'].includes(memType)) {
+          baseType = memType as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
+        } else if (memType === 'STORY') {
+          baseType = 'LORE';
+        } else if (memType === 'ATOMIC') {
+          baseType = 'FACT';
+        }
+        
+        return {
+          content: m.content,
+          type: baseType,
+          importance: m.importance || 3,
+          source: m.source || 'fallback'
+        };
+      });
+    }
+  }
+
+  /**
+   * 🎯 CLAUDE RAG: Extract podcast facts (replaces Gemini)
+   */
+  async extractPodcastFacts(transcript: string, episodeNumber: number, episodeTitle: string): Promise<Array<{
+    content: string;
+    type: 'TOPIC' | 'QUOTE' | 'FACT' | 'STORY' | 'MOMENT';
+    keywords: string[];
+    importance: number;
+  }>> {
+    const prompt = `Extract key facts from Episode ${episodeNumber} of "${episodeTitle}".
+
+Focus on extracting 15-25 specific pieces:
+1. KEY TOPICS discussed in detail
+2. SPECIFIC QUOTES or memorable lines  
+3. IMPORTANT POINTS or arguments made
+4. NOTABLE MOMENTS or events mentioned
+5. FACTS or statistics mentioned
+6. STORIES told during the episode
+
+For each fact:
+- A clear, factual statement (1-2 sentences max)
+- Type: TOPIC, QUOTE, FACT, STORY, or MOMENT
+- Keywords that would help find this information
+- Importance rating 1-5 (5 being most memorable/important)
+
+TRANSCRIPT:
+${transcript.substring(0, 12000)}${transcript.length > 12000 ? '...(truncated)' : ''}
+
+Return ONLY valid JSON array:
+[
+  {
+    "content": "specific fact from episode",
+    "type": "TOPIC",
+    "keywords": ["relevant", "terms"],
+    "importance": 4
+  }
+]`;
+
+    try {
+      const response = await anthropic.messages.create({
+        model: DEFAULT_MODEL_STR,
+        max_tokens: 4096,
+        temperature: 0.3,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
+      });
+
+      const text = response.content[0].type === 'text' ? response.content[0].text : '';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const facts = JSON.parse(jsonMatch[0]);
+        console.log(`🧠 Claude extracted ${facts.length} facts from Episode ${episodeNumber}`);
+        return facts;
+      }
+      throw new Error('No valid JSON in response');
+    } catch (error) {
+      console.error(`❌ Claude podcast fact extraction error for Episode ${episodeNumber}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * 🎯 CLAUDE RAG: Extract Discord member facts (replaces Gemini)
+   */
+  async extractDiscordMemberFacts(
+    username: string,
+    message: string,
+    existingFacts: string[] = []
+  ): Promise<Array<{ fact: string; confidence: number; category: string }>> {
+    const prompt = `Analyze this Discord message to extract factual information about the user.
+
+USER: ${username}
+MESSAGE: "${message}"
+
+EXISTING FACTS ABOUT ${username}:
+${existingFacts.length > 0 ? '- ' + existingFacts.join('\n- ') : 'None'}
+
+Extract NEW, specific, factual information about ${username}. Focus on:
+1. Gameplay Preferences: Killer/survivor mains, playstyle, perk preferences
+2. Game Knowledge: Skill level, experience, opinions
+3. Personal Info: Timezone, availability (only if explicitly stated)
+
+RULES:
+- Extract ONLY facts explicitly stated BY the user
+- Do NOT infer or assume
+- Do NOT duplicate existing facts
+- Be specific (e.g., "mains Nurse killer" not just "plays DBD")
+- Include confidence score (0-100)
+
+Return ONLY valid JSON:
+{
+  "facts": [
+    {
+      "fact": "Specific fact about ${username}",
+      "confidence": 85,
+      "category": "gameplay"
+    }
+  ]
+}`;
+
+    try {
+      const response = await anthropic.messages.create({
+        model: DEFAULT_MODEL_STR,
+        max_tokens: 1024,
+        temperature: 0.1,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
+      });
+
+      const text = response.content[0].type === 'text' ? response.content[0].text : '';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+        return result.facts || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('❌ Claude Discord fact extraction error:', error);
+      return [];
     }
   }
 }
