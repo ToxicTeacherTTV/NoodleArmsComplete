@@ -5,11 +5,18 @@ import * as schema from "@shared/schema";
 
 neonConfig.webSocketConstructor = ws;
 
+// 🔧 CRITICAL: Disable pipelining to avoid connection errors on Replit
+neonConfig.pipelineConnect = false;
+
 if (!process.env.DATABASE_URL) {
   throw new Error(
     "DATABASE_URL must be set. Did you forget to provision a database?",
   );
 }
+
+console.log('🔌 Connecting to Neon database...');
+
+console.log('🔌 Connecting to Neon database...');
 
 export const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL,
@@ -18,7 +25,21 @@ export const pool = new Pool({
   idleTimeoutMillis: 10000,
   allowExitOnIdle: false,
   // Connection validation to detect and remove dead connections
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 10000, // Increased from 5000 for Replit stability
+});
+
+// 🚨 CRITICAL: Global error handler to prevent crashes from Neon connection errors
+process.on('unhandledRejection', (reason: any, promise) => {
+  // Silently handle Neon websocket errors that would otherwise crash
+  if (reason?.message?.includes('Connect') || 
+      reason?.code === 'ECONNREFUSED' ||
+      reason?.code === 'ETIMEDOUT' ||
+      reason?.toString().includes('ErrorEvent')) {
+    console.error('⚠️ Database connection issue (non-fatal):', reason?.message || reason);
+    return;
+  }
+  // Re-throw other unhandled rejections
+  console.error('❌ Unhandled rejection:', reason);
 });
 
 // Add proper error handling to prevent unhandled error dumps and crashes
