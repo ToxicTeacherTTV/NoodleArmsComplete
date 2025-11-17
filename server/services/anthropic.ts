@@ -5,7 +5,6 @@ import ChaosEngine from './chaosEngine.js';
 import { contentFilter } from './contentFilter.js';
 import { varietyController } from './VarietyController.js';
 import { storyCompletionTracker } from './storyCompletionTracker.js';
-import { intrusiveThoughts } from './intrusiveThoughts.js';
 import { storage } from '../storage.js';
 import { z } from 'zod';
 import { prometheusMetrics } from './prometheusMetrics.js';
@@ -985,17 +984,6 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
       // Get current chaos state and personality modifier
       const chaosModifier = this.chaosEngine.getPersonalityModifier();
       
-      // 🧠 NEW: Check for intrusive thoughts injection
-      let intrusiveThought = null;
-      try {
-        intrusiveThought = await intrusiveThoughts.shouldInjectThought(userMessage, conversationId);
-        if (intrusiveThought) {
-          console.log(`💭 Injecting intrusive thought (${intrusiveThought.intensity}): ${intrusiveThought.thought.substring(0, 50)}...`);
-        }
-      } catch (error) {
-        console.warn('⚠️ Intrusive thoughts injection failed:', error);
-      }
-      
       // 🔥 NEW: Topic escalation tracking and emotional investment system
       let escalationPrompt = "";
       if (profileId && conversationId) {
@@ -1057,16 +1045,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
         }
       }
       
-      // 💭 DISABLED: Intrusive thoughts were breaking response flow
-      // Keeping the intrusive thought system active for tracking, but NOT injecting mid-response
-      // If we want tangents, they should come naturally from personality, not forced injections
-      let promptWithIntrusion = `The Toxic Teacher says: "${userMessage}"`;
-      // REMOVED: Mid-response injection that broke coherent responses
-      // if (intrusiveThought) {
-      //   promptWithIntrusion += `\n\n💭 INTRUSIVE THOUGHT: While they're talking, you suddenly think: "${intrusiveThought.thought}" - inject this random thought naturally into your response as if it just popped into your head.`;
-      // }
-      
-      const fullPrompt = `${promptWithIntrusion}${contextPrompt}${modeContext}${escalationPrompt}${sceneCard}`;
+      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}${modeContext}${escalationPrompt}${sceneCard}`;
 
       // Enhanced system prompt with personality controls, chaos personality AND variety control
       // 🚫 CRITICAL: Put formatting rules FIRST for maximum priority
