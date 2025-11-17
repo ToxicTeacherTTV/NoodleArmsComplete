@@ -433,7 +433,7 @@ class ElevenLabsService {
           const detectedEnergy = this.detectTextEnergy(currentSentence);
           const emotionTag = detectedEnergy || emotionStages[stage];
           
-          const doubleTag = `[bronx]${emotionTag}`;
+          const doubleTag = `[bronx][${emotionTag}]`;
           
           if (result.trim()) {
             result += ` ${doubleTag} ${currentSentence.trim()}`;
