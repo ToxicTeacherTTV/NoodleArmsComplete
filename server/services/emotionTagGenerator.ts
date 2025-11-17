@@ -77,7 +77,7 @@ class EmotionTagGenerator {
     if (mood === 'aggressive' || mood === 'chaotic') {
       if (hasQuestion) {
         return {
-          opening: 'bronx, skeptical',
+          opening: 'skeptical',
           rising: 'scoffs, dismissive',
           peak: 'furious, heated',
           falling: 'sarcastic, mocking',
@@ -85,7 +85,7 @@ class EmotionTagGenerator {
         };
       }
       return {
-        opening: 'bronx, dismissive',
+        opening: 'dismissive',
         rising: 'heated, building',
         peak: 'furious',
         falling: 'sarcastic',
@@ -96,7 +96,7 @@ class EmotionTagGenerator {
     // RELAXED/CHILL MODE
     if (mood === 'relaxed' || intensity === 'low') {
       return {
-        opening: 'bronx, casual',
+        opening: 'casual',
         rising: 'conversational',
         peak: 'warm, friendly',
         falling: 'relaxed',
@@ -107,7 +107,7 @@ class EmotionTagGenerator {
     // STORYTELLING (long content)
     if (isLong || hasMultipleSentences) {
       return {
-        opening: 'bronx, setting the scene',
+        opening: 'setting the scene',
         rising: 'building tension',
         peak: 'dramatic reveal',
         falling: 'winding down',
@@ -118,17 +118,17 @@ class EmotionTagGenerator {
     // QUICK RESPONSE (short content)
     if (isShort) {
       return {
-        opening: 'bronx',
+        opening: 'casual',
         rising: 'casual',
         peak: 'matter-of-fact',
         falling: 'casual',
-        close: 'bronx'
+        close: 'confident'
       };
     }
     
     // BALANCED DEFAULT
     return {
-      opening: 'bronx, engaging',
+      opening: 'engaging',
       rising: 'passionate, building',
       peak: hasExclamation ? 'intense, fired up' : 'emphatic',
       falling: 'cooling down',
