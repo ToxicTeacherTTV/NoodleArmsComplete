@@ -283,7 +283,7 @@ export default function JazzDashboard() {
 
                 {/* Main Content */}
                 <main className="container py-6">
-                    <div className="grid gap-4 lg:grid-cols-[280px_1fr] xl:grid-cols-[280px_1fr_320px]">
+                    <div className="grid gap-4 lg:grid-cols-[280px_1fr] xl:grid-cols-[280px_1fr_320px] h-[calc(100vh-7rem)]">
                         {/* Sidebar: Conversation History (Desktop) */}
                         <Card className="hidden lg:flex flex-col min-h-0 overflow-hidden card-hover">
                             <CardHeader className="border-b px-4 py-3">
