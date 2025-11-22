@@ -1,9 +1,9 @@
 import { memoryCaches } from './services/memoryCache';
 import { perfMetrics } from './services/performanceMetrics';
-import { 
-  profiles, 
-  conversations, 
-  messages, 
+import {
+  profiles,
+  conversations,
+  messages,
   documents,
   consolidatedPersonalities,
   memoryEntries,
@@ -31,7 +31,7 @@ import {
   memoryPeopleLinks,
   memoryPlaceLinks,
   memoryEventLinks,
-  type Profile, 
+  type Profile,
   type InsertProfile,
   type Conversation,
   type InsertConversation,
@@ -105,7 +105,7 @@ export interface IStorage {
   addMessage(message: InsertMessage): Promise<Message>;
   updateMessageRating(messageId: string, rating: number): Promise<void>;
   getRecentMessages(conversationId: string, limit: number): Promise<Message[]>;
-  
+
   // Enhanced memory persistence methods
   updateConversationContent(id: string, updates: {
     contentType?: 'PODCAST' | 'STREAMING' | 'DISCORD' | 'GENERAL';
@@ -117,7 +117,8 @@ export interface IStorage {
   getPodcastConversations(profileId: string, limit?: number): Promise<Conversation[]>;
   getConversationsByContentType(profileId: string, contentType: 'PODCAST' | 'STREAMING' | 'DISCORD' | 'GENERAL', limit?: number): Promise<Conversation[]>;
   searchConversationsByTopics(profileId: string, topics: string[], limit?: number): Promise<Conversation[]>;
-  getCompletedStories(profileId: string): Promise<{conversationId: string; stories: string[]}[]>;
+  getCompletedStories(profileId: string): Promise<{ conversationId: string; stories: string[] }[]>;
+  listWebConversations(profileId: string): Promise<Conversation[]>;
 
   // Document management
   createDocument(document: InsertDocument): Promise<Document>;
@@ -144,63 +145,63 @@ export interface IStorage {
   clearProfileMemories(profileId: string): Promise<void>;
   incrementMemoryRetrieval(id: string): Promise<void>;
   getMemoryStats(profileId: string): Promise<{ totalFacts: number; conversations: number }>;
-  
+
   // Embedding support for memory entries
   getMemoryEntriesWithEmbeddings(profileId: string): Promise<MemoryEntry[]>;
   getRecentMemoriesWithEmbeddings(profileId: string, limit: number): Promise<MemoryEntry[]>;
   getMemoryEntriesWithoutEmbeddings(profileId: string): Promise<MemoryEntry[]>;
-  updateMemoryEmbedding(id: string, embedding: {embedding: string, embeddingModel: string, embeddingUpdatedAt: Date}): Promise<void>;
+  updateMemoryEmbedding(id: string, embedding: { embedding: string, embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void>;
   searchMemoriesByKeywords(profileId: string, keywords: string[], limit?: number): Promise<MemoryEntry[]>;
-  
+
   // Query memories by source (e.g., podcast episode, document)
   getMemoriesBySource(profileId: string, sourceId: string, source?: string): Promise<MemoryEntry[]>;
-  
+
   // Confidence tracking methods
   findMemoryByCanonicalKey(profileId: string, canonicalKey: string): Promise<MemoryEntry | undefined>;
   updateMemoryConfidence(id: string, confidence: number, supportCount?: number): Promise<MemoryEntry>;
   updateMemoryEntry(id: string, updates: Partial<MemoryEntry>): Promise<MemoryEntry>;
   getHighConfidenceMemories(profileId: string, minConfidence: number, limit?: number): Promise<MemoryEntry[]>;
   getMemoriesByConfidenceRange(profileId: string, minConfidence: number, maxConfidence: number, limit?: number): Promise<MemoryEntry[]>;
-  
+
   // 📖 NEW: Podcast-aware memory retrieval
   getPodcastAwareMemories(profileId: string, mode?: string, limit?: number): Promise<Array<MemoryEntry & { parentStory?: MemoryEntry, isPodcastContent?: boolean }>>;
   markFactsAsContradicting(factIds: string[], groupId: string): Promise<void>;
   updateMemoryStatus(id: string, status: 'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'): Promise<MemoryEntry>;
   getReliableMemoriesForAI(profileId: string, limit?: number): Promise<MemoryEntry[]>;
-  
+
   // Protected facts methods
   addProtectedFact(profileId: string, content: string, importance?: number, keywords?: string[]): Promise<MemoryEntry>;
   getProtectedFacts(profileId: string): Promise<MemoryEntry[]>;
-  
+
   // Contradiction groups methods
   getContradictionGroups(profileId: string): Promise<any[]>;
 
   // Chaos State management
   getChaosState(): Promise<ChaosState | undefined>;
   createOrUpdateChaosState(state: InsertChaosState): Promise<ChaosState>;
-  
+
   // Discord management methods
   getDiscordServer(serverId: string): Promise<DiscordServer | undefined>;
   createDiscordServer(server: InsertDiscordServer): Promise<DiscordServer>;
   updateDiscordServer(id: string, updates: Partial<DiscordServer>): Promise<DiscordServer>;
   getProfileDiscordServers(profileId: string): Promise<DiscordServer[]>;
-  
+
   // Discord member management
   getDiscordMember(serverId: string, userId: string): Promise<DiscordMember | undefined>;
   createDiscordMember(member: InsertDiscordMember): Promise<DiscordMember>;
   updateDiscordMember(id: string, updates: Partial<DiscordMember>): Promise<DiscordMember>;
   getServerMembers(serverId: string): Promise<DiscordMember[]>;
-  
+
   // Discord topic triggers
   getDiscordTopicTriggers(serverId: string): Promise<DiscordTopicTrigger[]>;
   createDiscordTopicTrigger(trigger: InsertDiscordTopicTrigger): Promise<DiscordTopicTrigger>;
   updateDiscordTopicTrigger(id: string, updates: Partial<DiscordTopicTrigger>): Promise<DiscordTopicTrigger>;
   deleteDiscordTopicTrigger(id: string): Promise<void>;
-  
+
   // Discord conversation logging
   logDiscordConversation(conversation: InsertDiscordConversation): Promise<DiscordConversation>;
   getDiscordConversations(serverId: string, limit?: number): Promise<DiscordConversation[]>;
-  
+
   // Automated Sources Management
   createAutomatedSource(data: InsertAutomatedSource): Promise<AutomatedSource>;
   getAutomatedSources(profileId: string): Promise<AutomatedSource[]>;
@@ -221,7 +222,7 @@ export interface IStorage {
   listPodcastEpisodes(profileId: string): Promise<PodcastEpisode[]>;
   updatePodcastEpisode(id: string, updates: Partial<PodcastEpisode>): Promise<PodcastEpisode>;
   deletePodcastEpisode(id: string): Promise<void>;
-  
+
   createPodcastSegment(segment: InsertPodcastSegment): Promise<PodcastSegment>;
   getPodcastSegment(id: string): Promise<PodcastSegment | undefined>;
   getEpisodeSegments(episodeId: string): Promise<PodcastSegment[]>;
@@ -229,7 +230,7 @@ export interface IStorage {
   deletePodcastSegment(id: string): Promise<void>;
   clearPodcastSegments(episodeId: string): Promise<void>;
   searchPodcastContent(profileId: string, query: string): Promise<{ episodes: PodcastEpisode[]; segments: PodcastSegment[] }>;
-  
+
   // Content Library management
   createContentLibraryEntry(entry: InsertContentLibraryEntry): Promise<ContentLibraryEntry>;
   getContentLibraryEntry(id: string): Promise<ContentLibraryEntry | undefined>;
@@ -238,11 +239,11 @@ export interface IStorage {
   deleteContentLibraryEntry(id: string): Promise<void>;
   searchContentLibrary(profileId: string, query: string): Promise<ContentLibraryEntry[]>;
   updateContentLibraryAccess(id: string): Promise<void>;
-  
+
   // Embedding support for content library
   getContentLibraryWithEmbeddings(profileId: string): Promise<ContentLibraryEntry[]>;
   getContentLibraryWithoutEmbeddings(profileId: string): Promise<ContentLibraryEntry[]>;
-  updateContentLibraryEmbedding(id: string, embedding: {embedding: string, embeddingModel: string, embeddingUpdatedAt: Date}): Promise<void>;
+  updateContentLibraryEmbedding(id: string, embedding: { embedding: string, embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void>;
   getContentLibraryEntries(profileId: string): Promise<ContentLibraryEntry[]>;
 
   // Topic Escalation System
@@ -257,26 +258,26 @@ export interface IStorage {
   // Feature flag management
   getEntitySystemConfig(): Promise<EntitySystemConfig | undefined>;
   setEntitySystemEnabled(enabled: boolean): Promise<EntitySystemConfig>;
-  
+
   // Entity CRUD operations (all optional for backward compatibility)
   createPerson(person: InsertPerson): Promise<Person>;
   getPerson(id: string): Promise<Person | undefined>;
   getProfilePeople(profileId: string): Promise<Person[]>;
   updatePerson(id: string, updates: Partial<Person>): Promise<Person>;
   deletePerson(id: string): Promise<void>;
-  
+
   createPlace(place: InsertPlace): Promise<Place>;
   getPlace(id: string): Promise<Place | undefined>;
   getProfilePlaces(profileId: string): Promise<Place[]>;
   updatePlace(id: string, updates: Partial<Place>): Promise<Place>;
   deletePlace(id: string): Promise<void>;
-  
+
   createEvent(event: InsertEvent): Promise<Event>;
   getEvent(id: string): Promise<Event | undefined>;
   getProfileEvents(profileId: string): Promise<Event[]>;
   updateEvent(id: string, updates: Partial<Event>): Promise<Event>;
   deleteEvent(id: string): Promise<void>;
-  
+
   // Entity linking for memory entries (updated to use junction tables)
   linkMemoryToEntities(memoryId: string, entityLinks: {
     personIds?: string[];
@@ -288,7 +289,7 @@ export interface IStorage {
     places?: Place[];
     events?: Event[];
   }>>;
-  
+
   // Get memories for specific entities
   getMemoriesForPerson(personId: string, profileId: string): Promise<MemoryEntry[]>;
   getMemoriesForPlace(placeId: string, profileId: string): Promise<MemoryEntry[]>;
@@ -453,6 +454,17 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
+  async listWebConversations(profileId: string): Promise<Conversation[]> {
+    return await db
+      .select()
+      .from(conversations)
+      .where(and(
+        eq(conversations.profileId, profileId),
+        eq(conversations.isArchived, false)
+      ))
+      .orderBy(desc(conversations.createdAt));
+  }
+
   async searchConversationsByTopics(profileId: string, topics: string[], limit = 50): Promise<Conversation[]> {
     // Use array overlap operator to find conversations with matching topics
     return await db
@@ -460,59 +472,15 @@ export class DatabaseStorage implements IStorage {
       .from(conversations)
       .where(and(
         eq(conversations.profileId, profileId),
-        sql`${conversations.topicTags} && ${topics}` // PostgreSQL array overlap operator
+        // Check if topicTags overlaps with provided topics
+        sql`${conversations.topicTags} && ${topics}::text[]`
       ))
       .orderBy(desc(conversations.createdAt))
       .limit(limit);
   }
 
-  async listWebConversations(profileId: string, showArchived = false, limit = 50): Promise<Array<Conversation & { messageCount: number; firstMessage?: string }>> {
-    // Get non-Discord conversations (GENERAL, PODCAST, STREAMING)
-    const convos = await db
-      .select()
-      .from(conversations)
-      .where(and(
-        eq(conversations.profileId, profileId),
-        eq(conversations.isArchived, showArchived),
-        or(
-          eq(conversations.contentType, 'GENERAL'),
-          eq(conversations.contentType, 'PODCAST'),
-          eq(conversations.contentType, 'STREAMING')
-        )
-      ))
-      .orderBy(desc(conversations.createdAt))
-      .limit(limit);
-
-    // Get message counts and first message for each conversation
-    const conversationsWithMeta = await Promise.all(
-      convos.map(async (convo) => {
-        const msgs = await db
-          .select()
-          .from(messages)
-          .where(eq(messages.conversationId, convo.id))
-          .orderBy(messages.createdAt)
-          .limit(1);
-        
-        const messageCount = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(messages)
-          .where(eq(messages.conversationId, convo.id));
-
-        return {
-          ...convo,
-          title: convo.title, // Include AI-generated title
-          messageCount: Number(messageCount[0]?.count || 0),
-          firstMessage: msgs[0]?.content
-        };
-      })
-    );
-
-    // Filter out empty conversations (no messages)
-    return conversationsWithMeta.filter(convo => convo.messageCount > 0);
-  }
-
-  async getCompletedStories(profileId: string): Promise<{conversationId: string; stories: string[]}[]> {
-    const conversationsWithStories = await db
+  async getCompletedStories(profileId: string): Promise<{ conversationId: string; stories: string[] }[]> {
+    const results = await db
       .select({
         conversationId: conversations.id,
         completedStories: conversations.completedStories
@@ -520,11 +488,11 @@ export class DatabaseStorage implements IStorage {
       .from(conversations)
       .where(and(
         eq(conversations.profileId, profileId),
-        sql`array_length(${conversations.completedStories}, 1) > 0` // Only conversations with completed stories
+        sql`array_length(${conversations.completedStories}, 1) > 0`
       ))
       .orderBy(desc(conversations.createdAt));
 
-    return conversationsWithStories.map(row => ({
+    return results.map(row => ({
       conversationId: row.conversationId,
       stories: row.completedStories || []
     }));
@@ -558,7 +526,7 @@ export class DatabaseStorage implements IStorage {
     // 🚀 OPTIMIZATION: Allow custom limit for streaming mode (10 vs 40)
     const targetLimit = limit || 40; // Reduced from 50
     const candidateLimit = Math.min(targetLimit * 2, 100); // Get 2x candidates for sampling
-    
+
     // Smart sampling: Get candidates, then mix recent + sampled older examples
     const allExamples = await db
       .select()
@@ -572,23 +540,23 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(desc(documents.createdAt))
       .limit(candidateLimit);
-    
+
     if (allExamples.length <= targetLimit) {
       return allExamples; // If we have targetLimit or fewer, return all
     }
-    
+
     // Mix of recent (60%) and sampled older (40%) for variety
     const recentCount = Math.floor(targetLimit * 0.6);
     const olderCount = targetLimit - recentCount;
-    
+
     const recent = allExamples.slice(0, recentCount);
     const older = allExamples.slice(recentCount);
-    
+
     // Random sample from older set
     const sampledOlder = older
       .sort(() => Math.random() - 0.5)
       .slice(0, olderCount);
-    
+
     return [...recent, ...sampledOlder];
   }
 
@@ -657,12 +625,12 @@ export class DatabaseStorage implements IStorage {
   async addMemoryEntry(entry: InsertMemoryEntry): Promise<MemoryEntry> {
     // CRITICAL FIX: Ensure canonicalKey is always present
     let finalEntry = { ...entry };
-    
+
     if (!finalEntry.canonicalKey && finalEntry.content) {
       const { generateCanonicalKey } = await import('./utils/canonical.js');
       finalEntry.canonicalKey = generateCanonicalKey(finalEntry.content);
     }
-    
+
     // 🌟 NEW: Vector-based duplicate detection (BEFORE insert)
     // This catches semantic duplicates that text-based canonicalKey misses
     if (finalEntry.content && finalEntry.profileId) {
@@ -672,7 +640,7 @@ export class DatabaseStorage implements IStorage {
           finalEntry.profileId,
           finalEntry.content
         );
-        
+
         if (duplicateCheck.action === 'block') {
           // Near-exact duplicate (95%+) - don't create, just update existing
           console.log(`🚫 ${duplicateCheck.reason} - skipping creation`);
@@ -690,7 +658,7 @@ export class DatabaseStorage implements IStorage {
               })
               .where(eq(memoryEntries.id, existingId))
               .returning();
-            
+
             console.log(`🔄 Boosted existing memory instead: confidence ${updated.confidence}, support ${updated.supportCount}`);
             return updated;
           }
@@ -707,7 +675,7 @@ export class DatabaseStorage implements IStorage {
         console.warn('⚠️ Vector duplicate detection failed, continuing with insert:', error);
       }
     }
-    
+
     // 🔒 ATOMIC UPSERT: Insert or update on conflict (prevents race conditions)
     const [upsertedEntry] = await db
       .insert(memoryEntries)
@@ -720,7 +688,7 @@ export class DatabaseStorage implements IStorage {
           confidence: sql`LEAST(100, COALESCE(${memoryEntries.confidence}, 50) + 10)`,
           // Increment support count
           supportCount: sql`COALESCE(${memoryEntries.supportCount}, 1) + 1`,
-          
+
           // === Metadata updates (preserve existing values if new ones are null) ===
           type: sql`COALESCE(EXCLUDED.type, ${memoryEntries.type})`,
           content: sql`COALESCE(EXCLUDED.content, ${memoryEntries.content})`,
@@ -729,32 +697,32 @@ export class DatabaseStorage implements IStorage {
           sourceId: sql`COALESCE(EXCLUDED.source_id, ${memoryEntries.sourceId})`,
           status: sql`COALESCE(EXCLUDED.status, ${memoryEntries.status})`,
           isProtected: sql`COALESCE(EXCLUDED.is_protected, ${memoryEntries.isProtected})`,
-          
+
           // === Quality & clustering metadata ===
           qualityScore: sql`COALESCE(EXCLUDED.quality_score, ${memoryEntries.qualityScore})`,
           temporalContext: sql`COALESCE(EXCLUDED.temporal_context, ${memoryEntries.temporalContext})`,
           clusterId: sql`COALESCE(EXCLUDED.cluster_id, ${memoryEntries.clusterId})`,
           contradictionGroupId: sql`COALESCE(EXCLUDED.contradiction_group_id, ${memoryEntries.contradictionGroupId})`,
-          
+
           // === Usage metrics (cumulative - don't overwrite with new values) ===
           retrievalCount: sql`${memoryEntries.retrievalCount}`, // Keep existing count, don't reset
           successRate: sql`COALESCE(${memoryEntries.successRate}, EXCLUDED.success_rate)`, // Preserve existing rate
           lastUsed: sql`COALESCE(${memoryEntries.lastUsed}, EXCLUDED.last_used)`, // Keep most recent usage
-          
+
           // === Hierarchical fact fields (preserve existing if new is null) ===
           parentFactId: sql`COALESCE(EXCLUDED.parent_fact_id, ${memoryEntries.parentFactId})`,
           isAtomicFact: sql`COALESCE(EXCLUDED.is_atomic_fact, ${memoryEntries.isAtomicFact})`,
           storyContext: sql`COALESCE(EXCLUDED.story_context, ${memoryEntries.storyContext})`,
-          
+
           // === Semantic/embedding fields (preserve existing if new is null) ===
           embedding: sql`COALESCE(EXCLUDED.embedding, ${memoryEntries.embedding})`,
           embeddingModel: sql`COALESCE(EXCLUDED.embedding_model, ${memoryEntries.embeddingModel})`,
           embeddingUpdatedAt: sql`COALESCE(EXCLUDED.embedding_updated_at, ${memoryEntries.embeddingUpdatedAt})`,
-          
+
           // === Array merging (keywords, relationships) ===
           keywords: sql`ARRAY(SELECT DISTINCT unnest(COALESCE(${memoryEntries.keywords}, ARRAY[]::text[]) || COALESCE(EXCLUDED.keywords, ARRAY[]::text[])))`,
           relationships: sql`ARRAY(SELECT DISTINCT unnest(COALESCE(${memoryEntries.relationships}, ARRAY[]::text[]) || COALESCE(EXCLUDED.relationships, ARRAY[]::text[])))`,
-          
+
           // === Temporal fields (preserve firstSeenAt, update others) ===
           lastSeenAt: sql`now()`,
           updatedAt: sql`now()`,
@@ -766,7 +734,7 @@ export class DatabaseStorage implements IStorage {
     // 🚀 CACHE: Invalidate caches for this profile
     memoryCaches.warm.invalidatePattern(`enriched_memories:${entry.profileId}`);
     memoryCaches.warm.invalidatePattern(`search_memories:${entry.profileId}`);
-    
+
     // Log what happened
     if (upsertedEntry.supportCount && upsertedEntry.supportCount > 1) {
       console.log(`🔄 Updated existing memory: "${upsertedEntry.content.substring(0, 50)}..." (support: ${upsertedEntry.supportCount}, confidence: ${upsertedEntry.confidence})`);
@@ -795,13 +763,13 @@ export class DatabaseStorage implements IStorage {
   private async flagMemoryContentBackground(memory: MemoryEntry): Promise<void> {
     try {
       console.log(`🤖 Starting AI flagging analysis for memory: ${memory.id}`);
-      
+
       const analysis = await aiFlagger.analyzeContent(
         memory.content,
         'MEMORY',
-        { 
+        {
           profileId: memory.profileId,
-          sourceId: memory.id 
+          sourceId: memory.id
         }
       );
 
@@ -813,7 +781,7 @@ export class DatabaseStorage implements IStorage {
           memory.id,
           memory.profileId
         );
-        
+
         console.log(`🏷️ Generated ${analysis.flags.length} flags for memory ${memory.id}: ${analysis.flags.map(f => f.flagType).join(', ')}`);
       } else {
         console.log(`✅ No flags needed for memory ${memory.id}`);
@@ -830,10 +798,10 @@ export class DatabaseStorage implements IStorage {
   private async generateEmbeddingBackground(memoryId: string, content: string): Promise<void> {
     try {
       console.log(`🔢 Auto-generating embedding for memory: ${memoryId}`);
-      
+
       const { embeddingService } = await import('./services/embeddingService.js');
       const success = await embeddingService.embedMemoryEntry(memoryId, content);
-      
+
       if (success) {
         console.log(`✅ Embedding generated successfully for memory ${memoryId}`);
       }
@@ -864,7 +832,7 @@ export class DatabaseStorage implements IStorage {
 
   async searchMemoryEntries(profileId: string, query: string): Promise<MemoryEntry[]> {
     if (!query || query.trim().length === 0) return [];
-    
+
     // Use PostgreSQL full-text search with ranking
     return await db
       .select({
@@ -926,11 +894,11 @@ export class DatabaseStorage implements IStorage {
       eq(memoryEntries.source, source),
       eq(memoryEntries.status, 'ACTIVE')
     ];
-    
+
     if (sourceId) {
       conditions.push(eq(memoryEntries.sourceId, sourceId));
     }
-    
+
     return await db
       .select()
       .from(memoryEntries)
@@ -983,12 +951,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateMemoryConfidence(id: string, confidence: number, supportCount?: number): Promise<MemoryEntry> {
-    const updateData: any = { 
-      confidence, 
+    const updateData: any = {
+      confidence,
       lastSeenAt: sql`now()`,
-      updatedAt: sql`now()` 
+      updatedAt: sql`now()`
     };
-    
+
     if (supportCount !== undefined) {
       updateData.supportCount = supportCount;
     }
@@ -998,16 +966,16 @@ export class DatabaseStorage implements IStorage {
       .set(updateData)
       .where(eq(memoryEntries.id, id))
       .returning();
-    
+
     return updatedMemory;
   }
 
   async updateMemoryEntry(id: string, updates: Partial<MemoryEntry>): Promise<MemoryEntry> {
-    const updateData: any = { 
+    const updateData: any = {
       ...updates,
-      updatedAt: sql`now()` 
+      updatedAt: sql`now()`
     };
-    
+
     // Remove fields that shouldn't be updated directly
     delete updateData.id;
     delete updateData.createdAt;
@@ -1017,11 +985,11 @@ export class DatabaseStorage implements IStorage {
       .set(updateData)
       .where(eq(memoryEntries.id, id))
       .returning();
-    
+
     if (!updatedMemory) {
       throw new Error(`Memory entry with ID ${id} not found`);
     }
-    
+
     return updatedMemory;
   }
 
@@ -1060,68 +1028,68 @@ export class DatabaseStorage implements IStorage {
   // 📖 NEW: Podcast-aware memory retrieval that prioritizes podcast content
   async getPodcastAwareMemories(profileId: string, mode?: string, limit = 100): Promise<Array<MemoryEntry & { parentStory?: MemoryEntry, isPodcastContent?: boolean }>> {
     const isPodcastMode = mode === 'PODCAST';
-    
+
     // Get memories with enhanced context
     const baseMemories = await this.getEnrichedMemoriesForAI(profileId, limit * 2);
-    
+
     // If not in podcast mode, return regular enriched memories
     if (!isPodcastMode) {
       return baseMemories.map(memory => ({ ...memory, isPodcastContent: false }));
     }
-    
+
     // In podcast mode, prioritize podcast-related content
     const podcastMemories: Array<MemoryEntry & { parentStory?: MemoryEntry, isPodcastContent?: boolean }> = [];
     const generalMemories: Array<MemoryEntry & { parentStory?: MemoryEntry, isPodcastContent?: boolean }> = [];
-    
+
     for (const memory of baseMemories) {
       const isPodcastContent = this.isPodcastRelatedMemory(memory);
       const enhancedMemory = { ...memory, isPodcastContent };
-      
+
       if (isPodcastContent) {
         podcastMemories.push(enhancedMemory);
       } else {
         generalMemories.push(enhancedMemory);
       }
     }
-    
+
     // Return podcast memories first, then fill with general memories
     const combinedMemories = [...podcastMemories, ...generalMemories];
     return combinedMemories.slice(0, limit);
   }
-  
+
   // Helper method to identify podcast-related memories
   private isPodcastRelatedMemory(memory: MemoryEntry): boolean {
     const podcastKeywords = [
-      'podcast', 'episode', 'streaming', 'twitch', 'youtube', 
+      'podcast', 'episode', 'streaming', 'twitch', 'youtube',
       'chat', 'audience', 'viewer', 'subscriber', 'content',
       'story', 'tale', 'told', 'sharing', 'explain', 'talked about',
       'discussion', 'topic', 'segment', 'show', 'broadcast'
     ];
-    
+
     const content = memory.content.toLowerCase();
     const source = (memory.source || '').toLowerCase();
-    
+
     // Check if memory content contains podcast-related keywords
-    const hasKeywords = podcastKeywords.some(keyword => 
+    const hasKeywords = podcastKeywords.some(keyword =>
       content.includes(keyword) || source.includes(keyword)
     );
-    
+
     // Check if memory type suggests podcast content
     const isPodcastType = memory.type === 'LORE' || memory.type === 'STORY';
-    
+
     // Check if source indicates podcast origin
     const isPodcastSource = source.includes('conversation') || source.includes('chat') || source.includes('episode');
-    
+
     return hasKeywords || isPodcastType || isPodcastSource;
   }
 
   async markFactsAsContradicting(factIds: string[], groupId: string): Promise<void> {
     await db
       .update(memoryEntries)
-      .set({ 
+      .set({
         contradictionGroupId: groupId,
         status: 'AMBIGUOUS',
-        updatedAt: sql`now()` 
+        updatedAt: sql`now()`
       })
       .where(sql`${memoryEntries.id} = ANY(${factIds})`);
   }
@@ -1159,7 +1127,7 @@ export class DatabaseStorage implements IStorage {
   // 🚀 NEW: Enhanced memory retrieval that includes story context for atomic facts
   async getEnrichedMemoriesForAI(profileId: string, limit = 100): Promise<Array<MemoryEntry & { parentStory?: MemoryEntry }>> {
     const endTimer = perfMetrics.startTimer('getEnrichedMemoriesForAI');
-    
+
     // 🚀 CACHE: Check cache first
     const cacheKey = `enriched_memories:${profileId}:${limit}`;
     const cached = memoryCaches.warm.get(cacheKey);
@@ -1168,7 +1136,7 @@ export class DatabaseStorage implements IStorage {
       console.log(`⚡ Cache HIT for enriched memories (${profileId})`);
       return cached;
     }
-    
+
     // Get only high-confidence, ACTIVE facts for AI response generation
     const memories = await db
       .select()
@@ -1195,18 +1163,18 @@ export class DatabaseStorage implements IStorage {
       .filter((id, index, self) => self.indexOf(id) === index); // unique IDs only
 
     let parentStoriesMap = new Map<string, any>();
-    
+
     if (parentFactIds.length > 0) {
       try {
         const parentStories = await db
           .select()
           .from(memoryEntries)
           .where(sql`${memoryEntries.id} IN (${sql.join(parentFactIds.map(id => sql`${id}`), sql`, `)})`);
-        
+
         parentStories.forEach(story => {
           parentStoriesMap.set(story.id, story);
         });
-        
+
         console.log(`📦 Batch fetched ${parentStories.length} parent stories for getEnrichedMemoriesForAI`);
       } catch (error) {
         console.warn(`⚠️ Failed to batch fetch parent stories:`, error);
@@ -1227,7 +1195,7 @@ export class DatabaseStorage implements IStorage {
 
     // 🚀 CACHE: Store result for future use
     memoryCaches.warm.set(cacheKey, enrichedMemories);
-    
+
     const duration = endTimer();
     perfMetrics.log('getEnrichedMemoriesForAI', duration, { profileId, resultCount: enrichedMemories.length });
 
@@ -1247,14 +1215,14 @@ export class DatabaseStorage implements IStorage {
         const isLongEnough = word.length > 2;
         const commonWords = ['who', 'what', 'when', 'where', 'why', 'how', 'tell', 'about', 'the', 'and', 'but', 'are', 'you', 'can', 'did', 'know'];
         const isNotCommonWord = !commonWords.includes(word);
-        
+
         return (isNumber || isLongEnough) && isNotCommonWord;
       }); // Preserve episode numbers like "68"!
 
     console.log(`🔍 Smart search for "${query}" -> Keywords: [${keywords.join(', ')}]`);
 
     // Build flexible search conditions for each keyword
-    const keywordConditions = keywords.map(keyword => 
+    const keywordConditions = keywords.map(keyword =>
       or(
         // Search in content (case-insensitive)
         sql`LOWER(${memoryEntries.content}) LIKE ${`%${keyword.toLowerCase()}%`}`,
@@ -1292,18 +1260,18 @@ export class DatabaseStorage implements IStorage {
       .filter((id, index, self) => self.indexOf(id) === index); // unique IDs only
 
     let parentStoriesMap = new Map<string, any>();
-    
+
     if (parentFactIds.length > 0) {
       try {
         const parentStories = await db
           .select()
           .from(memoryEntries)
           .where(sql`${memoryEntries.id} IN (${sql.join(parentFactIds.map(id => sql`${id}`), sql`, `)})`);
-        
+
         parentStories.forEach(story => {
           parentStoriesMap.set(story.id, story);
         });
-        
+
         console.log(`📦 Batch fetched ${parentStories.length} parent stories for searchEnrichedMemoryEntries`);
       } catch (error) {
         console.warn(`⚠️ Failed to batch fetch parent stories:`, error);
@@ -1329,7 +1297,7 @@ export class DatabaseStorage implements IStorage {
   async addProtectedFact(profileId: string, content: string, importance = 5, keywords: string[] = []): Promise<MemoryEntry> {
     const { generateCanonicalKey } = await import('./utils/canonical.js');
     const canonicalKey = generateCanonicalKey(content);
-    
+
     const protectedFact = await this.addMemoryEntry({
       profileId,
       type: 'FACT' as const,
@@ -1342,7 +1310,7 @@ export class DatabaseStorage implements IStorage {
       isProtected: true, // Mark as protected
       canonicalKey,
     });
-    
+
     console.log(`🔒 Added protected fact: "${content}"`);
     return protectedFact;
   }
@@ -1376,7 +1344,7 @@ export class DatabaseStorage implements IStorage {
 
     // Group facts by their contradiction group ID
     const groups: { [groupId: string]: MemoryEntry[] } = {};
-    
+
     for (const fact of contradictedFacts) {
       const groupId = fact.contradictionGroupId!;
       if (!groups[groupId]) {
@@ -1390,7 +1358,7 @@ export class DatabaseStorage implements IStorage {
       // Find the primary fact (highest confidence, ACTIVE status)
       const primaryFact = facts.find(f => f.status === 'ACTIVE') || facts[0];
       const conflictingFacts = facts.filter(f => f.id !== primaryFact.id);
-      
+
       return {
         groupId,
         facts,
@@ -1415,7 +1383,7 @@ export class DatabaseStorage implements IStorage {
   async createOrUpdateChaosState(state: InsertChaosState): Promise<ChaosState> {
     // Check if global chaos state already exists
     const existingState = await this.getChaosState();
-    
+
     if (existingState) {
       // Update existing state
       const updateData: any = {
@@ -1629,11 +1597,11 @@ export class DatabaseStorage implements IStorage {
 
   async getPendingContent(profileId: string, processed?: boolean): Promise<PendingContent[]> {
     const conditions = [eq(pendingContent.profileId, profileId)];
-    
+
     if (processed !== undefined) {
       conditions.push(eq(pendingContent.processed, processed));
     }
-    
+
     return await db
       .select()
       .from(pendingContent)
@@ -1644,10 +1612,10 @@ export class DatabaseStorage implements IStorage {
   async approvePendingContent(id: string): Promise<void> {
     await db
       .update(pendingContent)
-      .set({ 
-        approved: true, 
-        processed: true, 
-        processedAt: sql`now()` 
+      .set({
+        approved: true,
+        processed: true,
+        processedAt: sql`now()`
       })
       .where(eq(pendingContent.id, id));
   }
@@ -1655,9 +1623,9 @@ export class DatabaseStorage implements IStorage {
   async rejectPendingContent(id: string, reason: string): Promise<void> {
     await db
       .update(pendingContent)
-      .set({ 
-        approved: false, 
-        processed: true, 
+      .set({
+        approved: false,
+        processed: true,
         processedAt: sql`now()`,
         rejectionReason: reason
       })
@@ -1711,25 +1679,25 @@ export class DatabaseStorage implements IStorage {
     includeUsed?: boolean;
   } = {}): Promise<PrerollAd[]> {
     const conditions = [eq(prerollAds.profileId, profileId)];
-    
+
     if (options.category) {
       conditions.push(eq(prerollAds.category, options.category));
     }
-    
+
     if (!options.includeUsed) {
       conditions.push(eq(prerollAds.lastUsed, sql`NULL`));
     }
-    
+
     const query = db
       .select()
       .from(prerollAds)
       .where(and(...conditions))
       .orderBy(desc(prerollAds.generatedAt));
-    
+
     if (options.limit) {
       return await query.limit(options.limit);
     }
-    
+
     return await query;
   }
 
@@ -1908,7 +1876,7 @@ export class DatabaseStorage implements IStorage {
 
     // Create a simple search pattern for each keyword
     const searchPattern = keywords.join(' | ');
-    
+
     try {
       // Search episodes using a simpler approach
       const episodes = await db
@@ -1945,9 +1913,9 @@ export class DatabaseStorage implements IStorage {
         .orderBy(podcastSegments.startTime)
         .limit(10);
 
-      return { 
-        episodes, 
-        segments: segments.map(s => s.podcast_segments) 
+      return {
+        episodes,
+        segments: segments.map(s => s.podcast_segments)
       };
     } catch (error) {
       console.error('Error retrieving podcast content:', error);
@@ -1975,7 +1943,7 @@ export class DatabaseStorage implements IStorage {
     if (category) {
       whereConditions.push(eq(contentLibrary.category, category as any));
     }
-    
+
     return await db
       .select()
       .from(contentLibrary)
@@ -2018,7 +1986,7 @@ export class DatabaseStorage implements IStorage {
   async updateContentLibraryAccess(id: string): Promise<void> {
     await db
       .update(contentLibrary)
-      .set({ 
+      .set({
         lastAccessed: sql`now()`,
         accessCount: sql`${contentLibrary.accessCount} + 1`
       })
@@ -2068,7 +2036,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(memoryEntries.importance));
   }
 
-  async updateMemoryEmbedding(id: string, embedding: {embedding: string, embeddingModel: string, embeddingUpdatedAt: Date}): Promise<void> {
+  async updateMemoryEmbedding(id: string, embedding: { embedding: string, embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void> {
     await db
       .update(memoryEntries)
       .set({
@@ -2081,10 +2049,10 @@ export class DatabaseStorage implements IStorage {
 
   async searchMemoriesByKeywords(profileId: string, keywords: string[], limit = 20): Promise<MemoryEntry[]> {
     if (keywords.length === 0) return [];
-    
+
     // Combine keywords into a single search query for PostgreSQL full-text search
     const searchQuery = keywords.join(' | '); // OR search for any keyword
-    
+
     return await db
       .select({
         id: memoryEntries.id,
@@ -2163,7 +2131,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(contentLibrary.updatedAt));
   }
 
-  async updateContentLibraryEmbedding(id: string, embedding: {embedding: string, embeddingModel: string, embeddingUpdatedAt: Date}): Promise<void> {
+  async updateContentLibraryEmbedding(id: string, embedding: { embedding: string, embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void> {
     await db
       .update(contentLibrary)
       .set({
@@ -2185,10 +2153,10 @@ export class DatabaseStorage implements IStorage {
   // Topic Escalation System Implementation
   async trackTopicMention(profileId: string, topic: string, context: string): Promise<TopicEscalation> {
     const normalizedTopic = topic.toLowerCase().trim();
-    
+
     // Check if topic already exists
     const existingTopic = await this.getTopicEscalation(profileId, topic);
-    
+
     if (existingTopic) {
       // Escalate existing topic
       const newMentionCount = (existingTopic.mentionCount || 0) + 1;
@@ -2196,14 +2164,14 @@ export class DatabaseStorage implements IStorage {
       const escalationRate = existingTopic.escalationRate || 15;
       const newIntensity = Math.min(100, currentIntensity + escalationRate);
       const newMaxIntensity = Math.max(existingTopic.maxIntensity || 15, newIntensity);
-      
+
       // Update contexts array (keep last 5 contexts)
       const updatedContexts = [context, ...(existingTopic.contexts || [])].slice(0, 5);
-      
+
       // Check if it's becoming personal (intensity > 60)
       const isPersonal = newIntensity > 60;
       const familyHonorInvolved = newIntensity > 85; // Family honor threshold
-      
+
       const [updatedTopic] = await db
         .update(topicEscalation)
         .set({
@@ -2218,7 +2186,7 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(topicEscalation.id, existingTopic.id))
         .returning();
-      
+
       return updatedTopic;
     } else {
       // Create new topic escalation
@@ -2236,7 +2204,7 @@ export class DatabaseStorage implements IStorage {
           emotionalTriggers: []
         })
         .returning();
-      
+
       return newTopic;
     }
   }
@@ -2250,7 +2218,7 @@ export class DatabaseStorage implements IStorage {
         eq(topicEscalation.profileId, profileId),
         eq(topicEscalation.normalizedTopic, normalizedTopic)
       ));
-    
+
     return escalation || undefined;
   }
 
@@ -2282,7 +2250,7 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(topicEscalation.id, id))
       .returning();
-    
+
     return updatedTopic;
   }
 
@@ -2298,7 +2266,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ===== NEW: Entity System Implementation (Phase 1) =====
-  
+
   // Feature flag management
   async getEntitySystemConfig(): Promise<EntitySystemConfig | undefined> {
     const [config] = await db.select().from(entitySystemConfig).limit(1);
@@ -2307,7 +2275,7 @@ export class DatabaseStorage implements IStorage {
 
   async setEntitySystemEnabled(enabled: boolean): Promise<EntitySystemConfig> {
     const existing = await this.getEntitySystemConfig();
-    
+
     if (existing) {
       const [updated] = await db
         .update(entitySystemConfig)
@@ -2323,7 +2291,7 @@ export class DatabaseStorage implements IStorage {
       return newConfig;
     }
   }
-  
+
   // Person management
   async createPerson(person: InsertPerson): Promise<Person> {
     const [newPerson] = await db
@@ -2364,7 +2332,7 @@ export class DatabaseStorage implements IStorage {
     // Get both entities
     const primary = await this.getPerson(primaryId);
     const duplicate = await this.getPerson(duplicateId);
-    
+
     if (!primary || !duplicate) {
       throw new Error('One or both people not found');
     }
@@ -2427,7 +2395,7 @@ export class DatabaseStorage implements IStorage {
 
     return updated;
   }
-  
+
   // Place management
   async createPlace(place: InsertPlace): Promise<Place> {
     const [newPlace] = await db
@@ -2467,7 +2435,7 @@ export class DatabaseStorage implements IStorage {
   async mergePlaces(primaryId: string, duplicateId: string, mergedData?: Partial<Place>): Promise<Place> {
     const primary = await this.getPlace(primaryId);
     const duplicate = await this.getPlace(duplicateId);
-    
+
     if (!primary || !duplicate) {
       throw new Error('One or both places not found');
     }
@@ -2515,7 +2483,7 @@ export class DatabaseStorage implements IStorage {
     await this.deletePlace(duplicateId);
     return updated;
   }
-  
+
   // Event management
   async createEvent(event: InsertEvent): Promise<Event> {
     const [newEvent] = await db
@@ -2555,7 +2523,7 @@ export class DatabaseStorage implements IStorage {
   async mergeEvents(primaryId: string, duplicateId: string, mergedData?: Partial<Event>): Promise<Event> {
     const primary = await this.getEvent(primaryId);
     const duplicate = await this.getEvent(duplicateId);
-    
+
     if (!primary || !duplicate) {
       throw new Error('One or both events not found');
     }
@@ -2615,14 +2583,14 @@ export class DatabaseStorage implements IStorage {
       this.getProfilePlaces(profileId),
       this.getProfileEvents(profileId),
     ]);
-    
+
     return {
       people: peopleList,
       places: placesList,
       events: eventsList,
     };
   }
-  
+
   // Entity linking for memory entries (updated to use junction tables)
   async linkMemoryToEntities(memoryId: string, entityLinks: {
     personIds?: string[];
@@ -2643,7 +2611,7 @@ export class DatabaseStorage implements IStorage {
         }
       }
     }
-    
+
     // Create junction table entries for places
     if (entityLinks.placeIds && entityLinks.placeIds.length > 0) {
       for (const placeId of entityLinks.placeIds) {
@@ -2658,7 +2626,7 @@ export class DatabaseStorage implements IStorage {
         }
       }
     }
-    
+
     // Create junction table entries for events
     if (entityLinks.eventIds && entityLinks.eventIds.length > 0) {
       for (const eventId of entityLinks.eventIds) {
@@ -2701,13 +2669,13 @@ export class DatabaseStorage implements IStorage {
           .from(memoryPeopleLinks)
           .innerJoin(people, eq(memoryPeopleLinks.personId, people.id))
           .where(eq(memoryPeopleLinks.memoryId, memory.id)),
-        
+
         // Get places linked to this memory
         db.select({ place: places })
           .from(memoryPlaceLinks)
           .innerJoin(places, eq(memoryPlaceLinks.placeId, places.id))
           .where(eq(memoryPlaceLinks.memoryId, memory.id)),
-        
+
         // Get events linked to this memory
         db.select({ event: events })
           .from(memoryEventLinks)
@@ -2740,7 +2708,7 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
-    
+
     return results.map(row => row.memory);
   }
 
@@ -2757,7 +2725,7 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
-    
+
     return results.map(row => row.memory);
   }
 
@@ -2774,7 +2742,7 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
-    
+
     return results.map(row => row.memory);
   }
 

@@ -1,4 +1,4 @@
-import { geminiService } from './gemini.js';
+import { aiOrchestrator } from './aiOrchestrator.js';
 import { storage } from '../storage.js';
 
 interface ExtractedMemberFact {
@@ -27,8 +27,8 @@ export class DiscordFactExtractor {
     }
 
     try {
-      // Use Gemini's dedicated Discord fact extraction method
-      const extractedFacts = await geminiService.extractDiscordMemberFacts(
+      // Use AI Orchestrator for Discord fact extraction
+      const extractedFacts = await aiOrchestrator.extractDiscordMemberFacts(
         username,
         message,
         existingFacts
@@ -65,10 +65,10 @@ export class DiscordFactExtractor {
     try {
       // Merge new facts with existing, avoiding duplicates
       const allFacts = [...existingFacts];
-      
+
       for (const newFact of newFacts) {
         // Check if similar fact already exists (simple string matching)
-        const isDuplicate = allFacts.some(existing => 
+        const isDuplicate = allFacts.some(existing =>
           existing.toLowerCase().includes(newFact.toLowerCase()) ||
           newFact.toLowerCase().includes(existing.toLowerCase())
         );

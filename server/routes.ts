@@ -5,10 +5,9 @@ import { memoryCaches } from "./services/memoryCache";
 import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, insertDiscordServerSchema, insertDiscordMemberSchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags, duplicateScanResults, profiles, listenerCities } from "@shared/schema";
 import { eq, and, sql, or, inArray, desc } from "drizzle-orm";
 import { db } from "./db";
-import { anthropicService } from "./services/anthropic";
+import { aiOrchestrator } from "./services/aiOrchestrator";
 import { elevenlabsService } from "./services/elevenlabs";
 import { documentProcessor } from "./services/documentProcessor";
-import { geminiService } from "./services/gemini";
 import ChaosEngine from "./services/chaosEngine.js";
 import EvolutionaryAI from "./services/evolutionaryAI.js";
 import { LoreEngine } from './services/loreEngine.js';
@@ -79,7 +78,7 @@ const SUPPORTED_FILE_TYPES = [
   'text/markdown',
 ];
 
-const upload = multer({ 
+const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit to prevent DoS attacks
@@ -127,10 +126,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn('Database health check failed:', dbError);
       }
 
-      const hasIssues = !healthStatus.services.database || 
-                        !healthStatus.services.anthropic ||
-                        !healthStatus.services.gemini;
-      
+      const hasIssues = !healthStatus.services.database ||
+        !healthStatus.services.anthropic ||
+        !healthStatus.services.gemini;
+
       if (hasIssues) {
         healthStatus.status = 'degraded';
         return res.status(200).json(healthStatus); // Still return 200 for monitoring
@@ -158,7 +157,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(401).json({ error: 'Unauthorized' });
         }
       }
-      
+
       res.set('Content-Type', prometheusMetrics.register.contentType);
       const metrics = await prometheusMetrics.getMetrics();
       res.send(metrics);
@@ -215,14 +214,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       await storage.setActiveProfile(id);
-      
+
       // Get the newly activated profile and set its voice
       const activeProfile = await storage.getProfile(id);
       if (activeProfile && activeProfile.voiceId) {
         elevenlabsService.setVoiceId(activeProfile.voiceId);
         console.log(`🎵 Voice set to ${activeProfile.voiceId} for activated profile: ${activeProfile.name}`);
       }
-      
+
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: 'Failed to activate profile' });
@@ -260,18 +259,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { voiceId, voiceSettings } = req.body;
-      
+
       const updateData: any = {};
       if (voiceId !== undefined) updateData.voiceId = voiceId;
       if (voiceSettings !== undefined) updateData.voiceSettings = voiceSettings;
-      
+
       const profile = await storage.updateProfile(id, updateData);
-      
+
       // If this is the active profile, update the ElevenLabs service
       if (profile.isActive && profile.voiceId) {
         elevenlabsService.setVoiceId(profile.voiceId);
       }
-      
+
       res.json({
         voiceId: profile.voiceId,
         voiceSettings: profile.voiceSettings
@@ -287,7 +286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!voiceId) {
         return res.status(400).json({ error: 'Voice ID is required' });
       }
-      
+
       elevenlabsService.setVoiceId(voiceId);
       res.json({ success: true, voiceId });
     } catch (error) {
@@ -300,11 +299,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const conversationData = insertConversationSchema.parse(req.body);
       const conversation = await storage.createConversation(conversationData);
-      
+
       // Auto-rotate personality for new conversation (cluster-based)
       const { personalityController } = await import('./services/personalityController');
       await personalityController.rotateForNewConversation();
-      
+
       res.json(conversation);
     } catch (error) {
       res.status(400).json({ error: 'Invalid conversation data' });
@@ -366,20 +365,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { format = 'txt' } = req.body;
       const messages = await storage.getConversationMessages(id);
       const conversation = await storage.getConversationById(id);
-      
+
       if (format === 'json') {
         res.json({ conversation, messages });
       } else {
         let textContent = `Conversation: ${conversation?.title || 'Untitled'}\n`;
         textContent += `Date: ${conversation?.createdAt}\n`;
         textContent += `=`.repeat(60) + '\n\n';
-        
+
         messages.forEach((msg: any) => {
           const timestamp = new Date(msg.createdAt).toLocaleString();
           const speaker = msg.type === 'USER' ? 'You' : 'Nicky';
           textContent += `[${timestamp}] ${speaker}:\n${msg.content}\n\n`;
         });
-        
+
         res.setHeader('Content-Type', 'text/plain');
         res.setHeader('Content-Disposition', `attachment; filename="chat-${id}.txt"`);
         res.send(textContent);
@@ -393,7 +392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/chat', async (req, res) => {
     try {
       const { message, conversationId, mode, personalityControl } = req.body;
-      
+
       if (!message || !conversationId) {
         return res.status(400).json({ error: 'Message and conversation ID required' });
       }
@@ -405,36 +404,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 🎭 UNIFIED: Get personality with advisory chaos influence (non-mutating)
       const { personalityController } = await import('./services/personalityController');
-      
+
       // Get base personality from unified controller
       let basePersonality = await personalityController.getEffectivePersonality();
-      
+
       // Apply manual personality control override if provided
       if (personalityControl) {
         basePersonality = await personalityController.createTemporaryOverride(personalityControl);
         console.log(`🎭 Manual personality override applied:`, JSON.stringify(personalityControl));
       }
-      
+
       // Get current chaos state for advisory influence (logged, not applied)
       const chaosState = await chaosEngine.getCurrentState();
       const chaosAdvice = {
         level: chaosState.level,
         mode: chaosState.mode,
         suggestedIntensityDelta: chaosState.level >= 80 ? 1 : chaosState.level <= 20 ? -1 : 0,
-        suggestedSpiceCap: chaosState.mode === 'FAKE_PROFESSIONAL' ? 'platform_safe' : 
-                          chaosState.mode === 'FULL_PSYCHO' ? 'spicy' : undefined,
+        suggestedSpiceCap: chaosState.mode === 'FAKE_PROFESSIONAL' ? 'platform_safe' :
+          chaosState.mode === 'FULL_PSYCHO' ? 'spicy' : undefined,
         suggestedPreset: chaosState.mode === 'FULL_PSYCHO' ? 'Unhinged' :
-                        chaosState.mode === 'FAKE_PROFESSIONAL' ? 'Chill Nicky' :
-                        chaosState.mode === 'HYPER_FOCUSED' ? 'Patch Roast' : 
-                        chaosState.mode === 'CONSPIRACY' ? 'Storytime' : undefined
+          chaosState.mode === 'FAKE_PROFESSIONAL' ? 'Chill Nicky' :
+            chaosState.mode === 'HYPER_FOCUSED' ? 'Patch Roast' :
+              chaosState.mode === 'CONSPIRACY' ? 'Storytime' : undefined
       };
-      
+
       // Log chaos advice for transparency (but use base personality as-is)
       console.log(`🎲 Chaos advice: ${chaosAdvice.level}% ${chaosAdvice.mode} suggests ${chaosAdvice.suggestedPreset || 'no preset change'} with ${chaosAdvice.suggestedIntensityDelta > 0 ? 'higher' : chaosAdvice.suggestedIntensityDelta < 0 ? 'lower' : 'same'} intensity`);
-      
+
       const controls = basePersonality;
       console.log(`🎭 Using personality:`, JSON.stringify(controls));
-      
+
       // 🎯 CONTEXT-AWARE SWITCHING: Auto-switch preset based on message content
       const switchOccurred = await personalityController.applyContextualSwitch(message);
       if (switchOccurred) {
@@ -442,10 +441,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`🔄 Context-aware switch: ${controls.preset} → ${newPersonality.preset}`);
         Object.assign(controls, newPersonality);
       }
-      
+
       // Generate personality prompt with unified controls
       const { generatePersonalityPrompt } = await import('./types/personalityControl');
-      
+
       // 🚀 PERFORMANCE: Track timing for optimization measurement
       const perfTimers = {
         memoryRetrieval: 0,
@@ -454,19 +453,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         emotionTags: 0,
         total: Date.now()
       };
-      
+
       // 🚀 STREAMING OPTIMIZATION: Check response cache first
       const { responseCache } = await import('./services/responseCache');
       const cacheKey = responseCache.getCacheKey(message, mode, activeProfile.id);
-      
+
       if (responseCache.shouldCache(message, mode)) {
         const cachedResponse = await responseCache.get(cacheKey);
-        
+
         if (cachedResponse) {
           // Return cached response instantly
           perfTimers.total = Date.now() - perfTimers.total;
           console.log(`⚡ CACHE HIT: Instant response (${perfTimers.total}ms) - saved ~5-10s`);
-          
+
           return res.json({
             content: cachedResponse,
             processingTime: perfTimers.total,
@@ -479,10 +478,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 🚀 PARALLEL OPTIMIZATION: Load all context simultaneously
       // 🔥 PRE-WARMING: Uses cached data when available for instant access
       console.log(`🧠 Starting parallel context loading for: "${message}"`);
-      
+
       const isStreaming = mode === 'STREAMING';
       const contextStart = Date.now();
-      
+
       // 🎯 Load everything in parallel using Promise.all
       // 🔥 Training examples, podcast memories, and lore use pre-warmed cache when available
       const [
@@ -495,7 +494,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Memory retrieval (🚀 REDUCED: 15→8 for speed with Gemini 2.5 Pro)
         (async () => {
           try {
-            const memories = await anthropicService.retrieveContextualMemories(
+            const memories = await aiOrchestrator.retrieveContextualMemories(
               message,
               activeProfile.id,
               conversationId,
@@ -506,160 +505,160 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return { memories, enhanced: true, error: null };
           } catch (error) {
             console.warn('⚠️ Enhanced contextual search failed, falling back to hybrid search:', error);
-            
+
             try {
               const { embeddingService } = await import('./services/embeddingService');
               const hybridResults = await embeddingService.hybridSearch(message, activeProfile.id, 8);  // Also reduced
-              
+
               const semanticMemories = hybridResults.semantic.map(result => ({
                 ...result,
                 relevanceScore: result.similarity * 100,
                 searchMethod: 'semantic'
               }));
-              
+
               const keywordMemories = hybridResults.keyword.map(result => ({
-                ...result, 
+                ...result,
                 relevanceScore: 70,
                 searchMethod: 'keyword'
               }));
-              
+
               const seenIds = new Set();
               const combinedResults = [];
-              
+
               for (const result of semanticMemories) {
                 if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
                   seenIds.add(result.id);
                   combinedResults.push(result);
                 }
               }
-              
+
               for (const result of keywordMemories) {
                 if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
                   seenIds.add(result.id);
                   combinedResults.push(result);
                 }
               }
-              
+
               return { memories: combinedResults, enhanced: false, error: null };
             } catch (fallbackError) {
               console.warn('⚠️ Hybrid search also failed, using basic keyword search:', fallbackError);
               const fallbackResults = await storage.searchEnrichedMemoryEntries(activeProfile.id, message);
-              return { 
-                memories: fallbackResults.filter(m => (m.confidence || 50) >= 60), 
-                enhanced: false, 
-                error: fallbackError 
+              return {
+                memories: fallbackResults.filter(m => (m.confidence || 50) >= 60),
+                enhanced: false,
+                error: fallbackError
               };
             }
           }
         })(),
-        
+
         // Podcast-aware memories (🔥 uses pre-warmed cache, 🚀 REDUCED: 15→8)
         contextPrewarmer.getPodcastMemories(activeProfile.id, storage, mode),
-        
+
         // Document search
         documentProcessor.searchDocuments(activeProfile.id, message),
-        
+
         // Lore context (🔥 uses pre-warmed cache, skip for streaming)
         isStreaming ? Promise.resolve(undefined) : contextPrewarmer.getLoreContext(activeProfile.id, storage),
-        
+
         // Training examples (🔥 uses pre-warmed cache, fewer for streaming)
         contextPrewarmer.getTrainingExamples(activeProfile.id, storage)
       ]);
-      
+
       const parallelLoadTime = Date.now() - contextStart;
-      
+
       // Process memory results
       const searchBasedMemories = contextualMemoriesResult.memories;
       const enhancedSearchUsed = contextualMemoriesResult.enhanced;
-      
+
       perfTimers.memoryRetrieval = parallelLoadTime;
       perfTimers.contextLoading = parallelLoadTime;
-      
+
       const semanticCount = searchBasedMemories.filter(m => m.retrievalMethod?.includes('semantic')).length;
       const keywordCount = searchBasedMemories.filter(m => m.retrievalMethod?.includes('keyword')).length;
-      const avgContextualRelevance = searchBasedMemories.length > 0 
+      const avgContextualRelevance = searchBasedMemories.length > 0
         ? Math.round(searchBasedMemories.reduce((sum, m) => sum + (m.contextualRelevance || 0), 0) / searchBasedMemories.length * 100)
         : 0;
-      
+
       console.log(`🎯 Enhanced contextual search: ${semanticCount} semantic + ${keywordCount} keyword = ${searchBasedMemories.length} results (avg contextual relevance: ${avgContextualRelevance}%)`);
-      
+
       // Combine memories
       const seenIds = new Set(searchBasedMemories.map(m => m.id));
       const additionalMemories = podcastAwareMemories.filter(m => !seenIds.has(m.id));
       const relevantMemories = [...searchBasedMemories, ...additionalMemories.slice(0, 10)];
-      
+
       // Update retrieval tracking for all used memories
       for (const memory of relevantMemories) {
         await storage.incrementMemoryRetrieval(memory.id);
       }
-      
+
       console.log(`🚀 Parallel load complete: ${relevantMemories.length} memories + ${relevantDocs.length} docs + ${trainingExamples.length} training examples in ${parallelLoadTime}ms`);
-      
+
       // ✂️ SMART CONTEXT PRUNING: Remove redundant info already in recent conversation
       // Saves 1-2s by reducing tokens and preventing duplicate context
       const recentMessages = await contextPruner.getRecentMessages(conversationId, storage, 8);
       const memoryPruning = contextPruner.pruneMemories(relevantMemories, recentMessages, 8);
       const docPruning = contextPruner.pruneDocuments(relevantDocs, recentMessages, 8);
-      
+
       // Use pruned context for AI generation
       const prunedMemories = memoryPruning.pruned;
       const prunedDocs = docPruning.pruned;
       const totalTokensSaved = memoryPruning.stats.savings + docPruning.stats.savings;
-      
+
       console.log(`✂️  Total pruning: ${memoryPruning.stats.removed + docPruning.stats.removed} items removed, ~${totalTokensSaved} tokens saved`);
-      
+
       // Log confidence distribution for monitoring
       const confidenceStats = prunedMemories.length > 0 ? {
         min: Math.min(...prunedMemories.map(m => m.confidence || 50)),
         max: Math.max(...prunedMemories.map(m => m.confidence || 50)),
         avg: Math.round(prunedMemories.reduce((sum, m) => sum + (m.confidence || 50), 0) / prunedMemories.length)
       } : { min: 0, max: 0, avg: 0 };
-      
+
       // 📖 NEW: Track podcast content prioritization
       const podcastContentCount = additionalMemories.filter(m => (m as any).isPodcastContent).length;
       const modeLabel = mode === 'PODCAST' ? '🎙️  PODCAST MODE' : '💬 CHAT MODE';
-      
+
       console.log(`🧠 AI Context (${modeLabel}): ${searchBasedMemories.length} search-based + ${additionalMemories.slice(0, 10).length} context facts (${podcastContentCount} podcast-specific) (${prunedMemories.length} after pruning). Confidence: ${confidenceStats.min}-${confidenceStats.max}% (avg: ${confidenceStats.avg}%)`);
-      
+
       // 🌐 ENHANCED: Web search integration for current information
       // 🚀 OPTIMIZATION: Skip web search for STREAMING mode (use cached knowledge)
       let webSearchResults: any[] = [];
       let webSearchUsed = false;
-      
+
       if (!isStreaming) {
         try {
           const { webSearchService } = await import('./services/webSearchService');
-          
+
           // Intelligent decision: Should we search the web?
           const shouldSearch = await webSearchService.shouldTriggerSearch(
             relevantMemories,
             message,
             confidenceStats.avg
           );
-          
+
           if (shouldSearch) {
             console.log(`🔍 Triggering web search for: "${message}"`);
             console.log(`📊 Decision factors: ${relevantMemories.length} memories, ${confidenceStats.avg}% avg confidence`);
-            
+
             const searchResponse = await webSearchService.search(message);
-            
+
             if (searchResponse.results.length > 0) {
               webSearchResults = searchResponse.results.map(result => ({
-              title: result.title,
-              snippet: result.snippet,
-              url: result.url,
-              score: result.score,
-              source: 'web_search'
-            }));
-            webSearchUsed = true;
-            
-            console.log(`🌐 Web search: Found ${webSearchResults.length} results in ${searchResponse.searchTime}ms`);
+                title: result.title,
+                snippet: result.snippet,
+                url: result.url,
+                score: result.score,
+                source: 'web_search'
+              }));
+              webSearchUsed = true;
+
+              console.log(`🌐 Web search: Found ${webSearchResults.length} results in ${searchResponse.searchTime}ms`);
+            } else {
+              console.log(`🌐 Web search: No results found for "${message}"`);
+            }
           } else {
-            console.log(`🌐 Web search: No results found for "${message}"`);
+            console.log(`🚫 Web search skipped: sufficient context available (${relevantMemories.length} memories, ${confidenceStats.avg}% confidence)`);
           }
-        } else {
-          console.log(`🚫 Web search skipped: sufficient context available (${relevantMemories.length} memories, ${confidenceStats.avg}% confidence)`);
-        }
         } catch (error) {
           console.warn('⚠️ Web search failed:', error);
           webSearchUsed = false;
@@ -670,16 +669,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 🎭 Generate personality control prompt and log debug state
       const personalityPrompt = generatePersonalityPrompt(controls);
-      
+
       // Log debug state for transparency
       const { generateDebugState } = await import('./types/personalityControl');
       const debugState = generateDebugState(controls);
       console.log(`🎭 ${debugState}`);
-      
+
       if (trainingExamples.length > 0) {
         console.log(`📚 Using ${trainingExamples.length} training examples for response style guidance`);
       }
-      
+
       // 💾 CRITICAL: Store the USER message first (was missing, causing history bug)
       await storage.addMessage({
         conversationId,
@@ -690,10 +689,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`💾 Saved user message to database`);
 
       const aiStart = Date.now();
-      
+
       // Generate AI response with personality controls, lore context, mode awareness, web search results, and training examples
       // ✂️ Uses pruned memories/docs to reduce tokens and save processing time
-      const aiResponse = await anthropicService.generateResponse(
+      const aiResponse = await aiOrchestrator.generateResponse(
         message,
         activeProfile.coreIdentity,
         prunedMemories,
@@ -706,12 +705,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         personalityPrompt,
         trainingExamples
       );
-      
+
       perfTimers.aiGeneration = Date.now() - aiStart;
 
       // 🎭 Process response: strip debug patterns and add emotion tags
       let processedContent = aiResponse.content;
-      
+
       // Remove any debug headers that Claude might generate despite instructions
       processedContent = processedContent
         .replace(/\[NICKY STATE\][^\n]*/gi, '') // Remove debug state header
@@ -723,41 +722,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const { emotionTagGenerator } = await import('./services/emotionTagGenerator');
           const { elevenlabsService } = await import('./services/elevenlabs');
-          
+
           // 🚀 OPTIMIZATION: Use fast pattern-based arc for STREAMING (no AI call)
           const useFastMode = mode === 'STREAMING';
-          
+
           // Generate 5-stage emotional arc for natural progression
           const emotionalArc = await emotionTagGenerator.generateEmotionalArc({
             content: processedContent,
             personality: activeProfile.name,
             contentType: 'voice_response',
-            mood: controls.preset === 'Chill Nicky' ? 'relaxed' : 
-                  controls.preset === 'Roast Mode' ? 'aggressive' :
-                  controls.preset === 'Unhinged' ? 'chaotic' : 'balanced',
-            intensity: controls.intensity === 'low' ? 'low' : 
-                      controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
+            mood: controls.preset === 'Chill Nicky' ? 'relaxed' :
+              controls.preset === 'Roast Mode' ? 'aggressive' :
+                controls.preset === 'Unhinged' ? 'chaotic' : 'balanced',
+            intensity: controls.intensity === 'low' ? 'low' :
+              controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
           }, useFastMode);
-          
+
           perfTimers.emotionTags = Date.now() - emotionStart;
-          
+
           console.log(`🎭 Generated emotional arc${useFastMode ? ' (FAST)' : ''}: opening="${emotionalArc.opening}" rising="${emotionalArc.rising}" peak="${emotionalArc.peak}" falling="${emotionalArc.falling}" close="${emotionalArc.close}" [${perfTimers.emotionTags}ms]`);
-          
+
           // Strip ALL existing emotion tags to prevent duplication
           let cleanedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
-          
+
           // Apply emotional arc with natural progression
           const taggedContent = elevenlabsService.applyEmotionalArc(cleanedContent, emotionalArc);
-          
+
           processedContent = taggedContent;
           console.log(`🎭 Applied emotional arc with [bronx][emotion] double-tags for natural flow`);
-          
+
           console.log(`🎭 Final emotional arc: opening="${emotionalArc.opening}" rising="${emotionalArc.rising}" peak="${emotionalArc.peak}" falling="${emotionalArc.falling}" close="${emotionalArc.close}"`);
-          
+
         } catch (error) {
           console.warn('⚠️ Failed to generate emotion tags:', error);
           // Continue with original content if emotion tag generation fails
-          
+
           // Still add [bronx] for podcast mode if emotion tagging fails
           if (mode === 'PODCAST' && !processedContent.includes('[bronx]')) {
             processedContent = `[bronx] ${processedContent}`;
@@ -779,16 +778,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...aiResponse,
         content: processedContent
       };
-      
+
       // 🚀 PERFORMANCE SUMMARY
       perfTimers.total = Date.now() - perfTimers.total;
-      const savings = mode === 'STREAMING' 
+      const savings = mode === 'STREAMING'
         ? ` (🚀 OPTIMIZED: -${Math.round((perfTimers.memoryRetrieval + perfTimers.contextLoading + perfTimers.emotionTags) * 0.4)}ms estimated savings)`
         : '';
       console.log(`⚡ Performance: Memory=${perfTimers.memoryRetrieval}ms | Context=${perfTimers.contextLoading}ms | AI=${perfTimers.aiGeneration}ms | Emotions=${perfTimers.emotionTags}ms | TOTAL=${perfTimers.total}ms${savings}`);
       console.log(`✂️  Context Pruning: ${memoryPruning.stats.removed + docPruning.stats.removed} items removed | ~${totalTokensSaved} tokens saved | ${Math.round(totalTokensSaved * 0.0015)}ms estimated time saved`);
 
-      
+
       // 🚀 CACHE: Store cacheable responses for future requests
       if (responseCache.shouldCache(message, mode)) {
         responseCache.set(cacheKey, processedContent, mode);
@@ -809,7 +808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 📚 NEW: Auto-save high-quality messages as training examples
       try {
         const { messageTrainingCollector } = await import('./services/messageTrainingCollector');
-        
+
         // Evaluate in background (don't block response)
         setTimeout(async () => {
           try {
@@ -818,7 +817,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               conversationLength: messageCount + 1,
               hasPositiveRating: false // Will be updated if user rates
             });
-            
+
             if (quality.isQuality) {
               await messageTrainingCollector.saveMessageAsTraining(
                 storage,
@@ -844,7 +843,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (webSearchUsed && webSearchResults.length > 0) {
         try {
           const { webMemoryConsolidator } = await import('./services/webMemoryConsolidator');
-          
+
           // Evaluate and store valuable web search results in background
           setTimeout(async () => {
             try {
@@ -853,13 +852,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 message,
                 activeProfile.id
               );
-              
+
               if (candidates.length > 0) {
                 const storedCount = await webMemoryConsolidator.storeWebMemories(
                   candidates,
                   activeProfile.id
                 );
-                
+
                 if (storedCount > 0) {
                   console.log(`💾 Background consolidation: Stored ${storedCount} web search results as memories`);
                 }
@@ -881,7 +880,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const messageCount = (await storage.getConversationMessages(conversationId)).length;
       if (messageCount === 2) { // First exchange complete (1 user + 1 AI)
         try {
-          const title = await geminiService.generateConversationTitle(message, response.content);
+          const title = await aiOrchestrator.generateConversationTitle(message, response.content);
           await storage.updateConversationTitle(conversationId, title);
           console.log(`📝 Generated conversation title: "${title}"`);
         } catch (error) {
@@ -900,13 +899,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/enhance-text', async (req, res) => {
     try {
       const { text, mode, characterContext } = req.body;
-      
+
       if (!text) {
         return res.status(400).json({ error: 'Text is required' });
       }
 
       let enhancedText: string;
-      
+
       if (mode === 'quick') {
         // Fast pattern-based enhancement
         enhancedText = emotionEnhancer.quickEnhance(text);
@@ -917,7 +916,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('🎭 AI emotion enhancement applied');
       }
 
-      res.json({ 
+      res.json({
         original: text,
         enhanced: enhancedText,
         mode: mode || 'ai'
@@ -931,7 +930,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/enhance-message', async (req, res) => {
     try {
       const { conversationId, messageIndex, mode } = req.body;
-      
+
       if (!conversationId || messageIndex === undefined) {
         return res.status(400).json({ error: 'Conversation ID and message index are required' });
       }
@@ -939,7 +938,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get conversation messages
       const messages = await storage.getConversationMessages(conversationId);
       const message = messages[messageIndex];
-      
+
       if (!message) {
         return res.status(404).json({ error: 'Message not found' });
       }
@@ -950,22 +949,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let enhancedContent: string;
-      
+
       if (mode === 'quick') {
         enhancedContent = emotionEnhancer.quickEnhance(message.content);
         console.log(`⚡ Quick enhanced message at index ${messageIndex}`);
       } else {
         // Get personality context for better enhancement
         const activeProfile = await storage.getActiveProfile();
-        const characterContext = activeProfile ? 
-          `Nicky "Noodle Arms" A.I. Dente - unhinged Italian-American podcaster from the Bronx` : 
+        const characterContext = activeProfile ?
+          `Nicky "Noodle Arms" A.I. Dente - unhinged Italian-American podcaster from the Bronx` :
           undefined;
-        
+
         enhancedContent = await emotionEnhancer.enhanceText(message.content, characterContext);
         console.log(`🎭 AI enhanced message at index ${messageIndex}`);
       }
 
-      res.json({ 
+      res.json({
         messageIndex,
         original: message.content,
         enhanced: enhancedContent,
@@ -982,11 +981,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { rating } = req.body; // 1 = thumbs down, 2 = thumbs up
-      
+
       if (!rating || ![1, 2].includes(rating)) {
         return res.status(400).json({ error: 'Rating must be 1 (thumbs down) or 2 (thumbs up)' });
       }
-      
+
       await storage.updateMessageRating(id, rating);
       res.json({ success: true });
     } catch (error) {
@@ -1022,25 +1021,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate request body
       const validationResult = ttsRequestSchema.safeParse(req.body);
       if (!validationResult.success) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'Invalid request parameters',
           details: validationResult.error.format()
         });
       }
 
-      const { 
-        text, 
-        emotionProfile, 
-        contentType, 
-        personality, 
-        mood, 
-        useAI 
+      const {
+        text,
+        emotionProfile,
+        contentType,
+        personality,
+        mood,
+        useAI
       } = validationResult.data;
 
       // Get active profile and use its voice settings
       const activeProfile = await storage.getActiveProfile();
       let voiceSettings;
-      
+
       if (activeProfile && activeProfile.voiceSettings) {
         voiceSettings = activeProfile.voiceSettings;
         // Also ensure the voice ID is set
@@ -1059,12 +1058,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Use AI emotion tags for ads, hardcoded for other content types
       const audioBuffer = await elevenlabsService.synthesizeSpeech(
-        text, 
-        emotionProfile, 
+        text,
+        emotionProfile,
         voiceSettings,
         context
       );
-      
+
       res.setHeader('Content-Type', 'audio/mpeg');
       res.setHeader('Content-Length', audioBuffer.length);
       res.send(audioBuffer);
@@ -1128,26 +1127,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       (async () => {
         try {
           await documentStageTracker.updateStage(document.id, 'text_extraction', 'processing');
-          
+
           // Original document processing
           await documentProcessor.processDocument(document.id, fileBuffer);
-          
+
           await documentStageTracker.updateStage(document.id, 'text_extraction', 'completed');
-          
+
           // 🔢 NEW: Generate embedding for semantic search
           const doc = await storage.getDocument(document.id);
           if (doc?.extractedContent) {
             await documentStageTracker.updateStage(document.id, 'embedding_generation', 'processing');
-            
+
             const embedding = await embeddingService.generateEmbedding(doc.extractedContent);
             await storage.updateDocument(document.id, {
               embedding: JSON.stringify(embedding.embedding),
               embeddingModel: embedding.model,
               embeddingUpdatedAt: new Date()
             });
-            
+
             await documentStageTracker.updateStage(document.id, 'embedding_generation', 'completed');
-            
+
             // 🎮 NEW: Check if this is patch notes and process accordingly
             const { patchNotesProcessor } = await import('./services/patchNotesProcessor');
             const patchResult = await patchNotesProcessor.processPatchNotes(
@@ -1156,10 +1155,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               doc.extractedContent,
               document.id
             );
-            
+
             if (patchResult.success) {
               console.log(`🎮 Processed ${patchResult.game} patch ${patchResult.version}: ${patchResult.changesStored} changes stored`);
-              
+
               // Note: Document already has processingMetadata field for patch info
               // No need to update - it's tracked in memory entries
             }
@@ -1168,9 +1167,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('Document processing error:', error);
           await storage.updateDocument(document.id, { processingStatus: 'FAILED' as const });
           await documentStageTracker.updateStage(
-            document.id, 
-            'text_extraction', 
-            'failed', 
+            document.id,
+            'text_extraction',
+            'failed',
             { error: (error as Error).message }
           );
         }
@@ -1228,7 +1227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/training-examples', async (req: Request, res: Response) => {
     try {
       const { text, name } = req.body;
-      
+
       if (!text || text.trim().length === 0) {
         return res.status(400).json({ error: 'Text content is required' });
       }
@@ -1268,26 +1267,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { messageId } = req.params;
       const activeProfile = await storage.getActiveProfile();
-      
+
       if (!activeProfile) {
         return res.status(400).json({ error: 'No active profile found' });
       }
-      
+
       // Get the message and its conversation
       const message = await storage.getMessage(messageId);
       if (!message) {
         return res.status(404).json({ error: 'Message not found' });
       }
-      
+
       if (message.type !== 'AI') {
         return res.status(400).json({ error: 'Only AI messages can be saved as training examples' });
       }
-      
+
       // Get conversation messages for context
       const messages = await storage.getConversationMessages(message.conversationId);
       const messageIndex = messages.findIndex(m => m.id === messageId);
       const userMessage = messageIndex > 0 ? messages[messageIndex - 1] : undefined;
-      
+
       // Use training collector to save
       const { messageTrainingCollector } = await import('./services/messageTrainingCollector');
       await messageTrainingCollector.saveMessageAsTraining(
@@ -1300,31 +1299,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
           mode: (message as any).metadata?.mode || 'CHAT'
         }
       );
-      
+
       res.json({ success: true, message: 'Message saved as training example' });
     } catch (error) {
       console.error('Failed to save message as training:', error);
       res.status(500).json({ error: 'Failed to save message as training example' });
     }
   });
-  
+
   // 📚 NEW: Batch process conversation messages for training
   app.post('/api/conversations/:conversationId/extract-training', async (req, res) => {
     try {
       const { conversationId } = req.params;
       const activeProfile = await storage.getActiveProfile();
-      
+
       if (!activeProfile) {
         return res.status(400).json({ error: 'No active profile found' });
       }
-      
+
       const { messageTrainingCollector } = await import('./services/messageTrainingCollector');
       const result = await messageTrainingCollector.processConversationMessages(
         storage,
         conversationId,
         activeProfile.id
       );
-      
+
       res.json({
         success: true,
         saved: result.saved,
@@ -1341,23 +1340,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/patch-notes/process', async (req, res) => {
     try {
       const { text, game, version } = req.body;
-      
+
       if (!text || typeof text !== 'string') {
         return res.status(400).json({ error: 'Text content required' });
       }
-      
+
       const activeProfile = await storage.getActiveProfile();
       if (!activeProfile) {
         return res.status(400).json({ error: 'No active profile found' });
       }
-      
+
       const { patchNotesProcessor } = await import('./services/patchNotesProcessor');
       const result = await patchNotesProcessor.processPatchNotes(
         storage,
         activeProfile.id,
         text
       );
-      
+
       if (!result.success) {
         return res.json({
           success: false,
@@ -1365,7 +1364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isPatches: false
         });
       }
-      
+
       res.json({
         success: true,
         game: result.game,
@@ -1373,7 +1372,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         changesStored: result.changesStored,
         message: `Processed ${result.game} patch ${result.version}: ${result.changesStored} changes stored`
       });
-      
+
     } catch (error) {
       console.error('Failed to process patch notes:', error);
       res.status(500).json({ error: 'Failed to process patch notes' });
@@ -1427,7 +1426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Use AI to extract key patterns from the training example
-      const extractedPatterns = await anthropicService.extractPersonalityPatterns(
+      const extractedPatterns = await aiOrchestrator.extractPersonalityPatterns(
         trainingExample.extractedContent
       );
 
@@ -1439,10 +1438,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         coreIdentity: updatedIdentity
       });
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         patterns: extractedPatterns,
-        message: 'Training example patterns merged into core personality' 
+        message: 'Training example patterns merged into core personality'
       });
     } catch (error) {
       console.error('Merge personality error:', error);
@@ -1460,9 +1459,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { StyleConsolidator } = await import('./services/styleConsolidator.js');
       const consolidator = new StyleConsolidator(storage);
-      
+
       const consolidation = await consolidator.analyzeAndConsolidate(activeProfile.id);
-      
+
       // Save to database
       const saved = await storage.createConsolidatedPersonality({
         profileId: activeProfile.id,
@@ -1550,9 +1549,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!document) {
         return res.status(404).json({ error: 'Document not found' });
       }
-      res.json({ 
-        ...document, 
-        content: document.extractedContent || 'No content available' 
+      res.json({
+        ...document,
+        content: document.extractedContent || 'No content available'
       });
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch document' });
@@ -1589,14 +1588,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 🚀 Start background processing (returns immediately)
       await documentProcessor.startBackgroundProcessing(
-        activeProfile.id, 
-        document.extractedContent, 
-        document.filename, 
+        activeProfile.id,
+        document.extractedContent,
+        document.filename,
         document.id
       );
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         status: 'processing',
         message: 'Fact extraction started in background. Check document status for progress.',
         documentId: id
@@ -1658,8 +1657,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mood: 'NEUTRAL'
       });
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         title: contentEntry.title,
         category: contentEntry.category,
         message: 'Document content has been saved to content library'
@@ -1704,7 +1703,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { title, content, category, mood, tags } = req.body;
-      
+
       const updates: any = {};
       if (title) updates.title = title;
       if (content) updates.content = content;
@@ -1716,7 +1715,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!updatedEntry) {
         return res.status(404).json({ error: 'Content not found' });
       }
-      
+
       res.json(updatedEntry);
     } catch (error) {
       console.error('Content library update error:', error);
@@ -1758,7 +1757,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (typeof content !== 'string') {
         return res.status(400).json({ error: 'Content must be a string' });
       }
-      
+
       const notesPath = path.join(process.cwd(), 'NOTES.md');
       await fs.writeFile(notesPath, content, 'utf8');
       res.json({ success: true });
@@ -1795,13 +1794,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { source } = req.params;
       const { sourceId } = req.query;
-      
+
       const entries = await storage.getMemoryEntriesBySource(
-        activeProfile.id, 
-        source, 
+        activeProfile.id,
+        source,
         sourceId as string | undefined
       );
-      
+
       res.json(entries);
     } catch (error) {
       console.error('Failed to fetch memories by source:', error);
@@ -1813,7 +1812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/memory/entries/:id', async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       // Verify active profile exists
       const activeProfile = await storage.getActiveProfile();
       if (!activeProfile) {
@@ -1822,14 +1821,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Delete the memory entry directly
       await storage.deleteMemoryEntry(id);
-      
+
       console.log(`🗑️ Deleted memory entry with ID: ${id}`);
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: 'Memory entry deleted successfully',
         deletedEntry: { id }
       });
-      
+
     } catch (error) {
       console.error('Failed to delete memory entry:', error);
       res.status(500).json({ error: 'Failed to delete memory entry' });
@@ -1840,7 +1839,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/entries/batch-delete', async (req, res) => {
     try {
       const { ids } = req.body;
-      
+
       if (!Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ error: 'Invalid or empty ids array' });
       }
@@ -1859,14 +1858,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error(`Failed to delete memory ${id}:`, error);
         }
       }
-      
+
       console.log(`🗑️ Batch deleted ${deletedCount} memory entries`);
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         deletedCount,
         message: `Successfully deleted ${deletedCount} memory entries`
       });
-      
+
     } catch (error) {
       console.error('Batch delete failed:', error);
       res.status(500).json({ error: 'Failed to batch delete memory entries' });
@@ -1877,7 +1876,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/entries/batch-update-importance', async (req, res) => {
     try {
       const { ids, importance } = req.body;
-      
+
       if (!Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ error: 'Invalid or empty ids array' });
       }
@@ -1900,14 +1899,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             inArray(memoryEntries.id, ids)
           )
         );
-      
+
       console.log(`📊 Updated importance to ${importance} for ${ids.length} memory entries`);
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         updatedCount: ids.length,
         message: `Successfully updated importance for ${ids.length} memory entries`
       });
-      
+
     } catch (error) {
       console.error('Batch update importance failed:', error);
       res.status(500).json({ error: 'Failed to batch update importance' });
@@ -1918,7 +1917,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/entries/batch-update-type', async (req, res) => {
     try {
       const { ids, type } = req.body;
-      
+
       if (!Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ error: 'Invalid or empty ids array' });
       }
@@ -1942,14 +1941,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             inArray(memoryEntries.id, ids)
           )
         );
-      
+
       console.log(`🏷️ Updated type to ${type} for ${ids.length} memory entries`);
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         updatedCount: ids.length,
         message: `Successfully updated type for ${ids.length} memory entries`
       });
-      
+
     } catch (error) {
       console.error('Batch update type failed:', error);
       res.status(500).json({ error: 'Failed to batch update type' });
@@ -1971,21 +1970,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const entry of entries) {
         const content = entry.content.toLowerCase();
         const isFromDocument = entry.source?.startsWith('ai-extract:') || entry.source?.startsWith('document:');
-        
+
         if (isFromDocument && entry.type === 'PREFERENCE') {
           // Look for patterns that suggest user preferences stored as Nicky's
           const suspiciousPatterns = [
-            'nicky mains ', 
+            'nicky mains ',
             'nicky prefers ',
             'nicky likes ',
             'nicky\'s primary killer',
             'nicky uses '
           ];
-          
+
           const matchesPattern = suspiciousPatterns.some(pattern => content.includes(pattern));
-          const lacksNickyContext = !content.includes('nicky said') && !content.includes('nicky mentioned') && 
-                                  !content.includes('nicky states') && !content.includes('according to nicky');
-          
+          const lacksNickyContext = !content.includes('nicky said') && !content.includes('nicky mentioned') &&
+            !content.includes('nicky states') && !content.includes('according to nicky');
+
           if (matchesPattern && lacksNickyContext) {
             await storage.deleteMemoryEntry(entry.id);
             deletedCount++;
@@ -1994,9 +1993,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json({ 
+      res.json({
         message: `Cleaned up ${deletedCount} potentially misattributed memories`,
-        deletedCount 
+        deletedCount
       });
     } catch (error) {
       console.error('Memory cleanup error:', error);
@@ -2046,7 +2045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`✅ Deduplication complete: Removed ${deletedCount} duplicate entries`);
-      res.json({ 
+      res.json({
         message: `Removed ${deletedCount} duplicate memory entries`,
         deletedCount,
         totalEntries: entries.length,
@@ -2069,13 +2068,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Clean up hardcoded characters from lore system
       const charactersDeleted = await storage.db.delete(loreCharacters)
         .where(eq(loreCharacters.profileId, activeProfile.id));
-        
+
       const eventsDeleted = await storage.db.delete(loreEvents)
         .where(eq(loreEvents.profileId, activeProfile.id));
 
       console.log('Cleaned up hardcoded lore characters and events');
 
-      res.json({ 
+      res.json({
         message: 'Cleaned up hardcoded lore characters and events that were causing character conflicts',
         charactersDeleted: charactersDeleted.rowCount || 0,
         eventsDeleted: eventsDeleted.rowCount || 0
@@ -2099,7 +2098,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch memory stats' });
     }
   });
-  
+
   // 🚀 Response cache stats endpoint
   app.get('/api/cache/stats', async (req, res) => {
     try {
@@ -2110,7 +2109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch cache stats' });
     }
   });
-  
+
   // 🚀 Clear response cache endpoint
   app.post('/api/cache/clear', async (req, res) => {
     try {
@@ -2139,7 +2138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!activeProfile) {
         return res.status(400).json({ error: 'No active profile found' });
       }
-      
+
       await contextPrewarmer.refresh(activeProfile.id, storage);
       const stats = contextPrewarmer.getStats();
       res.json({ success: true, message: 'Pre-warmed cache refreshed', stats });
@@ -2151,7 +2150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/consolidate', async (req, res) => {
     try {
       const { conversationId } = req.body;
-      
+
       if (!conversationId) {
         return res.status(400).json({ error: 'Conversation ID required' });
       }
@@ -2163,15 +2162,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get recent messages for consolidation
       const recentMessages = await storage.getRecentMessages(conversationId, 10);
-      
+
       if (recentMessages.length === 0) {
         return res.json({ message: 'No messages to consolidate' });
       }
 
       // Use Claude to consolidate memories
       console.log(`💬 Memory consolidation: Processing ${recentMessages.length} recent messages`);
-      const consolidatedMemories = await anthropicService.consolidateMemories(recentMessages);
-      
+      const consolidatedMemories = await aiOrchestrator.consolidateMemories(recentMessages);
+
       // Store the consolidated memories with confidence based on conversation context
       for (const memory of consolidatedMemories) {
         await storage.addMemoryEntry({
@@ -2186,9 +2185,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      res.json({ 
+      res.json({
         message: `Consolidated ${consolidatedMemories.length} memories`,
-        memories: consolidatedMemories 
+        memories: consolidatedMemories
       });
     } catch (error) {
       console.error('Memory consolidation error:', error);
@@ -2205,11 +2204,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get count before clearing
       const stats = await storage.getMemoryStats(activeProfile.id);
-      
+
       // Clear existing memories
       await storage.clearProfileMemories(activeProfile.id);
 
-      res.json({ 
+      res.json({
         message: `Cleared ${stats.totalFacts} memory entries`,
         clearedCount: stats.totalFacts
       });
@@ -2222,7 +2221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/deep-scan-duplicates', async (req, res) => {
     let results;
     let scanCompleted = false;
-    
+
     try {
       const activeProfile = await storage.getActiveProfile();
       if (!activeProfile) {
@@ -2230,12 +2229,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { scanDepth = 100, similarityThreshold = 0.90 } = req.body;
-      
+
       // Validate scanDepth
       const validDepths = [100, 500, 1000, 'ALL'];
       if (!validDepths.includes(scanDepth)) {
-        return res.status(400).json({ 
-          error: `Invalid scan depth. Must be one of: ${validDepths.join(', ')}` 
+        return res.status(400).json({
+          error: `Invalid scan depth. Must be one of: ${validDepths.join(', ')}`
         });
       }
 
@@ -2247,7 +2246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         scanDepth,
         similarityThreshold
       );
-      
+
       scanCompleted = true;
       console.log(`✅ Scan completed: ${results.duplicateGroups.length} groups, ${results.totalDuplicates} duplicates`);
 
@@ -2268,7 +2267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For large scans, reduce preview size to help with database performance
       const isLargeScan = results.totalDuplicates > 200;
       const previewLength = isLargeScan ? 150 : 280;
-      
+
       if (isLargeScan) {
         console.log(`📦 Large scan detected (${results.totalDuplicates} duplicates), using shorter previews (${previewLength} chars)`);
       }
@@ -2287,7 +2286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Try to save scan results to database (may timeout on large scans)
       let savedScanId = null;
       let savedSuccessfully = true;
-      
+
       try {
         // Set a 15-second timeout for the save operation
         const savePromise = (async () => {
@@ -2322,9 +2321,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`💾 Saved scan results to database: ID ${savedScanId}`);
       } catch (saveError: any) {
         savedSuccessfully = false;
-        const timeoutDetected = saveError?.code === '57P01' || 
-                                saveError?.code === '57014' || 
-                                saveError?.message?.includes('timeout');
+        const timeoutDetected = saveError?.code === '57P01' ||
+          saveError?.code === '57014' ||
+          saveError?.message?.includes('timeout');
         const reason = timeoutDetected ? 'database timeout (large dataset)' : saveError?.message;
         console.warn(`⚠️ Failed to save scan results to database (${reason})`);
         console.warn('   Returning results to client anyway - they can still work with them in-memory');
@@ -2343,11 +2342,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error('Deep duplicate scan error:', error);
-      
+
       // If scan completed but only saving failed, return partial success
       if (scanCompleted && results) {
         console.log('⚠️ Scan completed successfully but response failed - returning results anyway');
-        
+
         // Recreate standardized groups for error case
         const standardizedGroups = results.duplicateGroups.map((group) => ({
           masterId: group.masterId,
@@ -2361,7 +2360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             similarity: dup.similarity ?? 1
           }))
         }));
-        
+
         return res.json({
           success: true,
           scanId: null,
@@ -2373,7 +2372,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           duplicateGroups: standardizedGroups
         });
       }
-      
+
       res.status(500).json({ error: 'Failed to perform deep duplicate scan' });
     }
   });
@@ -2414,9 +2413,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const allIds = Array.from(idSet);
         const entries = allIds.length > 0
           ? await db
-              .select()
-              .from(memoryEntries)
-              .where(inArray(memoryEntries.id, allIds))
+            .select()
+            .from(memoryEntries)
+            .where(inArray(memoryEntries.id, allIds))
           : [];
 
         const entryMap = new Map(entries.map((entry) => [entry.id, entry]));
@@ -2425,13 +2424,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const masterEntry = entryMap.get(summary.masterId);
           const safeMaster = masterEntry
             ? {
-                id: masterEntry.id,
-                content: masterEntry.content,
-                source: masterEntry.source ?? null,
-                createdAt: masterEntry.createdAt,
-                confidence: masterEntry.confidence ?? null,
-                importance: masterEntry.importance ?? null,
-              }
+              id: masterEntry.id,
+              content: masterEntry.content,
+              source: masterEntry.source ?? null,
+              createdAt: masterEntry.createdAt,
+              confidence: masterEntry.confidence ?? null,
+              importance: masterEntry.importance ?? null,
+            }
             : undefined;
 
           const duplicates = summary.duplicates.map((dup) => {
@@ -2517,11 +2516,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         importance: m.importance || 1,
         source: m.source || 'unknown'
       }));
-      const optimizedMemories = await geminiService.consolidateAndOptimizeMemories(memoriesForOptimization);
-      
+      const optimizedMemories = await aiOrchestrator.consolidateAndOptimizeMemories(memoriesForOptimization);
+
       // Clear existing memories and replace with optimized ones
       await storage.clearProfileMemories(activeProfile.id);
-      
+
       // Add optimized memories back with high confidence (since they came from high-confidence sources)
       for (const memory of optimizedMemories) {
         await storage.addMemoryEntry({
@@ -2536,7 +2535,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      res.json({ 
+      res.json({
         message: `Knowledge base optimized: ${reliableMemories.length} → ${optimizedMemories.length} entries`,
         beforeCount: reliableMemories.length,
         afterCount: optimizedMemories.length
@@ -2557,16 +2556,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all completed documents for the active profile
       const documents = await storage.getProfileDocuments(activeProfile.id);
       const completedDocs = documents.filter(doc => doc.processingStatus === 'COMPLETED');
-      
+
       let processedCount = 0;
-      
+
       for (const document of completedDocs) {
         try {
           if (document.extractedContent) {
             // Re-extract knowledge using hierarchical logic (prevents orphaned facts)
-            await documentProcessor.extractAndStoreKnowledge(
-              activeProfile.id, 
-              document.extractedContent, 
+            await documentProcessor.extractAndStoreHierarchicalKnowledge(
+              activeProfile.id,
+              document.extractedContent,
               document.filename,
               document.id
             );
@@ -2577,7 +2576,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json({ 
+      res.json({
         message: `Reprocessed ${processedCount} documents`,
         processedCount,
         totalDocuments: completedDocs.length
@@ -2609,11 +2608,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { eventType } = req.body;
       const validEvents = ['death', 'win', 'trolled', 'compliment', 'random'];
-      
+
       if (!validEvents.includes(eventType)) {
         return res.status(400).json({ error: 'Invalid event type' });
       }
-      
+
       await chaosEngine.triggerChaosEvent(eventType);
       const newState = await chaosEngine.getCurrentState();
       res.json(newState);
@@ -2626,11 +2625,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/chaos/override', async (req, res) => {
     try {
       const { level } = req.body;
-      
+
       if (typeof level !== 'number' || level < 0 || level > 100) {
         return res.status(400).json({ error: 'Level must be a number between 0 and 100' });
       }
-      
+
       await chaosEngine.setManualOverride(level);
       const newState = await chaosEngine.getCurrentState();
       res.json({
@@ -2647,11 +2646,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/chaos/set-level', async (req, res) => {
     try {
       const { level } = req.body;
-      
+
       if (typeof level !== 'number' || level < 0 || level > 100) {
         return res.status(400).json({ error: 'Level must be a number between 0 and 100' });
       }
-      
+
       await chaosEngine.setBaseLevel(level);
       const newState = await chaosEngine.getCurrentState();
       res.json({
@@ -2680,22 +2679,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { personalityController } = await import('./services/personalityController');
       const { preset, intensity, dbdLens, spice } = req.body;
-      
+
       // Validate input
       const validPresets = ['Chill Nicky', 'Roast Mode', 'Unhinged', 'Patch Roast', 'Storytime', 'Caller War'];
       const validIntensities = ['low', 'med', 'high', 'ultra'];
       const validSpices = ['platform_safe', 'normal', 'spicy'];
-      
+
       const updates: any = {};
       if (preset && validPresets.includes(preset)) updates.preset = preset;
       if (intensity && validIntensities.includes(intensity)) updates.intensity = intensity;
       if (typeof dbdLens === 'boolean') updates.dbd_lens = dbdLens;
       if (spice && validSpices.includes(spice)) updates.spice = spice;
-      
+
       if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: 'No valid personality updates provided' });
       }
-      
+
       const newState = await personalityController.updatePersonality(updates, 'manual');
       res.json({
         ...newState,
@@ -2711,14 +2710,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { personalityController } = await import('./services/personalityController');
       const { preset, intensity, dbdLens, spice } = req.body;
-      
+
       // Create temporary override for one response
       const overrides: any = {};
       if (preset) overrides.preset = preset;
       if (intensity) overrides.intensity = intensity;
       if (typeof dbdLens === 'boolean') overrides.dbd_lens = dbdLens;
       if (spice) overrides.spice = spice;
-      
+
       const temporaryPersonality = await personalityController.createTemporaryOverride(overrides);
       res.json({
         temporaryPersonality,
@@ -2734,18 +2733,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { personalityController } = await import('./services/personalityController');
       const { intensityDelta, spiceCap, presetSuggestion, reason } = req.body;
-      
+
       if (!reason) {
         return res.status(400).json({ error: 'Reason required for chaos influence' });
       }
-      
+
       const influence = {
         intensityDelta: intensityDelta || 0,
         spiceCap,
         presetSuggestion,
         reason
       };
-      
+
       const newState = await personalityController.applyChaosInfluence(influence);
       res.json({
         ...newState,
@@ -2775,7 +2774,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/evolutionary-optimization', async (req, res) => {
     try {
       const { profileId } = req.body;
-      
+
       if (!profileId) {
         return res.status(400).json({ error: 'Profile ID required' });
       }
@@ -2783,10 +2782,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get only high-confidence memories for evolutionary optimization
       const reliableMemories = await storage.getReliableMemoriesForAI(profileId, 1000);
       console.log(`🧬 Evolutionary optimization: Using ${reliableMemories.length} high-confidence memories (≥60% confidence)`);
-      
+
       // Run the revolutionary optimization with reliable data only
       const result = await evolutionaryAI.evolutionaryOptimization(reliableMemories);
-      
+
       // Store the optimized facts back (in a real system, you'd want to backup first)
       // For now, let's just return the results
       res.json({
@@ -2811,7 +2810,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/memory/evolution-metrics', async (req, res) => {
     try {
       let profileId = req.query.profileId as string;
-      
+
       // Always get the active profile (same as memory stats endpoint)
       const activeProfile = await storage.getActiveProfile();
       if (!activeProfile) {
@@ -2821,17 +2820,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get memory entries for the active profile
       const memories = await storage.getMemoryEntries(profileId);
-      
+
       // Calculate current evolution metrics
       const totalFacts = memories.length;
-      const avgQuality = totalFacts > 0 ? 
+      const avgQuality = totalFacts > 0 ?
         memories.reduce((sum, m) => sum + (m.qualityScore || 5), 0) / totalFacts : 5;
-      const avgImportance = totalFacts > 0 ? 
+      const avgImportance = totalFacts > 0 ?
         memories.reduce((sum, m) => sum + (m.importance || 1), 0) / totalFacts : 1;
-      const recentlyUsed = memories.filter(m => m.lastUsed && 
+      const recentlyUsed = memories.filter(m => m.lastUsed &&
         new Date(m.lastUsed).getTime() > Date.now() - (7 * 24 * 60 * 60 * 1000)
       ).length;
-      
+
       const metrics = {
         totalFacts,
         avgQualityScore: Number(avgQuality.toFixed(1)),
@@ -2841,7 +2840,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastOptimization: 'Never', // Would track this in production
         readyForOptimization: totalFacts > 100 // Suggest optimization if lots of facts
       };
-      
+
       res.json(metrics);
     } catch (error) {
       res.status(500).json({ error: 'Failed to get evolution metrics' });
@@ -2913,7 +2912,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const hasUserMarkers = /(\byou\s|user:|^### |^> |what|how|why|hey nicky)/i.test(fact.content);
         const hasAIMarkers = /(nicky|assistant:|dente|noodle arms)/i.test(content);
         const isLong = fact.content.length > 300;
-        
+
         return hasUserMarkers && hasAIMarkers && isLong;
       });
 
@@ -2926,7 +2925,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           // Parse the fact content to extract only Nicky's parts
           const nickyContent = conversationParser.extractFactRelevantContent(fact.content, fact.source || 'unknown');
-          
+
           // Only include if we can extract something meaningful and different
           if (nickyContent && nickyContent.trim() !== fact.content.trim() && nickyContent.length > 20) {
             previews.push({
@@ -2945,7 +2944,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json({ 
+      res.json({
         success: true,
         totalFound: wallOfTextFacts.length,
         previewsAvailable: previews.length,
@@ -2961,7 +2960,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/apply-cleaning', async (req, res) => {
     try {
       const { selectedFactIds } = req.body;
-      
+
       if (!selectedFactIds || !Array.isArray(selectedFactIds) || selectedFactIds.length === 0) {
         return res.status(400).json({ error: 'No fact IDs provided' });
       }
@@ -2985,13 +2984,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           // Parse the fact content to extract only Nicky's parts
           const nickyContent = conversationParser.extractFactRelevantContent(fact.content, fact.source || 'unknown');
-          
+
           // Only update if we actually extracted something meaningful and different
           if (nickyContent && nickyContent.trim() !== fact.content.trim() && nickyContent.length > 20) {
             // Update the fact with cleaned content using SQL update
             await db
               .update(memoryEntries)
-              .set({ 
+              .set({
                 content: nickyContent.substring(0, 500), // Limit to 500 chars max
                 updatedAt: sql`now()`
               })
@@ -3004,10 +3003,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json({ 
+      res.json({
         success: true,
         message: `Successfully applied cleaning to ${applied} facts`,
-        applied 
+        applied
       });
     } catch (error) {
       console.error('Apply cleaning error:', error);
@@ -3030,7 +3029,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const hasUserMarkers = /(\byou\s|user:|^### |^> |what|how|why|hey nicky)/i.test(fact.content);
         const hasAIMarkers = /(nicky|assistant:|dente|noodle arms)/i.test(content);
         const isLong = fact.content.length > 300;
-        
+
         return hasUserMarkers && hasAIMarkers && isLong;
       });
 
@@ -3046,13 +3045,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           // Parse the fact content to extract only Nicky's parts
           const nickyContent = conversationParser.extractFactRelevantContent(fact.content, fact.source || 'unknown');
-          
+
           // Only update if we actually extracted something meaningful and different
           if (nickyContent && nickyContent.trim() !== fact.content.trim() && nickyContent.length > 20) {
             // Update the fact with cleaned content using SQL update
             await db
               .update(memoryEntries)
-              .set({ 
+              .set({
                 content: nickyContent.substring(0, 500), // Limit to 500 chars max
                 updatedAt: sql`now()`
               })
@@ -3065,10 +3064,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json({ 
+      res.json({
         message: `Successfully reprocessed ${cleaned} wall-of-text facts`,
         totalFound: wallOfTextFacts.length,
-        cleaned 
+        cleaned
       });
     } catch (error) {
       console.error('Fact reprocessing error:', error);
@@ -3103,7 +3102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 🔒 CRITICAL: Check if scan is already running (prevents infinite loops!)
       const scanStatus = smartContradictionDetector.checkScanStatus(activeProfile.id);
-      
+
       if (!scanStatus.canRun) {
         console.log(`🔒 Scan already ${scanStatus.status} for profile ${activeProfile.id}, returning cached result`);
         return res.json({
@@ -3116,17 +3115,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       smartContradictionDetector.startScanJob(activeProfile.id);
 
       console.log(`🔍 Starting contradiction scan for profile ${activeProfile.id}`);
-      
+
       // Get all ACTIVE facts that don't already have contradiction groups
       const allFacts = await storage.getMemoryEntries(activeProfile.id, 1000);
-      const activeFacts = allFacts.filter(f => 
-        f.status === 'ACTIVE' && 
+      const activeFacts = allFacts.filter(f =>
+        f.status === 'ACTIVE' &&
         !f.contradictionGroupId &&
         !f.isProtected // Don't scan protected facts
       );
 
       console.log(`🔍 Scanning ${activeFacts.length} facts for contradictions`);
-      
+
       let contradictionsFound = 0;
       let groupsCreated = 0;
 
@@ -3135,48 +3134,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let processedCount = 0;
       let successfulAICalls = 0;
       let failedAICalls = 0;
-      
+
       for (let i = 0; i < activeFacts.length; i += batchSize) {
         const batch = activeFacts.slice(i, i + batchSize);
-        
-        console.log(`📊 Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(activeFacts.length/batchSize)} (${batch.length} facts)`);
+
+        console.log(`📊 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(activeFacts.length / batchSize)} (${batch.length} facts)`);
         console.log(`📈 AI Success Rate: ${failedAICalls + successfulAICalls > 0 ? Math.round((successfulAICalls / (successfulAICalls + failedAICalls)) * 100) : 0}% (${successfulAICalls} success, ${failedAICalls} failed)`);
-        
+
         for (const currentFact of batch) {
           // Skip if this fact already has a group (may have been assigned in this scan)
           if (currentFact.contradictionGroupId) continue;
-          
+
           processedCount++;
           console.log(`🔍 Checking fact ${processedCount}/${activeFacts.length}: "${currentFact.content.substring(0, 50)}..."`);
-          
+
           try {
             // Use the SMART contradiction detector to find conflicts efficiently 
             const result = await smartContradictionDetector.detectContradictions(activeProfile.id, currentFact);
-            
+
             // Count successful calls (assuming it succeeded if we got a result)
             successfulAICalls++;
-            
+
             if (result.isContradiction && result.conflictingFacts.length > 0) {
               const groupId = `contradiction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-              
+
               // Group all conflicting facts together
               const allFactsInGroup = [currentFact, ...result.conflictingFacts];
               const factIds = allFactsInGroup.map(f => f.id);
-              
+
               console.log(`⚠️ Found contradiction group with ${allFactsInGroup.length} facts`);
-              
+
               // Mark all facts in this group
               await storage.markFactsAsContradicting(factIds, groupId);
-              
+
               // Set the highest confidence fact as primary (keep it ACTIVE)
-              const primaryFact = allFactsInGroup.reduce((best, current) => 
+              const primaryFact = allFactsInGroup.reduce((best, current) =>
                 (current.confidence || 0) > (best.confidence || 0) ? current : best
               );
               await storage.updateMemoryStatus(primaryFact.id, 'ACTIVE');
-              
+
               contradictionsFound += allFactsInGroup.length;
               groupsCreated++;
-              
+
               // Mark processed facts as having contradiction groups to avoid reprocessing
               allFactsInGroup.forEach(fact => {
                 fact.contradictionGroupId = groupId;
@@ -3187,7 +3186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             failedAICalls++;
             // Continue with other facts even if one fails
           }
-          
+
           // 🚀 OPTIMIZED: Longer delay between individual facts when API is struggling
           if (failedAICalls > successfulAICalls && failedAICalls > 3) {
             console.log(`⏸️ API struggling (${failedAICalls} failures), adding extra delay...`);
@@ -3196,7 +3195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await new Promise(resolve => setTimeout(resolve, 300)); // Standard 300ms delay
           }
         }
-        
+
         // 🚀 OPTIMIZED: Much longer delays between batches to give API time to recover
         if (i + batchSize < activeFacts.length) {
           const batchDelay = failedAICalls > successfulAICalls ? 2000 : 800; // 2s if struggling, 800ms normally
@@ -3205,12 +3204,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const message = groupsCreated > 0 
+      const message = groupsCreated > 0
         ? `Found ${groupsCreated} contradiction groups with ${contradictionsFound} total conflicting facts`
         : "No contradictions found in your knowledge base";
 
       console.log(`✅ Contradiction scan complete: ${message}`);
-      
+
       // 🔒 Complete the scan job (mutex protection)
       smartContradictionDetector.completeScanJob(activeProfile.id, [{
         isContradiction: groupsCreated > 0,
@@ -3218,7 +3217,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         severity: 'LOW' as const,
         explanation: message
       }]);
-      
+
       res.json({
         found: groupsCreated,
         totalFactsChecked: activeFacts.length,
@@ -3236,23 +3235,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id: documentId } = req.params;
       const { preserveExisting = true, improveAtomization = false } = req.body;
-      
+
       console.log(`📄 Starting reprocessing for document ${documentId}...`);
-      
+
       // Get the document
       const document = await db
         .select()
         .from(documents)
         .where(eq(documents.id, documentId))
         .limit(1);
-        
+
       if (!document || document.length === 0) {
         return res.status(404).json({ error: 'Document not found' });
       }
-      
+
       const doc = document[0];
       console.log(`📄 Found document: ${doc.filename}`);
-      
+
       // Get existing facts from this document to preserve them
       const existingFacts = preserveExisting ? await db
         .select()
@@ -3263,42 +3262,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
             eq(memoryEntries.sourceId, documentId)
           )
         ) : [];
-      
+
       console.log(`📄 Found ${existingFacts.length} existing facts from this document`);
-      
+
       // Mark document as processing
       await db
         .update(documents)
-        .set({ 
+        .set({
           processingStatus: 'PROCESSING',
           updatedAt: sql`now()`
         })
         .where(eq(documents.id, documentId));
-      
+
       try {
         // Re-extract knowledge using the document processor
         if (doc.extractedContent) {
           console.log(`📄 Re-extracting knowledge from ${doc.filename}...`);
-          
+
           // Use a public method to trigger reprocessing
           await documentProcessor.reprocessDocument(
-            doc.profileId, 
-            doc.extractedContent, 
-            doc.filename, 
+            doc.profileId,
+            doc.extractedContent,
+            doc.filename,
             doc.id
           );
-          
+
           console.log(`✅ Reprocessing completed for ${doc.filename}`);
-          
+
           // Mark as completed
           await db
             .update(documents)
-            .set({ 
+            .set({
               processingStatus: 'COMPLETED',
               updatedAt: sql`now()`
             })
             .where(eq(documents.id, documentId));
-          
+
           // Get final fact counts
           const finalFacts = await db
             .select()
@@ -3309,11 +3308,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 eq(memoryEntries.sourceId, documentId)
               )
             );
-          
-          const message = preserveExisting 
+
+          const message = preserveExisting
             ? `Reprocessed ${doc.filename}: ${existingFacts.length} existing facts preserved, ${finalFacts.length - existingFacts.length} new facts extracted`
             : `Reprocessed ${doc.filename}: ${finalFacts.length} total facts after reprocessing`;
-          
+
           res.json({
             success: true,
             message,
@@ -3322,33 +3321,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
             finalFactsCount: finalFacts.length,
             newFactsExtracted: Math.max(0, finalFacts.length - existingFacts.length)
           });
-          
+
         } else {
           await db
             .update(documents)
-            .set({ 
+            .set({
               processingStatus: 'FAILED',
               updatedAt: sql`now()`
             })
             .where(eq(documents.id, documentId));
-            
+
           res.status(400).json({ error: 'Document has no extracted content to reprocess' });
         }
-        
+
       } catch (extractionError) {
         console.error('📄 Reprocessing extraction failed:', extractionError);
-        
+
         await db
           .update(documents)
-          .set({ 
+          .set({
             processingStatus: 'FAILED',
             updatedAt: sql`now()`
           })
           .where(eq(documents.id, documentId));
-          
+
         res.status(500).json({ error: 'Failed to reprocess document', details: (extractionError as Error).message });
       }
-      
+
     } catch (error) {
       console.error('📄 Document reprocessing failed:', error);
       res.status(500).json({ error: 'Failed to reprocess document' });
@@ -3364,7 +3363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`📄 Starting batch reprocessing for all documents...`);
-      
+
       // Get all completed documents for the profile
       const allDocuments = await db
         .select()
@@ -3375,17 +3374,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             eq(documents.processingStatus, 'COMPLETED')
           )
         );
-        
+
       console.log(`📄 Found ${allDocuments.length} documents to reprocess`);
-      
+
       let successCount = 0;
       let errorCount = 0;
       const results = [];
-      
+
       for (const doc of allDocuments) {
         try {
           console.log(`📄 Reprocessing ${doc.filename}...`);
-          
+
           // Get existing facts count
           const existingFacts = await db
             .select()
@@ -3396,16 +3395,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 eq(memoryEntries.sourceId, doc.id)
               )
             );
-          
+
           // Re-extract if content exists
           if (doc.extractedContent) {
             await documentProcessor.reprocessDocument(
-              doc.profileId, 
-              doc.extractedContent, 
-              doc.filename, 
+              doc.profileId,
+              doc.extractedContent,
+              doc.filename,
               doc.id
             );
-            
+
             const finalFacts = await db
               .select()
               .from(memoryEntries)
@@ -3415,7 +3414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   eq(memoryEntries.sourceId, doc.id)
                 )
               );
-            
+
             results.push({
               filename: doc.filename,
               status: 'success',
@@ -3423,10 +3422,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               finalFacts: finalFacts.length,
               newFacts: Math.max(0, finalFacts.length - existingFacts.length)
             });
-            
+
             successCount++;
             console.log(`✅ ${doc.filename}: ${existingFacts.length} → ${finalFacts.length} facts`);
-            
+
           } else {
             results.push({
               filename: doc.filename,
@@ -3434,7 +3433,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               reason: 'No extracted content'
             });
           }
-          
+
         } catch (docError) {
           console.error(`❌ Failed to reprocess ${doc.filename}:`, docError);
           errorCount++;
@@ -3445,9 +3444,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       }
-      
+
       console.log(`📄 Batch reprocessing complete: ${successCount} success, ${errorCount} errors`);
-      
+
       res.json({
         success: true,
         message: `Reprocessed ${successCount} documents successfully, ${errorCount} errors`,
@@ -3456,7 +3455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         errorCount,
         results
       });
-      
+
     } catch (error) {
       console.error('📄 Batch reprocessing failed:', error);
       res.status(500).json({ error: 'Failed to batch reprocess documents' });
@@ -3467,7 +3466,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const updates = req.body;
-      
+
       // Validate confidence range (0-100)
       if (updates.confidence !== undefined) {
         const confidence = Number(updates.confidence);
@@ -3475,18 +3474,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ error: 'Confidence must be between 0 and 100' });
         }
       }
-      
+
       // Use the more flexible updateMemoryEntry method for content + confidence updates
       const updatedEntry = await storage.updateMemoryEntry(id, updates);
-      
+
       if (updates.confidence !== undefined) {
         console.log(`📊 Manual confidence update: Fact confidence set to ${updates.confidence}% by user`);
       }
-      
+
       if (updates.content !== undefined) {
         console.log(`📝 Manual content update: Fact content updated by user`);
       }
-      
+
       res.json(updatedEntry);
     } catch (error) {
       console.error('Update memory entry error:', error);
@@ -3498,7 +3497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/memory/entries/:id/protect', async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       // Check if fact exists
       const activeProfile = await storage.getActiveProfile();
       if (!activeProfile) {
@@ -3507,7 +3506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const currentFacts = await storage.getMemoryEntries(activeProfile.id, 10000);
       const currentFact = currentFacts.find(f => f.id === id);
-      
+
       if (!currentFact) {
         return res.status(404).json({ error: 'Fact not found' });
       }
@@ -3523,7 +3522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         confidence: 100,        // Maximum confidence
         supportCount: 999,      // High support count so it's never overridden
       });
-      
+
       console.log(`🔒 Fact protected: "${currentFact.content.substring(0, 50)}..." now has 100% confidence and cannot be contradicted`);
       res.json(updatedEntry);
     } catch (error) {
@@ -3535,15 +3534,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/entries/:id/boost', async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       // Get current fact to calculate progressive boost
       const currentFacts = await storage.getMemoryEntries(await storage.getActiveProfile().then(p => p!.id), 1000);
       const currentFact = currentFacts.find(f => f.id === id);
-      
+
       if (!currentFact) {
         return res.status(404).json({ error: 'Fact not found' });
       }
-      
+
       // Progressive boosting: 85→90→95→100
       const currentConfidence = currentFact.confidence || 50; // Default to 50 if null
       let newConfidence;
@@ -3556,7 +3555,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         newConfidence = 100;
       }
-      
+
       const updatedEntry = await storage.updateMemoryConfidence(id, newConfidence, undefined);
       console.log(`🎯 Progressive boost: Fact confidence ${currentConfidence}% → ${newConfidence}% by user`);
       res.json(updatedEntry);
@@ -3569,7 +3568,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/entries/:id/deprecate', async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       const updatedEntry = await storage.updateMemoryStatus(id, 'DEPRECATED');
       console.log(`❌ Manual deprecation: Fact marked as FALSE by user`);
       res.json(updatedEntry);
@@ -3582,7 +3581,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/entries/:id/clean', async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       const activeProfile = await storage.getActiveProfile();
       if (!activeProfile) {
         return res.status(400).json({ error: 'No active profile found' });
@@ -3591,7 +3590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get the memory entry to clean
       const currentFacts = await storage.getMemoryEntries(activeProfile.id, 10000);
       const currentFact = currentFacts.find(f => f.id === id);
-      
+
       if (!currentFact) {
         return res.status(404).json({ error: 'Fact not found' });
       }
@@ -3601,16 +3600,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasUserMarkers = /(\byou\s|user:|^### |^> |what|how|why|hey nicky)/i.test(currentFact.content);
       const hasAIMarkers = /(nicky|assistant:|dente|noodle arms)/i.test(content);
       const isLong = currentFact.content.length > 300;
-      
+
       if (!hasUserMarkers || !hasAIMarkers || !isLong) {
         return res.status(400).json({ error: 'This fact does not appear to be wall-of-text that can be cleaned' });
       }
 
       console.log(`✂️ Cleaning wall-of-text fact: "${currentFact.content.substring(0, 100)}..."`);
-      
+
       // Use conversationParser to split into atomic sentences
       const atomicSentences = conversationParser.splitIntoAtomicSentences(currentFact.content);
-      
+
       if (atomicSentences.length <= 1) {
         return res.status(400).json({ error: 'Could not split this content into multiple atomic facts' });
       }
@@ -3644,7 +3643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log(`✅ Cleaned wall-of-text into ${newFacts.length} atomic facts`);
-      
+
       res.json({
         success: true,
         createdCount: newFacts.length,
@@ -3660,11 +3659,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/resolve-contradiction', async (req, res) => {
     try {
       const { winnerFactId, loserFactId } = req.body;
-      
+
       // Boost winner to 100%, deprecate loser
       await storage.updateMemoryConfidence(winnerFactId, 100, undefined);
       await storage.updateMemoryStatus(loserFactId, 'DEPRECATED');
-      
+
       console.log(`⚖️ Contradiction resolved: Winner ${winnerFactId}, Loser ${loserFactId}`);
       res.json({ success: true, message: 'Contradiction resolved' });
     } catch (error) {
@@ -3713,11 +3712,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { profileId } = req.params;
       console.log(`🚀 Starting knowledge graph build for profile ${profileId}`);
-      
+
       // This is a heavy operation that processes all memories
       await MemoryAnalyzer.buildKnowledgeGraph(profileId);
-      
-      res.json({ 
+
+      res.json({
         success: true,
         message: 'Knowledge graph built successfully from all memories'
       });
@@ -3744,13 +3743,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { profileId } = req.params;
       const { q } = req.query;
-      
+
       if (!q || typeof q !== 'string') {
         return res.status(400).json({ error: 'Query parameter "q" is required' });
       }
-      
+
       const memories = await storage.searchMemoryEntries(profileId, q);
-      res.json({ 
+      res.json({
         query: q,
         count: memories.length,
         memories: memories.map(m => ({
@@ -3773,18 +3772,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { sourceId } = req.params;
       const { source } = req.query; // Optional: filter by source type
-      
+
       const profile = await storage.getActiveProfile();
       if (!profile) {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
       const memories = await storage.getMemoriesBySource(
-        profile.id, 
-        sourceId, 
+        profile.id,
+        sourceId,
         source as string | undefined
       );
-      
+
       res.json({
         sourceId,
         source: source || 'any',
@@ -3806,7 +3805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log('🚀 Starting embedding generation for memory entries...');
-      
+
       // Get entries without embeddings
       const entriesWithoutEmbeddings = await storage.getMemoryEntriesWithoutEmbeddings(profile.id);
       console.log(`📊 Found ${entriesWithoutEmbeddings.length} memory entries without embeddings`);
@@ -3821,7 +3820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let processed = 0;
       let errors = 0;
-      
+
       // Generate embeddings for all memories at once
       const { embeddingService } = await import('./services/embeddingService');
       const result = await embeddingService.generateEmbeddingsForAllMemories(profile.id);
@@ -3848,7 +3847,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { query, limit = 10, threshold = 0.7 } = req.body;
-      
+
       if (!query || typeof query !== 'string') {
         return res.status(400).json({ error: 'Query string is required' });
       }
@@ -3921,15 +3920,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { content, importance = 5, keywords = [] } = req.body;
-      
+
       if (!content || typeof content !== 'string' || content.trim().length === 0) {
         return res.status(400).json({ error: 'Content is required and must be a non-empty string' });
       }
 
       const protectedFact = await storage.addProtectedFact(
-        profile.id, 
-        content.trim(), 
-        importance, 
+        profile.id,
+        content.trim(),
+        importance,
         keywords
       );
 
@@ -3956,7 +3955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AI-Assisted Flagging System API Endpoints
-  
+
   // Get pending flags for review
   app.get('/api/flags/pending', async (req, res) => {
     try {
@@ -3966,14 +3965,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { limit = 50 } = req.query;
-      
+
       // Get pending flags using original logic
       const flags = await aiFlagger.getPendingFlags(db, profile.id, Number(limit));
-      
+
       // Enrich memory flags with content in one query
       const memoryFlagIds = flags.filter(f => f.targetType === 'MEMORY').map(f => f.targetId);
       let memoryContentMap = new Map();
-      
+
       if (memoryFlagIds.length > 0) {
         const memoryContents = await db
           .select({
@@ -3984,12 +3983,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })
           .from(memoryEntries)
           .where(inArray(memoryEntries.id, memoryFlagIds));
-          
+
         memoryContents.forEach(mem => {
           memoryContentMap.set(mem.id, mem);
         });
       }
-      
+
       // Enrich flags with memory content
       const enrichedFlags = flags.map(flag => {
         if (flag.targetType === 'MEMORY' && memoryContentMap.has(flag.targetId)) {
@@ -4003,14 +4002,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         return flag;
       });
-      
+
       // Group importance flags for the same target
       const groupedFlags = [];
       const importanceGroups = new Map();
-      
+
       for (const flag of enrichedFlags) {
         const isImportanceFlag = ['high_importance', 'medium_importance', 'low_importance'].includes(flag.flagType);
-        
+
         if (isImportanceFlag) {
           const groupKey = `${flag.targetType}:${flag.targetId}`;
           if (!importanceGroups.has(groupKey)) {
@@ -4037,7 +4036,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       }
-      
+
       // Add importance groups to the result
       for (const group of Array.from(importanceGroups.values())) {
         if (group.flags.length > 1) {
@@ -4054,7 +4053,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       }
-      
+
       res.json({
         count: flags.length,
         flags: groupedFlags
@@ -4108,7 +4107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Batch update: approve selected importance, reject others
       const updatePromises = allFlags.map(flag => {
         const status = flag.flagType === selectedImportance ? 'APPROVED' : 'REJECTED';
-        const notes = flag.flagType === selectedImportance 
+        const notes = flag.flagType === selectedImportance
           ? reviewNotes || `Selected as ${selectedImportance}`
           : `Auto-rejected: selected ${selectedImportance} instead`;
 
@@ -4127,8 +4126,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`🎯 Batch reviewed importance flags for ${targetType}:${targetId} - selected: ${selectedImportance}`);
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         updated: allFlags.length,
         selectedImportance,
         message: `Approved ${selectedImportance}, rejected ${allFlags.length - 1} others`
@@ -4144,14 +4143,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/flags/:flagId/review', async (req, res) => {
     try {
       const { flagId } = req.params;
-      
+
       // Validate request body
       const reviewSchema = z.object({
         reviewStatus: z.enum(['APPROVED', 'REJECTED', 'MODIFIED']),
         reviewNotes: z.string().optional(),
         reviewedBy: z.string().default('user')
       });
-      
+
       const { reviewStatus, reviewNotes, reviewedBy } = reviewSchema.parse(req.body);
 
       const [updatedFlag] = await db
@@ -4227,7 +4226,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Memory Deduplication API Endpoints
-  
+
   // Find duplicate groups
   app.get('/api/memory/duplicates', async (req, res) => {
     try {
@@ -4238,10 +4237,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { threshold = 0.7 } = req.query;
       const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
-      
+
       const duplicateGroups = await memoryDeduplicator.findDuplicateGroups(
-        db, 
-        profile.id, 
+        db,
+        profile.id,
         Number(threshold)
       );
 
@@ -4266,7 +4265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { threshold = 0.9 } = req.body;
       const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
-      
+
       // 🔧 Warm up connection pool with a simple query to ensure fresh connections
       try {
         await db.execute(sql`SELECT 1 as test`);
@@ -4274,7 +4273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (warmupError) {
         console.warn('⚠️ Connection pool warmup failed, proceeding anyway:', warmupError);
       }
-      
+
       const mergedCount = await memoryDeduplicator.autoMergeDuplicates(
         db,
         profile.id,
@@ -4284,8 +4283,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         success: true,
         mergedCount,
-        message: mergedCount > 0 
-          ? `Successfully merged ${mergedCount} duplicate memories. Run again to process more.` 
+        message: mergedCount > 0
+          ? `Successfully merged ${mergedCount} duplicate memories. Run again to process more.`
           : 'No duplicates merged. Either no duplicates found or connection timed out.'
       });
     } catch (error) {
@@ -4298,7 +4297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/preview-merge', async (req, res) => {
     try {
       const { masterEntryId, duplicateIds } = req.body;
-      
+
       if (!masterEntryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
         return res.status(400).json({ error: 'masterEntryId and duplicateIds are required' });
       }
@@ -4325,7 +4324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Generate AI-powered merge suggestion
       const mergedContent = await memoryDeduplicator.mergeContentWithAI(masterEntry, duplicateEntries);
-      
+
       res.json({
         success: true,
         mergedContent,
@@ -4342,7 +4341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/merge-group', async (req, res) => {
     try {
       const { masterEntryId, duplicateIds } = req.body;
-      
+
       if (!masterEntryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
         return res.status(400).json({ error: 'masterEntryId and duplicateIds are required' });
       }
@@ -4369,7 +4368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Build duplicate group and merge - use AI to combine ALL unique facts from all versions
       const mergedContent = await memoryDeduplicator.mergeContentWithAI(masterEntry, duplicateEntries);
-      
+
       const duplicateGroup = {
         masterEntry,
         duplicates: duplicateEntries,
@@ -4403,7 +4402,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/memory/merge', async (req, res) => {
     try {
       const { primaryId, duplicateIds, mergedContent } = req.body;
-      
+
       if (!primaryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
         return res.status(400).json({ error: 'primaryId and duplicateIds are required' });
       }
@@ -4467,13 +4466,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { content, threshold = 0.8 } = req.body;
-      
+
       if (!content) {
         return res.status(400).json({ error: 'content is required' });
       }
 
       const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
-      
+
       const duplicates = await memoryDeduplicator.checkForDuplicates(
         db,
         profile.id,
@@ -5008,20 +5007,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract entities using AI
       const extractionResult = await entityExtraction.extractEntitiesFromMemory(
         memoryContent,
-        { 
-          people: transformedPeople, 
-          places: transformedPlaces, 
-          events: transformedEvents 
+        {
+          people: transformedPeople,
+          places: transformedPlaces,
+          events: transformedEvents
         }
       );
 
       // Run disambiguation
       const disambiguationResult = await entityExtraction.disambiguateEntities(
         extractionResult.entities,
-        { 
-          people: transformedPeople, 
-          places: transformedPlaces, 
-          events: transformedEvents 
+        {
+          people: transformedPeople,
+          places: transformedPlaces,
+          events: transformedEvents
         }
       );
 
@@ -5110,7 +5109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         for (let j = i + 1; j < people.length; j++) {
           const candidate = people[j];
-          
+
           // Check name similarity
           const nameSimilarity = calculateStringSimilarity(
             primary.canonicalName.toLowerCase(),
@@ -5164,7 +5163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         for (let j = i + 1; j < places.length; j++) {
           const candidate = places[j];
-          
+
           const nameSimilarity = calculateStringSimilarity(
             primary.canonicalName.toLowerCase(),
             candidate.canonicalName.toLowerCase()
@@ -5201,7 +5200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         for (let j = i + 1; j < events.length; j++) {
           const candidate = events[j];
-          
+
           const nameSimilarity = calculateStringSimilarity(
             primary.canonicalName.toLowerCase(),
             candidate.canonicalName.toLowerCase()
@@ -5253,9 +5252,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   function calculateStringSimilarity(str1: string, str2: string): number {
     const longer = str1.length > str2.length ? str1 : str2;
     const shorter = str1.length > str2.length ? str2 : str1;
-    
+
     if (longer.length === 0) return 1.0;
-    
+
     const editDistance = levenshteinDistance(longer, shorter);
     return (longer.length - editDistance) / longer.length;
   }
@@ -5337,10 +5336,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Extract entities from all memories
       const extractionResults = await entityExtraction.extractEntitiesFromMultipleMemories(
         validMemories,
-        { 
-          people: transformedPeople, 
-          places: transformedPlaces, 
-          events: transformedEvents 
+        {
+          people: transformedPeople,
+          places: transformedPlaces,
+          events: transformedEvents
         }
       );
 
@@ -5359,7 +5358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/entities/link-memory', async (req, res) => {
     try {
       const { memoryId, personId, placeId, eventId } = req.body;
-      
+
       if (!memoryId) {
         return res.status(400).json({ error: 'memoryId is required' });
       }
@@ -5387,7 +5386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
       const memories = await storage.getMemoryWithEntityLinks(profile.id, limit);
-      
+
       res.json(memories);
     } catch (error) {
       console.error('Error fetching linked memories:', error);
@@ -5404,7 +5403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { memoryIds } = req.body;
-      
+
       if (!memoryIds || !Array.isArray(memoryIds)) {
         return res.status(400).json({ error: 'memoryIds array is required' });
       }
@@ -5418,7 +5417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('❌ Batch analysis failed:', error);
         });
 
-      res.json({ 
+      res.json({
         message: `Batch analysis started for ${memoryIds.length} memories`,
         status: 'started'
       });
@@ -5468,7 +5467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Smart Auto-Approval System for Flags
-  
+
   // Run auto-approval process
   app.post('/api/flags/auto-approve', async (req, res) => {
     try {
@@ -5501,7 +5500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { date } = req.query;
       const { flagAutoApprovalService } = await import('./services/flagAutoApproval');
       const digest = await flagAutoApprovalService.getDailyDigest(
-        profile.id, 
+        profile.id,
         date as string | undefined
       );
 
@@ -5548,7 +5547,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { targetType, targetId } = req.params;
-      
+
       if (!['MEMORY', 'MESSAGE', 'DOCUMENT', 'CONVERSATION'].includes(targetType)) {
         return res.status(400).json({ error: 'Invalid target type' });
       }
@@ -5562,7 +5561,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Discord API Routes (Protected by basic auth check)
-  
+
   // Simple auth middleware for Discord routes
   const requireAuth = (req: any, res: any, next: any) => {
     // For now, just require an active profile as basic protection
@@ -5578,7 +5577,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/discord/status', requireAuth, async (req, res) => {
     try {
       const isConnected = discordBotService.getConnectionStatus();
-      res.json({ 
+      res.json({
         connected: isConnected,
         status: isConnected ? 'online' : 'offline'
       });
@@ -5606,30 +5605,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/discord/servers/:id/behavior', requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       // Import personality controller for migration
       const { personalityController } = await import('./services/personalityController');
-      
+
       // Check if server needs migration and perform it
       const needsMigration = await personalityController.doesDiscordServerNeedMigration(id);
       if (needsMigration) {
         console.log(`🔄 Auto-migrating Discord server ${id} to unified personality system...`);
         await personalityController.migrateDiscordServer(id);
       }
-      
+
       // Now get the unified personality state instead of legacy behavior
       const personalityState = await personalityController.getState();
-      
+
       // For backward compatibility, convert unified personality back to legacy format
       const legacyFormat = {
-        aggressiveness: personalityState.effectivePersonality.intensity === 'ultra' ? 90 : 
-                       personalityState.effectivePersonality.intensity === 'high' ? 75 :
-                       personalityState.effectivePersonality.intensity === 'med' ? 60 : 40,
+        aggressiveness: personalityState.effectivePersonality.intensity === 'ultra' ? 90 :
+          personalityState.effectivePersonality.intensity === 'high' ? 75 :
+            personalityState.effectivePersonality.intensity === 'med' ? 60 : 40,
         responsiveness: personalityState.effectivePersonality.intensity === 'ultra' ? 85 :
-                       personalityState.effectivePersonality.intensity === 'high' ? 70 :
-                       personalityState.effectivePersonality.intensity === 'med' ? 55 : 35,
+          personalityState.effectivePersonality.intensity === 'high' ? 70 :
+            personalityState.effectivePersonality.intensity === 'med' ? 55 : 35,
         unpredictability: personalityState.effectivePersonality.spice === 'spicy' ? 85 :
-                         personalityState.effectivePersonality.spice === 'normal' ? 50 : 15,
+          personalityState.effectivePersonality.spice === 'normal' ? 50 : 15,
         dbdObsession: personalityState.effectivePersonality.dbd_lens ? 80 : 40,
         familyBusinessMode: 35,
       };
@@ -5646,10 +5645,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params; // This is the Discord server ID
       const updates = req.body;
-      
+
       // Import personality controller
       const { personalityController } = await import('./services/personalityController');
-      
+
       // Convert legacy behavior updates to unified personality updates
       const legacyBehavior = {
         aggressiveness: updates.aggressiveness,
@@ -5658,10 +5657,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dbdObsession: updates.dbdObsession,
         familyBusinessMode: updates.familyBusinessMode
       };
-      
+
       // Convert to personality settings
       const migratedPersonality = personalityController.migrateDiscordBehaviorToPersonality(legacyBehavior);
-      
+
       // Update unified personality controller
       await personalityController.updatePersonality({
         preset: migratedPersonality.preset,
@@ -5669,7 +5668,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         spice: personalityController['mapSpiceToLevel'](migratedPersonality.spice),
         dbd_lens: migratedPersonality.dbdLensActive
       }, 'discord_override');
-      
+
       // Mark the server as migrated
       const server = await storage.getDiscordServer(id);
       if (server) {
@@ -5678,9 +5677,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         //   unifiedPersonalityMigrated: true
         // });
       }
-      
+
       console.log(`🔄 Updated Discord behavior via legacy API: ${JSON.stringify(legacyBehavior)} → ${migratedPersonality.preset}`);
-      
+
       // Return the updated personality state in legacy format for compatibility
       const personalityState = await personalityController.getState();
       const legacyFormat = {
@@ -5690,7 +5689,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dbdObsession: migratedPersonality.dbdLensActive ? 80 : 40,
         familyBusinessMode: 35,
       };
-      
+
       res.json(legacyFormat);
     } catch (error) {
       console.error('Error updating Discord server behavior:', error);
@@ -5702,10 +5701,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/discord/migrate-servers', requireAuth, async (req, res) => {
     try {
       const { personalityController } = await import('./services/personalityController');
-      
+
       console.log('🚀 Manual Discord server migration triggered...');
       const results = await personalityController.migrateAllDiscordServers();
-      
+
       res.json({
         success: true,
         migrated: results.migrated,
@@ -5714,10 +5713,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error('Error during manual Discord migration:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         error: 'Failed to migrate Discord servers',
-        message: error instanceof Error ? error.message : 'Unknown error' 
+        message: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });
@@ -5726,11 +5725,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/discord/servers/:serverId/effective-behavior', requireAuth, async (req, res) => {
     try {
       const { serverId } = req.params;
-      
+
       // Import the behavior modulator here to avoid circular dependency
       const { behaviorModulator } = await import('./services/behaviorModulator');
       const effective = await behaviorModulator.getEffectiveBehavior(serverId);
-      
+
       res.json(effective);
     } catch (error) {
       console.error('Error getting effective Discord behavior:', error);
@@ -5743,23 +5742,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { serverId } = req.params;
       const { type, strength, durationMinutes } = req.body;
-      
+
       // Validate nudge data
       const validTypes = ['mention_burst', 'quiet_period', 'keyword_trigger', 'moderation_flag'];
       if (!validTypes.includes(type)) {
         return res.status(400).json({ error: 'Invalid nudge type' });
       }
-      
+
       const nudge = {
         type,
         strength: Math.max(-20, Math.min(20, strength || 5)),
         expiresAt: new Date(Date.now() + (durationMinutes || 30) * 60 * 1000).toISOString(),
       };
-      
+
       // Import the behavior modulator here to avoid circular dependency
       const { behaviorModulator } = await import('./services/behaviorModulator');
       await behaviorModulator.addContextNudge(serverId, nudge);
-      
+
       res.json({ success: true, nudge });
     } catch (error) {
       console.error('Error adding context nudge:', error);
@@ -5771,13 +5770,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/discord/servers/:serverId/proactive-settings', requireAuth, async (req, res) => {
     try {
       const { serverId } = req.params;
-      
+
       // Find the Discord server by serverId
       const activeProfile = await storage.getActiveProfile();
       if (!activeProfile) {
         return res.status(400).json({ error: 'No active profile found' });
       }
-      
+
       const servers = await storage.getProfileDiscordServers(activeProfile.id);
       const server = servers.find(s => s.serverId === serverId);
       if (!server) {
@@ -5804,13 +5803,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { serverId } = req.params;
       const { proactiveEnabled, allowedChannels, blockedChannels, enabledMessageTypes } = req.body;
-      
+
       // Find the Discord server by serverId
       const activeProfile = await storage.getActiveProfile();
       if (!activeProfile) {
         return res.status(400).json({ error: 'No active profile found' });
       }
-      
+
       const servers = await storage.getProfileDiscordServers(activeProfile.id);
       const server = servers.find(s => s.serverId === serverId);
       if (!server) {
@@ -5819,23 +5818,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Validate and prepare updates
       const updates: any = {};
-      
+
       if (typeof proactiveEnabled === 'boolean') {
         updates.proactiveEnabled = proactiveEnabled;
       }
-      
+
       if (Array.isArray(allowedChannels)) {
         // Validate channel IDs are strings
         const validChannels = allowedChannels.filter(id => typeof id === 'string' && id.trim().length > 0);
         updates.allowedChannels = validChannels;
       }
-      
+
       if (Array.isArray(blockedChannels)) {
         // Validate channel IDs are strings
         const validChannels = blockedChannels.filter(id => typeof id === 'string' && id.trim().length > 0);
         updates.blockedChannels = validChannels;
       }
-      
+
       if (Array.isArray(enabledMessageTypes)) {
         // Validate message types
         const validTypes = ['dbd', 'italian', 'family_business', 'aggressive', 'random'];
@@ -5867,7 +5866,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { facts, keywords } = req.body;
-      
+
       const updates: any = {};
       if (Array.isArray(facts)) updates.facts = facts;
       if (Array.isArray(keywords)) updates.keywords = keywords;
@@ -5917,7 +5916,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const updates = req.body;
-      
+
       const trigger = await storage.updateDiscordTopicTrigger(id, updates);
       res.json(trigger);
     } catch (error) {
@@ -5941,7 +5940,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id: serverId } = req.params;
       const limit = parseInt(req.query.limit as string) || 50;
-      
+
       const conversations = await storage.getDiscordConversations(serverId, limit);
       res.json(conversations);
     } catch (error) {
@@ -5975,7 +5974,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json({ data: source });
     } catch (error) {
       console.error('❌ Source creation failed:', error);
-      res.status(400).json({ 
+      res.status(400).json({
         error: 'Invalid source data',
         details: error instanceof Error ? error.message : 'Unknown error'
       });
@@ -6010,12 +6009,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/ingestion/pending/:id/approve', async (req, res) => {
     try {
       const { id } = req.params;
-      
+
       const pendingItem = await storage.getPendingContentById(id);
       if (!pendingItem) {
         return res.status(404).json({ error: 'Content not found' });
       }
-      
+
       // Process through existing document pipeline  
       await documentProcessor.reprocessDocument(
         pendingItem.profileId,
@@ -6023,13 +6022,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `reddit-${pendingItem.title}`, // source filename
         pendingItem.id // document ID
       );
-      
+
       // Mark as approved and processed
       await storage.approvePendingContent(id);
-      
-      res.json({ 
-        success: true, 
-        message: 'Content approved and processed into memory' 
+
+      res.json({
+        success: true,
+        message: 'Content approved and processed into memory'
       });
     } catch (error) {
       console.error('Failed to approve content:', error);
@@ -6042,15 +6041,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { reason } = req.body;
-      
+
       if (!reason) {
         return res.status(400).json({ error: 'Rejection reason required' });
       }
-      
+
       await storage.rejectPendingContent(id, reason);
-      res.json({ 
-        success: true, 
-        message: 'Content rejected' 
+      res.json({
+        success: true,
+        message: 'Content rejected'
       });
     } catch (error) {
       res.status(500).json({ error: 'Failed to reject content' });
@@ -6076,11 +6075,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/ingestion/test/:profileId/:sourceType', async (req, res) => {
     try {
       const { profileId, sourceType } = req.params;
-      
+
       if (sourceType !== 'reddit' && sourceType !== 'steam') {
         return res.status(400).json({ error: 'Invalid source type' });
       }
-      
+
       const collected = await collectionManager.testCollection(profileId, sourceType);
       res.json({
         success: true,
@@ -6097,7 +6096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // =====================================
   // PRE-ROLL AD GENERATION ROUTES  
   // =====================================
-  
+
   // Generate a new pre-roll ad
   app.post('/api/ads/generate', async (req, res) => {
     try {
@@ -6107,7 +6106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { category, personalityFacet, forceNew, manualSponsorName, manualProductName, submittedBy } = req.body;
-      
+
       const adRequest = {
         profileId: activeProfile.id,
         category,
@@ -6117,7 +6116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         manualProductName,
         submittedBy
       };
-      
+
       const newAd = await adGenerationService.generateAd(adRequest);
       res.json({ data: newAd });
     } catch (error) {
@@ -6135,7 +6134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { category, personalityFacet, count = 3, manualSponsorName, manualProductName, submittedBy } = req.body;
-      
+
       if (count < 1 || count > 10) {
         return res.status(400).json({ error: 'Count must be between 1 and 10' });
       }
@@ -6149,9 +6148,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         manualProductName,
         submittedBy
       };
-      
+
       const ads = await adGenerationService.generateBatch(adRequest, count);
-      res.json({ 
+      res.json({
         data: ads,
         message: `Generated ${ads.length} ads - pick your favorites!`
       });
@@ -6166,13 +6165,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { profileId } = req.params;
       const { category, limit, includeUsed } = req.query;
-      
+
       const options = {
         category: category as string,
         limit: limit ? parseInt(limit as string) : undefined,
         includeUsed: includeUsed === 'true'
       };
-      
+
       const ads = await adGenerationService.getAds(profileId, options);
       res.json({ data: ads });
     } catch (error) {
@@ -6198,11 +6197,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { rating } = req.body;
-      
+
       if (!rating || rating < 1 || rating > 5) {
         return res.status(400).json({ error: 'Rating must be between 1 and 5' });
       }
-      
+
       await adGenerationService.rateAd(id, rating);
       res.json({ success: true });
     } catch (error) {
@@ -6216,7 +6215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { isFavorite } = req.body;
-      
+
       await adGenerationService.toggleFavorite(id, isFavorite);
       res.json({ success: true });
     } catch (error) {
@@ -6245,9 +6244,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!ad) {
         return res.status(404).json({ error: 'Ad not found' });
       }
-      
+
       const emotionProfile = adGenerationService.getEmotionProfileForFacet(ad.personalityFacet || undefined);
-      res.json({ 
+      res.json({
         emotionProfile,
         personalityFacet: ad.personalityFacet,
         availableProfiles: elevenlabsService.getEmotionProfiles()
@@ -6263,19 +6262,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { status, audioFilePath, episodeId } = req.body;
-      
+
       const validStatuses = ['draft', 'approved', 'recorded', 'published', 'rejected'];
       if (!status || !validStatuses.includes(status)) {
-        return res.status(400).json({ 
-          error: `Status must be one of: ${validStatuses.join(', ')}` 
+        return res.status(400).json({
+          error: `Status must be one of: ${validStatuses.join(', ')}`
         });
       }
-      
+
       await adGenerationService.updateProductionStatus(id, status, {
         audioFilePath,
         episodeId
       });
-      
+
       res.json({ success: true, status });
     } catch (error) {
       console.error('Failed to update ad status:', error);
@@ -6287,24 +6286,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/ads/bulk-status', async (req, res) => {
     try {
       const { adIds, status } = req.body;
-      
+
       if (!Array.isArray(adIds) || adIds.length === 0) {
         return res.status(400).json({ error: 'adIds must be a non-empty array' });
       }
-      
+
       const validStatuses = ['draft', 'approved', 'recorded', 'published', 'rejected'];
       if (!status || !validStatuses.includes(status)) {
-        return res.status(400).json({ 
-          error: `Status must be one of: ${validStatuses.join(', ')}` 
+        return res.status(400).json({
+          error: `Status must be one of: ${validStatuses.join(', ')}`
         });
       }
-      
+
       await adGenerationService.bulkUpdateStatus(adIds, status);
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         updatedCount: adIds.length,
-        status 
+        status
       });
     } catch (error) {
       console.error('Failed to bulk update ad status:', error);
@@ -6354,7 +6353,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             storage.db,
             activeProfile.id
           );
-          
+
           const memoriesToHide = relevanceScores
             .filter(r => r.shouldHide)
             .map(r => r.memoryId);
@@ -6380,13 +6379,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length < 2) {
             return res.status(400).json({ error: 'merge_cluster requires at least 2 memory IDs' });
           }
-          
+
           if (!options || !options.mergedContent) {
             return res.status(400).json({ error: 'merge_cluster requires mergedContent in options' });
           }
 
           console.log(`🔀 Merging cluster of ${memoryIds.length} facts...`);
-          
+
           // Get all facts to merge for metadata preservation
           const factsToMerge = await Promise.all(
             memoryIds.map(id => storage.db.query.memoryEntries.findFirst({
@@ -6395,7 +6394,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           );
 
           const validFacts = factsToMerge.filter(f => f !== undefined);
-          
+
           if (validFacts.length === 0) {
             return res.status(404).json({ error: 'No valid facts found to merge' });
           }
@@ -6576,7 +6575,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Podcast Management API Routes
-  
+
   // Get all podcast episodes for active profile
   app.get('/api/podcast/episodes', async (req, res) => {
     try {
@@ -6584,7 +6583,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!activeProfile) {
         return res.status(400).json({ error: 'No active profile found' });
       }
-      
+
       const episodes = await storage.listPodcastEpisodes(activeProfile.id);
       res.json(episodes);
     } catch (error) {
@@ -6806,11 +6805,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🧹 Cleared existing segments for episode: "${episode.title}"`);
 
       // Use AI to parse segments from transcript
-      const { geminiService } = await import('./services/gemini.js');
-      const parsedSegments = await geminiService.parseShowSegments(episode.transcript, episode.title);
+      const { aiOrchestrator } = await import('./services/aiOrchestrator.js');
+      const parsedSegments = await aiOrchestrator.parseShowSegments(episode.transcript, episode.title);
 
       if (parsedSegments.length === 0) {
-        return res.json({ 
+        return res.json({
           message: 'No recurring show segments found in transcript',
           segments: []
         });
@@ -6883,7 +6882,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       if (!result.success) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: result.error || 'Failed to extract facts',
           factsCreated: 0,
           entitiesCreated: 0
@@ -6925,7 +6924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id,
         'podcast_episode'
       );
-      
+
       res.json({
         episodeId: id,
         episodeNumber: episode.episodeNumber,
@@ -6964,7 +6963,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/podcast/rss/sync', async (req, res) => {
     try {
       const { feedUrl, transcriptDir, processTranscripts } = req.body;
-      
+
       if (!feedUrl || typeof feedUrl !== 'string') {
         return res.status(400).json({ error: 'RSS feed URL is required' });
       }
@@ -6976,7 +6975,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { PodcastRssSyncService } = await import('./services/podcastRssSync.js');
       const syncService = new PodcastRssSyncService(transcriptDir || './podcast_transcripts');
-      
+
       const result = await syncService.syncRssFeed(
         db,
         activeProfile.id,
@@ -6987,7 +6986,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(result);
     } catch (error) {
       console.error('Error syncing RSS feed:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'Failed to sync RSS feed',
         message: error instanceof Error ? error.message : 'Unknown error'
       });
@@ -7004,7 +7003,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { PodcastRssSyncService } = await import('./services/podcastRssSync.js');
       const syncService = new PodcastRssSyncService();
-      
+
       const result = await syncService.processPendingEpisodes(
         db,
         storage,
@@ -7014,7 +7013,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(result);
     } catch (error) {
       console.error('Error processing episodes:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'Failed to process episodes',
         message: error instanceof Error ? error.message : 'Unknown error'
       });
@@ -7440,7 +7439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/topics/track', async (req, res) => {
     try {
       const { topic, context } = req.body;
-      
+
       if (!topic || !context) {
         return res.status(400).json({ error: 'Topic and context are required' });
       }

@@ -13,30 +13,16 @@ import { getDefaultModel, isValidModel } from '../config/geminiModels.js';
  * 1. RAG Operations (extraction, consolidation): Claude Sonnet 4.5 (PRIMARY)
  * 2. Chat Fallback: Gemini 2.0 Flash (when Claude fails)
  * 3. Non-critical: Gemini 2.0 Flash (title generation, etc.)
- * 
- * **COST OPTIMIZATION**:
- * - Claude Sonnet 4.5: $3 input / $15 output per 1M tokens (best quality)
- * - Gemini Flash: $0.075 per 1M tokens (17x cheaper, fallback use)
  */
-
-// Import anthropicService for RAG delegation (avoid circular dependency issues)
-let anthropicService: any = null;
-async function getAnthropicService() {
-  if (!anthropicService) {
-    const module = await import('./anthropic.js');
-    anthropicService = module.anthropicService;
-  }
-  return anthropicService;
-}
 
 class GeminiService {
   private ai: GoogleGenAI;
 
   constructor() {
-    this.ai = new GoogleGenAI({ 
-      apiKey: process.env.GEMINI_API_KEY || "" 
+    this.ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY || ""
     });
-    
+
     const defaultModel = getDefaultModel();
     console.log(`✅ Gemini service initialized with default model: ${defaultModel}`);
     console.log(`   Environment: ${process.env.NODE_ENV || 'production'}`);
@@ -58,35 +44,35 @@ class GeminiService {
     maxRetries: number = 3
   ): Promise<T> {
     const delays = [1000, 3000, 9000]; // 1s, 3s, 9s
-    
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await operation();
       } catch (error) {
         const isLastAttempt = attempt === maxRetries;
         const errorMessage = error instanceof Error ? error.message : String(error);
-        
+
         // Check if this is a retryable error
-        const isRetryable = 
+        const isRetryable =
           errorMessage.toLowerCase().includes('overload') ||
           errorMessage.toLowerCase().includes('rate limit') ||
           errorMessage.toLowerCase().includes('quota') ||
           errorMessage.toLowerCase().includes('unavailable') ||
           errorMessage.toLowerCase().includes('timeout');
-        
+
         if (!isRetryable || isLastAttempt) {
           console.error(`❌ ${operationName} failed after ${attempt + 1} attempts:`, errorMessage);
           throw error;
         }
-        
+
         const delayMs = delays[attempt];
         console.warn(`⚠️ ${operationName} failed (attempt ${attempt + 1}/${maxRetries + 1}): ${errorMessage}`);
         console.log(`🔄 Retrying in ${delayMs / 1000}s...`);
-        
+
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
-    
+
     // TypeScript safety - should never reach here
     throw new Error(`Unexpected retry loop exit for ${operationName}`);
   }
@@ -95,36 +81,36 @@ class GeminiService {
   private detectDocumentType(filename: string, content: string): 'organizational' | 'conversational' | 'general' {
     const lowerFilename = filename.toLowerCase();
     const lowerContent = content.toLowerCase();
-    
+
     // Organizational/Lore documents
     const orgKeywords = [
-      'roster', 'organization', 'members', 'hierarchy', 
+      'roster', 'organization', 'members', 'hierarchy',
       'member registry', 'organizational', 'lore', 'character profiles',
       'backstory', 'universe', 'world-building', 'family tree'
     ];
-    
+
     // Conversational documents
     const conversationalKeywords = [
       'transcript', 'conversation', 'episode', 'chat log',
       'dialogue', 'interview', 'stream', 'podcast'
     ];
-    
+
     // Check organizational
-    if (orgKeywords.some(keyword => 
+    if (orgKeywords.some(keyword =>
       lowerFilename.includes(keyword) || lowerContent.includes(keyword)
     )) {
       console.log(`📋 Detected ORGANIZATIONAL document: ${filename}`);
       return 'organizational';
     }
-    
+
     // Check conversational
-    if (conversationalKeywords.some(keyword => 
+    if (conversationalKeywords.some(keyword =>
       lowerFilename.includes(keyword) || lowerContent.includes(keyword)
     )) {
       console.log(`💬 Detected CONVERSATIONAL document: ${filename}`);
       return 'conversational';
     }
-    
+
     console.log(`📄 Detected GENERAL document: ${filename}`);
     return 'general';
   }
@@ -135,46 +121,29 @@ class GeminiService {
   private detectDocumentContext(filename: string, content: string): string {
     const lowerFilename = filename.toLowerCase();
     const lowerContent = content.toLowerCase().substring(0, 2000); // Check first 2000 chars
-    
+
     // Check for specific games/topics
     if (lowerFilename.includes('arc raiders') || lowerContent.includes('arc raiders')) {
       return 'Arc Raiders (tactical PvE extraction shooter)';
     }
-    
-    if (lowerFilename.includes('dbd') || 
-        lowerFilename.includes('dead by daylight') || 
-        lowerContent.includes('dead by daylight') ||
-        lowerContent.includes('survivors') && lowerContent.includes('killers')) {
+
+    if (lowerFilename.includes('dbd') ||
+      lowerFilename.includes('dead by daylight') ||
+      lowerContent.includes('dead by daylight') ||
+      lowerContent.includes('survivors') && lowerContent.includes('killers')) {
       return 'Dead by Daylight (asymmetric horror game)';
     }
-    
+
     if (lowerFilename.includes('sabam') || lowerContent.includes('sabam')) {
       return "Nicky's SABAM organization (Italian-American mafia family)";
     }
-    
+
     // Default: general Nicky lore
     return "Nicky 'Noodle Arms' A.I. Dente's universe";
   }
 
-  // Enhanced hierarchical extraction methods - NOW ROUTE TO CLAUDE FOR QUALITY
+  // Enhanced hierarchical extraction methods - Pure Gemini Implementation
   async extractStoriesFromDocument(content: string, filename: string): Promise<Array<{
-    content: string;
-    type: 'STORY' | 'LORE' | 'CONTEXT';
-    importance: number;
-    keywords: string[];
-  }>> {
-    console.log('🎯 Routing story extraction to Claude Sonnet 4.5...');
-    try {
-      const claude = await getAnthropicService();
-      return await claude.extractStoriesFromDocument(content, filename);
-    } catch (claudeError) {
-      console.warn('⚠️ Claude extraction failed, using Gemini fallback:', claudeError);
-      return this.extractStoriesFromDocumentGemini(content, filename);
-    }
-  }
-
-  // Original Gemini implementation kept as fallback
-  private async extractStoriesFromDocumentGemini(content: string, filename: string): Promise<Array<{
     content: string;
     type: 'STORY' | 'LORE' | 'CONTEXT';
     importance: number;
@@ -186,9 +155,9 @@ class GeminiService {
 
     const docType = this.detectDocumentType(filename, content);
     const docContext = this.detectDocumentContext(filename, content);
-    
+
     let extractionScope = '';
-    
+
     if (docType === 'organizational') {
       extractionScope = `📋 DOCUMENT TYPE: ORGANIZATIONAL/LORE
 This document describes characters, organizations, or world-building in Nicky's universe.
@@ -212,7 +181,7 @@ EXAMPLES of what to extract from an organizational document:
 - "Bruno 'The Basement' Bolognese is a Junior Associate and Bubba specialist" ✅
 - "SABAM ranks members by food items (LIT, PASTA, MEATBALL, etc.)" ✅
 - "The Ravioli Twins share one gaming chair for authenticity" ✅`;
-      
+
     } else if (docType === 'conversational') {
       extractionScope = `💬 DOCUMENT TYPE: CONVERSATIONAL
 This content has been pre-filtered to contain ONLY Nicky's statements, responses, and attributions.
@@ -226,7 +195,7 @@ EXTRACTION SCOPE - Include:
 ✅ Information Nicky shared about others
 
 Focus on what Nicky says and does, but include relevant context about people/things he discusses.`;
-      
+
     } else {
       extractionScope = `📄 DOCUMENT TYPE: GENERAL
 This document contains information relevant to Nicky's character and world.
@@ -284,7 +253,7 @@ Example format:
     // Use intelligent model selection with fallback
     return await executeWithDefaultModel(async (model) => {
       this.validateModel(model, 'extractStoriesFromDocument');
-      
+
       const response = await this.ai.models.generateContent({
         model,
         config: {
@@ -316,24 +285,6 @@ Example format:
   }
 
   async extractAtomicFactsFromStory(storyContent: string, storyContext: string): Promise<Array<{
-    content: string;
-    type: 'ATOMIC';
-    importance: number;
-    keywords: string[];
-    storyContext: string;
-  }>> {
-    console.log('🎯 Routing atomic fact extraction to Claude Sonnet 4.5...');
-    try {
-      const claude = await getAnthropicService();
-      return await claude.extractAtomicFactsFromStory(storyContent, storyContext);
-    } catch (claudeError) {
-      console.warn('⚠️ Claude extraction failed, using Gemini fallback:', claudeError);
-      return this.extractAtomicFactsFromStoryGemini(storyContent, storyContext);
-    }
-  }
-
-  // Original Gemini implementation kept as fallback
-  private async extractAtomicFactsFromStoryGemini(storyContent: string, storyContext: string): Promise<Array<{
     content: string;
     type: 'ATOMIC';
     importance: number;
@@ -403,7 +354,7 @@ Return as JSON array.`;
     try {
       return await executeWithDefaultModel(async (model) => {
         this.validateModel(model, 'extractAtomicFactsFromStory');
-        
+
         const response = await this.ai.models.generateContent({
           model,
           config: {
@@ -435,11 +386,11 @@ Return as JSON array.`;
       }, 'extraction'); // Purpose: extraction (atomic fact breakdown)
     } catch (error) {
       console.error("❌ Gemini atomic fact extraction error:", error);
-      
+
       // Classify the error for better handling
       const errorType = this.classifyGeminiError(error);
       console.warn(`⚠️ Fact extraction failed (${errorType}): Returning empty result with error flag`);
-      
+
       // Return empty array but with error metadata for upstream handling
       const result: any[] = [];
       (result as any)._extractionError = {
@@ -451,203 +402,180 @@ Return as JSON array.`;
     }
   }
 
-  // Legacy method for backward compatibility
-  async extractFactsFromDocument(content: string, filename: string): Promise<Array<{
+  async extractPodcastFacts(transcript: string, episodeNumber: number, episodeTitle: string): Promise<Array<{
     content: string;
-    type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
-    importance: number;
+    type: 'TOPIC' | 'QUOTE' | 'FACT' | 'STORY' | 'MOMENT';
     keywords: string[];
+    importance: number;
   }>> {
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("Gemini API key not configured");
     }
 
-    const prompt = `You are analyzing a document that may contain information about or from Nicky "Noodle Arms" A.I. Dente (a foul-mouthed Italian mafia-themed Dead by Daylight streamer who co-hosts "Camping Them Softly" podcast), the user who uploaded this document, or other people.
+    const prompt = `Extract key facts, memorable moments, topics discussed, and quotes from Episode ${episodeNumber} of the podcast "${episodeTitle}".
 
-CRITICAL: Pay attention to WHO is saying or doing what. This could be:
-- Content BY Nicky (his own statements/preferences) 
-- Content ABOUT Nicky (others describing him)
-- Content BY the USER (their own statements/preferences)
-- Content ABOUT other people (guests, characters, etc.)
+Focus on extracting 15-25 specific, factual pieces of information that would be useful to remember:
 
-Analyze document: "${filename}"
+1. KEY TOPICS discussed in detail
+2. SPECIFIC QUOTES or memorable lines  
+3. IMPORTANT POINTS or arguments made
+4. GUEST insights or expertise shared
+5. NOTABLE MOMENTS or events mentioned
+6. FACTS or statistics mentioned
+7. STORIES told during the episode
+8. GAMEPLAY moments or results
+9. AUDIENCE interactions or questions
+10. CONTROVERSIAL opinions or takes
 
-Content:
-${content}
+For each fact, provide:
+- A clear, factual statement (1-2 sentences max)
+- The type: TOPIC, QUOTE, FACT, STORY, or MOMENT
+- Keywords that would help find this information
+- Importance rating 1-5 (5 being most memorable/important)
 
-Extract relevant facts, but ONLY store information that is clearly ABOUT NICKY or BY NICKY. Do NOT store user preferences as Nicky's traits.
+TRANSCRIPT:
+${transcript}
 
-For each fact about Nicky, provide:
-- content: The actual fact with clear attribution (1-2 sentences max)
-- type: FACT (general info), PREFERENCE (likes/dislikes), LORE (backstory), or CONTEXT (situational)  
-- importance: 1-5 (5 being most important for character consistency)
-- keywords: 2-4 relevant keywords for retrieval
-
-ONLY include facts that are:
-1. Nicky's personality traits, preferences, or backstory
-2. Nicky's Dead by Daylight knowledge, strategies, or opinions
-3. Nicky's streaming/podcast content or habits  
-4. Nicky's relationships with other characters (Earl, Vice Don, etc.)
-
-DO NOT include:
-- User's personal preferences or statements
-- Other people's preferences (unless about Nicky)
-- General gaming information not specific to Nicky
-
-Return as JSON array. Only include substantial, unique facts about Nicky specifically.
-
-Example format:
+Respond with ONLY a JSON array - no other text:
 [
   {
-    "content": "Nicky states he prefers playing as Ghostface because of the stealth gameplay style",
-    "type": "PREFERENCE",
-    "importance": 4, 
-    "keywords": ["ghostface", "stealth", "killer", "preference"]
+    "content": "The specific fact or quote from the episode",
+    "type": "TOPIC",
+    "keywords": ["relevant", "search", "terms"],
+    "importance": 4
   }
 ]`;
 
     try {
+      // Use default model for podcast fact extraction
       return await executeWithDefaultModel(async (model) => {
-        this.validateModel(model, 'extractFactsFromDocument');
-        
+        this.validateModel(model, 'extractPodcastFacts');
+
         const response = await this.ai.models.generateContent({
           model,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                content: { type: "string" },
-                type: { type: "string", enum: ["FACT", "PREFERENCE", "LORE", "CONTEXT"] },
-                importance: { type: "number" },
-                keywords: { type: "array", items: { type: "string" } }
-              },
-              required: ["content", "type", "importance", "keywords"]
-            }
-          }
-        },
-        contents: prompt,
-      });
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  content: { type: "string" },
+                  type: { type: "string", enum: ["TOPIC", "QUOTE", "FACT", "STORY", "MOMENT"] },
+                  keywords: { type: "array", items: { type: "string" } },
+                  importance: { type: "number", minimum: 1, maximum: 5 }
+                },
+                required: ["content", "type", "keywords", "importance"]
+              }
+            },
+            temperature: 0.3 // Higher creativity for fact extraction
+          },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+        });
 
-      const rawJson = response.text;
-      if (rawJson) {
-        return JSON.parse(rawJson);
-      } else {
-        throw new Error("Empty response from Gemini");
-      }
-    }, 'extraction'); // Purpose: extraction (legacy fact extraction)
+        const rawJson = response.text;
+        if (rawJson) {
+          const facts = JSON.parse(rawJson);
+          console.log(`🧠 Extracted ${facts.length} facts from Episode ${episodeNumber}`);
+          return facts;
+        } else {
+          throw new Error("Empty response from Gemini");
+        }
+      }, 'extraction'); // Purpose: extraction (podcast facts)
     } catch (error) {
-      console.error("Gemini fact extraction error:", error);
-      throw new Error(`Failed to extract facts: ${error}`);
+      console.error(`❌ Gemini fact extraction error for Episode ${episodeNumber}:`, error);
+      console.warn(`⚠️ Returning empty array - fallback facts will be created`);
+      return []; // Return empty array if extraction fails - fallback will handle it
     }
   }
 
-  async deduplicateAndOptimizeFacts(facts: Array<{
-    content: string;
-    type: string;
-    importance: number;
-    keywords: string[];
-  }>): Promise<Array<{
-    content: string;
-    type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
-    importance: number;
-    keywords: string[];
-  }>> {
-    if (facts.length === 0) return [];
+  async extractDiscordMemberFacts(
+    username: string,
+    message: string,
+    existingFacts: string[] = []
+  ): Promise<Array<{ fact: string; confidence: number; category: string }>> {
+    if (!process.env.GEMINI_API_KEY) {
+      return [];
+    }
 
-    const prompt = `You are optimizing a knowledge base for Nicky "Noodle Arms" A.I. Dente, the Italian mafia-themed Dead by Daylight streamer.
+    const prompt = `You are analyzing a Discord message to extract factual information about the user.
 
-Analyze these facts and:
-1. Remove exact duplicates
-2. Merge similar facts into single, comprehensive entries
-3. Ensure each fact is unique and valuable
-4. Maintain character voice and personality
+USER: ${username}
+MESSAGE: "${message}"
 
-Facts to optimize:
-${JSON.stringify(facts, null, 2)}
+EXISTING FACTS ABOUT ${username}:
+${existingFacts.length > 0 ? '- ' + existingFacts.join('\n- ') : 'None'}
 
-Return the optimized facts as a JSON array. Keep the most important and unique information while eliminating redundancy.`;
+Extract NEW, specific, factual information about ${username} from this message. Focus on:
+1. **Gameplay Preferences**: Killer/survivor mains, playstyle, perk preferences, strategies
+2. **Game Knowledge**: Skill level, experience, opinions on game mechanics
+3. **Personal Info**: Timezone, availability, background (only if explicitly stated)
+4. **Other**: Hobbies, interests mentioned
+
+CRITICAL RULES:
+- Extract ONLY facts explicitly stated BY the user
+- Do NOT infer or assume facts
+- Do NOT extract facts about other people or characters
+- Do NOT duplicate existing facts
+- Be specific (e.g., "mains Nurse killer" not just "plays DBD")
+- Include confidence score (0-100) based on how explicitly stated the fact is
+
+Return as JSON. If no new facts can be extracted, return empty array:
+{
+  "facts": [
+    {
+      "fact": "Specific fact about ${username}",
+      "confidence": 85,
+      "category": "gameplay"
+    }
+  ]
+}`;
 
     try {
       return await executeWithDefaultModel(async (model) => {
-        this.validateModel(model, 'deduplicateAndOptimizeFacts');
-        
+        this.validateModel(model, 'extractDiscordMemberFacts');
+
         const response = await this.ai.models.generateContent({
           model,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "array",
-            items: {
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
               type: "object",
               properties: {
-                content: { type: "string" },
-                type: { type: "string", enum: ["FACT", "PREFERENCE", "LORE", "CONTEXT"] },
-                importance: { type: "number" },
-                keywords: { type: "array", items: { type: "string" } }
+                facts: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      fact: { type: "string" },
+                      confidence: { type: "number" },
+                      category: { type: "string", enum: ["gameplay", "preference", "personal", "other"] }
+                    },
+                    required: ["fact", "confidence", "category"]
+                  }
+                }
               },
-              required: ["content", "type", "importance", "keywords"]
-            }
-          }
-        },
-        contents: prompt,
-      });
+              required: ["facts"]
+            },
+            temperature: 0.1
+          },
+          contents: prompt,
+        });
 
-      const rawJson = response.text;
-      if (rawJson) {
-        return JSON.parse(rawJson);
-      } else {
-        throw new Error("Empty response from Gemini");
-      }
-    }, 'generation'); // Purpose: generation (optimize/dedup facts)
+        const rawJson = response.text;
+        if (rawJson) {
+          const result = JSON.parse(rawJson);
+          return result.facts || [];
+        }
+        return [];
+      }, 'extraction'); // Purpose: extraction (Discord member facts)
     } catch (error) {
-      console.error("❌ Gemini optimization error:", error);
-      
-      const errorType = this.classifyGeminiError(error);
-      console.warn(`⚠️ Memory optimization failed (${errorType}): Using original facts`);
-      
-      // Return original facts but flag that optimization failed
-      const result = facts as Array<{
-        content: string;
-        type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
-        importance: number;
-        keywords: string[];
-      }>;
-      (result as any)._optimizationError = {
-        type: errorType,
-        message: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString()
-      };
-      return result;
+      console.error('Discord fact extraction error:', error);
+      return [];
     }
   }
 
   async consolidateAndOptimizeMemories(memories: Array<{
-    id: string;
-    type: string;
-    content: string;
-    importance: number;
-    source?: string;
-  }>): Promise<Array<{
-    type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
-    content: string;
-    importance: number;
-    source?: string;
-  }>> {
-    console.log('🎯 Routing memory consolidation to Claude Sonnet 4.5...');
-    try {
-      const claude = await getAnthropicService();
-      return await claude.consolidateAndOptimizeMemories(memories);
-    } catch (claudeError) {
-      console.warn('⚠️ Claude consolidation failed, using Gemini fallback:', claudeError);
-      return this.consolidateAndOptimizeMemoriesGemini(memories);
-    }
-  }
-
-  // Original Gemini implementation kept as fallback
-  private async consolidateAndOptimizeMemoriesGemini(memories: Array<{
     id: string;
     type: string;
     content: string;
@@ -688,40 +616,40 @@ Response format:
     try {
       return await executeWithDefaultModel(async (model) => {
         this.validateModel(model, 'consolidateAndOptimizeMemories');
-        
+
         const response = await this.ai.models.generateContent({
           model,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                content: { type: "string" },
-                type: { type: "string", enum: ["FACT", "PREFERENCE", "LORE", "CONTEXT"] },
-                importance: { type: "number" },
-                source: { type: "string" }
-              },
-              required: ["content", "type", "importance"]
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  content: { type: "string" },
+                  type: { type: "string", enum: ["FACT", "PREFERENCE", "LORE", "CONTEXT"] },
+                  importance: { type: "number" },
+                  source: { type: "string" }
+                },
+                required: ["content", "type", "importance"]
+              }
             }
-          }
-        },
-        contents: prompt,
-      });
+          },
+          contents: prompt,
+        });
 
-      const rawJson = response.text;
-      if (rawJson) {
-        const consolidated = JSON.parse(rawJson);
-        return consolidated.map((item: any) => ({
-          ...item,
-          type: item.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT',
-          source: item.source || 'consolidation'
-        }));
-      } else {
-        throw new Error("Empty response from Gemini");
-      }
-    }, 'generation'); // Purpose: generation (consolidate memories)
+        const rawJson = response.text;
+        if (rawJson) {
+          const consolidated = JSON.parse(rawJson);
+          return consolidated.map((item: any) => ({
+            ...item,
+            type: item.type as 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT',
+            source: item.source || 'consolidation'
+          }));
+        } else {
+          throw new Error("Empty response from Gemini");
+        }
+      }, 'generation'); // Purpose: generation (consolidate memories)
     } catch (error) {
       console.error("Gemini consolidation error:", error);
       // Return simplified version of original memories if consolidation fails
@@ -750,7 +678,7 @@ Response format:
       // Build the full prompt for Gemini with conversational depth guidance
       // Don't wrap if it's already a formatted prompt (from Discord or other services)
       const isFormattedPrompt = userMessage.includes('Discord user') || userMessage.includes('Behavior Settings') || userMessage.includes('Prompt:');
-      
+
       const conversationalGuidance = !isFormattedPrompt ? `
 
 CONVERSATION STYLE - BE ENGAGING:
@@ -765,7 +693,7 @@ CONVERSATION STYLE - BE ENGAGING:
 
 Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${contextPrompt}`;
 
-      const fullPrompt = isFormattedPrompt 
+      const fullPrompt = isFormattedPrompt
         ? conversationalGuidance
         : conversationalGuidance;
 
@@ -787,14 +715,14 @@ ${coreIdentity}`;
       // Use intelligent model selection with fallback for chat
       const chatResult = await executeWithDefaultModel(async (model) => {
         this.validateModel(model, 'generateChatResponse');
-        
+
         console.log(`🤖 Generating chat response with ${model}`);
-        
+
         // Add timeout to prevent hanging
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error('Gemini API timeout after 45s')), 45000);
         });
-        
+
         const apiPromise = this.ai.models.generateContent({
           model,
           config: {
@@ -803,26 +731,26 @@ ${coreIdentity}`;
           },
           contents: fullPrompt,
         });
-        
+
         const response = await Promise.race([apiPromise, timeoutPromise]);
-        
+
         if (!response?.text) {
           throw new Error('Empty response from Gemini');
         }
-        
+
         return response.text;
       }, 'chat'); // Purpose: chat (conversational response)
 
       const rawContent = chatResult;
       const { filtered: filteredContent, wasFiltered } = contentFilter.filterContent(rawContent);
-      
+
       if (wasFiltered) {
         console.warn(`🚫 Gemini content filtered to prevent cancel-worthy language`);
       }
 
       // 🚫 CRITICAL: Strip ALL asterisks (emphasis, actions, italics - TTS doesn't need them)
       const asteriskPattern = /\*+([^*]+)\*+/g;
-      
+
       const strippedContent = filteredContent.replace(asteriskPattern, (match, innerText) => {
         console.warn(`🚫 Stripped asterisks from Gemini response: ${match}`);
         return innerText; // Keep the text, remove the asterisks
@@ -833,47 +761,47 @@ ${coreIdentity}`;
         // Split by emotion tags to process text segments
         const emotionTagPattern = /(\[[^\]]+\])/g;
         const segments = text.split(emotionTagPattern);
-        
+
         const fixed = segments.map((segment, index) => {
           // Skip emotion tags themselves
           if (segment.match(/^\[[^\]]+\]$/)) {
             return segment;
           }
-          
+
           // Process text segments
           if (segment.trim()) {
             const trimmed = segment.trim();
             const lastChar = trimmed[trimmed.length - 1];
-            
+
             // If already has ending punctuation, keep it
             if (['.', '!', '?', '…'].includes(lastChar)) {
               return segment;
             }
-            
+
             // Check if next segment is an emotion tag (don't add period before emotion tag)
             const nextSegment = segments[index + 1];
             if (nextSegment && nextSegment.match(/^\[[^\]]+\]$/)) {
               return segment;
             }
-            
+
             // Add appropriate punctuation
             // Use exclamation for all-caps phrases
             if (trimmed.length > 3 && trimmed === trimmed.toUpperCase()) {
               console.log(`🔧 Adding exclamation to: "${trimmed}"`);
               return segment.trimEnd() + '!';
             }
-            
+
             // Default: add period
             console.log(`🔧 Adding period to: "${trimmed}"`);
             return segment.trimEnd() + '.';
           }
-          
+
           return segment;
         });
-        
+
         return fixed.join('');
       };
-      
+
       const finalContent = fixPunctuation(strippedContent);
 
       const processingTime = Date.now() - startTime;
@@ -885,13 +813,13 @@ ${coreIdentity}`;
       };
     } catch (error) {
       console.error('❌ Gemini chat API error:', error);
-      
+
       // Classify error for appropriate handling
       console.log(`🔄 Gemini error occurred: ${error}`);
-      
+
       // Provide graceful degradation instead of throwing
       console.warn("⚠️ Gemini API failed, providing fallback response");
-      
+
       return {
         content: "Ay, my backup brain's having a moment! Give me a sec to recalibrate... 🤖💭",
         processingTime: Date.now() - startTime,
@@ -915,7 +843,7 @@ ${coreIdentity}`;
     // Use production model for critical analysis tasks
     return await executeWithProductionModel(async (model) => {
       this.validateModel(model, 'analyzeContentForFlags');
-      
+
       const response = await this.ai.models.generateContent({
         model,
         config: {
@@ -1035,124 +963,7 @@ Example format:
     try {
       return await executeWithDefaultModel(async (model) => {
         this.validateModel(model, 'parseShowSegments');
-        
-        const response = await this.ai.models.generateContent({
-          model,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                title: { type: "string" },
-                description: { type: "string" },
-                segmentType: { type: "string" },
-                content: { type: "string" },
-                startTime: { type: "number" },
-                endTime: { type: "number" }
-              },
-              required: ["title", "description", "segmentType", "content", "startTime"]
-            }
-          }
-        },
-        contents: prompt,
-      });
 
-      const rawJson = response.text;
-      if (rawJson) {
-        const segments = JSON.parse(rawJson);
-        console.log(`🎙️ Parsed ${segments.length} show segments from "${episodeTitle}"`);
-        return segments;
-      } else {
-        throw new Error("Empty response from Gemini");
-      }
-    }, 'extraction'); // Purpose: extraction (podcast segments)
-    } catch (error) {
-      console.error("❌ Gemini segment parsing error:", error);
-      
-      const errorType = this.classifyGeminiError(error);
-      console.warn(`⚠️ Podcast segment parsing failed (${errorType}): No segments extracted`);
-      
-      // Return empty array with error information
-      const result: any[] = [];
-      (result as any)._parsingError = {
-        type: errorType,
-        message: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
-        episodeTitle
-      };
-      return result;
-    }
-  }
-
-  // Extract podcast facts - NOW ROUTES TO CLAUDE
-  async extractPodcastFacts(transcript: string, episodeNumber: number, episodeTitle: string): Promise<Array<{
-    content: string;
-    type: 'TOPIC' | 'QUOTE' | 'FACT' | 'STORY' | 'MOMENT';
-    keywords: string[];
-    importance: number;
-  }>> {
-    console.log('🎯 Routing podcast fact extraction to Claude Sonnet 4.5...');
-    try {
-      const claude = await getAnthropicService();
-      return await claude.extractPodcastFacts(transcript, episodeNumber, episodeTitle);
-    } catch (claudeError) {
-      console.warn('⚠️ Claude extraction failed, using Gemini fallback:', claudeError);
-      return this.extractPodcastFactsGemini(transcript, episodeNumber, episodeTitle);
-    }
-  }
-
-  // Original Gemini implementation kept as fallback
-  private async extractPodcastFactsGemini(transcript: string, episodeNumber: number, episodeTitle: string): Promise<Array<{
-    content: string;
-    type: 'TOPIC' | 'QUOTE' | 'FACT' | 'STORY' | 'MOMENT';
-    keywords: string[];
-    importance: number;
-  }>> {
-    if (!process.env.GEMINI_API_KEY) {
-      throw new Error("Gemini API key not configured");
-    }
-
-    const prompt = `Extract key facts, memorable moments, topics discussed, and quotes from Episode ${episodeNumber} of the podcast "${episodeTitle}".
-
-Focus on extracting 15-25 specific, factual pieces of information that would be useful to remember:
-
-1. KEY TOPICS discussed in detail
-2. SPECIFIC QUOTES or memorable lines  
-3. IMPORTANT POINTS or arguments made
-4. GUEST insights or expertise shared
-5. NOTABLE MOMENTS or events mentioned
-6. FACTS or statistics mentioned
-7. STORIES told during the episode
-8. GAMEPLAY moments or results
-9. AUDIENCE interactions or questions
-10. CONTROVERSIAL opinions or takes
-
-For each fact, provide:
-- A clear, factual statement (1-2 sentences max)
-- The type: TOPIC, QUOTE, FACT, STORY, or MOMENT
-- Keywords that would help find this information
-- Importance rating 1-5 (5 being most memorable/important)
-
-TRANSCRIPT:
-${transcript}
-
-Respond with ONLY a JSON array - no other text:
-[
-  {
-    "content": "The specific fact or quote from the episode",
-    "type": "TOPIC",
-    "keywords": ["relevant", "search", "terms"],
-    "importance": 4
-  }
-]`;
-
-    try {
-      // Use default model for podcast fact extraction
-      return await executeWithDefaultModel(async (model) => {
-        this.validateModel(model, 'extractPodcastFacts');
-        
         const response = await this.ai.models.generateContent({
           model,
           config: {
@@ -1162,139 +973,44 @@ Respond with ONLY a JSON array - no other text:
               items: {
                 type: "object",
                 properties: {
+                  title: { type: "string" },
+                  description: { type: "string" },
+                  segmentType: { type: "string" },
                   content: { type: "string" },
-                  type: { type: "string", enum: ["TOPIC", "QUOTE", "FACT", "STORY", "MOMENT"] },
-                  keywords: { type: "array", items: { type: "string" } },
-                  importance: { type: "number", minimum: 1, maximum: 5 }
+                  startTime: { type: "number" },
+                  endTime: { type: "number" }
                 },
-                required: ["content", "type", "keywords", "importance"]
+                required: ["title", "description", "segmentType", "content", "startTime"]
               }
-            },
-            temperature: 0.3 // Higher creativity for fact extraction
+            }
           },
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          contents: prompt,
         });
 
         const rawJson = response.text;
         if (rawJson) {
-          const facts = JSON.parse(rawJson);
-          console.log(`🧠 Extracted ${facts.length} facts from Episode ${episodeNumber}`);
-          return facts;
+          const segments = JSON.parse(rawJson);
+          console.log(`🎙️ Parsed ${segments.length} show segments from "${episodeTitle}"`);
+          return segments;
         } else {
           throw new Error("Empty response from Gemini");
         }
-      }, 'extraction'); // Purpose: extraction (podcast facts)
+      }, 'extraction'); // Purpose: extraction (podcast segments)
     } catch (error) {
-      console.error(`❌ Gemini fact extraction error for Episode ${episodeNumber}:`, error);
-      console.warn(`⚠️ Returning empty array - fallback facts will be created`);
-      return []; // Return empty array if extraction fails - fallback will handle it
-    }
-  }
+      console.error("❌ Gemini segment parsing error:", error);
 
-  /**
-   * Extract facts about a Discord member - NOW ROUTES TO CLAUDE
-   */
-  async extractDiscordMemberFacts(
-    username: string,
-    message: string,
-    existingFacts: string[] = []
-  ): Promise<Array<{ fact: string; confidence: number; category: string }>> {
-    console.log('🎯 Routing Discord member fact extraction to Claude Sonnet 4.5...');
-    try {
-      const claude = await getAnthropicService();
-      return await claude.extractDiscordMemberFacts(username, message, existingFacts);
-    } catch (claudeError) {
-      console.warn('⚠️ Claude extraction failed, using Gemini fallback:', claudeError);
-      return this.extractDiscordMemberFactsGemini(username, message, existingFacts);
-    }
-  }
+      const errorType = this.classifyGeminiError(error);
+      console.warn(`⚠️ Podcast segment parsing failed (${errorType}): No segments extracted`);
 
-  /**
-   * Original Gemini implementation kept as fallback
-   */
-  private async extractDiscordMemberFactsGemini(
-    username: string,
-    message: string,
-    existingFacts: string[] = []
-  ): Promise<Array<{ fact: string; confidence: number; category: string }>> {
-    if (!process.env.GEMINI_API_KEY) {
-      return [];
-    }
-
-    const prompt = `You are analyzing a Discord message to extract factual information about the user.
-
-USER: ${username}
-MESSAGE: "${message}"
-
-EXISTING FACTS ABOUT ${username}:
-${existingFacts.length > 0 ? '- ' + existingFacts.join('\n- ') : 'None'}
-
-Extract NEW, specific, factual information about ${username} from this message. Focus on:
-1. **Gameplay Preferences**: Killer/survivor mains, playstyle, perk preferences, strategies
-2. **Game Knowledge**: Skill level, experience, opinions on game mechanics
-3. **Personal Info**: Timezone, availability, background (only if explicitly stated)
-4. **Other**: Hobbies, interests mentioned
-
-CRITICAL RULES:
-- Extract ONLY facts explicitly stated BY the user
-- Do NOT infer or assume facts
-- Do NOT extract facts about other people or characters
-- Do NOT duplicate existing facts
-- Be specific (e.g., "mains Nurse killer" not just "plays DBD")
-- Include confidence score (0-100) based on how explicitly stated the fact is
-
-Return as JSON. If no new facts can be extracted, return empty array:
-{
-  "facts": [
-    {
-      "fact": "Specific fact about ${username}",
-      "confidence": 85,
-      "category": "gameplay"
-    }
-  ]
-}`;
-
-    try {
-      return await executeWithDefaultModel(async (model) => {
-        this.validateModel(model, 'extractDiscordMemberFacts');
-        
-        const response = await this.ai.models.generateContent({
-          model,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "object",
-            properties: {
-              facts: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    fact: { type: "string" },
-                    confidence: { type: "number" },
-                    category: { type: "string", enum: ["gameplay", "preference", "personal", "other"] }
-                  },
-                  required: ["fact", "confidence", "category"]
-                }
-              }
-            },
-            required: ["facts"]
-          },
-          temperature: 0.1
-        },
-        contents: prompt,
-      });
-
-      const rawJson = response.text;
-      if (rawJson) {
-        const result = JSON.parse(rawJson);
-        return result.facts || [];
-      }
-      return [];
-    }, 'extraction'); // Purpose: extraction (Discord member facts)
-    } catch (error) {
-      console.error('Discord fact extraction error:', error);
-      return [];
+      // Return empty array with error information
+      const result: any[] = [];
+      (result as any)._parsingError = {
+        type: errorType,
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+        episodeTitle
+      };
+      return result;
     }
   }
 
@@ -1321,11 +1037,11 @@ Return as JSON. If no new facts can be extracted, return empty array:
     }
 
     // Network/timeout errors
-    if (statusCode >= 500 || 
-        errorMessage.includes('timeout') ||
-        errorMessage.includes('ETIMEDOUT') ||
-        errorMessage.includes('ECONNRESET') ||
-        errorMessage.includes('network')) {
+    if (statusCode >= 500 ||
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('ETIMEDOUT') ||
+      errorMessage.includes('ECONNRESET') ||
+      errorMessage.includes('network')) {
       return 'NETWORK_ERROR';
     }
 
@@ -1354,14 +1070,14 @@ Title:`;
 
       return await executeWithDefaultModel(async (model) => {
         this.validateModel(model, 'generateConversationTitle');
-        
+
         const result = await this.ai.models.generateContent({
           model,
           contents: prompt
         });
-        
+
         const title = result.text?.trim() || '';
-        
+
         // Clean up the title - remove quotes, periods, extra whitespace
         return title.replace(/^["']|["']$/g, '').replace(/\.$/, '').trim().substring(0, 60);
       }, 'generation'); // Purpose: generation (title creation)
@@ -1377,7 +1093,7 @@ Title:`;
 export async function generateLoreContent(prompt: string): Promise<any> {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-    
+
     // Use model selector for lore generation
     return await executeWithDefaultModel(async (model) => {
       const response = await ai.models.generateContent({
