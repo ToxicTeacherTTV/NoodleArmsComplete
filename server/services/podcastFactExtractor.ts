@@ -10,22 +10,8 @@ export class PodcastFactExtractor {
    */
   async extractAndStoreFacts(
     storage: IStorage,
-    profileId: string,
-    episodeId: string,
-    episodeNumber: number,
-    title: string,
-    transcript: string,
-    guestNames: string[] = [],
-    importance: 4
-        });
-
-if (topics && topics.length > 0) {
-  topics.forEach(topic => {
-    extractedFacts.push({
-      content: `Episode ${episodeNumber} discussed ${topic}`,
-      type: 'TOPIC',
-      keywords: [topic.toLowerCase(), 'episode', episodeNumber.toString()],
-      importance: 3
+    keywords: [topic.toLowerCase(), 'episode', episodeNumber.toString()],
+    importance: 3
     });
   });
 }
