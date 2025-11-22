@@ -53,10 +53,10 @@ class AnthropicService {
 
   // 🧠 Parse training examples to separate thinking/strategy from conversation style
   // 🚀 NEW: Uses AI for intelligent pattern detection instead of regex
-  private async parseTrainingExamples(examples: any[]): Promise<{ 
-    strategies: string[], 
+  private async parseTrainingExamples(examples: any[]): Promise<{
+    strategies: string[],
     conversations: string[],
-    consolidatedStyle?: string 
+    consolidatedStyle?: string
   }> {
     // If we have 3+ examples, consolidate them into unified style guide
     if (examples.length >= 3) {
@@ -72,21 +72,21 @@ class AnthropicService {
         // Fall through to individual example parsing
       }
     }
-    
+
     // 🎯 NEW: Use AI-powered parsing for < 3 examples or if consolidation fails
     const strategies: string[] = [];
     const conversations: string[] = [];
-    
+
     for (const example of examples) {
       if (!example.extractedContent) continue;
-      
+
       try {
         const parsed = await this.intelligentlyParseExample(example.extractedContent);
-        
+
         if (parsed.strategy && parsed.strategy.length > 50) {
           strategies.push(parsed.strategy.substring(0, 800));
         }
-        
+
         if (parsed.conversation && parsed.conversation.length > 50) {
           conversations.push(parsed.conversation.substring(0, 1200));
         }
@@ -96,8 +96,8 @@ class AnthropicService {
         conversations.push(example.extractedContent.substring(0, 1200));
       }
     }
-    
-    return { 
+
+    return {
       strategies: strategies.slice(0, 5), // Max 5 strategy examples
       conversations: conversations.slice(0, 8) // Max 8 conversation examples
     };
@@ -132,32 +132,11 @@ Examples:
 If the entire content is just conversation with no meta-thinking, put it all in "conversation" and leave "strategy" empty.`;
 
     try {
-      // Try Gemini first (fast and free) - use dynamic import to avoid circular dependency
-      const { geminiService } = await import('./gemini.js');
-      const geminiResponse = await geminiService.generateChatResponse(
-        prompt,
-        "You are a text analysis expert. Separate internal thinking from actual conversation. Return ONLY valid JSON.",
-        ''
-      );
-      
-      // Clean up response
-      let jsonText = geminiResponse.content.trim();
-      jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-      
-      const parsed = JSON.parse(jsonText);
-      return {
-        strategy: parsed.strategy || '',
-        conversation: parsed.conversation || content
-      };
-      
-    } catch (geminiError) {
-      // Fallback to Claude
-      console.warn('⚠️ Gemini parsing failed, using Claude');
-      
+      // Use Claude for intelligent parsing
       const response = await anthropic.messages.create({
         model: DEFAULT_MODEL_STR,
         max_tokens: 1000,
-        temperature: 0.1, // Low temp for consistent parsing
+        temperature: 0.1,
         system: "You are a text analysis expert. Separate internal thinking from actual conversation. Return ONLY valid JSON.",
         messages: [{
           role: 'user',
@@ -167,12 +146,18 @@ If the entire content is just conversation with no meta-thinking, put it all in 
 
       const textContent = Array.isArray(response.content) ? response.content[0] : response.content;
       let jsonText = textContent && 'text' in textContent ? textContent.text : '';
-      jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-      
+      jsonText = jsonText.replace(/```json\s*|```\s*/g, '').trim();
+
       const parsed = JSON.parse(jsonText);
       return {
         strategy: parsed.strategy || '',
         conversation: parsed.conversation || content
+      };
+    } catch (error) {
+      console.warn('⚠️ AI parsing failed for example, using as conversation:', error);
+      return {
+        strategy: '',
+        conversation: content
       };
     }
   }
@@ -216,21 +201,7 @@ Output format:
 Be specific and actionable. Extract the ESSENCE of the style, not just list examples.`;
 
     try {
-      // Try Gemini first (free tier) - use dynamic import to avoid circular dependency
-      const { geminiService } = await import('./gemini.js');
-      const geminiResponse = await geminiService.generateChatResponse(
-        prompt,
-        "You are a personality analysis expert. Extract unified behavioral patterns from multiple examples into one concise style guide.",
-        ''
-      );
-      
-      console.log(`✅ Consolidated ${examples.length} training examples into unified style guide (Gemini)`);
-      return geminiResponse.content;
-      
-    } catch (geminiError) {
-      // Fallback to Claude
-      console.warn('⚠️ Gemini failed, using Claude for consolidation');
-      
+      // Use Claude for consolidation
       const response = await anthropic.messages.create({
         model: DEFAULT_MODEL_STR,
         max_tokens: 1500,
@@ -244,9 +215,12 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
 
       const content = Array.isArray(response.content) ? response.content[0] : response.content;
       const textContent = content && 'text' in content ? content.text : '';
-      
+
       console.log(`✅ Consolidated ${examples.length} training examples into unified style guide (Claude)`);
       return textContent;
+    } catch (error) {
+      console.warn('⚠️ Consolidation failed:', error);
+      return '';
     }
   }
 
@@ -254,7 +228,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
   private extractKeywords(message: string): string[] {
     // Remove common stop words and extract meaningful terms
     const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them']);
-    
+
     return message
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, '') // Remove special characters
@@ -264,7 +238,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
         const isNumber = /^\d+$/.test(word);
         const isLongEnough = word.length > 2;
         const isNotStopWord = !stopWords.has(word);
-        
+
         return (isNumber || isLongEnough) && isNotStopWord;
       })
       .slice(0, 8); // Limit to 8 most relevant keywords
@@ -276,7 +250,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
     conversationId?: string,
     personalityState?: any,
     mode?: string
-  ): Promise<{keywords: string[], contextualQuery: string}> {
+  ): Promise<{ keywords: string[], contextualQuery: string }> {
     // Start with base keywords
     const baseKeywords = this.extractKeywords(message);
     let enhancedKeywords = [...baseKeywords];
@@ -290,14 +264,14 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
           // Extract keywords from recent conversation for context continuity
           const conversationText = recentMessages.map(m => m.content).join(' ');
           const conversationKeywords = this.extractKeywords(conversationText);
-          
+
           // Add conversation keywords with lower weight
           enhancedKeywords.push(...conversationKeywords.slice(0, 3));
-          
+
           // Create enhanced contextual query
           const recentContext = recentMessages.slice(-1)[0]?.content || '';
           if (recentContext && recentContext !== message) {
-            contextualQuery = `In context of: "${recentContext}" - User asks: ${message}`;
+            contextualQuery = `In context of: "${recentContext}" - User asks: ${message} `;
           }
         }
       }
@@ -314,14 +288,14 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
 
       // Remove duplicates and limit total
       const uniqueKeywords = Array.from(new Set(enhancedKeywords)).slice(0, 12);
-      
+
       console.log(`🔍 Enhanced keywords: base(${baseKeywords.length}) + context(${enhancedKeywords.length - baseKeywords.length}) = ${uniqueKeywords.length} total`);
-      
+
       return {
         keywords: uniqueKeywords,
         contextualQuery: contextualQuery
       };
-      
+
     } catch (error) {
       console.warn('⚠️ Contextual keyword extraction failed, using base keywords:', error);
       return {
@@ -406,11 +380,11 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
   ): Promise<Array<any & { contextualRelevance?: number, retrievalMethod?: string; knowledgeGap?: { hasGap: boolean; missingTopics: string[] } }>> {
     try {
       console.log(`🧠 Enhanced contextual memory retrieval for: "${userMessage}"`);
-      
+
       // 🎯 Detect query intent
       const queryIntent = this.detectQueryIntent(userMessage);
-      console.log(`🎯 Query intent detected: ${queryIntent}`);
-      
+      console.log(`🎯 Query intent detected: ${queryIntent} `);
+
       // Extract enhanced keywords with context
       const { keywords, contextualQuery } = await this.extractContextualKeywords(
         userMessage,
@@ -424,38 +398,38 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
       const candidateLimit = mode === 'STREAMING' ? limit * 1.5 : limit * 3;
       const { embeddingService } = await import('./embeddingService');
       const hybridResults = await embeddingService.hybridSearch(contextualQuery, profileId, candidateLimit);
-      
+
       // Extract memories from hybrid search results with enhanced scoring
       const semanticMemories = hybridResults.semantic.map((result: any) => ({
         ...result,
         contextualRelevance: this.calculateContextualRelevance(
-          result, 
-          personalityState, 
-          mode, 
-          keywords, 
+          result,
+          personalityState,
+          mode,
+          keywords,
           conversationId,
           queryIntent
         ),
         retrievalMethod: 'semantic_enhanced'
       }));
-      
+
       const keywordMemories = hybridResults.keyword.map((result: any) => ({
-        ...result, 
+        ...result,
         contextualRelevance: this.calculateContextualRelevance(
-          result, 
-          personalityState, 
-          mode, 
+          result,
+          personalityState,
+          mode,
           keywords,
           conversationId,
           queryIntent
         ),
         retrievalMethod: 'keyword_enhanced'
       }));
-      
+
       // Combine and deduplicate with enhanced scoring
       const seenIds = new Set();
       const combinedResults = [];
-      
+
       // Prioritize semantic results with enhanced contextual relevance
       for (const result of semanticMemories) {
         if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
@@ -466,7 +440,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
           });
         }
       }
-      
+
       // Add keyword results that weren't found semantically
       for (const result of keywordMemories) {
         if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
@@ -477,45 +451,45 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
           });
         }
       }
-      
+
       // 🎯 PHASE 2: Dynamic re-ranking with diversity scoring
       const selectedResults = [];
       const sortedCandidates = combinedResults.sort((a, b) => b.baseScore - a.baseScore);
-      
+
       for (const candidate of sortedCandidates) {
         if (selectedResults.length >= limit) break;
-        
+
         // Calculate diversity score based on already selected memories
         const diversityScore = this.calculateDiversityScore(candidate, selectedResults);
-        
+
         // Final score = base score * diversity penalty
         candidate.finalScore = candidate.baseScore * diversityScore;
         candidate.diversityScore = diversityScore;
-        
+
         selectedResults.push(candidate);
       }
-      
+
       // Re-sort by final score after diversity adjustments
       selectedResults.sort((a, b) => b.finalScore - a.finalScore);
-      
+
       // 🎯 PHASE 3: Knowledge gap detection
       const knowledgeGap = await this.detectKnowledgeGap(userMessage, selectedResults, keywords);
-      
+
       if (knowledgeGap.hasGap) {
-        console.log(`⚠️ Knowledge gap detected! Missing topics: ${knowledgeGap.missingTopics.join(', ')}`);
+        console.log(`⚠️ Knowledge gap detected! Missing topics: ${knowledgeGap.missingTopics.join(', ')} `);
       }
-      
-      console.log(`🎯 Contextual search: ${semanticMemories.length} semantic + ${keywordMemories.length} keyword → ${selectedResults.length} diverse results (gap: ${knowledgeGap.hasGap})`);
-      
+
+      console.log(`🎯 Contextual search: ${semanticMemories.length} semantic + ${keywordMemories.length} keyword → ${selectedResults.length} diverse results(gap: ${knowledgeGap.hasGap})`);
+
       // Attach knowledge gap info to results
       return selectedResults.map(r => ({
         ...r,
         knowledgeGap: knowledgeGap.hasGap ? knowledgeGap : undefined
       }));
-      
+
     } catch (error) {
       console.warn('⚠️ Enhanced contextual memory retrieval failed, falling back to basic retrieval:', error);
-      
+
       // Fallback to basic memory search
       const fallbackResults = await storage.searchEnrichedMemoryEntries(profileId, userMessage);
       return fallbackResults.filter(m => (m.confidence || 50) >= 60).map(m => ({
@@ -539,9 +513,9 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
 
     // 🎯 NEW: Recency bias - boost memories from current conversation
     if (conversationId && memory.metadata?.conversationId === conversationId) {
-      const ageInDays = memory.createdAt ? 
+      const ageInDays = memory.createdAt ?
         (Date.now() - new Date(memory.createdAt).getTime()) / (1000 * 60 * 60 * 24) : 999;
-      
+
       if (ageInDays < 1) relevance += 0.5; // Today's conversation
       else if (ageInDays < 7) relevance += 0.3; // This week
       else if (ageInDays < 30) relevance += 0.1; // This month
@@ -618,7 +592,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
   // 🎯 NEW: Detect query intent from user message
   private detectQueryIntent(message: string): string {
     const lower = message.toLowerCase();
-    
+
     if (/^(tell me|what do you know|explain|describe).*(about|regarding)/.test(lower)) {
       return 'tell_about';
     }
@@ -631,24 +605,24 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
     if (/(how (do|can) (i|you)|what's the way to)/.test(lower)) {
       return 'how_to';
     }
-    
+
     return 'general';
   }
 
   // 🎯 NEW: Calculate diversity penalty for similar memories
   private calculateDiversityScore(memory: any, selectedMemories: any[]): number {
     if (selectedMemories.length === 0) return 1.0;
-    
+
     let similarityPenalty = 0;
     const memoryKeywords = new Set(memory.keywords || []);
     const memoryType = memory.type;
-    
+
     for (const selected of selectedMemories) {
       // Type similarity penalty
       if (selected.type === memoryType) {
         similarityPenalty += 0.1;
       }
-      
+
       // Keyword overlap penalty
       const selectedKeywords = new Set(selected.keywords || []);
       const overlap = Array.from(memoryKeywords).filter(k => selectedKeywords.has(k)).length;
@@ -657,7 +631,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
         similarityPenalty += (overlap / total) * 0.2;
       }
     }
-    
+
     return Math.max(0, 1.0 - similarityPenalty);
   }
 
@@ -669,29 +643,29 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
   ): Promise<{ hasGap: boolean; missingTopics: string[] }> {
     // Extract potential topics from the query
     const topics = keywords.filter(k => k.length > 4); // Focus on substantive words
-    
+
     if (topics.length === 0) {
       return { hasGap: false, missingTopics: [] };
     }
-    
+
     // 🎯 Identify likely proper nouns (capitalized in original message) - these are most specific
     const messageWords = userMessage.split(/\s+/);
-    const properNouns = messageWords.filter(word => 
-      word.length > 3 && 
-      /^[A-Z]/.test(word) && 
+    const properNouns = messageWords.filter(word =>
+      word.length > 3 &&
+      /^[A-Z]/.test(word) &&
       !/^(What|Tell|About|Dead|Daylight|The|When|Where|How)$/i.test(word) // Exclude common question words
     ).map(w => w.toLowerCase());
-    
+
     // Check if SPECIFIC topics are mentioned in memories
     const missingTopics: string[] = [];
     const missingProperNouns: string[] = [];
-    
+
     for (const topic of topics) {
-      const found = retrievedMemories.some(m => 
+      const found = retrievedMemories.some(m =>
         m.content?.toLowerCase().includes(topic.toLowerCase()) ||
         m.keywords?.some((k: string) => k.toLowerCase() === topic.toLowerCase())
       );
-      
+
       if (!found) {
         missingTopics.push(topic);
         // Check if this is a proper noun (more likely to be a specific entity)
@@ -700,21 +674,21 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
         }
       }
     }
-    
+
     // 🎯 REFINED: Knowledge gap detection logic
     const hasFewMemories = retrievedMemories.length < 5;
     const hasUnmatchedTopics = missingTopics.length > 0;
     const hasUnmatchedProperNouns = missingProperNouns.length > 0;
-    
+
     // Trigger knowledge gap if:
     // 1. Proper noun (specific entity) is completely missing - HIGH PRIORITY
     // 2. OR few memories (< 5) and ANY topic missing
     // 3. OR many topics missing (> 50% coverage)
     const topicCoverage = topics.length > 0 ? (topics.length - missingTopics.length) / topics.length : 1;
     const isLikelyGap = hasUnmatchedProperNouns || // Proper noun missing = definite gap
-                        (hasFewMemories && hasUnmatchedTopics) || 
-                        topicCoverage < 0.5;
-    
+      (hasFewMemories && hasUnmatchedTopics) ||
+      topicCoverage < 0.5;
+
     return {
       hasGap: isLikelyGap,
       missingTopics: isLikelyGap ? (missingProperNouns.length > 0 ? missingProperNouns : missingTopics) : []
@@ -758,7 +732,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
     // Build context from memories and documents (moved outside try block for fallback access)
     let contextPrompt = "";
     let knowledgeGapInfo: any = null; // Store knowledge gap info for later use
-    
+
     try {
       // 💬 NEW: Add recent conversation history for context continuity
       // 🚀 OPTIMIZATION: Use fewer messages for STREAMING mode (4 vs 8)
@@ -771,7 +745,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
             recentMessages.forEach(msg => {
               const role = msg.type === 'USER' ? 'USER' : 'NICKY';
               const cleanContent = msg.content.replace(/\[bronx[^\]]*\]/g, '').trim(); // Remove voice tags for cleaner context
-              contextPrompt += `${role}: ${cleanContent}\n`;
+              contextPrompt += `${role}: ${cleanContent} \n`;
             });
             contextPrompt += "\n";
             console.log(`💬 Added ${recentMessages.length} recent messages to conversation context`);
@@ -780,32 +754,32 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
           console.warn('⚠️ Failed to retrieve conversation context:', contextError);
         }
       }
-      
+
       if (relevantMemories.length > 0) {
         contextPrompt += "\n\nRELEVANT MEMORIES:\n";
         relevantMemories.forEach(memory => {
           // 🚀 ENHANCED: Include story context for atomic facts to preserve narrative coherence
           if (memory.isAtomicFact && (memory as any).parentStory) {
-            contextPrompt += `- ${memory.content}\n`;
-            contextPrompt += `  ↳ Story Context: ${(memory as any).parentStory.content}\n`;
+            contextPrompt += `- ${memory.content} \n`;
+            contextPrompt += `  ↳ Story Context: ${(memory as any).parentStory.content} \n`;
           } else if (memory.storyContext) {
             // Include brief story context if available
-            contextPrompt += `- ${memory.content}\n`;
-            contextPrompt += `  ↳ Context: ${memory.storyContext}\n`;
+            contextPrompt += `- ${memory.content} \n`;
+            contextPrompt += `  ↳ Context: ${memory.storyContext} \n`;
           } else {
             // Regular fact without story context
-            contextPrompt += `- ${memory.content}\n`;
+            contextPrompt += `- ${memory.content} \n`;
           }
-          
+
           // 🎙️ NEW: Include episode source if memory came from a podcast
           if (memory.source === 'podcast_episode' && memory.temporalContext) {
-            contextPrompt += `  📍 From: ${memory.temporalContext}\n`;
+            contextPrompt += `  📍 From: ${memory.temporalContext} \n`;
           } else if (memory.temporalContext) {
             // Show temporal context for other sources too
-            contextPrompt += `  ⏰ When: ${memory.temporalContext}\n`;
+            contextPrompt += `  ⏰ When: ${memory.temporalContext} \n`;
           }
         });
-        
+
         // 🎯 Store knowledge gap info for later (we'll add instructions after web search)
         knowledgeGapInfo = (relevantMemories[0] as any)?.knowledgeGap;
       }
@@ -827,13 +801,13 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
           keywords = this.extractKeywords(userMessage);
         }
         const podcastContent = await storage.getRelevantPodcastContent(profileId, keywords);
-        
+
         if (podcastContent.episodes.length > 0) {
           contextPrompt += "\n\nRELEVANT PODCAST EPISODES:\n";
           podcastContent.episodes.forEach(episode => {
             contextPrompt += `- Episode #${episode.episodeNumber}: "${episode.title}"`;
             if (episode.description) {
-              contextPrompt += ` - ${episode.description}`;
+              contextPrompt += ` - ${episode.description} `;
             }
             if ((episode as any).guestInfo) {
               contextPrompt += ` (Guest: ${(episode as any).guestInfo})`;
@@ -843,7 +817,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
             }
             contextPrompt += `\n`;
             if (episode.notes) {
-              contextPrompt += `  ↳ Notes: ${episode.notes.substring(0, 200)}${episode.notes.length > 200 ? '...' : ''}\n`;
+              contextPrompt += `  ↳ Notes: ${episode.notes.substring(0, 200)}${episode.notes.length > 200 ? '...' : ''} \n`;
             }
           });
         }
@@ -855,14 +829,14 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
             const timestamp = Math.floor(startTime / 60) + ':' + (startTime % 60).toString().padStart(2, '0');
             contextPrompt += `- [${timestamp}] "${segment.title}"`;
             if (segment.description) {
-              contextPrompt += ` - ${segment.description}`;
+              contextPrompt += ` - ${segment.description} `;
             }
             if (segment.segmentType) {
               contextPrompt += ` (${segment.segmentType})`;
             }
             contextPrompt += `\n`;
             if (segment.transcript) {
-              contextPrompt += `  ↳ Transcript: ${segment.transcript.substring(0, 300)}${segment.transcript.length > 300 ? '...' : ''}\n`;
+              contextPrompt += `  ↳ Transcript: ${segment.transcript.substring(0, 300)}${segment.transcript.length > 300 ? '...' : ''} \n`;
             }
           });
         }
@@ -871,7 +845,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
       if (relevantDocs.length > 0) {
         contextPrompt += "\n\nRELEVANT DOCUMENTS:\n";
         relevantDocs.forEach(doc => {
-          contextPrompt += `- ${doc.content}\n`;
+          contextPrompt += `- ${doc.content} \n`;
         });
       }
 
@@ -879,8 +853,8 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
       if (webSearchResults.length > 0) {
         contextPrompt += "\n\nCURRENT WEB INFORMATION:\n";
         webSearchResults.forEach((result, index) => {
-          contextPrompt += `- ${result.title}\n`;
-          contextPrompt += `  ↳ ${result.snippet}`;
+          contextPrompt += `- ${result.title} \n`;
+          contextPrompt += `  ↳ ${result.snippet} `;
           if (result.url) {
             // Show domain name for source attribution
             const domain = new URL(result.url).hostname.replace('www.', '');
@@ -894,11 +868,11 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
       // 🎯 NEW: Knowledge gap guidance (after web search, so we know if we have info)
       if (knowledgeGapInfo?.hasGap) {
         const missingTopics = knowledgeGapInfo.missingTopics;
-        
+
         if (webSearchResults.length > 0) {
           // We have web search results! Use them to answer
-          contextPrompt += `\n⚠️ KNOWLEDGE GAP FILLED BY WEB SEARCH:\n`;
-          contextPrompt += `The user is asking about: ${missingTopics.join(', ')}\n`;
+          contextPrompt += `\n⚠️ KNOWLEDGE GAP FILLED BY WEB SEARCH: \n`;
+          contextPrompt += `The user is asking about: ${missingTopics.join(', ')} \n`;
           contextPrompt += `You didn't have this in your memories, but web search found current information above.\n\n`;
           contextPrompt += `INSTRUCTIONS:\n`;
           contextPrompt += `1. Use the web search results above to answer their question knowledgeably\n`;
@@ -925,7 +899,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
       // 📚 NEW: Add training examples with intelligent consolidation
       if (trainingExamples.length > 0) {
         const parsedExamples = await this.parseTrainingExamples(trainingExamples);
-        
+
         // If we got a consolidated style guide, use that (more efficient!)
         if (parsedExamples.consolidatedStyle) {
           contextPrompt += "\n\n🎓 UNIFIED STYLE GUIDE (learned from training):\n";
@@ -933,7 +907,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
           contextPrompt += "\n\nApply this style guide to all your responses.\n";
         } else {
           // Fall back to individual examples if consolidation wasn't used
-          
+
           // Add strategy/thinking patterns if found
           if (parsedExamples.strategies.length > 0) {
             contextPrompt += "\n\n🧠 RESPONSE STRATEGY PATTERNS:\n";
@@ -942,7 +916,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
               contextPrompt += `Strategy ${index + 1}:\n${strategy}\n\n`;
             });
           }
-          
+
           // Add conversation style examples
           if (parsedExamples.conversations.length > 0) {
             contextPrompt += "\n\n💬 CONVERSATION STYLE EXAMPLES:\n";
@@ -951,7 +925,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
               contextPrompt += `Example ${index + 1}:\n${conversation}\n\n`;
             });
           }
-          
+
           if (parsedExamples.strategies.length > 0 || parsedExamples.conversations.length > 0) {
             contextPrompt += "Combine the strategic thinking patterns with the conversation style to craft your responses.\n";
           }
@@ -983,26 +957,26 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
 
       // Get current chaos state and personality modifier
       const chaosModifier = this.chaosEngine.getPersonalityModifier();
-      
+
       // 🔥 NEW: Topic escalation tracking and emotional investment system
       let escalationPrompt = "";
       if (profileId && conversationId) {
         try {
           // Extract potential topics from user message
           const keywords = this.extractKeywords(userMessage);
-          
+
           // Track each topic and get escalation data
           for (const topic of keywords) {
             await storage.trackTopicMention(profileId, topic, userMessage);
           }
-          
+
           // Get high-intensity topics to add emotional investment
           const highIntensityTopics = await storage.getHighIntensityTopics(profileId, 30);
-          
+
           if (highIntensityTopics.length > 0) {
             escalationPrompt = "\n\n🔥 EMOTIONAL INVESTMENT TRACKER:\n";
             escalationPrompt += "You have been discussing these topics repeatedly and they are becoming increasingly personal to you:\n";
-            
+
             highIntensityTopics.forEach(topic => {
               let intensityLevel = "";
               const intensity = topic.currentIntensity || 0;
@@ -1015,12 +989,12 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
               } else {
                 intensityLevel = "Starting to care more";
               }
-              
+
               escalationPrompt += `- "${topic.topic}" (mentioned ${topic.mentionCount || 0} times, intensity: ${intensityLevel})\n`;
               const lastContext = topic.contexts && topic.contexts.length > 0 ? topic.contexts[topic.contexts.length - 1] : 'No context';
               escalationPrompt += `  Context: ${lastContext.substring(0, 100)}...\n`;
             });
-            
+
             escalationPrompt += "\nWhen these topics come up again, respond with escalating emotional investment based on the intensity level. Start casual, but by mention 4-5 it should be deeply personal!";
             console.log(`🔥 Added escalation context for ${highIntensityTopics.length} topics`);
           }
@@ -1028,14 +1002,14 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
           console.warn('⚠️ Topic escalation tracking failed:', error);
         }
       }
-      
+
       // ✨ NEW: Get variety controller facet and prompt
       let varietyPrompt = "";
       let sceneCard = "";
       if (conversationId) {
         const { facet, variety } = await varietyController.selectPersonaFacet(conversationId, userMessage);
         varietyPrompt = varietyController.generateVarietyPrompt(facet, variety);
-        
+
         // Add scene card for storytelling facets
         if (facet.responseShape.name === 'storylet' || facet.responseShape.name === 'nostalgic_riff') {
           const card = await varietyController.getRandomSceneCard(variety);
@@ -1044,7 +1018,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
           }
         }
       }
-      
+
       const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}${modeContext}${escalationPrompt}${sceneCard}`;
 
       // Enhanced system prompt with personality controls, chaos personality AND variety control
@@ -1054,20 +1028,20 @@ NEVER use asterisks (*) for actions, gestures, or stage directions. Do NOT write
 Describe actions IN YOUR DIALOGUE: "I'm wavin' my hand dismissively!" NOT "*waves hand dismissively*"
 
 ${coreIdentity}`;
-      
+
       // 🎭 NEW: Add personality control prompt if provided
       if (personalityPrompt) {
         enhancedCoreIdentity += `\n\n${personalityPrompt}`;
         console.log(`🎭 Applied personality controls to AI prompt`);
       }
-      
+
       enhancedCoreIdentity += `\n\n${chaosModifier}\n\n${varietyPrompt}`;
 
       // 🎯 PRIMARY: Use Claude Sonnet 4.5 for superior quality
       // Gemini kept as fallback for when Claude fails
       console.log('🌟 Using Claude Sonnet 4.5 as primary AI provider');
       const apiCallStart = Date.now();
-      
+
       try {
         // PRIMARY: Claude Sonnet 4.5
         const response = await anthropic.messages.create({
@@ -1082,9 +1056,9 @@ ${coreIdentity}`;
             }
           ],
         });
-        
+
         const apiCallDuration = (Date.now() - apiCallStart) / 1000;
-        
+
         // 📊 Track metrics for successful Claude call
         prometheusMetrics.trackLLMCall({
           provider: 'claude',
@@ -1094,25 +1068,25 @@ ${coreIdentity}`;
           outputTokens: response.usage?.output_tokens || 0,
           durationSeconds: apiCallDuration
         });
-        
+
         console.log('✅ Claude Sonnet 4.5 successfully generated response');
         const processingTime = Date.now() - startTime;
-        
+
         // Extract content from Claude response
         const content = Array.isArray(response.content) ? response.content[0] : response.content;
         const textContent = content && 'text' in content ? content.text : '';
-        
+
         // 🚫 Filter content to prevent cancel-worthy language while keeping profanity
         const rawContent = typeof textContent === 'string' ? textContent : '';
         const { filtered: filteredContent, wasFiltered } = contentFilter.filterContent(rawContent);
-        
+
         if (wasFiltered) {
           console.warn(`🚫 Content filtered to prevent cancel-worthy language`);
         }
 
         // 🚫 CRITICAL: Strip ALL asterisks (emphasis, actions, italics - TTS doesn't need them)
         const asteriskPattern = /\*+([^*]+)\*+/g;
-        
+
         const strippedContent = filteredContent.replace(asteriskPattern, (match, innerText) => {
           console.warn(`🚫 Stripped asterisks from response: ${match}`);
           return innerText; // Keep the text, remove the asterisks
@@ -1122,33 +1096,33 @@ ${coreIdentity}`;
         const fixPunctuation = (text: string): string => {
           // Split into sentences by looking for natural breaks
           const sentences = text.split(/(?<=[.!?…])\s+/);
-          
+
           const fixed = sentences.map(sentence => {
             const trimmed = sentence.trim();
             if (!trimmed) return '';
-            
+
             const lastChar = trimmed[trimmed.length - 1];
-            
+
             // If already has ending punctuation, keep it
             if (['.', '!', '?', '…'].includes(lastChar)) {
               return trimmed;
             }
-            
+
             // Add appropriate punctuation
             // Use exclamation for all-caps phrases
             if (trimmed.length > 3 && trimmed === trimmed.toUpperCase()) {
               console.log(`🔧 Adding exclamation to: "${trimmed}"`);
               return trimmed + '!';
             }
-            
+
             // Default: add period
             console.log(`🔧 Adding period to: "${trimmed}"`);
             return trimmed + '.';
           });
-          
+
           return fixed.filter(s => s).join(' ');
         };
-        
+
         const punctuatedContent = fixPunctuation(strippedContent);
 
         // ✨ NEW: Post-generation repetition filter
@@ -1156,7 +1130,7 @@ ${coreIdentity}`;
         if (conversationId) {
           const repetitionCheck = await this.checkForRepetition(conversationId, punctuatedContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
           finalContent = repetitionCheck.content;
-          
+
           // 📖 NEW: Story completion tracking for enhanced memory persistence
           await this.trackStoryCompletion(conversationId, finalContent, profileId, mode);
         }
@@ -1173,130 +1147,21 @@ ${coreIdentity}`;
           processingTime,
           retrievedContext: contextPrompt || undefined,
         };
-        
+
       } catch (claudeError) {
-        // 🔄 FALLBACK: Claude failed, fall back to Gemini (free backup)
         console.error('❌ Claude API error:', claudeError);
-        console.error(`\n${'='.repeat(80)}`);
-        console.error(`🚨 CLAUDE FAILED - FALLING BACK TO GEMINI (FREE BACKUP)`);
-        console.error(`   Error: ${claudeError instanceof Error ? claudeError.message : String(claudeError)}`);
-        console.error(`   � Note: Gemini is free but may have lower quality - Claude preferred`);
-        console.error(`${'='.repeat(80)}\n`);
-        
-        try {
-          // Dynamic import to avoid circular dependency
-          const { geminiService } = await import('./gemini.js');
-          const geminiCallStart = Date.now();
-          const geminiResponse = await geminiService.generateChatResponse(
-            userMessage,
-            enhancedCoreIdentity,
-            contextPrompt
-          );
-          
-          const geminiCallDuration = (Date.now() - geminiCallStart) / 1000;
-          
-          // 📊 Track metrics for Gemini fallback
-          prometheusMetrics.trackLLMCall({
-            provider: 'gemini',
-            model: 'gemini-2.0-flash',
-            type: 'chat',
-            inputTokens: 0, // Gemini doesn't expose token counts
-            outputTokens: 0,
-            durationSeconds: geminiCallDuration
-          });
-          
-          console.log('✅ Gemini successfully generated fallback response');
-          const processingTime = Date.now() - startTime;
-          
-          // Extract content from Gemini response
-          const content = geminiResponse.content;
-          
-          // 🚫 Filter content
-          const rawContent = typeof content === 'string' ? content : '';
-          const { filtered: filteredContent, wasFiltered } = contentFilter.filterContent(rawContent);
-          
-          if (wasFiltered) {
-            console.warn(`🚫 Content filtered to prevent cancel-worthy language`);
-          }
 
-          // 🚫 Strip asterisk actions (keep emphasized words/phrases)
-          const asteriskPattern = /\*[^*]+\*/g;
-          const actionVerbs = ['waves', 'wave', 'winks', 'wink', 'leans', 'lean', 'gestures', 'gesture', 
-                              'nods', 'nod', 'shrugs', 'shrug', 'points', 'point', 'laughs', 'laugh',
-                              'sighs', 'sigh', 'smirks', 'smirk', 'grins', 'grin', 'rolls eyes', 
-                              'crosses arms', 'snaps fingers', 'adjusts'];
-          
-          const strippedContent = filteredContent.replace(asteriskPattern, (match) => {
-            const content = match.slice(1, -1).toLowerCase();
-            
-            // Check if it contains action verbs - if so, remove it
-            const isAction = actionVerbs.some(verb => content.includes(verb));
-            
-            if (isAction) {
-              console.warn(`🚫 Stripped asterisk action from response: ${match}`);
-              return ''; // Remove action descriptions
-            }
-            
-            // Keep emphasized words/phrases (including catchphrases)
-            return match;
-          }).replace(/\s{2,}/g, ' ').trim();
-
-          // ✅ Fix missing punctuation (Claude can also skip periods sometimes)
-          const fixPunctuation = (text: string): string => {
-            const sentences = text.split(/(?<=[.!?…])\s+/);
-            const fixed = sentences.map(sentence => {
-              const trimmed = sentence.trim();
-              if (!trimmed) return '';
-              const lastChar = trimmed[trimmed.length - 1];
-              if (['.', '!', '?', '…'].includes(lastChar)) return trimmed;
-              if (trimmed.length > 3 && trimmed === trimmed.toUpperCase()) {
-                console.log(`🔧 Adding exclamation to: "${trimmed}"`);
-                return trimmed + '!';
-              }
-              console.log(`🔧 Adding period to: "${trimmed}"`);
-              return trimmed + '.';
-            });
-            return fixed.filter(s => s).join(' ');
-          };
-          
-          const punctuatedContent = fixPunctuation(strippedContent);
-
-          // ✨ Repetition filter
-          let finalContent = punctuatedContent;
-          if (conversationId) {
-            const repetitionCheck = await this.checkForRepetition(conversationId, punctuatedContent, userMessage, coreIdentity, relevantMemories, relevantDocs, loreContext, mode);
-            finalContent = repetitionCheck.content;
-            await this.trackStoryCompletion(conversationId, finalContent, profileId, mode);
-          }
-
-          // 🎭 Debug metrics
-          if (personalityPrompt) {
-            const { generateMetricsFooter } = await import('../types/personalityControl');
-            const metricsFooter = generateMetricsFooter(finalContent);
-            console.log(`📊 Response Metrics: ${metricsFooter.replace('<!-- METRICS ', '').replace(' -->', '')}`);
-          }
-
-          return {
-            content: finalContent,
-            processingTime,
-            retrievedContext: contextPrompt || undefined,
-          };
-            
-        } catch (claudeError) {
-          console.error('❌ Claude fallback also failed:', claudeError);
-          
-          // Last resort: provide a meaningful error response
-          return {
-            content: "Madonna mia! Both my brain circuits are having issues right now! Give me a minute to get my thoughts together... 🤖😅",
-            processingTime: Date.now() - startTime,
-            retrievedContext: contextPrompt || undefined
-          };
-        }
+        // Return error response - Orchestrator will handle fallback if needed
+        return {
+          content: "Madonna mia! My brain circuits are having issues right now! Give me a minute to get my thoughts together... 🤖😅",
+          processingTime: Date.now() - startTime,
+          retrievedContext: contextPrompt || undefined
+        };
       }
     } catch (error) {
       // This catch is for context building errors (before AI is called)
       console.error('❌ Context building error:', error);
-      
+
       return {
         content: "Ay, something's not working right in my digital noggin! Try asking me again in a moment! 🤯",
         processingTime: Date.now() - startTime,
@@ -1327,7 +1192,7 @@ ${coreIdentity}`;
         .slice(-5); // Last 5 AI responses
 
       const currentContentLower = content.toLowerCase();
-      
+
       // Check for problematic patterns
       const problematicPatterns = [
         /my name is nicky|i'm nicky|call me nicky/gi,
@@ -1339,10 +1204,10 @@ ${coreIdentity}`;
 
       // Check for self-introductions (major red flag)
       const hasSelfIntro = /my name is|i'm nicky|call me nicky/i.test(currentContentLower);
-      
+
       // Check for n-gram repetition (4-6 word phrases)
       const hasRepetitiveNGrams = this.detectNGramRepetition(currentContentLower, recentAIResponses);
-      
+
       // Check for overused motifs
       const overusedMotifCount = problematicPatterns.reduce((count, pattern) => {
         return count + (pattern.test(currentContentLower) ? 1 : 0);
@@ -1359,7 +1224,7 @@ ${coreIdentity}`;
         // Get different facet and regenerate
         const { facet: altFacet } = await varietyController.selectPersonaFacet(conversationId, userMessage);
         const altVarietyPrompt = varietyController.generateVarietyPrompt(altFacet, await varietyController.getSessionVariety(conversationId));
-        
+
         const antiRepetitionPrompt = `
 REGENERATION RULES:
 - NEVER introduce yourself or say your name
@@ -1383,18 +1248,18 @@ REGENERATION RULES:
           ],
         });
 
-        const regenContent = Array.isArray(regenerationResponse.content) 
-          ? (regenerationResponse.content[0] as any).text 
+        const regenContent = Array.isArray(regenerationResponse.content)
+          ? (regenerationResponse.content[0] as any).text
           : (regenerationResponse.content as any);
 
         const finalRegenContent = typeof regenContent === 'string' ? regenContent : content;
-        
+
         console.log(`✅ Successfully regenerated response to avoid repetition`);
         return { content: finalRegenContent, wasRegenerated: true };
       }
 
       return { content, wasRegenerated: false };
-      
+
     } catch (error) {
       console.error('❌ Repetition check failed:', error);
       return { content, wasRegenerated: false };
@@ -1406,15 +1271,15 @@ REGENERATION RULES:
    */
   private detectNGramRepetition(currentContent: string, recentResponses: string[]): boolean {
     const words = currentContent.split(/\s+/);
-    
+
     // Check 4-6 word phrases
     for (let n = 4; n <= 6; n++) {
       for (let i = 0; i <= words.length - n; i++) {
         const ngram = words.slice(i, i + n).join(' ');
-        
+
         // Skip very short or common phrases
         if (ngram.length < 15) continue;
-        
+
         // Check if this n-gram appears in recent responses
         const foundInRecent = recentResponses.some(response => response.includes(ngram));
         if (foundInRecent) {
@@ -1423,7 +1288,7 @@ REGENERATION RULES:
         }
       }
     }
-    
+
     return false;
   }
 
@@ -1450,38 +1315,38 @@ REGENERATION RULES:
   private classifyError(error: any) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const statusCode = error?.status || error?.response?.status;
-    
+
     // Credits exhausted
-    if (errorMessage.includes('credit balance is too low') || 
-        errorMessage.includes('insufficient credits') ||
-        statusCode === 400) {
+    if (errorMessage.includes('credit balance is too low') ||
+      errorMessage.includes('insufficient credits') ||
+      statusCode === 400) {
       return { type: 'CREDITS_EXHAUSTED', retryable: false, retryCount: 0 };
     }
-    
+
     // Rate limiting
     if (statusCode === 429 || errorMessage.includes('rate limit')) {
       return { type: 'RATE_LIMIT', retryable: true, retryCount: 0 };
     }
-    
+
     // Network/timeout errors
-    if (statusCode >= 500 || 
-        errorMessage.includes('timeout') ||
-        errorMessage.includes('ETIMEDOUT') ||
-        errorMessage.includes('ECONNRESET') ||
-        errorMessage.includes('network')) {
+    if (statusCode >= 500 ||
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('ETIMEDOUT') ||
+      errorMessage.includes('ECONNRESET') ||
+      errorMessage.includes('network')) {
       return { type: 'NETWORK_ERROR', retryable: true, retryCount: 0 };
     }
-    
+
     // Service unavailable
     if (statusCode === 503 || errorMessage.includes('service unavailable')) {
       return { type: 'SERVICE_UNAVAILABLE', retryable: true, retryCount: 0 };
     }
-    
+
     // Client errors (bad request, auth issues)
     if (statusCode >= 400 && statusCode < 500) {
       return { type: 'CLIENT_ERROR', retryable: false, retryCount: 0 };
     }
-    
+
     // Unknown errors - be conservative and don't retry
     return { type: 'UNKNOWN', retryable: false, retryCount: 0 };
   }
@@ -1519,7 +1384,7 @@ ${conversationHistory}`;
 
       // 🎯 PRIMARY: Use Claude for memory consolidation
       let textContent: string;
-      
+
       try {
         console.log('🌟 Using Claude Sonnet 4.5 for memory consolidation');
         const response = await anthropic.messages.create({
@@ -1538,21 +1403,18 @@ ${conversationHistory}`;
         textContent = content && 'text' in content ? content.text : '';
         console.log('✅ Claude successfully consolidated memories');
       } catch (claudeError) {
-        // 🔄 FALLBACK: Use Gemini if Claude fails - dynamic import to avoid circular dependency
-        console.warn('❌ Claude consolidation failed, falling back to Gemini:', claudeError);
-        const { geminiService } = await import('./gemini.js');
-        const geminiResponse = await geminiService.generateChatResponse(prompt, '', '');
-        textContent = geminiResponse.content;
-        console.log('✅ Gemini successfully consolidated memories (fallback)');
+        console.warn('❌ Claude consolidation failed:', claudeError);
+        // Orchestrator will handle fallback
+        return [];
       }
-      
+
       try {
         const rawMemories = JSON.parse(textContent);
         if (!Array.isArray(rawMemories)) {
           console.warn('Memory consolidation response is not an array:', rawMemories);
           return [];
         }
-        
+
         const validMemories: ConsolidatedMemory[] = [];
         for (const memory of rawMemories) {
           const validation = ConsolidatedMemorySchema.safeParse(memory);
@@ -1562,7 +1424,7 @@ ${conversationHistory}`;
             console.warn('Invalid memory structure from AI:', memory, 'Errors:', validation.error.errors);
           }
         }
-        
+
         console.log(`✅ Validated ${validMemories.length}/${rawMemories.length} memories from AI consolidation`);
         return validMemories;
       } catch (parseError) {
@@ -1663,44 +1525,11 @@ Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
 
       const content = Array.isArray(response.content) ? response.content[0] : response.content;
       const patterns = content && 'text' in content ? content.text : '';
-      
+
       return patterns.trim();
     } catch (error: any) {
-      // Check if error is due to credit/auth issues
-      const isCreditError = error?.status === 400 || 
-                          error?.message?.includes('credit') || 
-                          error?.message?.includes('balance') ||
-                          error?.status === 401 ||
-                          error?.status === 403;
-      
-      if (isCreditError) {
-        console.log('⚠️ Anthropic credits low, falling back to Gemini for pattern extraction');
-        
-        try {
-          // Dynamically import geminiService to avoid circular dependency
-          const { geminiService } = await import('./gemini.js');
-          
-          // Fallback to Gemini Pro (NEVER Flash - pattern extraction affects core identity)
-          const geminiResponse = await geminiService['ai'].models.generateContent({
-            model: 'gemini-2.5-pro', // 🚫 NEVER Flash - corrupts personality patterns
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: {
-              maxOutputTokens: 800,
-              temperature: 0.3
-            }
-          });
-          
-          const patterns = geminiResponse.text || '';
-          console.log('✅ Successfully extracted patterns using Gemini fallback');
-          return patterns.trim();
-        } catch (geminiError) {
-          console.error('Gemini fallback error:', geminiError);
-          throw new Error('Failed to extract personality patterns (both Anthropic and Gemini failed)');
-        }
-      }
-      
       console.error('Pattern extraction error:', error);
-      throw new Error('Failed to extract personality patterns');
+      throw error; // Re-throw for Orchestrator to handle
     }
   }
 
@@ -1708,18 +1537,18 @@ Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
    * Track completed stories for enhanced memory persistence
    */
   private async trackStoryCompletion(
-    conversationId: string, 
-    content: string, 
+    conversationId: string,
+    content: string,
     profileId?: string,
     mode?: string
   ): Promise<void> {
     try {
       // Analyze content for completed stories
       const storyAnalysis = storyCompletionTracker.analyzeForCompletedStory(content);
-      
+
       if (storyAnalysis.isCompleteStory && storyAnalysis.confidence > 0.5) {
         console.log(`📖 Detected completed ${storyAnalysis.storyType} story (confidence: ${Math.round(storyAnalysis.confidence * 100)}%)`);
-        
+
         // Check for repetition before tracking
         if (profileId) {
           const repetitionCheck = await storyCompletionTracker.checkForStoryRepetition(
@@ -1728,16 +1557,16 @@ Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
             storyAnalysis.storyType,
             conversationId
           );
-          
+
           if (repetitionCheck.isRepetitive) {
             console.warn(`🔄 Similar story detected - not tracking to avoid repetition: ${repetitionCheck.similarStories.join(', ')}`);
             return;
           }
         }
-        
+
         // Determine if this is podcast content based on mode
         const podcastEpisodeId = mode === 'PODCAST' ? 'auto-detected' : undefined;
-        
+
         // Track the completed story
         await storyCompletionTracker.trackCompletedStory(
           conversationId,
@@ -1900,7 +1729,7 @@ Return ONLY valid JSON array, no other text:
     source?: string;
   }>> {
     if (memories.length === 0) return [];
-    
+
     console.log(`🧠 Consolidating ${memories.length} memories using Claude Sonnet 4.5...`);
 
     const prompt = `Optimize this knowledge base for Nicky "Noodle Arms" A.I. Dente.
@@ -1961,7 +1790,7 @@ Return optimized memory entries as JSON array:
         } else if (memType === 'ATOMIC') {
           baseType = 'FACT';
         }
-        
+
         return {
           content: m.content,
           type: baseType,

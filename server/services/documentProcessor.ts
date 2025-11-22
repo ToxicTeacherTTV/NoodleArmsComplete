@@ -2,7 +2,7 @@ import { storage } from "../storage";
 import { Document } from "@shared/schema";
 import pdf from 'pdf-parse';
 import mammoth from 'mammoth';
-import { geminiService } from './gemini';
+import { aiOrchestrator } from './aiOrchestrator';
 import { contradictionDetector } from './contradictionDetector';
 import { conversationParser } from './conversationParser';
 import { entityExtraction } from './entityExtraction';
@@ -46,7 +46,7 @@ class DocumentProcessor {
       console.warn('⚠️ Failed to initialize tiktoken encoder, falling back to character-based chunking');
       this.encoder = null;
     }
-    
+
     try {
       // @ts-ignore - Natural.js TypeScript definitions may be incorrect
       this.sentenceTokenizer = new natural.SentenceTokenizer();
@@ -57,11 +57,11 @@ class DocumentProcessor {
       };
     }
   }
-  
+
   async processDocument(documentId: string, buffer: Buffer): Promise<void> {
     try {
       await storage.updateDocument(documentId, { processingStatus: 'PROCESSING' });
-      
+
       const document = await storage.getDocument(documentId);
       if (!document) {
         throw new Error('Document not found');
@@ -113,12 +113,12 @@ class DocumentProcessor {
     const chunks: string[] = [];
     const paragraphs = text.split(/\n\n+/);
     let currentChunk = '';
-    
+
     for (const paragraph of paragraphs) {
       const trimmedParagraph = paragraph.trim();
-      
+
       if (!trimmedParagraph) continue;
-      
+
       // If adding this paragraph would exceed chunk size, save current chunk
       if (currentChunk && (currentChunk.length + trimmedParagraph.length) > maxChunkSize) {
         chunks.push(currentChunk.trim());
@@ -127,49 +127,49 @@ class DocumentProcessor {
         currentChunk += (currentChunk ? '\n\n' : '') + trimmedParagraph;
       }
     }
-    
+
     if (currentChunk.trim()) {
       chunks.push(currentChunk.trim());
     }
-    
+
     return chunks.length > 0 ? chunks : [text]; // Fallback to full text if no chunks
   }
 
   // 🚀 NEW: Public method for reprocessing documents without full pipeline
   async reprocessDocument(profileId: string, extractedContent: string, filename: string, documentId: string): Promise<void> {
     console.log(`🔄 Reprocessing document ${filename} for enhanced narrative context...`);
-    
+
     // Call the private hierarchical extraction method directly
     await this.extractAndStoreHierarchicalKnowledge(profileId, extractedContent, filename, documentId);
-    
+
     console.log(`✅ Document reprocessing completed for ${filename}`);
   }
 
   // 🎯 BACKGROUND: Start entity extraction in the background without blocking
   async startBackgroundProcessing(profileId: string, extractedContent: string, filename: string, documentId: string): Promise<void> {
     console.log(`🚀 Starting background processing for ${filename}...`);
-    
+
     // Update status to indicate processing has started
-    await storage.updateDocument(documentId, { 
+    await storage.updateDocument(documentId, {
       processingStatus: 'PROCESSING',
-      processingProgress: 0 
+      processingProgress: 0
     });
 
     // Run extraction in the background (don't await)
     setImmediate(async () => {
       try {
         await this.extractAndStoreHierarchicalKnowledgeInBackground(profileId, extractedContent, filename, documentId);
-        
+
         // Mark as completed
-        await storage.updateDocument(documentId, { 
+        await storage.updateDocument(documentId, {
           processingStatus: 'COMPLETED',
           processingProgress: 100
         });
-        
+
         console.log(`✅ Background processing completed for ${filename}`);
       } catch (error) {
         console.error(`❌ Background processing failed for ${filename}:`, error);
-        await storage.updateDocument(documentId, { 
+        await storage.updateDocument(documentId, {
           processingStatus: 'FAILED',
           processingProgress: 0
         });
@@ -181,21 +181,21 @@ class DocumentProcessor {
 
   // 📦 BATCHED: Full entity extraction in background with progress tracking
   private async extractAndStoreHierarchicalKnowledgeInBackground(
-    profileId: string, 
-    content: string, 
-    filename: string, 
+    profileId: string,
+    content: string,
+    filename: string,
     documentId: string
   ): Promise<void> {
     console.log(`🔄 Running FULL entity extraction in background for ${filename}...`);
-    
+
     // Update progress as we work through the full extraction
     await storage.updateDocument(documentId, { processingProgress: 5 });
-    
+
     try {
       // Just call the full extraction method and update progress along the way
       // This does ALL the entity extraction, story parsing, etc.
       await this.extractAndStoreHierarchicalKnowledgeWithProgress(profileId, content, filename, documentId);
-      
+
       console.log(`✅ Full background extraction completed for ${filename}`);
     } catch (error) {
       console.error(`❌ Background extraction failed:`, error);
@@ -205,19 +205,19 @@ class DocumentProcessor {
 
   // Wrapper that adds progress tracking to the full extraction
   private async extractAndStoreHierarchicalKnowledgeWithProgress(
-    profileId: string, 
-    content: string, 
-    filename: string, 
+    profileId: string,
+    content: string,
+    filename: string,
     documentId: string
   ): Promise<void> {
     // Step 1: Chunk large documents to prevent API overload
     await storage.updateDocument(documentId, { processingProgress: 10 });
     console.log(`📖 Processing full document content (${content.length} chars)...`);
-    
+
     // Chunk the content first if it's too large (>100k chars = ~25k tokens)
     const MAX_CHUNK_SIZE = 100000; // ~25k tokens
     const chunks: string[] = [];
-    
+
     if (content.length > MAX_CHUNK_SIZE) {
       // Split into large character-based chunks
       for (let i = 0; i < content.length; i += MAX_CHUNK_SIZE) {
@@ -228,35 +228,35 @@ class DocumentProcessor {
       chunks.push(content);
       console.log(`📦 Content small enough to process in single chunk (${content.length} chars)`);
     }
-    
+
     await storage.updateDocument(documentId, { processingProgress: 15 });
-    
+
     // Step 2: Extract stories from each chunk (15% -> 40%)
     console.log(`📖 Extracting stories from ${chunks.length} chunks...`);
     const allStories = [];
-    
+
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       console.log(`📝 Processing chunk ${i + 1}/${chunks.length}...`);
-      
-      const chunkStories = await geminiService.extractStoriesFromDocument(chunk, `${filename} (chunk ${i + 1})`);
+
+      const chunkStories = await aiOrchestrator.extractStoriesFromDocument(chunk, `${filename} (chunk ${i + 1})`);
       allStories.push(...chunkStories);
-      
+
       // Update progress
       const progress = 15 + Math.floor((i + 1) / chunks.length * 15);
       await storage.updateDocument(documentId, { processingProgress: Math.min(progress, 30) });
-      
+
       // Small delay between chunks to avoid rate limiting
       if (i < chunks.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
-    
+
     const stories = allStories;
     console.log(`✅ Extracted ${stories.length} total stories from ${chunks.length} chunks`);
-    
+
     await storage.updateDocument(documentId, { processingProgress: 30 });
-    
+
     // Store story-level facts
     const storyIds: string[] = [];
     for (const story of stories) {
@@ -274,18 +274,18 @@ class DocumentProcessor {
       });
       storyIds.push(storyFact.id);
     }
-    
+
     await storage.updateDocument(documentId, { processingProgress: 40 });
-    
+
     // Step 3: Extract atomic facts (40% -> 95%)
     console.log(`⚛️ Extracting atomic facts from stories...`);
     let totalAtomicFacts = 0;
-    
+
     for (let i = 0; i < stories.length; i++) {
       const story = stories[i];
       const storyContextSnippet = story.content.substring(0, 200);
-      const atomicFacts = await geminiService.extractAtomicFactsFromStory(story.content, storyContextSnippet);
-      
+      const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(story.content, storyContextSnippet);
+
       for (const atomicFact of atomicFacts) {
         const canonicalKey = this.generateCanonicalKey(atomicFact.content);
         await storage.addMemoryEntry({
@@ -303,15 +303,15 @@ class DocumentProcessor {
         });
         totalAtomicFacts++;
       }
-      
+
       // Update progress based on stories processed
       const progress = 40 + Math.floor((i + 1) / stories.length * 55);
       await storage.updateDocument(documentId, { processingProgress: Math.min(progress, 95) });
-      
+
       // Small delay between stories
       await new Promise(resolve => setTimeout(resolve, 200));
     }
-    
+
     console.log(`✅ Extracted ${totalAtomicFacts} atomic facts from ${stories.length} stories`);
   }
 
@@ -319,58 +319,58 @@ class DocumentProcessor {
   private intelligentChunkText(text: string, maxTokens: number = 500): string[] {
     try {
       console.log('🧠 Starting intelligent document processing...');
-      
+
       // Step 1: Clean the text first
       text = this.cleanText(text);
-      
+
       // Step 2: Extract entities BEFORE chunking so we don't lose them
       const globalEntities = this.extractGlobalEntitiesSync(text);
       console.log(`🔍 Extracted ${globalEntities.people.length} people, ${globalEntities.places.length} places globally`);
-      
+
       // Step 3: Chunk intelligently
       const chunks = this.intelligentChunk(text, maxTokens);
       console.log(`📝 Created ${chunks.length} intelligent chunks`);
-      
+
       // Step 4: Process each chunk with context for story detection
       const stories: ExtractedStory[] = [];
       for (let i = 0; i < chunks.length; i++) {
         const story = this.processChunkSync(
-          chunks[i], 
-          chunks[i-1], // previous chunk for context
-          chunks[i+1], // next chunk for context
+          chunks[i],
+          chunks[i - 1], // previous chunk for context
+          chunks[i + 1], // next chunk for context
           globalEntities
         );
         stories.push(story);
       }
-      
+
       // Step 5: Reconnect related stories
       const connectedStories = this.connectRelatedStories(stories);
-      
+
       // Return the enhanced chunks with preserved context
       return connectedStories.map(story => story.content);
-      
+
     } catch (error) {
       console.error('❌ Intelligent chunking failed, falling back to legacy:', error);
       return this.legacyChunkText(text);
     }
   }
-  
+
   // Fallback to original chunking method
   private legacyChunkText(text: string, maxChunkSize = 2500, overlap = 200): string[] {
     const chunks: string[] = [];
-    
+
     // First split by double newlines (paragraphs), then by single newlines if needed
     const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0);
-    
+
     let currentChunk = '';
-    
+
     for (const paragraph of paragraphs) {
       const trimmedParagraph = paragraph.trim();
-      
+
       // If adding this paragraph would exceed chunk size
       if (currentChunk && (currentChunk.length + trimmedParagraph.length) > maxChunkSize) {
         chunks.push(currentChunk.trim());
-        
+
         // Create overlap by keeping last portion of previous chunk
         const sentences = currentChunk.split(/[.!?]+/).filter(s => s.trim());
         const overlapSentences = sentences.slice(-2); // Keep last 2 sentences for context
@@ -378,12 +378,12 @@ class DocumentProcessor {
       } else {
         currentChunk += (currentChunk ? '\n\n' : '') + trimmedParagraph;
       }
-      
+
       // If single paragraph is too large, split it by sentences
       if (currentChunk.length > maxChunkSize * 1.5) {
         const sentences = currentChunk.split(/[.!?]+/).filter(s => s.trim());
         let tempChunk = '';
-        
+
         for (const sentence of sentences) {
           if (tempChunk && (tempChunk.length + sentence.length) > maxChunkSize) {
             chunks.push(tempChunk.trim() + '.');
@@ -392,15 +392,15 @@ class DocumentProcessor {
             tempChunk += (tempChunk ? '. ' : '') + sentence;
           }
         }
-        
+
         currentChunk = tempChunk;
       }
     }
-    
+
     if (currentChunk.trim()) {
       chunks.push(currentChunk.trim());
     }
-    
+
     return chunks;
   }
 
@@ -410,21 +410,21 @@ class DocumentProcessor {
   private classifyContent(content: string, filename: string): { mode: 'conversational' | 'informational', metrics: any } {
     const lines = content.split('\n');
     const contentLength = content.length;
-    
+
     // Calculate features for classification
     const questionCount = (content.match(/[?]/g) || []).length;
     const dialogueMarkers = (content.match(/^(user|nicky|assistant|you)[\s:]/gmi) || []).length;
     const sectionHeaders = (content.match(/^#{1,3}\s|^#\s.*|^\*\*.*\*\*$|^Section\s\d+/gmi) || []).length;
     const longParagraphs = lines.filter(line => line.length > 200).length;
     const avgLineLength = lines.length > 0 ? contentLength / lines.length : 0;
-    
+
     // Try conversation parsing to get actual metrics
     const parsed = conversationParser.parseConversation(content, filename);
     const nickyTurns = parsed.turns.filter(t => t.speaker === 'nicky').length;
     const userTurns = parsed.turns.filter(t => t.speaker === 'user').length;
     const totalTurns = parsed.totalTurns;
     const nickyContentRatio = parsed.nickyContent.length / contentLength;
-    
+
     const metrics = {
       contentLength,
       questionCount,
@@ -437,14 +437,14 @@ class DocumentProcessor {
       userTurns,
       nickyContentRatio
     };
-    
+
     // Classification logic - conservative approach
     const isConversational = (
       (totalTurns >= 6 && (nickyTurns >= 2 || nickyContentRatio >= 0.15)) ||
       (questionCount >= 3 && dialogueMarkers >= 4) ||
       (nickyTurns >= 2 && userTurns >= 2)
     );
-    
+
     const isInformational = (
       (totalTurns < 6 && sectionHeaders >= 3) ||
       (nickyContentRatio < 0.05 && longParagraphs > 5) ||
@@ -454,26 +454,26 @@ class DocumentProcessor {
       filename.toLowerCase().includes('manual') ||
       filename.toLowerCase().includes('.pdf')
     );
-    
+
     // Default to conversational to preserve existing behavior
     const mode = isInformational && !isConversational ? 'informational' : 'conversational';
-    
+
     console.log(`📊 Content classification for ${filename}: ${mode}`);
     console.log(`📈 Metrics: turns=${totalTurns}, nicky=${nickyTurns}, ratio=${nickyContentRatio.toFixed(3)}, headers=${sectionHeaders}`);
-    
+
     return { mode, metrics };
   }
 
   // New hierarchical extraction method with content-type routing
-  private async extractAndStoreHierarchicalKnowledge(profileId: string, content: string, filename: string, documentId: string): Promise<void> {
+  public async extractAndStoreHierarchicalKnowledge(profileId: string, content: string, filename: string, documentId: string): Promise<void> {
     try {
       console.log(`🧠 Starting hierarchical extraction for ${filename}...`);
-      
+
       // 🚀 NEW: Classify content type and route accordingly
       const classification = this.classifyContent(content, filename);
       let contentToProcess = content;
       let processedWithConversational = false;
-      
+
       if (classification.mode === 'conversational') {
         // Use existing conversation parsing for chat logs
         console.log(`🎭 Processing as conversational content - extracting Nicky's responses...`);
@@ -484,24 +484,24 @@ class DocumentProcessor {
         console.log(`📖 Processing as informational content - using full document...`);
         contentToProcess = content;
       }
-      
+
       // Safety fallback: if conversational processing yielded very little content, retry as informational
       if (processedWithConversational && contentToProcess.length < 2000 && content.length > 10000) {
         console.log(`⚠️ Conversational processing yielded little content (${contentToProcess.length} chars from ${content.length}), retrying as informational...`);
         contentToProcess = content;
       }
-      
+
       // PASS 1: Extract rich stories and contexts (from processed content)
       console.log(`📖 Pass 1: Extracting stories and contexts from processed content...`);
-      const stories = await geminiService.extractStoriesFromDocument(contentToProcess, filename);
+      const stories = await aiOrchestrator.extractStoriesFromDocument(contentToProcess, filename);
       console.log(`✅ Extracted ${stories.length} stories/contexts`);
-      
+
       const storyIds: string[] = [];
-      
+
       // Store story-level facts first
       for (const story of stories) {
         const canonicalKey = this.generateCanonicalKey(story.content);
-        
+
         let storyFact = await storage.addMemoryEntry({
           profileId,
           type: story.type,
@@ -513,7 +513,7 @@ class DocumentProcessor {
           canonicalKey,
           isAtomicFact: false, // This is a parent story
         });
-        
+
         // Handle story deduplication - find existing story if insertion failed
         if (!storyFact?.id) {
           const existingStory = await storage.findMemoryByCanonicalKey(profileId, canonicalKey);
@@ -521,41 +521,41 @@ class DocumentProcessor {
             storyFact = existingStory;
           }
         }
-        
+
         if (storyFact?.id) {
           storyIds.push(storyFact.id);
           console.log(`📚 Stored story: ${story.content.substring(0, 60)}...`);
-          
+
           // � OPTIMIZATION: Skip per-memory entity extraction, batch it at the end
           // Entities will be extracted in one batch after all memories are created
         } else {
           console.warn(`⚠️ Failed to store story, skipping atomic fact extraction for this story`);
         }
       }
-      
+
       // PASS 2: Extract atomic facts from each story
       console.log(`🔬 Pass 2: Extracting atomic facts from stories...`);
       let totalAtomicFacts = 0;
       const atomicFactIds: string[] = []; // Track atomic fact IDs for batched entity extraction
-      
+
       for (let i = 0; i < stories.length; i++) {
         const story = stories[i];
         const storyId = storyIds[i];
-        
+
         if (!storyId) continue;
-        
+
         try {
-          const atomicFacts = await geminiService.extractAtomicFactsFromStory(
-            story.content, 
+          const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(
+            story.content,
             `${story.type}: ${story.keywords.join(', ')}`
           );
-          
+
           console.log(`⚛️ Extracted ${atomicFacts.length} atomic facts from story ${i + 1}`);
-          
+
           // Store atomic facts linked to parent story
           for (const atomicFact of atomicFacts) {
             const atomicCanonicalKey = this.generateCanonicalKey(atomicFact.content);
-            
+
             const atomicMemory = await storage.addMemoryEntry({
               profileId,
               type: 'ATOMIC',
@@ -569,13 +569,13 @@ class DocumentProcessor {
               parentFactId: storyId, // Link to parent story
               storyContext: atomicFact.storyContext,
             });
-            
+
             if (atomicMemory?.id) {
               atomicFactIds.push(atomicMemory.id); // Track for batch entity extraction
             }
-            
+
             totalAtomicFacts++;
-            
+
             // � OPTIMIZATION: Skip per-memory entity extraction, batch it at the end
             // Entities will be extracted in one batch after all memories are created
           }
@@ -584,10 +584,10 @@ class DocumentProcessor {
           // Continue with other stories
         }
       }
-      
+
       console.log(`🎉 Hierarchical extraction complete!`);
       console.log(`📊 Results: ${stories.length} stories, ${totalAtomicFacts} atomic facts`);
-      
+
       // 🚀 BATCHED ENTITY EXTRACTION: Extract entities once for ALL memories (stories + atomic facts)
       const allMemoryIds = [...storyIds, ...atomicFactIds].filter(id => id);
       console.log(`🔗 Starting batched entity extraction for all ${allMemoryIds.length} memories...`);
@@ -597,11 +597,11 @@ class DocumentProcessor {
         const allMemories = allMemoriesFromDb
           .filter(m => allMemoryIds.includes(m.id))
           .map(m => ({ id: m.id, content: m.content }));
-        
+
         if (allMemories.length > 0) {
           // Get existing entities ONCE
           const existingEntitiesRaw = await storage.getAllEntities(profileId);
-          
+
           // Convert null to undefined for type compatibility
           const existingEntities = {
             people: existingEntitiesRaw.people.map(p => ({
@@ -623,17 +623,17 @@ class DocumentProcessor {
               description: e.description ?? undefined
             }))
           };
-          
+
           console.log(`📚 Found ${existingEntities.people.length} people, ${existingEntities.places.length} places, ${existingEntities.events.length} events`);
-          
+
           // Extract entities from ALL memories in one batch
           const batchResults = await entityExtraction.extractEntitiesFromMultipleMemories(
             allMemories,
             existingEntities
           );
-          
+
           let totalEntitiesLinked = 0;
-          
+
           // Process results and link entities
           for (const result of batchResults) {
             if (result.entities.length > 0) {
@@ -642,12 +642,12 @@ class DocumentProcessor {
                 result.entities,
                 existingEntities
               );
-              
+
               const personIds: string[] = [];
               const placeIds: string[] = [];
               const eventIds: string[] = [];
               let entitiesCreated = 0;
-              
+
               // Process matches
               for (const match of disambiguation.matches) {
                 if (match.confidence > 0.7) {
@@ -656,7 +656,7 @@ class DocumentProcessor {
                   else if (match.matchType === 'EVENT') eventIds.push(match.existingEntityId);
                 }
               }
-              
+
               // Create new entities
               for (const newEntity of disambiguation.newEntities) {
                 try {
@@ -701,7 +701,7 @@ class DocumentProcessor {
                   console.error(`Error creating ${newEntity.type}:`, error);
                 }
               }
-              
+
               // Link this memory to its entities
               if (personIds.length > 0 || placeIds.length > 0 || eventIds.length > 0) {
                 await storage.linkMemoryToEntities(result.memoryId, {
@@ -711,259 +711,49 @@ class DocumentProcessor {
                 });
                 totalEntitiesLinked++;
               }
-              
+
               if (entitiesCreated > 0) {
                 console.log(`✨ Created ${entitiesCreated} new entities for memory ${result.memoryId.substring(0, 8)}`);
               }
             }
           }
-          
+
           console.log(`✅ Batched entity extraction complete: linked ${totalEntitiesLinked} memories to entities`);
         }
       } catch (error) {
         console.error(`❌ Batched entity extraction failed:`, error);
         // Don't fail the whole reprocessing
       }
-      
+
       // Run contradiction detection on atomic facts
       console.log(`🔍 Running contradiction detection...`);
       // Note: Contradiction detection runs automatically during memory entry creation
-      
+
     } catch (error) {
       console.error('❌ Hierarchical knowledge extraction failed:', error);
       // Fallback to legacy extraction
-      console.log('🔄 Falling back to legacy extraction...');
-      await this.extractAndStoreKnowledgeLegacy(profileId, content, filename, documentId);
-    }
-  }
-  
-  // Legacy extraction method as fallback
-  private async extractAndStoreKnowledgeLegacy(profileId: string, content: string, filename: string, documentId?: string): Promise<void> {
-    return this.extractAndStoreKnowledge(profileId, content, filename, documentId);
-  }
-
-  async extractAndStoreKnowledge(profileId: string, content: string, filename: string, documentId?: string): Promise<void> {
-    try {
-      console.log(`Starting AI-powered fact extraction for ${filename}...`);
-      
-      // 🔧 NEW: Parse conversation to extract only Nicky's content
-      console.log(`🎭 Parsing conversation to separate user and Nicky content...`);
-      const nickyContent = conversationParser.extractFactRelevantContent(content, filename);
-      
-      // Use Gemini to intelligently extract facts from the content (Nicky only)
-      const extractedFacts = await geminiService.extractFactsFromDocument(nickyContent, filename);
-      
-      console.log(`Extracted ${extractedFacts.length} facts from ${filename}`);
-      
-      // Track processed facts to prevent intra-document over-boosting
-      const processedInThisDocument = new Set<string>();
-      let storedCount = 0;
-      let boostedCount = 0;
-      
-      for (const fact of extractedFacts) {
-        const canonicalKey = this.generateCanonicalKey(fact.content);
-        
-        // Skip if we already processed this exact fact in this document
-        if (processedInThisDocument.has(canonicalKey)) {
-          continue;
-        }
-        processedInThisDocument.add(canonicalKey);
-        
-        // Check if this fact already exists
-        const existingFact = await storage.findMemoryByCanonicalKey(profileId, canonicalKey);
-        
-        if (existingFact) {
-          // Fact exists - boost confidence and support count (max +10 per document)
-          const newSupportCount = (existingFact.supportCount || 1) + 1;
-          const confidenceBoost = 10; // Fixed 10 point boost per new document
-          const newConfidence = Math.min(100, (existingFact.confidence || 50) + confidenceBoost);
-          
-          await storage.updateMemoryConfidence(existingFact.id, newConfidence, newSupportCount);
-          boostedCount++;
-          
-          console.log(`Boosted confidence for fact: "${fact.content.substring(0, 50)}..." (${existingFact.confidence || 50} → ${newConfidence}, support: ${newSupportCount})`);
-        } else {
-          // New fact - determine initial confidence based on source and importance
-          const initialConfidence = this.calculateInitialConfidence(fact.importance, filename);
-          
-          const newMemoryEntry = await storage.addMemoryEntry({
-            profileId,
-            type: fact.type,
-            content: fact.content.trim(),
-            importance: fact.importance,
-            confidence: initialConfidence,
-            sourceId: documentId || `doc:${filename}`,
-            supportCount: 1,
-            canonicalKey,
-            source: `ai-extract:${filename}`,
-          });
-          
-          // Check for contradictions with this new fact
-          try {
-            const contradictionGroup = await contradictionDetector.checkAndResolveContradictions(profileId, newMemoryEntry);
-            if (contradictionGroup) {
-              console.log(`🔍 Resolved contradiction for fact: "${fact.content.substring(0, 50)}..." in group ${contradictionGroup.groupId}`);
-            }
-          } catch (error) {
-            console.error('Error checking contradictions for new fact:', error);
-            // Continue processing even if contradiction detection fails
-          }
-          
-          storedCount++;
-        }
-      }
-      
-      console.log(`Processed ${extractedFacts.length} facts from ${filename}: ${storedCount} new, ${boostedCount} confidence boosted`);
-      
-    } catch (error) {
-      console.error('AI fact extraction failed, falling back to keyword-based extraction:', error);
-      
-      // Fallback to original keyword-based extraction if AI fails
-      await this.fallbackExtractAndStoreKnowledge(profileId, content, filename, documentId);
+      console.log('🔄 Hierarchical extraction failed, skipping legacy fallback as it is deprecated.');
+      // await this.extractAndStoreKnowledgeLegacy(profileId, content, filename, documentId);
     }
   }
 
-  private async fallbackExtractAndStoreKnowledge(profileId: string, content: string, filename: string, documentId?: string): Promise<void> {
-    // Enhanced extraction for character-specific knowledge
-    const characterKeywords = [
-      // DBD game content
-      'killer', 'survivor', 'generator', 'hook', 'pallet', 'vault', 'loop', 'bloodweb', 'entity', 'trial', 'offering', 'add-on', 'perk', 'bloodpoint', 'dead by daylight', 'dbd', 'behavior', 'bhvr',
-      // Character personality
-      'nicky', 'dente', 'sabam', 'streaming', 'podcast', 'camping them softly', 'earl', 'vice don', 'digital entertainment',
-      // Character preferences and lore
-      'ghostface', 'twins', 'nurse', 'hillbilly', 'wraith', 'demogorgon', 'plague', 'spirit'
-    ];
 
-    // Use larger paragraph-based chunks instead of line-by-line processing
-    const chunks = this.legacyChunkText(content, 1500, 150);
-    
-    // Track processed facts to prevent intra-document over-boosting
-    const processedInThisDocument = new Set<string>();
-    
-    for (const chunk of chunks) {
-      const lowerChunk = chunk.toLowerCase();
-      
-      // Check if chunk contains relevant character content
-      const relevantKeywordCount = characterKeywords.filter(keyword => 
-        lowerChunk.includes(keyword)
-      ).length;
-      
-      // Only store chunks with substantial relevant content AND clear Nicky references
-      if (relevantKeywordCount >= 2 && chunk.trim().length > 100) {
-        // CRITICAL: Only store content that is clearly about/by Nicky
-        // Check for explicit Nicky references or first-person statements that could be Nicky's
-        const hasNickyReference = lowerChunk.includes('nicky') || lowerChunk.includes('dente') || 
-                                 lowerChunk.includes('camping them softly') || lowerChunk.includes('earl') || 
-                                 lowerChunk.includes('vice don');
-        
-        // Skip user preferences that aren't about Nicky
-        const looksLikeUserContent = (lowerChunk.includes('i prefer') || lowerChunk.includes('my main') || 
-                                    lowerChunk.includes('i like') || lowerChunk.includes('i play')) && 
-                                   !hasNickyReference;
-        
-        if (!hasNickyReference && looksLikeUserContent) {
-          continue; // Skip storing user preferences as Nicky's traits
-        }
-        
-        // If no clear Nicky reference, only store general DBD knowledge, not personal preferences
-        if (!hasNickyReference) {
-          const isPersonalPreference = lowerChunk.includes('prefer') || lowerChunk.includes('like') || 
-                                     lowerChunk.includes('favorite') || lowerChunk.includes('main');
-          if (isPersonalPreference) {
-            continue; // Skip personal preferences without clear attribution
-          }
-        }
-        
-        // Determine content type and importance  
-        let type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT' = 'FACT';
-        let importance = hasNickyReference ? 3 : 2; // Higher importance for explicit Nicky content
-        
-        // Character personality and preferences (only if about Nicky)
-        if ((lowerChunk.includes('prefer') || lowerChunk.includes('like') || lowerChunk.includes('favorite')) && hasNickyReference) {
-          type = 'PREFERENCE';
-          importance = 4;
-        }
-        // Character backstory and lore
-        else if (lowerChunk.includes('backstory') || lowerChunk.includes('history') || lowerChunk.includes('origin')) {
-          type = 'LORE';
-          importance = hasNickyReference ? 4 : 2;
-        }
-        // Game strategy and tactics
-        else if (lowerChunk.includes('strategy') || lowerChunk.includes('tactics') || lowerChunk.includes('gameplay')) {
-          type = 'CONTEXT';
-          importance = hasNickyReference ? 3 : 2;
-        }
-        
-        // Generate canonical key from raw content (before adding prefixes)
-        const rawContent = chunk.trim();
-        const canonicalKey = this.generateCanonicalKey(rawContent);
-        
-        // Skip if we already processed this exact fact in this document
-        if (processedInThisDocument.has(canonicalKey)) {
-          continue;
-        }
-        processedInThisDocument.add(canonicalKey);
-        
-        // Check if this fact already exists
-        const existingFact = await storage.findMemoryByCanonicalKey(profileId, canonicalKey);
-        
-        if (existingFact) {
-          // Fact exists - boost confidence and support count (max +10 per document)
-          const newSupportCount = (existingFact.supportCount || 1) + 1;
-          const confidenceBoost = 10; // Fixed 10 point boost per new document
-          const newConfidence = Math.min(100, (existingFact.confidence || 50) + confidenceBoost);
-          
-          await storage.updateMemoryConfidence(existingFact.id, newConfidence, newSupportCount);
-          console.log(`Boosted fallback fact confidence: "${rawContent.substring(0, 50)}..." (${existingFact.confidence || 50} → ${newConfidence})`);
-        } else {
-          // New fact - add attribution prefix if no clear Nicky reference
-          let displayContent = rawContent;
-          if (!hasNickyReference) {
-            displayContent = `Document reference: ${rawContent}`;
-          }
-          
-          const initialConfidence = this.calculateInitialConfidence(importance, filename);
-          
-          const newMemoryEntry = await storage.addMemoryEntry({
-            profileId,
-            type,
-            content: displayContent,
-            importance,
-            confidence: initialConfidence,
-            sourceId: documentId || `doc:${filename}`,
-            supportCount: 1,
-            canonicalKey,
-            source: `document:${filename}`,
-          });
-          
-          // Check for contradictions with this new fact
-          try {
-            const contradictionGroup = await contradictionDetector.checkAndResolveContradictions(profileId, newMemoryEntry);
-            if (contradictionGroup) {
-              console.log(`🔍 Resolved fallback contradiction for fact: "${rawContent.substring(0, 50)}..." in group ${contradictionGroup.groupId}`);
-            }
-          } catch (error) {
-            console.error('Error checking contradictions for fallback fact:', error);
-            // Continue processing even if contradiction detection fails
-          }
-        }
-      }
-    }
-  }
+  // Legacy methods removed to prevent circular dependencies and enforce new architecture
+
 
   async searchDocuments(profileId: string, query: string): Promise<any[]> {
     const documents = await storage.getProfileDocuments(profileId);
     const results: any[] = [];
-    
+
     for (const doc of documents) {
       if (doc.chunks && doc.processingStatus === 'COMPLETED') {
-        const relevantChunks = doc.chunks.filter(chunk => 
+        const relevantChunks = doc.chunks.filter(chunk =>
           chunk.toLowerCase().includes(query.toLowerCase())
         );
-        
+
         if (relevantChunks.length > 0) {
           await storage.incrementDocumentRetrieval(doc.id);
-          
+
           results.push({
             documentId: doc.id,
             filename: doc.filename,
@@ -973,7 +763,7 @@ class DocumentProcessor {
         }
       }
     }
-    
+
     return results.sort((a, b) => b.relevantChunks - a.relevantChunks);
   }
 
@@ -986,7 +776,7 @@ class DocumentProcessor {
       .replace(/[^\w\s]/g, '') // Remove punctuation
       .replace(/\s+/g, ' ')    // Normalize whitespace
       .substring(0, 100);      // Limit length
-    
+
     // Simple hash for canonical key
     let hash = 0;
     for (let i = 0; i < normalized.length; i++) {
@@ -994,7 +784,7 @@ class DocumentProcessor {
       hash = ((hash << 5) - hash) + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
-    
+
     return `fact_${Math.abs(hash)}`;
   }
 
@@ -1018,19 +808,19 @@ class DocumentProcessor {
     const chunks: string[] = [];
     let currentChunk = '';
     let currentTokens = 0;
-    
+
     for (const paragraph of paragraphs) {
       const paragraphTokens = this.encoder ? this.encoder.encode(paragraph).length : Math.ceil(paragraph.length / 4);
-      
+
       // If single paragraph is too long, split by sentences
       if (paragraphTokens > maxTokens) {
         const sentences = this.sentenceTokenizer ? this.sentenceTokenizer.tokenize(paragraph) : paragraph.split(/[.!?]+/);
         let tempChunk = '';
         let tempTokens = 0;
-        
+
         for (const sentence of sentences) {
           const sentTokens = this.encoder ? this.encoder.encode(sentence).length : Math.ceil(sentence.length / 4);
-          
+
           if (tempTokens + sentTokens > maxTokens && tempChunk) {
             // Save current chunk
             chunks.push(tempChunk.trim());
@@ -1041,49 +831,49 @@ class DocumentProcessor {
             tempTokens += sentTokens;
           }
         }
-        
+
         if (tempChunk) {
           chunks.push(tempChunk.trim());
         }
-      } 
+      }
       // If adding paragraph exceeds limit, save current and start new
       else if (currentTokens + paragraphTokens > maxTokens && currentChunk) {
         chunks.push(currentChunk.trim());
         currentChunk = paragraph;
         currentTokens = paragraphTokens;
-      } 
+      }
       // Otherwise, add to current chunk
       else {
         currentChunk += '\n\n' + paragraph;
         currentTokens += paragraphTokens;
       }
     }
-    
+
     // Don't forget the last chunk
     if (currentChunk) {
       chunks.push(currentChunk.trim());
     }
-    
+
     return chunks;
   }
 
   private extractGlobalEntitiesSync(text: string): GlobalEntities {
     // Extract ALL entities from document first
     // This ensures we don't miss important people/places
-    
+
     const entities = {
       people: new Set<string>(),
       places: new Set<string>(),
       events: new Set<string>(),
       relationships: new Map<string, string[]>()
     };
-    
+
     // Pattern matching for names (capitalized words) - fix iterator issue
     const namePattern = /\b([A-Z][a-z]+ (?:[A-Z][a-z]+ ?){0,2})\b/g;
     let match;
     while ((match = namePattern.exec(text)) !== null) {
       const potential = match[1].trim();
-      
+
       // Filter out common non-names
       if (!this.isCommonWord(potential) && potential.length > 2) {
         // Use context to determine if it's a person or place
@@ -1091,7 +881,7 @@ class DocumentProcessor {
           Math.max(0, match.index - 50),
           Math.min(text.length, match.index + 50)
         );
-        
+
         if (this.isPerson(potential, context)) {
           entities.people.add(potential);
         } else if (this.isPlace(potential, context)) {
@@ -1099,14 +889,14 @@ class DocumentProcessor {
         }
       }
     }
-    
+
     // Extract events (looking for time markers + actions) - fix iterator issue
     const eventPattern = /(when|after|before|during) ([^.!?]+)/gi;
     let eventMatch;
     while ((eventMatch = eventPattern.exec(text)) !== null) {
       entities.events.add(eventMatch[2].trim());
     }
-    
+
     return {
       people: Array.from(entities.people),
       places: Array.from(entities.places),
@@ -1128,7 +918,7 @@ class DocumentProcessor {
 
   private isPlace(text: string, context: string): boolean {
     const placeIndicators = [
-      'in', 'at', 'from', 'to', 'near', 'city', 
+      'in', 'at', 'from', 'to', 'near', 'city',
       'town', 'street', 'restaurant', 'house'
     ];
     return placeIndicators.some(ind => context.toLowerCase().includes(ind));
@@ -1137,9 +927,9 @@ class DocumentProcessor {
   private isCommonWord(word: string): boolean {
     const common = [
       'The', 'This', 'That', 'These', 'Those', 'Monday',
-      'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 
+      'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
       'Sunday', 'January', 'February', 'March', 'April', 'May',
-      'June', 'July', 'August', 'September', 'October', 
+      'June', 'July', 'August', 'September', 'October',
       'November', 'December'
     ];
     return common.includes(word);
@@ -1158,45 +948,45 @@ class DocumentProcessor {
       end: /(finally|in the end|ultimately|concluded|last)/i,
       complete: /(the story|here's what happened|let me tell you)/i
     };
-    
+
     // Determine story completeness
     let storyArc: 'complete' | 'partial' | 'fragment' = 'fragment';
-    
+
     if (storyMarkers.complete.test(chunk)) {
       storyArc = 'complete';
     } else if (
-      storyMarkers.beginning.test(chunk) && 
+      storyMarkers.beginning.test(chunk) &&
       storyMarkers.end.test(chunk)
     ) {
       storyArc = 'complete';
     } else if (
-      storyMarkers.beginning.test(chunk) || 
+      storyMarkers.beginning.test(chunk) ||
       storyMarkers.end.test(chunk)
     ) {
       storyArc = 'partial';
     }
-    
+
     // Extract local entities
     const localEntities = this.extractGlobalEntitiesSync(chunk);
-    
+
     // Merge with global entities (don't miss anyone!) - fix Set iteration
     const allPeople = new Set<string>();
     localEntities.people.forEach(p => allPeople.add(p));
     globalEntities.people.forEach(p => allPeople.add(p));
-    
+
     const allPlaces = new Set<string>();
     localEntities.places.forEach(p => allPlaces.add(p));
     globalEntities.places.forEach(p => allPlaces.add(p));
-    
+
     const entities = {
       people: Array.from(allPeople),
       places: Array.from(allPlaces),
       events: localEntities.events // Keep local events
     };
-    
+
     // Calculate importance based on entity mentions and story completeness
     const importance = this.calculateImportanceFromStory(chunk, entities, storyArc);
-    
+
     return {
       content: chunk,
       entities,
@@ -1221,16 +1011,16 @@ class DocumentProcessor {
     storyArc: string
   ): number {
     let importance = 500; // Base
-    
+
     // Complete stories are more important
     if (storyArc === 'complete') importance += 200;
     if (storyArc === 'partial') importance += 100;
-    
+
     // More entities = more important
     importance += entities.people.length * 50;
     importance += entities.places.length * 30;
     importance += entities.events.length * 40;
-    
+
     // Emotional content is important for Nicky
     const emotionalWords = [
       'angry', 'frustrated', 'happy', 'sad', 'betrayed',
@@ -1240,7 +1030,7 @@ class DocumentProcessor {
       word => chunk.toLowerCase().includes(word)
     ).length;
     importance += emotionCount * 75;
-    
+
     // Cap at 999 (reserved for protected facts)
     return Math.min(importance, 990);
   }
@@ -1252,19 +1042,19 @@ class DocumentProcessor {
         const sharedPeople = stories[i].entities.people.filter(
           p => stories[j].entities.people.includes(p)
         );
-        
+
         const sharedPlaces = stories[i].entities.places.filter(
           p => stories[j].entities.places.includes(p)
         );
-        
+
         // If they share entities, they're related
         if (sharedPeople.length > 0 || sharedPlaces.length > 0) {
           stories[i].relatedChunks.push(stories[j].content);
           stories[j].relatedChunks.push(stories[i].content);
-          
+
           // Incomplete stories that relate might form complete story
           if (
-            stories[i].storyArc === 'partial' && 
+            stories[i].storyArc === 'partial' &&
             stories[j].storyArc === 'partial'
           ) {
             // Check if they form a complete arc together
@@ -1277,7 +1067,7 @@ class DocumentProcessor {
         }
       }
     }
-    
+
     return stories;
   }
 
@@ -1286,21 +1076,21 @@ class DocumentProcessor {
     const hasBeginning = /^(once|one day|it started|first)/i.test(text);
     const hasMiddle = /(then|after|during|while)/i.test(text);
     const hasEnd = /(finally|in the end|ultimately|concluded)/i.test(text);
-    
+
     return hasBeginning && hasMiddle && hasEnd;
   }
 
   // Calculate initial confidence based on source reliability and importance
   private calculateInitialConfidence(importance: number, filename: string): number {
     let baseConfidence = 50; // Default medium confidence
-    
+
     // Boost confidence based on importance (1-5 scale from Gemini)
     const importanceBoost = (importance - 1) * 10; // 0-40 point boost
-    
+
     // Boost confidence based on source type
     let sourceBoost = 0;
     const lowerFilename = filename.toLowerCase();
-    
+
     if (lowerFilename.includes('official') || lowerFilename.includes('doc')) {
       sourceBoost = 15; // Official documentation
     } else if (lowerFilename.includes('note') || lowerFilename.includes('fact')) {
@@ -1308,7 +1098,7 @@ class DocumentProcessor {
     } else if (lowerFilename.includes('chat') || lowerFilename.includes('log')) {
       sourceBoost = 5;  // Chat logs or conversation logs
     }
-    
+
     const confidence = Math.min(90, baseConfidence + importanceBoost + sourceBoost);
     return Math.max(30, confidence); // Minimum 30% confidence
   }
