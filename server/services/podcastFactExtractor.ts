@@ -4,26 +4,9 @@ import { entityExtraction } from './entityExtraction.js';
 
 export class PodcastFactExtractor {
 
-  /**
-   * Extract structured facts AND entities from a podcast episode transcript
-   * Stores facts as memory entries and automatically extracts/links entities (people, places, events)
-   */
-  async extractAndStoreFacts(
-    storage: IStorage,
-    keywords: [topic.toLowerCase(), 'episode', episodeNumber.toString()],
-    importance: 3
-    });
-  });
-}
-
-if (guestNames && guestNames.length > 0) {
-  guestNames.forEach(guest => {
-    extractedFacts.push({
-      content: `Episode ${episodeNumber} featured guest ${guest}`,
-      type: 'FACT',
-      keywords: [guest.toLowerCase(), 'guest', 'episode', episodeNumber.toString()],
-      importance: 4
-    });
+  keywords: [guest.toLowerCase(), 'guest', 'episode', episodeNumber.toString()],
+  importance: 4
+});
   });
 }
 
