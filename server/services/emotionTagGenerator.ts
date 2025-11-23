@@ -77,62 +77,62 @@ class EmotionTagGenerator {
     if (mood === 'aggressive' || mood === 'chaotic') {
       if (hasQuestion) {
         return {
-          opening: 'skeptical',
-          rising: 'scoffs, dismissive',
-          peak: 'furious, heated',
-          falling: 'sarcastic, mocking',
-          close: 'mutters, eye roll'
+          opening: '[suspicious]',
+          rising: '[scoffs]',
+          peak: '[furious]',
+          falling: '[sarcastic]',
+          close: '[muttering bitterly]'
         };
       }
       return {
-        opening: 'dismissive',
-        rising: 'heated, building',
-        peak: 'furious',
-        falling: 'sarcastic',
-        close: 'mutters'
+        opening: '[dismissive]',
+        rising: '[voice rising]',
+        peak: '[furious]',
+        falling: '[sarcastic]',
+        close: '[grumbling under breath]'
       };
     }
     
-    // RELAXED/CHILL MODE
+    // MINIMUM ANNOYANCE MODE (still irritated, just less explosive)
     if (mood === 'relaxed' || intensity === 'low') {
       return {
-        opening: 'casual',
-        rising: 'conversational',
-        peak: 'warm, friendly',
-        falling: 'relaxed',
-        close: 'content'
+        opening: '[annoyed]',
+        rising: '[grumpy]',
+        peak: '[exasperated]',
+        falling: '[bitter]',
+        close: '[dismissive]'
       };
     }
     
     // STORYTELLING (long content)
     if (isLong || hasMultipleSentences) {
       return {
-        opening: 'setting the scene',
-        rising: 'building tension',
-        peak: 'dramatic reveal',
-        falling: 'winding down',
-        close: 'reflective'
+        opening: '[nostalgic]',
+        rising: '[building up]',
+        peak: '[cackling]',
+        falling: '[chuckling darkly]',
+        close: '[warm]'
       };
     }
     
     // QUICK RESPONSE (short content)
     if (isShort) {
       return {
-        opening: 'casual',
-        rising: 'casual',
-        peak: 'matter-of-fact',
-        falling: 'casual',
-        close: 'confident'
+        opening: '[deadpan]',
+        rising: '[deadpan]',
+        peak: '[sarcastic]',
+        falling: '[deadpan]',
+        close: '[dismissive]'
       };
     }
     
-    // BALANCED DEFAULT
+    // BALANCED DEFAULT (still pissed off, just controlled)
     return {
-      opening: 'engaging',
-      rising: 'passionate, building',
-      peak: hasExclamation ? 'intense, fired up' : 'emphatic',
-      falling: 'cooling down',
-      close: 'signature, confident'
+      opening: '[annoyed]',
+      rising: '[voice rising]',
+      peak: hasExclamation ? '[furious]' : '[exasperated]',
+      falling: '[bitter]',
+      close: '[muttering bitterly]'
     };
   }
 
@@ -299,27 +299,29 @@ CRITICAL RULES:
 
 ACTIONABLE ElevenLabs v3 Audio Tags - VOCAL ACTIONS ONLY:
 
-LAUGHING/POSITIVE:
-- [laughs], [giggles], [chuckles], [snorts], [laughing happily], [chuckling mischievously]
+EMOTIONAL STATES:
+- [grumpy], [annoyed], [furious], [exasperated]
+- [manic], [unhinged], [psycho], [losing it]
+- [conspiratorial], [suspicious], [paranoid]
+- [deadpan], [sarcastic], [bitter], [dismissive]
+- [warm], [genuine], [nostalgic], [wistful]
 
-SIGHING/BREATHING:
-- [sighs], [frustrated sighs], [exhausted sighs], [sighs dramatically]
-- [exhales], [exhales sharply], [inhales deeply], [clears throat]
+NON-VERBAL SOUNDS (BE SPECIFIC):
+- [laughing], [cackling], [chuckling darkly], [scoffs], [snorts]
+- [sighs heavily], [groans], [exhales sharply]
+- [clears throat], [coughs]
+- [muttering bitterly], [grumbling under breath], [whispering]
 
-SPEAKING STYLES (the most important):
-- [whispers], [whispers conspiratorially], [whispers urgently]
-- [grumbling], [grumbling angrily], [muttering], [muttering sarcastically]
-- [talking fast], [speaking slowly], [rambling], [rambling excitedly]
-- [yelling], [yelling furiously], [yelling excitedly], [shouting], [shouting angrily]
-
-EMOTIONAL VOCALIZATIONS:
-- [crying], [sobbing], [sniffling], [whimpering]
-- [growling], [snarling], [hissing]
+WISEGUY INTENSITY:
+- [speaking slowly for emphasis], [building up], [rapid-fire]
+- [voice rising], [yelling], [screaming], [shouting]
+- [through gritted teeth], [seething]
 
 COMBO EXAMPLES (emotion + action):
 - [frustrated grumbling], [excited rambling], [angry muttering]
 - [nervous laughs], [tired sighs], [manic laughing]
 - [yelling furiously], [shouting excitedly], [sarcastic muttering]
+- [muttering bitterly], [grumbling angrily], [rambling excitedly]
 
 IMPORTANT - For maximum yelling impact:
 - USE BOTH tag AND text formatting
@@ -355,12 +357,29 @@ Rules:
 7. Do NOT include words like "bronx", "italian", "jersey"
 8. No explanation, just the JSON object
 
-BEST TAGS (vocal actions):
-- Laughing: [laughs], [chuckles], [giggles], [nervous laughs], [manic laughing]
-- Sighing: [sighs], [frustrated sighs], [exhausted sighs], [dramatic sighs]
-- Speaking: [whispers], [grumbling], [muttering], [rambling], [talking fast]
-- Yelling: [yelling furiously], [yelling excitedly], [shouting angrily], [shouting urgently]
-- Combos: [frustrated grumbling], [excited rambling], [angry muttering], [sarcastic muttering]
+AVAILABLE TAGS (choose from these specific ones):
+
+EMOTIONAL STATES:
+- [grumpy], [annoyed], [furious], [exasperated]
+- [manic], [unhinged], [psycho], [losing it]
+- [conspiratorial], [suspicious], [paranoid]
+- [deadpan], [sarcastic], [bitter], [dismissive]
+- [warm], [genuine], [nostalgic], [wistful]
+
+NON-VERBAL SOUNDS:
+- [laughing], [cackling], [chuckling darkly], [scoffs], [snorts]
+- [sighs heavily], [groans], [exhales sharply]
+- [clears throat], [coughs]
+- [muttering bitterly], [grumbling under breath], [whispering]
+
+WISEGUY INTENSITY:
+- [speaking slowly for emphasis], [building up], [rapid-fire]
+- [voice rising], [yelling], [screaming], [shouting]
+- [through gritted teeth], [seething]
+
+COMBO EXAMPLES:
+- [frustrated grumbling], [excited rambling], [angry muttering]
+- [sarcastic muttering], [muttering bitterly], [grumbling angrily]
 
 IMPORTANT: For yelling, use BOTH tag + text formatting for maximum impact
 
@@ -398,28 +417,28 @@ Generate tags now:`;
     switch (context.contentType) {
       case 'ad':
         return {
-          opening: '[talking fast]',
-          rising: '[excited rambling]',
-          peak: '[yelling excitedly]',
-          falling: '[speaking urgently]',
-          close: '[whispers urgently]'
+          opening: '[rapid-fire]',
+          rising: '[building up]',
+          peak: '[yelling]',
+          falling: '[voice rising]',
+          close: '[through gritted teeth]'
         };
       case 'chat':
       case 'voice_response':
         return {
-          opening: '[grumbling]',
-          rising: '[frustrated sighs]',
-          peak: '[yelling furiously]',
-          falling: '[sarcastic muttering]',
-          close: '[exhausted sighs]'
+          opening: '[grumpy]',
+          rising: '[sighs heavily]',
+          peak: '[furious]',
+          falling: '[muttering bitterly]',
+          close: '[grumbling under breath]'
         };
       default:
         return {
-          opening: '[speaking thoughtfully]',
-          rising: '[talking curiously]',
-          peak: '[excited rambling]',
-          falling: '[chuckles]',
-          close: '[laughs warmly]'
+          opening: '[warm]',
+          rising: '[nostalgic]',
+          peak: '[laughing]',
+          falling: '[chuckling darkly]',
+          close: '[genuine]'
         };
     }
   }

@@ -1,12 +1,78 @@
 # Nicky AI - Improvement Opportunities Analysis
 
 **Date**: 2025-11-04  
-**Last Updated**: 2025-11-10  
+**Last Updated**: 2025-11-23  
 **Context**: Analysis of current system capabilities and opportunities for enhancement
 
 ---
 
-## ✅ COMPLETED IMPROVEMENTS (Nov 2025 Update)
+## ✅ COMPLETED IMPROVEMENTS (Nov 23, 2025 Update)
+
+### 1. **Universal Model Selection System** ✅ COMPLETED (Nov 23)
+**Status:** DEPLOYED - Full UI with cost/quality visualization
+- ✅ Type-safe model selection with TypeScript interfaces
+- ✅ localStorage-based preferences (per-operation granularity)
+- ✅ 4 React components: ModelSelector, QuickModelToggle, DocumentProcessingDialog, AIModelSettings
+- ✅ Backend routing (selectedModel flows from frontend → routes → orchestrator)
+- ✅ Gemini 3 Pro Preview support
+- ✅ Chat header integration
+- ✅ Cost badges and quality indicators
+
+**Models Available:**
+- Claude Sonnet 4.5: $3/$15 per 1M tokens
+- Gemini 3 Pro Preview: Pricing TBD (newest)
+- Gemini 2.5 Pro: $1.25/$5 per 1M tokens
+- Gemini 2.5 Flash: $0.30/$1.20 per 1M tokens
+
+### 2. **Personality Baseline Corrections** ✅ COMPLETED (Nov 23)
+**Status:** DEPLOYED - Nicky's baseline is now "Level 6 annoyance", never calm
+- ✅ "Chill Nicky" renamed to "Grumpy Mode (Level 6)"
+- ✅ Explicit baseline instruction: "NEVER calm, happy, relaxed, or content"
+- ✅ Emotional arcs changed from calm/happy → annoyed/skeptical defaults
+- ✅ UI color scheme updated (blue → gray for grumpy)
+- ✅ All personality modes now maintain minimum irritation
+
+### 3. **ElevenLabs v3 Emotion Tag Compliance** ✅ COMPLETED (Nov 23)
+**Status:** DEPLOYED - Experimental accent tags + vivid descriptors
+- ✅ Changed `[bronx]` → `[strong bronx wiseguy accent]`
+- ✅ Enforced double-tag pattern: `[strong bronx wiseguy accent][emotion]`
+- ✅ Removed forced emotion tag overrides (no more `[[grumpy]]` bugs)
+- ✅ Expanded tag library with vivid alternatives:
+  - muttering → muttering bitterly
+  - laughing → cackling, chuckling darkly
+  - Added: sighs heavily, voice rising, through gritted teeth, seething
+- ✅ Synced vocabularies between emotionTagGenerator and emotionEnhancer
+
+### 4. **Deep Scan Chunked Saving** ✅ COMPLETED (Nov 23)
+**Status:** DEPLOYED - Large scans now save successfully
+- ✅ Timeout increased: 15s → 60s
+- ✅ Automatic chunking for scans >500 groups
+- ✅ Smart chunk retrieval (auto-merges CHUNK records with ACTIVE scan)
+- ✅ Added 'CHUNK' status to schema type definitions
+- ✅ Transparent to user (chunks handled automatically)
+
+**Benefits:**
+- ALL memory scans (2,400+ memories) now save without timeout
+- Results persist across page refreshes
+- Seamless UX (no user-facing changes)
+
+### 5. **Intelligence Analysis Summary Cards** ✅ COMPLETED (Nov 23)
+**Status:** DEPLOYED - Dashboard now shows correct counts
+- ✅ Added `summary` object to backend response
+- ✅ Stats now populate: totalIssues, highPriority, mediumPriority, autoHandled
+- ✅ Cards display actual data instead of zeros
+
+### 6. **Intelligence Dashboard Per-Cluster State** ✅ COMPLETED (Nov 23)
+**Status:** DEPLOYED - Individual merge buttons work correctly
+- ✅ Tracked `mergingClusterId` for per-button loading states
+- ✅ Only clicked button shows spinner (not all buttons)
+- ✅ Success toast: "✅ Cluster Merged: Successfully merged X facts"
+- ✅ Auto-remove merged clusters from UI
+- ✅ `mergedClusters` Set tracks completed merges
+
+---
+
+## ✅ PREVIOUSLY COMPLETED (Pre-Nov 23)
 
 ### 1. **Vector Embeddings for Semantic Search** ✅ COMPLETED
 **Status:** IMPLEMENTED (Oct-Nov 2025)

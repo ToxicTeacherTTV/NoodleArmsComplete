@@ -666,15 +666,46 @@ Response format:
   async generateChatResponse(
     userMessage: string,
     coreIdentity: string,
-    contextPrompt: string = ""
+    relevantMemories: any[] = [],
+    relevantDocs: any[] = [],
+    loreContext: string = "",
+    mode?: string,
+    conversationId?: string,
+    profileId?: string,
+    webSearchResults: any[] = [],
+    personalityPrompt?: string,
+    trainingExamples: any[] = []
   ): Promise<{ content: string; processingTime: number; retrievedContext?: string }> {
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("Gemini API key not configured");
     }
 
     const startTime = Date.now();
+    let contextPrompt = "";  // Declare outside try block for error handler access
 
     try {
+      // Build context from memories, docs, and lore
+      
+      if (relevantMemories.length > 0) {
+        contextPrompt += `\n\nRELEVANT MEMORIES:\n${relevantMemories.map(m => `- ${m.fact || m.content}`).join('\n')}`;
+      }
+      
+      if (relevantDocs.length > 0) {
+        contextPrompt += `\n\nRELEVANT DOCUMENTS:\n${relevantDocs.map(d => `- ${d.title}: ${d.summary || d.content}`).join('\n')}`;
+      }
+      
+      if (loreContext) {
+        contextPrompt += `\n\nLORE CONTEXT:\n${loreContext}`;
+      }
+      
+      if (webSearchResults.length > 0) {
+        contextPrompt += `\n\nWEB SEARCH RESULTS:\n${webSearchResults.map(r => `- ${r.title}: ${r.snippet}`).join('\n')}`;
+      }
+      
+      if (trainingExamples.length > 0) {
+        contextPrompt += `\n\nTRAINING EXAMPLES (for style guidance):\n${trainingExamples.slice(0, 3).map(ex => `Example: ${ex.prompt}\nResponse: ${ex.response}`).join('\n\n')}`;
+      }
+
       // Build the full prompt for Gemini with conversational depth guidance
       // Don't wrap if it's already a formatted prompt (from Discord or other services)
       const isFormattedPrompt = userMessage.includes('Discord user') || userMessage.includes('Behavior Settings') || userMessage.includes('Prompt:');
@@ -697,10 +728,10 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${c
         ? conversationalGuidance
         : conversationalGuidance;
 
-      console.log('🌟 Using Gemini fallback for chat response');
+      console.log('🌟 Using Gemini for chat response');
 
       // 🚫 CRITICAL: Put formatting rules FIRST for maximum priority
-      const enhancedCoreIdentity = `🚫 CRITICAL FORMATTING RULES:
+      let enhancedCoreIdentity = `🚫 CRITICAL FORMATTING RULES:
 
 RULE #1 - NO ASTERISKS:
 NEVER use asterisks (*) for actions, gestures, or stage directions. Do NOT write *gestures*, *winks*, *leans in*, *waves*, etc.
@@ -711,6 +742,11 @@ ALWAYS end sentences with proper punctuation (. ! ?). Every statement must end w
 Use commas where grammatically appropriate to separate clauses and maintain readability.
 
 ${coreIdentity}`;
+
+      // Add personality prompt if provided
+      if (personalityPrompt) {
+        enhancedCoreIdentity += `\n\n${personalityPrompt}`;
+      }
 
       // Use intelligent model selection with fallback for chat
       const chatResult = await executeWithDefaultModel(async (model) => {

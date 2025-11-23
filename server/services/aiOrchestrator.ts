@@ -9,6 +9,7 @@ import {
     OptimizedMemory,
     ConsolidatedMemory
 } from './ai-types.js';
+import { AIModel } from '@shared/modelSelection.js';
 
 /**
  * 🎼 AI ORCHESTRATOR
@@ -18,68 +19,113 @@ import {
  * where services directly imported each other.
  * 
  * STRATEGY:
- * 1. Primary: Claude 4.5 Sonnet (Superior quality for reasoning/creative)
- * 2. Fallback: Gemini 2.0 Flash (Cost-effective, fast, good backup)
+ * - User-selectable models: Claude Sonnet 4.5, Gemini 3 Pro, Gemini 2.5 Pro, Gemini 2.5 Flash
+ * - Automatic fallback on failure
+ * - Per-operation model preferences
  */
 export class AIOrchestrator {
-
+    
     /**
-     * Extract stories from a document with fallback strategy
+     * Route AI operation to the selected model with fallback
      */
-    async extractStoriesFromDocument(content: string, filename: string): Promise<StoryExtractionResult[]> {
-        console.log('🎼 Orchestrator: Routing story extraction to Claude Sonnet 4.5...');
-        try {
-            return await anthropicService.extractStoriesFromDocument(content, filename);
-        } catch (claudeError) {
-            console.warn('⚠️ Orchestrator: Claude extraction failed, using Gemini fallback:', claudeError);
-            return await geminiService.extractStoriesFromDocument(content, filename);
+    private async routeToModel<T>(
+        operation: string,
+        selectedModel: AIModel,
+        claudeOperation: () => Promise<T>,
+        geminiOperation: () => Promise<T>
+    ): Promise<T> {
+        // Map model selection to provider
+        const useGemini = selectedModel !== 'claude-sonnet-4.5';
+        
+        if (useGemini) {
+            console.log(`🎼 Orchestrator: Routing ${operation} to ${selectedModel}...`);
+            try {
+                return await geminiOperation();
+            } catch (geminiError) {
+                console.warn(`⚠️ Orchestrator: ${selectedModel} failed, trying Claude fallback:`, geminiError);
+                return await claudeOperation();
+            }
+        } else {
+            console.log(`🎼 Orchestrator: Routing ${operation} to Claude Sonnet 4.5...`);
+            try {
+                return await claudeOperation();
+            } catch (claudeError) {
+                console.warn('⚠️ Orchestrator: Claude failed, trying Gemini fallback:', claudeError);
+                return await geminiOperation();
+            }
         }
     }
 
     /**
-     * Extract atomic facts from a story with fallback strategy
+     * Extract stories from a document with user-selectable model
      */
-    async extractAtomicFactsFromStory(storyContent: string, storyContext: string): Promise<AtomicFactResult[]> {
-        console.log('🎼 Orchestrator: Routing atomic fact extraction to Claude Sonnet 4.5...');
-        try {
-            return await anthropicService.extractAtomicFactsFromStory(storyContent, storyContext);
-        } catch (claudeError) {
-            console.warn('⚠️ Orchestrator: Claude extraction failed, using Gemini fallback:', claudeError);
-            return await geminiService.extractAtomicFactsFromStory(storyContent, storyContext);
-        }
+    async extractStoriesFromDocument(
+        content: string,
+        filename: string,
+        selectedModel: AIModel = 'claude-sonnet-4.5'
+    ): Promise<StoryExtractionResult[]> {
+        return this.routeToModel(
+            'story extraction',
+            selectedModel,
+            () => anthropicService.extractStoriesFromDocument(content, filename),
+            () => geminiService.extractStoriesFromDocument(content, filename)
+        );
     }
 
     /**
-     * Consolidate and optimize memories with fallback strategy
+     * Extract atomic facts from a story with user-selectable model
      */
-    async consolidateAndOptimizeMemories(memories: MemoryEntry[] | any[]): Promise<OptimizedMemory[]> {
-        console.log('🎼 Orchestrator: Routing memory consolidation to Claude Sonnet 4.5...');
-        try {
-            return await anthropicService.consolidateAndOptimizeMemories(memories);
-        } catch (claudeError) {
-            console.warn('⚠️ Orchestrator: Claude consolidation failed, using Gemini fallback:', claudeError);
-            const result = await geminiService.consolidateAndOptimizeMemories(memories);
-            // Ensure importance is a number and map to OptimizedMemory
-            return result.map((m: any) => ({
-                type: m.type,
-                content: m.content,
-                importance: (typeof m.importance === 'number' ? m.importance : 1) as number,
-                source: m.source
-            })) as OptimizedMemory[];
-        }
+    async extractAtomicFactsFromStory(
+        storyContent: string,
+        storyContext: string,
+        selectedModel: AIModel = 'claude-sonnet-4.5'
+    ): Promise<AtomicFactResult[]> {
+        return this.routeToModel(
+            'atomic fact extraction',
+            selectedModel,
+            () => anthropicService.extractAtomicFactsFromStory(storyContent, storyContext),
+            () => geminiService.extractAtomicFactsFromStory(storyContent, storyContext)
+        );
     }
 
     /**
-     * Extract podcast facts with fallback strategy
+     * Consolidate and optimize memories with user-selectable model
      */
-    async extractPodcastFacts(transcript: string, episodeNumber: number, episodeTitle: string): Promise<PodcastFactResult[]> {
-        console.log('🎼 Orchestrator: Routing podcast fact extraction to Claude Sonnet 4.5...');
-        try {
-            return await anthropicService.extractPodcastFacts(transcript, episodeNumber, episodeTitle);
-        } catch (claudeError) {
-            console.warn('⚠️ Orchestrator: Claude extraction failed, using Gemini fallback:', claudeError);
-            return await geminiService.extractPodcastFacts(transcript, episodeNumber, episodeTitle);
-        }
+    async consolidateAndOptimizeMemories(
+        memories: MemoryEntry[] | any[],
+        selectedModel: AIModel = 'claude-sonnet-4.5'
+    ): Promise<OptimizedMemory[]> {
+        return this.routeToModel(
+            'memory consolidation',
+            selectedModel,
+            () => anthropicService.consolidateAndOptimizeMemories(memories),
+            async () => {
+                const result = await geminiService.consolidateAndOptimizeMemories(memories);
+                return result.map((m: any) => ({
+                    type: m.type,
+                    content: m.content,
+                    importance: (typeof m.importance === 'number' ? m.importance : 1) as number,
+                    source: m.source
+                })) as OptimizedMemory[];
+            }
+        );
+    }
+
+    /**
+     * Extract podcast facts with user-selectable model
+     */
+    async extractPodcastFacts(
+        transcript: string,
+        episodeNumber: number,
+        episodeTitle: string,
+        selectedModel: AIModel = 'claude-sonnet-4.5'
+    ): Promise<PodcastFactResult[]> {
+        return this.routeToModel(
+            'podcast fact extraction',
+            selectedModel,
+            () => anthropicService.extractPodcastFacts(transcript, episodeNumber, episodeTitle),
+            () => geminiService.extractPodcastFacts(transcript, episodeNumber, episodeTitle)
+        );
     }
 
     /**
@@ -194,6 +240,56 @@ export class AIOrchestrator {
      * Generate chat response with fallback strategy
      */
     async generateResponse(
+        userMessage: string,
+        coreIdentity: string,
+        relevantMemories: any[],
+        relevantDocs: any[] = [],
+        loreContext?: string,
+        mode?: string,
+        conversationId?: string,
+        profileId?: string,
+        webSearchResults: any[] = [],
+        personalityPrompt?: string,
+        trainingExamples: any[] = [],
+        selectedModel?: string
+    ): Promise<any> {
+        const model = (selectedModel || 'claude-sonnet-4.5') as AIModel;
+        
+        // Use selected model with automatic fallback
+        return await this.routeToModel(
+            'chat response generation',
+            model,
+            () => anthropicService.generateResponse(
+                userMessage,
+                coreIdentity,
+                relevantMemories,
+                relevantDocs,
+                loreContext,
+                mode,
+                conversationId,
+                profileId,
+                webSearchResults,
+                personalityPrompt,
+                trainingExamples
+            ),
+            () => geminiService.generateChatResponse(
+                userMessage,
+                coreIdentity,
+                relevantMemories,
+                relevantDocs,
+                loreContext,
+                mode,
+                conversationId,
+                profileId,
+                webSearchResults,
+                personalityPrompt,
+                trainingExamples
+            ).then(response => ({ content: response.content }))
+        );
+    }
+
+    // Legacy fallback code (keeping for reference)
+    private async generateResponseLegacy(
         userMessage: string,
         coreIdentity: string,
         relevantMemories: any[],

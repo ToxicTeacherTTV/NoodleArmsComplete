@@ -1,12 +1,117 @@
 # Nicky AI - Project Roadmap & Improvements
 
-**Last Updated:** November 10, 2025
+**Last Updated:** November 23, 2025
 
 This document tracks suggested improvements and their implementation status.
 
 ---
 
-## ✅ COMPLETED FIXES
+## 🎉 RECENT COMPLETIONS (November 23, 2025)
+
+### Universal Model Selection System ✅ COMPLETED
+**Status:** DEPLOYED - Full model selection with cost/quality visualization
+
+**What was built:**
+- ✅ Type-safe model selection system (`shared/modelSelection.ts`)
+- ✅ 4 React UI components:
+  - `ModelSelector` - Full selector with cost badges
+  - `QuickModelToggle` - Compact chat header toggle
+  - `DocumentProcessingDialog` - Warning dialog for doc processing
+  - `AIModelSettings` - Settings panel
+- ✅ Backend model routing (selectedModel flows frontend → routes → orchestrator)
+- ✅ Gemini 3 Pro Preview support added
+- ✅ Chat header integration with model toggle
+- ✅ localStorage-based preferences (per-operation)
+
+**Models Available:**
+- Claude Sonnet 4.5: $3/$15 per 1M (High quality, reliable)
+- Gemini 3 Pro Preview: Pricing TBD (Newest, experimental)
+- Gemini 2.5 Pro: $1.25/$5 per 1M (Balance of cost/quality)
+- Gemini 2.5 Flash: $0.30/$1.20 per 1M (Fast, economical)
+
+**Files:** `shared/modelSelection.ts`, `server/services/aiOrchestrator.ts`, `server/config/geminiModels.ts`, `client/src/components/model-selector.tsx`, `client/src/components/quick-model-toggle.tsx`, `client/src/components/document-processing-dialog.tsx`, `client/src/components/ai-model-settings.tsx`, `client/src/components/jazz-dashboard-v2.tsx`, `server/routes.ts`
+
+### Personality Baseline Fix ✅ COMPLETED
+**Status:** DEPLOYED - Nicky never calm/relaxed anymore
+
+**Changes Made:**
+- ✅ Changed "Chill Nicky" → "Grumpy Mode (Level 6)" baseline
+- ✅ Added explicit instruction: "You are NEVER calm, happy, relaxed, or content. Your baseline is Level 6 on the annoyance scale."
+- ✅ Changed "RELAXED/CHILL MODE" → "MINIMUM ANNOYANCE MODE" with grumpy baseline
+- ✅ Updated default emotional arcs from calm/happy to annoyed/skeptical
+- ✅ UI display updated to show "Grumpy Mode (Level 6)"
+
+**Files:** `server/types/personalityControl.ts`, `server/services/emotionTagGenerator.ts`, `server/services/anthropic.ts`, `client/src/components/personality-surge-panel.tsx`
+
+### ElevenLabs v3 Emotion Tag Compliance ✅ COMPLETED
+**Status:** DEPLOYED - Experimental accent tags + vivid emotion descriptors
+
+**Changes Made:**
+- ✅ Changed `[bronx]` → `[strong bronx wiseguy accent]` (ElevenLabs v3 experimental format)
+- ✅ Ensured `[strong bronx wiseguy accent][emotion]` double-tag pattern
+- ✅ Fixed validation to check for proper pattern, only strip/reapply if missing
+- ✅ Removed forced emotion tag overrides (no more double brackets)
+- ✅ Expanded tag library with vivid alternatives:
+  - Basic: muttering → muttering bitterly
+  - Basic: laughing → cackling, chuckling darkly
+  - Added: sighs heavily, voice rising, through gritted teeth, seething
+- ✅ Synced tag vocabulary between emotionTagGenerator (auto chat) and emotionEnhancer (manual API)
+
+**Files:** `server/routes.ts`, `server/services/anthropic.ts`, `server/services/elevenlabs.ts`, `server/services/emotionEnhancer.ts`, `server/services/emotionTagGenerator.ts`
+
+### Deep Scan Chunked Saving ✅ COMPLETED
+**Status:** DEPLOYED - Large duplicate scans now save successfully
+
+**Changes Made:**
+- ✅ Increased timeout from 15s → 60s for database saves
+- ✅ Automatic chunking for scans >500 duplicate groups
+- ✅ First chunk saved as 'ACTIVE' with full metadata
+- ✅ Additional chunks saved as 'CHUNK' status
+- ✅ Smart chunk loading: auto-fetches and merges all chunks on retrieval
+- ✅ Added 'CHUNK' status to schema type definition
+
+**Benefits:**
+- Large ALL scans (thousands of groups) now save successfully
+- Seamless user experience (chunking happens transparently)
+- Results persist across page refreshes
+
+**Files:** `server/routes.ts`, `shared/schema.ts`
+
+### Intelligence Analysis UI Fix ✅ COMPLETED
+**Status:** DEPLOYED - Summary cards now populate correctly
+
+**Problem:** Backend returned data but missing `summary` object that frontend cards expected
+
+**Fix:**
+- ✅ Added `summary` object to intelligence analysis response:
+  - `totalIssues` - count across all categories
+  - `highPriority` - HIGH clusters + MAJOR drifts
+  - `mediumPriority` - MEDIUM clusters + MODERATE drifts
+  - `autoHandled` - hidden memories + trusted sources
+
+**Files:** `server/services/intelligenceEngine.ts`
+
+### Intelligence Dashboard Per-Cluster Loading ✅ COMPLETED
+**Status:** DEPLOYED - Individual cluster merge buttons work correctly
+
+**Changes Made:**
+- ✅ Added `mergingClusterId` state to track specific cluster being merged
+- ✅ Added `mergedClusters` Set to track completed merges
+- ✅ Individual button loading states (only clicked button shows spinner)
+- ✅ Success toast: "✅ Cluster Merged: Successfully merged X facts into one memory"
+- ✅ Auto-remove merged clusters from UI immediately
+- ✅ Pass `clusterId` through mutation for tracking
+
+**Benefits:**
+- No more "all buttons spinning" bug
+- Clear visual feedback on merge completion
+- Clusters disappear from list after successful merge
+
+**Files:** `client/src/components/intelligence-dashboard.tsx`
+
+---
+
+## ✅ COMPLETED FIXES (Pre-November 23, 2025)
 
 ### 0. Gemini-Primary Architecture Migration ✅ COMPLETED (Oct-Nov 2025)
 **Status:** DEPLOYED - 85-90% cost reduction achieved

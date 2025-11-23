@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, Upload, Plus, Trash2, Check, Globe, Filter, Shuffle, BarChart3 } from "lucide-react";
+import { MapPin, Upload, Plus, Trash2, Check, Globe, Filter, Shuffle, BarChart3, ChevronDown, ChevronUp } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Select,
   SelectContent,
@@ -58,6 +59,7 @@ export default function ListenerCitiesPage() {
   const [filterContinent, setFilterContinent] = useState<string>("");
   const [filterRegion, setFilterRegion] = useState<string>("");
   const [filterCovered, setFilterCovered] = useState<string>("all");
+  const [isFiltersOpen, setIsFiltersOpen] = useState(true);
 
   // Add city form
   const [newCity, setNewCity] = useState("");
@@ -249,7 +251,7 @@ export default function ListenerCitiesPage() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
@@ -404,85 +406,101 @@ export default function ListenerCitiesPage() {
       )}
 
       {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <Label>Continent</Label>
-              <Select value={filterContinent || "all-continents"} onValueChange={(v) => setFilterContinent(v === "all-continents" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Continents" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all-continents">All Continents</SelectItem>
-                  {stats &&
-                    Object.keys(stats.byContinents).map((continent) => (
-                      <SelectItem key={continent} value={continent}>
-                        {continent} ({stats.byContinents[continent]})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+      <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                Filters
+              </CardTitle>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-9 p-0">
+                  {isFiltersOpen ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">Toggle filters</span>
+                </Button>
+              </CollapsibleTrigger>
             </div>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <Label>Continent</Label>
+                  <Select value={filterContinent || "all-continents"} onValueChange={(v) => setFilterContinent(v === "all-continents" ? "" : v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Continents" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all-continents">All Continents</SelectItem>
+                      {stats &&
+                        Object.keys(stats.byContinents).map((continent) => (
+                          <SelectItem key={continent} value={continent}>
+                            {continent} ({stats.byContinents[continent]})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div>
-              <Label>Country</Label>
-              <Select value={filterCountry || "all-countries"} onValueChange={(v) => setFilterCountry(v === "all-countries" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Countries" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all-countries">All Countries</SelectItem>
-                  {stats &&
-                    Object.keys(stats.byCountries).map((country) => (
-                      <SelectItem key={country} value={country}>
-                        {country} ({stats.byCountries[country]})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div>
+                  <Label>Country</Label>
+                  <Select value={filterCountry || "all-countries"} onValueChange={(v) => setFilterCountry(v === "all-countries" ? "" : v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Countries" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all-countries">All Countries</SelectItem>
+                      {stats &&
+                        Object.keys(stats.byCountries).map((country) => (
+                          <SelectItem key={country} value={country}>
+                            {country} ({stats.byCountries[country]})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div>
-              <Label>Region</Label>
-              <Select value={filterRegion || "all-regions"} onValueChange={(v) => setFilterRegion(v === "all-regions" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Regions" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all-regions">All Regions</SelectItem>
-                  {stats &&
-                    Object.keys(stats.byRegions).map((region) => (
-                      <SelectItem key={region} value={region}>
-                        {region} ({stats.byRegions[region]})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div>
+                  <Label>Region</Label>
+                  <Select value={filterRegion || "all-regions"} onValueChange={(v) => setFilterRegion(v === "all-regions" ? "" : v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Regions" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all-regions">All Regions</SelectItem>
+                      {stats &&
+                        Object.keys(stats.byRegions).map((region) => (
+                          <SelectItem key={region} value={region}>
+                            {region} ({stats.byRegions[region]})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div>
-              <Label>Status</Label>
-              <Select value={filterCovered} onValueChange={setFilterCovered}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Cities</SelectItem>
-                  <SelectItem value="true">Covered Only</SelectItem>
-                  <SelectItem value="false">Uncovered Only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+                <div>
+                  <Label>Status</Label>
+                  <Select value={filterCovered} onValueChange={setFilterCovered}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Cities</SelectItem>
+                      <SelectItem value="true">Covered Only</SelectItem>
+                      <SelectItem value="false">Uncovered Only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Cities List */}
       <Card>

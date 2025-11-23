@@ -356,8 +356,9 @@ export default function PodcastManagementPanel() {
 
     createEpisodeMutation.mutate({
       ...newEpisode,
+      guestNames: newEpisode.guestInfo ? newEpisode.guestInfo.split(',').map(s => s.trim()).filter(Boolean) : [],
       topics: [],
-      keyMoments: []
+      highlights: [] // Changed from keyMoments to highlights to match schema
     });
   };
 
@@ -375,8 +376,9 @@ export default function PodcastManagementPanel() {
       id: selectedEpisode.id,
       updates: {
         ...editEpisode,
+        guestNames: editEpisode.guestInfo ? editEpisode.guestInfo.split(',').map(s => s.trim()).filter(Boolean) : [],
         topics: [],
-        keyMoments: []
+        highlights: []
       }
     });
   };
@@ -385,8 +387,8 @@ export default function PodcastManagementPanel() {
     setEditEpisode({
       title: episode.title,
       description: episode.description || "",
-      episodeNumber: episode.episodeNumber,
-      guestInfo: (episode as any).guestInfo || "",
+      episodeNumber: episode.episodeNumber ?? 0,
+      guestInfo: episode.guestNames?.join(", ") || "",
       transcript: episode.transcript || "",
       notes: episode.notes || ""
     });

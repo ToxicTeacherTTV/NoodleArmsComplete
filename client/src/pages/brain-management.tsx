@@ -1649,167 +1649,133 @@ export default function BrainManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <Brain className="h-8 w-8 text-purple-600 mr-3" />
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Nicky's Brain Management
-              </h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-600 dark:text-gray-300">
-                {memoryStats?.totalFacts || 0} total facts
-              </div>
-              <Button 
-                variant="outline" 
-                onClick={() => setLocation("/")}
-                data-testid="button-back"
-              >
-                Back to Chat
-              </Button>
-            </div>
-          </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Brain className="h-8 w-8 text-purple-600" />
+            Brain Management
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {memoryStats?.totalFacts || 0} total facts stored in long-term memory
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant={sortBy === 'confidence' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSortBy('confidence')}
+          >
+            Sort by Confidence
+          </Button>
+          <Button
+            variant={sortBy === 'date' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSortBy('date')}
+          >
+            Sort by Date
+          </Button>
+          <Button
+            onClick={() => previewCleaningMutation.mutate()}
+            disabled={previewCleaningMutation.isPending}
+            variant="outline"
+            size="sm"
+          >
+            {previewCleaningMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Scissors className="h-4 w-4 mr-2" />
+            )}
+            Clean Wall-of-Text
+          </Button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <SystemOperationsSummary
-          memoryStats={memoryStats}
-          flagsData={flagsData}
-          flagAnalytics={flagAnalytics}
-          documents={documents}
-          chaosState={chaosState}
-          personalityState={personalityState}
-          timelineHealth={timelineHealth}
-          onRequestTimelineRepair={() => timelineRepairMutation.mutate()}
-          timelineRepairPending={timelineRepairMutation.isPending}
+      <SystemOperationsSummary
+        memoryStats={memoryStats}
+        flagsData={flagsData}
+        flagAnalytics={flagAnalytics}
+        documents={documents}
+        chaosState={chaosState}
+        personalityState={personalityState}
+        timelineHealth={timelineHealth}
+        onRequestTimelineRepair={() => timelineRepairMutation.mutate()}
+        timelineRepairPending={timelineRepairMutation.isPending}
+      />
+
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+        <Input
+          type="text"
+          placeholder="Search Nicky's knowledge..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
         />
+      </div>
 
-        {/* Search Bar & Sorting Controls */}
-        <div className="mb-8 space-y-4">
-          <div className="flex gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                type="text"
-                placeholder="Search Nicky's knowledge..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-                data-testid="input-search"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant={sortBy === 'confidence' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSortBy('confidence')}
-                data-testid="sort-by-confidence"
-              >
-                Sort by Confidence
-              </Button>
-              <Button
-                variant={sortBy === 'date' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSortBy('date')}
-                data-testid="sort-by-date"
-              >
-                Sort by Date
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-                data-testid="toggle-sort-order"
-              >
-                {sortOrder === 'desc' ? '↓' : '↑'}
-              </Button>
-              <Button
-                onClick={() => previewCleaningMutation.mutate()}
-                disabled={previewCleaningMutation.isPending}
-                variant="outline"
-                size="sm"
-                data-testid="button-preview-cleaning"
-              >
-                {previewCleaningMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Scissors className="h-4 w-4 mr-2" />
-                    Preview Clean Wall-of-Text
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 2xl:grid-cols-10 gap-1 h-auto p-1">
-            <TabsTrigger value="recent-memories" data-testid="tab-recent-memories" className="text-xs">
+      {/* Tabs */}
+      <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
+        <ScrollArea className="w-full pb-4">
+          <TabsList className="inline-flex h-auto p-1 w-full justify-start min-w-max">
+            <TabsTrigger value="recent-memories" className="text-xs px-3 py-1.5">
               📝 Recent
             </TabsTrigger>
-            <TabsTrigger value="analytics" data-testid="tab-analytics" className="text-xs">
+            <TabsTrigger value="analytics" className="text-xs px-3 py-1.5">
               📊 Analytics
             </TabsTrigger>
-            <TabsTrigger value="documents" data-testid="tab-documents" className="text-xs">
+            <TabsTrigger value="documents" className="text-xs px-3 py-1.5">
               📁 Docs
             </TabsTrigger>
-            <TabsTrigger value="identity" data-testid="tab-identity" className="text-xs">
+            <TabsTrigger value="identity" className="text-xs px-3 py-1.5">
               🎭 Identity
             </TabsTrigger>
-            <TabsTrigger value="entities" data-testid="tab-entities" className="text-xs">
+            <TabsTrigger value="entities" className="text-xs px-3 py-1.5">
               👥 Entities
             </TabsTrigger>
-            <TabsTrigger value="discord" data-testid="tab-discord" className="text-xs">
+            <TabsTrigger value="discord" className="text-xs px-3 py-1.5">
               🤖 Discord
             </TabsTrigger>
-            <TabsTrigger value="protected-facts" data-testid="tab-protected-facts" className="text-xs">
+            <TabsTrigger value="protected-facts" className="text-xs px-3 py-1.5">
               🛡️ Protected
             </TabsTrigger>
-            <TabsTrigger value="high-confidence" data-testid="tab-high-confidence" className="text-xs">
-              ✅ High (90%+)
+            <TabsTrigger value="high-confidence" className="text-xs px-3 py-1.5">
+              ✅ High
             </TabsTrigger>
-            <TabsTrigger value="medium-confidence" data-testid="tab-medium-confidence" className="text-xs">
-              ⚠️ Med (60-89%)
+            <TabsTrigger value="medium-confidence" className="text-xs px-3 py-1.5">
+              ⚠️ Med
             </TabsTrigger>
-            <TabsTrigger value="low-confidence" data-testid="tab-low-confidence" className="text-xs">
-              ❓ Low (0-59%)
+            <TabsTrigger value="low-confidence" className="text-xs px-3 py-1.5">
+              ❓ Low
             </TabsTrigger>
-            <TabsTrigger value="contradictions" data-testid="tab-contradictions" className="text-xs">
+            <TabsTrigger value="contradictions" className="text-xs px-3 py-1.5">
               🔥 Conflicts ({contradictions?.length || 0})
             </TabsTrigger>
-            <TabsTrigger value="flags" data-testid="tab-flags" className="text-xs">
+            <TabsTrigger value="flags" className="text-xs px-3 py-1.5">
               🚩 Flags ({flagsData?.count || 0})
             </TabsTrigger>
-            <TabsTrigger value="duplicates" data-testid="tab-duplicates" className="text-xs">
+            <TabsTrigger value="duplicates" className="text-xs px-3 py-1.5">
               📋 Dupes
             </TabsTrigger>
-            <TabsTrigger value="all-facts" data-testid="tab-all-facts" className="text-xs">
-              🧠 All Facts
+            <TabsTrigger value="all-facts" className="text-xs px-3 py-1.5">
+              🧠 All
             </TabsTrigger>
-            <TabsTrigger value="intelligence" data-testid="tab-intelligence" className="text-xs">
-              🧠 Intelligence
+            <TabsTrigger value="intelligence" className="text-xs px-3 py-1.5">
+              🧠 Intel
             </TabsTrigger>
-            <TabsTrigger value="podcast" data-testid="tab-podcast" className="text-xs">
+            <TabsTrigger value="podcast" className="text-xs px-3 py-1.5">
               🎙️ Podcast
             </TabsTrigger>
-            <TabsTrigger value="content-sources" data-testid="tab-content-sources" className="text-xs">
-              📡 Content Sources
+            <TabsTrigger value="content-sources" className="text-xs px-3 py-1.5">
+              📡 Sources
             </TabsTrigger>
-            <TabsTrigger value="content-library" data-testid="tab-content-library" className="text-xs">
-              📚 Content Library
+            <TabsTrigger value="content-library" className="text-xs px-3 py-1.5">
+              📚 Library
             </TabsTrigger>
           </TabsList>
+        </ScrollArea>
 
           {/* Recent Memories */}
           <TabsContent value="recent-memories" className="mt-6">
@@ -3272,7 +3238,6 @@ export default function BrainManagement() {
             <ContentLibraryPanel profileId={activeProfile?.id} />
           </TabsContent>
         </Tabs>
-      </div>
 
       {/* Single Fact Cleaning Dialog */}
       <Dialog open={showSingleCleanDialog} onOpenChange={(open) => !open && setShowSingleCleanDialog(false)}>
