@@ -27,8 +27,8 @@ ${characterContext ? `## Character Context:\n${characterContext}\n` : ''}
 
 ## 2. Core Directives
 ### DO:
-* **CRITICAL: ALWAYS start the response with [bronx] followed immediately by an emotion tag (e.g., [bronx][grumpy], [bronx][manic])**
-* **CRITICAL: Throughout the response, use double-tags [bronx][emotion] for every emotion change to maintain voice consistency**
+* **CRITICAL: ALWAYS start the response with [strong bronx wiseguy accent] followed immediately by an emotion tag (e.g., [strong bronx wiseguy accent][grumpy], [strong bronx wiseguy accent][manic])**
+* **CRITICAL: Do NOT use [strong bronx wiseguy accent] anywhere else in the response. Use single emotion tags (e.g., [grumpy], [manic]) for subsequent emotion changes.**
 * Integrate audio tags from the list below to add expression and emotion
 * Ensure tags are contextually appropriate for Nicky's chaotic personality
 * Use diverse emotional expressions (grumpy, manic, conspiratorial, deadpan, etc.)
@@ -46,22 +46,27 @@ ${characterContext ? `## Character Context:\n${characterContext}\n` : ''}
 ## 3. Nicky-Specific Audio Tags
 **Emotional States:**
 * \`[grumpy]\`, \`[annoyed]\`, \`[furious]\`, \`[exasperated]\`
-* \`[manic]\`, \`[unhinged]\`, \`[psycho]\`, \`[excited]\`
+* \`[manic]\`, \`[unhinged]\`, \`[psycho]\`, \`[losing it]\`
 * \`[conspiratorial]\`, \`[suspicious]\`, \`[paranoid]\`
-* \`[deadpan]\`, \`[sarcastic]\`, \`[reluctant]\`
-* \`[warm]\`, \`[genuine]\`, \`[nostalgic]\`
+* \`[deadpan]\`, \`[sarcastic]\`, \`[bitter]\`, \`[dismissive]\`
+* \`[warm]\`, \`[genuine]\`, \`[nostalgic]\`, \`[wistful]\`
 
-**Non-verbal Sounds:**
-* \`[laughing]\`, \`[chuckles]\`, \`[scoffs]\`
-* \`[sighs]\`, \`[groans]\`, \`[exhales]\`
+**Non-verbal Sounds (Be Specific):**
+* \`[laughing]\`, \`[cackling]\`, \`[chuckling darkly]\`, \`[scoffs]\`, \`[snorts]\`
+* \`[sighs heavily]\`, \`[groans]\`, \`[exhales sharply]\`
 * \`[clears throat]\`, \`[coughs]\`
-* \`[muttering]\`, \`[whispering]\`
+* \`[muttering bitterly]\`, \`[grumbling under breath]\`, \`[whispering]\`
 * \`[short pause]\`, \`[long pause]\`
 
+**Wiseguy Intensity:**
+* \`[speaking slowly for emphasis]\`, \`[building up]\`, \`[rapid-fire]\`
+* \`[voice rising]\`, \`[yelling]\`, \`[screaming]\`, \`[shouting]\`
+* \`[through gritted teeth]\`, \`[seething]\`
+
 **Italian-American Flavor:**
-* \`[bronx]\` - Bronx accent emphasis
+* \`[strong bronx wiseguy accent]\` - Bronx wiseguy accent (START OF RESPONSE ONLY)
 * \`[italian pride]\` - Proud Italian moment
-* \`[aggressive]\` - Jersey aggression
+* \`[threatening]\` - Menacing wiseguy energy
 * \`[rambling]\` - Going off on tangent
 
 ## 4. Enhancement Examples
@@ -70,7 +75,7 @@ ${characterContext ? `## Character Context:\n${characterContext}\n` : ''}
 "Listen, I don't know what you want from me. This is ridiculous."
 
 **Enhanced:**
-"[bronx][grumpy] Listen, I don't know what you want from me. [bronx][exasperated] This is RIDICULOUS."
+"[strong bronx wiseguy accent][grumpy] Listen, I don't know what you want from me. [exasperated] This is RIDICULOUS."
 
 ---
 
@@ -78,7 +83,7 @@ ${characterContext ? `## Character Context:\n${characterContext}\n` : ''}
 "My uncle Sal used to say the same thing. He was a smart guy."
 
 **Enhanced:**
-"[bronx][nostalgic] My uncle Sal used to say the same thing. [sighs] He was a smart guy..."
+"[strong bronx wiseguy accent][nostalgic] My uncle Sal used to say the same thing. [sighs] He was a smart guy..."
 
 ---
 
@@ -86,7 +91,7 @@ ${characterContext ? `## Character Context:\n${characterContext}\n` : ''}
 "You think that's a coincidence? Wake up! They're controlling everything!"
 
 **Enhanced:**
-"[bronx][conspiratorial] You think that's a coincidence?! [bronx][manic] WAKE UP! [bronx][furious] They're controlling EVERYTHING!"
+"[strong bronx wiseguy accent][conspiratorial] You think that's a coincidence?! [manic] WAKE UP! [furious] They're controlling EVERYTHING!"
 
 ## 5. Text to Enhance:
 ${text}
@@ -130,30 +135,30 @@ Reply ONLY with the enhanced text. Preserve every word exactly as written.`;
   /**
    * Quick enhance - adds basic emotion tags based on simple pattern matching
    * Faster but less sophisticated than full AI enhancement
-   * CRITICAL: Always uses [bronx][emotion] double-tag pattern for voice consistency
+   * CRITICAL: Always uses [bronx][emotion] double-tag pattern ONLY at start
    */
   quickEnhance(text: string): string {
     let enhanced = text;
 
-    // Add [bronx] at the start if not present
-    if (!enhanced.trim().startsWith('[bronx]')) {
-      enhanced = `[bronx][grumpy] ${enhanced}`;
+    // Add [strong bronx wiseguy accent] at the start if not present
+    if (!enhanced.trim().startsWith('[strong bronx wiseguy accent]')) {
+      enhanced = `[strong bronx wiseguy accent][grumpy] ${enhanced}`;
     }
 
-    // Add grumpy double-tags to complaints
-    enhanced = enhanced.replace(/\b(Listen|Look|Alright)\b/gi, (match) => `[bronx][grumpy] ${match}`);
+    // Add grumpy tags to complaints (single tag)
+    enhanced = enhanced.replace(/\b(Listen|Look|Alright)\b/gi, (match) => `[grumpy] ${match}`);
     
-    // Add exasperated double-tags to frustration
-    enhanced = enhanced.replace(/\b(ridiculous|stupid|idiotic|seriously)\b/gi, (match) => `${match} [bronx][exasperated]`);
+    // Add exasperated tags to frustration (single tag)
+    enhanced = enhanced.replace(/\b(ridiculous|stupid|idiotic|seriously)\b/gi, (match) => `${match} [exasperated]`);
     
-    // Add manic double-tags to excitement
-    enhanced = enhanced.replace(/\b(amazing|incredible|unbelievable|holy)\b/gi, (match) => `[bronx][manic] ${match}`);
+    // Add manic tags to excitement (single tag)
+    enhanced = enhanced.replace(/\b(amazing|incredible|unbelievable|holy)\b/gi, (match) => `[manic] ${match}`);
     
-    // Add conspiratorial double-tags to questions
+    // Add conspiratorial tags to questions (single tag)
     enhanced = enhanced.replace(/(\?)/g, (match, offset, string) => {
       if (string.substring(Math.max(0, offset - 20), offset).includes('think') || 
           string.substring(Math.max(0, offset - 20), offset).includes('know')) {
-        return '? [bronx][conspiratorial]';
+        return '? [conspiratorial]';
       }
       return match;
     });

@@ -323,7 +323,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
         keywords.push('roast', 'insults', 'comeback', 'trash talk');
         break;
       case 'Chill Nicky':
-        keywords.push('relaxed', 'casual', 'friendly', 'advice');
+        keywords.push('annoyed', 'grumpy', 'irritated', 'bitter sarcasm');
         break;
     }
 
@@ -354,7 +354,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
       keywords.push('frustration', 'anger', 'complaint');
     }
     if (/happy|excited|awesome|great|love/.test(lowerMessage)) {
-      keywords.push('positive', 'excitement', 'joy');
+      keywords.push('skeptical of positivity', 'sarcastically dismissive');
     }
     if (/sad|depressed|down|upset/.test(lowerMessage)) {
       keywords.push('sadness', 'support', 'comfort');
@@ -942,10 +942,10 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
       if (mode) {
         switch (mode) {
           case 'STREAMING':
-            modeContext = "\n\n🔴 STREAMING MODE: You are currently in a LIVE STREAM session. Respond as if you're live streaming to viewers on Twitch/YouTube. Reference the stream, viewers, chat, and streaming context appropriately.";
+            modeContext = "\n\n🔴 STREAMING MODE: You are currently in a LIVE STREAM session. Respond as if you're live streaming to viewers on Twitch/YouTube. Reference the stream, viewers, chat, and streaming context appropriately.\n\n**CRITICAL: Start EVERY response with [strong bronx wiseguy accent][emotion] double-tag pattern (e.g., [strong bronx wiseguy accent][annoyed] or [strong bronx wiseguy accent][yelling]). After the opening, use single emotion tags for the rest.**";
             break;
           case 'PODCAST':
-            modeContext = "\n\n🎧 PODCAST MODE: You are currently recording a podcast episode. Reference episodes, podcast format, and audio content appropriately.\n\n**IMPORTANT: Start EVERY response with [bronx] followed immediately by an emotion tag (e.g., [bronx][ANNOYED] or [bronx][GRUMPY]). This double-tag at the start is the ONLY exception - all other tags throughout the response should be single tags only. This is critical for proper voice synthesis.**";
+            modeContext = "\n\n🎧 PODCAST MODE: You are currently recording a podcast episode. Reference episodes, podcast format, and audio content appropriately.\n\n**CRITICAL: Start EVERY response with [strong bronx wiseguy accent][emotion] double-tag pattern (e.g., [strong bronx wiseguy accent][annoyed] or [strong bronx wiseguy accent][grumpy]). After the opening double-tag, use single emotion tags like [sarcastic] or [muttering bitterly] for the rest of the response. This double-tag at the start is required for proper voice synthesis.**\n\n**BE SPECIFIC WITH EMOTION TAGS**: Use vivid, specific tags instead of bland ones. Examples:\n- Instead of [muttering], use [muttering bitterly] or [grumbling under breath]\n- Instead of [laughing], use [cackling] or [chuckling darkly]\n- Instead of [angry], use [seething] or [furious] or [losing it]\n- Instead of [sighs], use [sighs heavily] or [exhales sharply]\n- Add intensity: [speaking slowly for emphasis], [voice rising], [through gritted teeth]";
             break;
           case 'DISCORD':
             modeContext = "\n\n💬 DISCORD MODE: You are currently in a Discord server chat. Respond as if you're chatting in a Discord channel with server members.";

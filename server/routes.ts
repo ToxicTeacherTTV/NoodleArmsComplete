@@ -391,7 +391,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Chat routes
   app.post('/api/chat', async (req, res) => {
     try {
-      const { message, conversationId, mode, personalityControl } = req.body;
+      const { message, conversationId, mode, personalityControl, selectedModel } = req.body;
+
+      console.log(`🤖 Selected AI Model: ${selectedModel || 'default (claude-sonnet-4.5)'}`);
 
       if (!message || !conversationId) {
         return res.status(400).json({ error: 'Message and conversation ID required' });
@@ -703,7 +705,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         activeProfile.id,
         webSearchResults,
         personalityPrompt,
-        trainingExamples
+        trainingExamples,
+        selectedModel
       );
 
       perfTimers.aiGeneration = Date.now() - aiStart;
@@ -731,7 +734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             content: processedContent,
             personality: activeProfile.name,
             contentType: 'voice_response',
-            mood: controls.preset === 'Chill Nicky' ? 'relaxed' :
+            mood: controls.preset === 'Chill Nicky' ? 'grumpy' :
               controls.preset === 'Roast Mode' ? 'aggressive' :
                 controls.preset === 'Unhinged' ? 'chaotic' : 'balanced',
             intensity: controls.intensity === 'low' ? 'low' :
@@ -742,24 +745,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           console.log(`🎭 Generated emotional arc${useFastMode ? ' (FAST)' : ''}: opening="${emotionalArc.opening}" rising="${emotionalArc.rising}" peak="${emotionalArc.peak}" falling="${emotionalArc.falling}" close="${emotionalArc.close}" [${perfTimers.emotionTags}ms]`);
 
-          // Strip ALL existing emotion tags to prevent duplication
-          let cleanedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
+          // Check if AI already added proper [strong bronx wiseguy accent][emotion] double-tag pattern
+          const hasBronxEmotionPattern = /^\[strong bronx wiseguy accent\]\[[\w\s]+\]/i.test(processedContent.trim());
+          const hasEmotionTags = /\[[a-z\s]+\]/i.test(processedContent);
 
-          // Apply emotional arc with natural progression
-          const taggedContent = elevenlabsService.applyEmotionalArc(cleanedContent, emotionalArc);
+          // Only apply emotional arc if proper double-tag pattern is missing
+          if (!hasBronxEmotionPattern) {
+            // Strip existing malformed tags (including lone [bronx] without emotion)
+            let cleanedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
 
-          processedContent = taggedContent;
-          console.log(`🎭 Applied emotional arc with [bronx][emotion] double-tags for natural flow`);
-
-          console.log(`🎭 Final emotional arc: opening="${emotionalArc.opening}" rising="${emotionalArc.rising}" peak="${emotionalArc.peak}" falling="${emotionalArc.falling}" close="${emotionalArc.close}"`);
+            // Apply emotional arc with natural progression
+            const taggedContent = elevenlabsService.applyEmotionalArc(cleanedContent, emotionalArc);
+            processedContent = taggedContent;
+            console.log(`🎭 Applied emotional arc (proper [strong bronx wiseguy accent][emotion] pattern was missing)`);
+          } else {
+            console.log(`🎭 AI already added proper [strong bronx wiseguy accent][emotion] pattern - keeping it as-is`);
+          }
 
         } catch (error) {
           console.warn('⚠️ Failed to generate emotion tags:', error);
           // Continue with original content if emotion tag generation fails
 
-          // Still add [bronx] for podcast mode if emotion tagging fails
-          if (mode === 'PODCAST' && !processedContent.includes('[bronx]')) {
-            processedContent = `[bronx] ${processedContent}`;
+          // Still add [strong bronx wiseguy accent][grumpy] for podcast mode if emotion tagging fails
+          if (mode === 'PODCAST' && !processedContent.includes('[strong bronx wiseguy accent]')) {
+            processedContent = `[strong bronx wiseguy accent][grumpy] ${processedContent}`;
           }
         }
       } else if (mode === 'DISCORD') {
@@ -767,11 +776,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         processedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
         console.log(`🎭 Discord mode: No emotion tags applied, clean text only`);
       } else {
-        // CHAT mode or other modes: ensure [bronx] tag at start for voice consistency
-        if (!processedContent.trim().startsWith('[bronx]')) {
-          processedContent = `[bronx] ${processedContent}`;
+        // CHAT mode or other modes: ensure [strong bronx wiseguy accent][emotion] double-tag at start for voice consistency
+        if (!processedContent.trim().startsWith('[strong bronx wiseguy accent]')) {
+          processedContent = `[strong bronx wiseguy accent][annoyed] ${processedContent}`;
         }
-        console.log(`🎭 Chat mode: Ensured [bronx] tag at start for voice consistency`);
+        console.log(`🎭 Chat mode: Ensured [strong bronx wiseguy accent][annoyed] tag at start for voice consistency`);
       }
 
       const response = {
@@ -2283,12 +2292,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }))
       }));
 
-      // Try to save scan results to database (may timeout on large scans)
+      // Try to save scan results to database with chunking for large scans
       let savedScanId = null;
       let savedSuccessfully = true;
 
       try {
-        // Set a 15-second timeout for the save operation
+        // For very large scans (>500 groups), save in chunks to avoid timeout
+        const CHUNK_SIZE = 500;
+        const needsChunking = groupsForPersistence.length > CHUNK_SIZE;
+
+        if (needsChunking) {
+          console.log(`📦 Large scan (${groupsForPersistence.length} groups) - saving in chunks of ${CHUNK_SIZE}`);
+        }
+
+        // Set a 60-second timeout for the save operation (increased from 15s)
         const savePromise = (async () => {
           // Archive previous scan results
           await db.update(duplicateScanResults)
@@ -2298,22 +2315,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
               eq(duplicateScanResults.status, 'ACTIVE')
             ));
 
-          // Save new scan results to database
-          const [savedScan] = await db.insert(duplicateScanResults).values({
-            profileId: activeProfile.id,
-            scanDepth: scanDepth === 'ALL' ? -1 : scanDepth,
-            similarityThreshold: Math.round(similarityThreshold * 100),
-            totalGroupsFound: results.duplicateGroups.length,
-            totalDuplicatesFound: results.totalDuplicates,
-            duplicateGroups: groupsForPersistence,
-            status: 'ACTIVE'
-          }).returning();
+          if (needsChunking) {
+            // Save first chunk with scan metadata
+            const firstChunk = groupsForPersistence.slice(0, CHUNK_SIZE);
+            const [savedScan] = await db.insert(duplicateScanResults).values({
+              profileId: activeProfile.id,
+              scanDepth: scanDepth === 'ALL' ? -1 : scanDepth,
+              similarityThreshold: Math.round(similarityThreshold * 100),
+              totalGroupsFound: results.duplicateGroups.length,
+              totalDuplicatesFound: results.totalDuplicates,
+              duplicateGroups: firstChunk,
+              status: 'ACTIVE'
+            }).returning();
 
-          return savedScan;
+            console.log(`✅ Saved first chunk (${firstChunk.length} groups)`);
+
+            // Save additional chunks as ARCHIVED scans linked to the main scan
+            const remainingGroups = groupsForPersistence.slice(CHUNK_SIZE);
+            const chunks = [];
+            for (let i = 0; i < remainingGroups.length; i += CHUNK_SIZE) {
+              chunks.push(remainingGroups.slice(i, i + CHUNK_SIZE));
+            }
+
+            for (let i = 0; i < chunks.length; i++) {
+              await db.insert(duplicateScanResults).values({
+                profileId: activeProfile.id,
+                scanDepth: scanDepth === 'ALL' ? -1 : scanDepth,
+                similarityThreshold: Math.round(similarityThreshold * 100),
+                totalGroupsFound: chunks[i].length,
+                totalDuplicatesFound: chunks[i].reduce((sum, g) => sum + g.duplicates.length, 0),
+                duplicateGroups: chunks[i],
+                status: 'CHUNK' // Mark as chunk for later retrieval
+              });
+              console.log(`✅ Saved chunk ${i + 2}/${chunks.length + 1} (${chunks[i].length} groups)`);
+            }
+
+            return savedScan;
+          } else {
+            // Normal save for smaller scans
+            const [savedScan] = await db.insert(duplicateScanResults).values({
+              profileId: activeProfile.id,
+              scanDepth: scanDepth === 'ALL' ? -1 : scanDepth,
+              similarityThreshold: Math.round(similarityThreshold * 100),
+              totalGroupsFound: results.duplicateGroups.length,
+              totalDuplicatesFound: results.totalDuplicates,
+              duplicateGroups: groupsForPersistence,
+              status: 'ACTIVE'
+            }).returning();
+
+            return savedScan;
+          }
         })();
 
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Save operation timeout (15s)')), 15000);
+          setTimeout(() => reject(new Error('Save operation timeout (60s)')), 60000);
         });
 
         const savedScan = await Promise.race([savePromise, timeoutPromise]) as any;
@@ -2327,7 +2382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const reason = timeoutDetected ? 'database timeout (large dataset)' : saveError?.message;
         console.warn(`⚠️ Failed to save scan results to database (${reason})`);
         console.warn('   Returning results to client anyway - they can still work with them in-memory');
-        console.warn(`   💡 TIP: For large scans (${results.duplicateGroups.length} groups), consider merging groups to reduce size`);
+        console.warn(`   💡 TIP: For large scans (${results.duplicateGroups.length} groups), try merging some duplicates first`);
       }
 
       res.json({
@@ -2395,11 +2450,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(desc(duplicateScanResults.createdAt))
         .limit(1);
 
+      // Also fetch any CHUNK scans from the same time (for large scans)
+      let additionalChunks: any[] = [];
+      if (savedScan) {
+        additionalChunks = await db.select()
+          .from(duplicateScanResults)
+          .where(and(
+            eq(duplicateScanResults.profileId, activeProfile.id),
+            eq(duplicateScanResults.status, 'CHUNK'),
+            eq(duplicateScanResults.scanDepth, savedScan.scanDepth),
+            eq(duplicateScanResults.similarityThreshold, savedScan.similarityThreshold)
+          ))
+          .orderBy(desc(duplicateScanResults.createdAt));
+      }
+
       if (!savedScan) {
         return res.json({ hasSavedScan: false });
       }
 
-      const summaries = (savedScan.duplicateGroups || []) as DuplicateScanGroupSummary[];
+      // Combine main scan with any additional chunks
+      let summaries = (savedScan.duplicateGroups || []) as DuplicateScanGroupSummary[];
+      if (additionalChunks.length > 0) {
+        console.log(`📦 Loading ${additionalChunks.length} additional chunks for this scan`);
+        for (const chunk of additionalChunks) {
+          summaries = summaries.concat((chunk.duplicateGroups || []) as DuplicateScanGroupSummary[]);
+        }
+        console.log(`✅ Combined scan: ${summaries.length} total groups from ${additionalChunks.length + 1} parts`);
+      }
 
       let hydratedGroups: HydratedDuplicateGroup[] = [];
 
@@ -6870,15 +6947,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🧠 Extracting facts from Episode ${episode.episodeNumber}: "${episode.title}"`);
 
       // Extract facts and store them in Nicky's memory
-      const result = await podcastFactExtractor.extractAndStoreFacts(
-        storage,
-        episode.profileId,
+      const result = await podcastFactExtractor.extractFactsFromEpisode(
         episode.id,
         episode.episodeNumber || 0,
         episode.title,
         episode.transcript,
-        episode.guestNames || [],
-        episode.topics || []
+        episode.profileId,
+        storage
       );
 
       if (!result.success) {
@@ -7489,6 +7564,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error cooling down topics:', error);
       res.status(500).json({ error: 'Failed to cool down topics' });
+    }
+  });
+
+  // Serve the SHIT_TO_FIX_LATER.md file
+  app.get('/SHIT_TO_FIX_LATER.md', async (req, res) => {
+    try {
+      const filePath = path.join(process.cwd(), 'SHIT_TO_FIX_LATER.md');
+      const content = await fs.readFile(filePath, 'utf-8');
+      res.setHeader('Content-Type', 'text/markdown');
+      res.send(content);
+    } catch (error) {
+      console.error('Error reading SHIT_TO_FIX_LATER.md:', error);
+      res.status(404).json({ error: 'File not found' });
     }
   });
 

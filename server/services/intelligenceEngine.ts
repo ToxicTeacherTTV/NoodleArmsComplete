@@ -788,6 +788,14 @@ If no drift detected, return: []`;
       sourceReliability: sourceReliability || [],
       personalityDrift: personalityDrift || [],
       contextRelevance: relevanceScores || [],
+      summary: {
+        totalIssues: (clusterAnalysis || []).length + (personalityDrift || []).length + (sourceReliability || []).length,
+        highPriority: (clusterAnalysis || []).filter(c => c.priority === 'HIGH').length + 
+                      (personalityDrift || []).filter(d => d.severity === 'MAJOR').length,
+        mediumPriority: (clusterAnalysis || []).filter(c => c.priority === 'MEDIUM').length + 
+                        (personalityDrift || []).filter(d => d.severity === 'MODERATE').length,
+        autoHandled
+      },
       actionRequired,
       autoHandled,
       priorityActions

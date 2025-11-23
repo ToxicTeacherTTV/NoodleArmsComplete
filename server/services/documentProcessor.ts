@@ -239,7 +239,7 @@ class DocumentProcessor {
       const chunk = chunks[i];
       console.log(`📝 Processing chunk ${i + 1}/${chunks.length}...`);
 
-      const chunkStories = await aiOrchestrator.extractStoriesFromDocument(chunk, `${filename} (chunk ${i + 1})`);
+      const chunkStories = await aiOrchestrator.extractStoriesFromDocument(chunk, `${filename} (chunk ${i + 1})`, 'gemini-2.5-flash');
       allStories.push(...chunkStories);
 
       // Update progress
@@ -284,7 +284,7 @@ class DocumentProcessor {
     for (let i = 0; i < stories.length; i++) {
       const story = stories[i];
       const storyContextSnippet = story.content.substring(0, 200);
-      const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(story.content, storyContextSnippet);
+      const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(story.content, storyContextSnippet, 'gemini-2.5-flash');
 
       for (const atomicFact of atomicFacts) {
         const canonicalKey = this.generateCanonicalKey(atomicFact.content);
@@ -493,7 +493,7 @@ class DocumentProcessor {
 
       // PASS 1: Extract rich stories and contexts (from processed content)
       console.log(`📖 Pass 1: Extracting stories and contexts from processed content...`);
-      const stories = await aiOrchestrator.extractStoriesFromDocument(contentToProcess, filename);
+      const stories = await aiOrchestrator.extractStoriesFromDocument(contentToProcess, filename, 'gemini-2.5-flash');
       console.log(`✅ Extracted ${stories.length} stories/contexts`);
 
       const storyIds: string[] = [];
@@ -547,7 +547,8 @@ class DocumentProcessor {
         try {
           const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(
             story.content,
-            `${story.type}: ${story.keywords.join(', ')}`
+            `${story.type}: ${story.keywords.join(', ')}`,
+            'gemini-2.5-flash'
           );
 
           console.log(`⚛️ Extracted ${atomicFacts.length} atomic facts from story ${i + 1}`);

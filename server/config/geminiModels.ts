@@ -62,6 +62,15 @@ export const GEMINI_MODELS: Record<string, GeminiModelConfig> = {
     costMultiplier: 17, // 17x more expensive than Flash
     isExperimental: false,
     description: 'Premium Pro model - best quality, highest cost'
+  },
+  
+  // NEW: Gemini 3 Pro Preview (newest, most intelligent)
+  'gemini-3-pro-preview': {
+    name: 'gemini-3-pro-preview',
+    tier: 'premium',
+    costMultiplier: 17, // Assume similar to 2.5 Pro (TBD)
+    isExperimental: false,
+    description: 'Google\'s newest, most intelligent model to date'
   }
 } as const;
 

@@ -246,7 +246,7 @@ export const duplicateScanResults = pgTable("duplicate_scan_results", {
   totalGroupsFound: integer("total_groups_found").default(0),
   totalDuplicatesFound: integer("total_duplicates_found").default(0),
   duplicateGroups: jsonb("duplicate_groups").$type<any[]>().default([]), // Array of duplicate group objects
-  status: text("status").$type<'ACTIVE' | 'ARCHIVED'>().default('ACTIVE'),
+  status: text("status").$type<'ACTIVE' | 'ARCHIVED' | 'CHUNK'>().default('ACTIVE'), // CHUNK = additional data for large scans
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 }, (table) => ({

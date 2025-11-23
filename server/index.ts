@@ -97,7 +97,6 @@ app.use((req, res, next) => {
   server.listen({
     port,
     host: "0.0.0.0",
-    reusePort: true,
   }, async () => {
     log(`serving on port ${port}`);
     
@@ -123,6 +122,7 @@ app.use((req, res, next) => {
       }
 
       // 🔥 Pre-warm context cache for instant responses
+      /*
       if (activeProfile) {
         try {
           await contextPrewarmer.warmContext(activeProfile.id, storage);
@@ -131,6 +131,7 @@ app.use((req, res, next) => {
           log(`⚠️ Failed to pre-warm context: ${error}`);
         }
       }
+      */
     } catch (error) {
       log(`⚠️ Failed to initialize services: ${error}`);
     }

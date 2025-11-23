@@ -1,6 +1,5 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,12 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PrerollAdPanel from "@/components/preroll-ad-panel";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Plus, Lightbulb, Target, CheckCircle, Clock, AlertTriangle, FileText, Users, Settings, Trash2, Edit, BookOpen, Code, Database, Zap } from "lucide-react";
+import { Plus, Target, CheckCircle, Clock, AlertTriangle, FileText, Trash2, Edit, BookOpen, Code, Database, Zap, AlertCircle, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ProjectIdea {
@@ -63,11 +61,12 @@ export default function ProjectWorkspace() {
   const [editingIdea, setEditingIdea] = useState<ProjectIdea | null>(null);
   const [isEditTaskDialogOpen, setIsEditTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<{milestoneId: string, taskIndex: number, taskText: string} | null>(null);
+  const [isFixLaterDialogOpen, setIsFixLaterDialogOpen] = useState(false);
+  const [fixLaterContent, setFixLaterContent] = useState<string>('');
   
   // Fetch active profile for Pre-Roll Ad Panel
   const { data: activeProfile } = useQuery({
     queryKey: ['/api/profiles/active'],
-    enabled: selectedTab === 'preroll-ads', // Only fetch when ads tab is selected
   });
   
   // Mock data for now - would be connected to API later
@@ -760,32 +759,13 @@ This represents the current state as of November 2025 with major TTS and memory 
   const totalActualHours = ideas.reduce((sum, idea) => sum + (idea.actualHours || 0), 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center gap-4 mb-4">
-            <Link href="/">
-              <Button variant="ghost" size="sm" data-testid="button-back-home">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Dashboard
-              </Button>
-            </Link>
-            <div className="h-6 w-px bg-border" />
-            <Link href="/brain">
-              <Button variant="ghost" size="sm" data-testid="button-brain-management">
-                <Users className="w-4 h-4 mr-2" />
-                Brain Management
-              </Button>
-            </Link>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Project Workspace</h1>
-              <p className="text-gray-600 dark:text-gray-300">Organize ideas, track progress, and manage your AI co-host development</p>
-            </div>
-            <div className="flex gap-2">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Project Workspace</h1>
+          <p className="text-gray-600 dark:text-gray-300">Organize ideas, track progress, and manage your AI co-host development</p>
+        </div>
+        <div className="flex gap-2">
               <Dialog open={isIdeaDialogOpen} onOpenChange={setIsIdeaDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-gradient-to-r from-blue-500 to-purple-600" data-testid="button-add-idea">
@@ -923,6 +903,63 @@ This represents the current state as of November 2025 with major TTS and memory 
                       Cancel
                     </Button>
                     <Button onClick={addNote} data-testid="button-save-note">Add Note</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isFixLaterDialogOpen} onOpenChange={async (open) => {
+                setIsFixLaterDialogOpen(open);
+                if (open) {
+                  // Fetch the markdown file content when dialog opens
+                  try {
+                    const response = await fetch('/SHIT_TO_FIX_LATER.md');
+                    const text = await response.text();
+                    setFixLaterContent(text);
+                  } catch (error) {
+                    console.error('Error fetching fix later list:', error);
+                    setFixLaterContent('# Error\n\nCould not load the file.');
+                  }
+                }
+              }}>
+                <DialogTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+                    data-testid="button-fix-later"
+                  >
+                    <AlertCircle className="w-4 h-4 mr-2" />
+                    Shit to Fix
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[80vh]">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                      Shit to Fix Later
+                    </DialogTitle>
+                    <DialogDescription>
+                      Quick-capture list for bugs, annoyances, and future improvements
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
+                    <pre className="text-sm whitespace-pre-wrap font-mono">
+                      {fixLaterContent}
+                    </pre>
+                  </ScrollArea>
+                  
+                  <DialogFooter className="flex justify-between items-center">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => window.open('vscode://file/C:/Users/trist/Documents/NickyGit/NoodleArmsComplete/SHIT_TO_FIX_LATER.md')}
+                      className="gap-2"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Open in VS Code
+                    </Button>
+                    <Button onClick={() => setIsFixLaterDialogOpen(false)}>
+                      Close
+                    </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -1067,27 +1104,28 @@ This represents the current state as of November 2025 with major TTS and memory 
               </Dialog>
             </div>
           </div>
-        </div>
 
         {/* Main Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="overview" data-testid="tab-overview">
-              📊 Overview
-            </TabsTrigger>
-            <TabsTrigger value="ideas" data-testid="tab-ideas">
-              💡 Ideas & Tasks ({ideas.length})
-            </TabsTrigger>
-            <TabsTrigger value="milestones" data-testid="tab-milestones">
-              🎯 Milestones ({milestones.length})
-            </TabsTrigger>
-            <TabsTrigger value="notes" data-testid="tab-notes">
-              📝 Notes ({notes.length})
-            </TabsTrigger>
-            <TabsTrigger value="preroll-ads" data-testid="tab-preroll-ads">
-              🎪 Pre-Roll Ads
-            </TabsTrigger>
-          </TabsList>
+          <ScrollArea className="w-full pb-2">
+            <TabsList className="inline-flex h-auto p-1 w-full justify-start min-w-max">
+              <TabsTrigger value="overview" data-testid="tab-overview" className="px-4 py-2">
+                📊 Overview
+              </TabsTrigger>
+              <TabsTrigger value="ideas" data-testid="tab-ideas" className="px-4 py-2">
+                💡 Ideas & Tasks ({ideas.length})
+              </TabsTrigger>
+              <TabsTrigger value="milestones" data-testid="tab-milestones" className="px-4 py-2">
+                🎯 Milestones ({milestones.length})
+              </TabsTrigger>
+              <TabsTrigger value="notes" data-testid="tab-notes" className="px-4 py-2">
+                📝 Notes ({notes.length})
+              </TabsTrigger>
+              <TabsTrigger value="preroll-ads" data-testid="tab-preroll-ads" className="px-4 py-2">
+                🎪 Pre-Roll Ads
+              </TabsTrigger>
+            </TabsList>
+          </ScrollArea>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="mt-6">
@@ -1489,7 +1527,6 @@ This represents the current state as of November 2025 with major TTS and memory 
             <PrerollAdPanel profileId={activeProfile?.id} />
           </TabsContent>
         </Tabs>
-      </div>
     </div>
   );
 }

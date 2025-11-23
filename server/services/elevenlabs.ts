@@ -433,12 +433,14 @@ class ElevenLabsService {
           const detectedEnergy = this.detectTextEnergy(currentSentence);
           const emotionTag = detectedEnergy || emotionStages[stage];
           
-          const doubleTag = `[bronx][${emotionTag}]`;
+          // Only add [bronx] to the very first tag of the response
+          const isFirstTag = result.length === 0;
+          const finalTag = isFirstTag ? `[bronx][${emotionTag}]` : `[${emotionTag}]`;
           
           if (result.trim()) {
-            result += ` ${doubleTag} ${currentSentence.trim()}`;
+            result += ` ${finalTag} ${currentSentence.trim()}`;
           } else {
-            result += `${doubleTag} ${currentSentence.trim()}`;
+            result += `${finalTag} ${currentSentence.trim()}`;
           }
           
           if (detectedEnergy) {
@@ -512,13 +514,15 @@ class ElevenLabsService {
             tagIndex++;
           }
           
-          // CRITICAL: Use [bronx][emotion] double-tag pattern for voice consistency
-          const doubleTag = `[bronx]${emotionTag}`;
+          // CRITICAL: Use [strong bronx wiseguy accent][emotion] double-tag pattern ONLY for the first tag
+          // Subsequent tags should be single [emotion] tags
+          const isFirstTag = result.length === 0;
+          const finalTag = isFirstTag ? `[strong bronx wiseguy accent]${emotionTag}` : emotionTag;
           
           if (result.trim()) {
-            result += ` ${doubleTag} ${currentSentence.trim()}`;
+            result += ` ${finalTag} ${currentSentence.trim()}`;
           } else {
-            result += `${doubleTag} ${currentSentence.trim()}`;
+            result += `${finalTag} ${currentSentence.trim()}`;
           }
           
           console.log(`🎭 Applied ${tagCycle[tagIndex % tagCycle.length] || 'hook'} tag to sentence ${sentenceCount}: "${currentSentence.substring(0, 30)}..."`);

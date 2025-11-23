@@ -9,6 +9,7 @@ import MessageComposer from "@/components/MessageComposer";
 import ProfileModal from "@/components/profile-modal";
 import NotesModal from "@/components/notes-modal";
 import { MemoryChecker } from "@/components/memory-checker";
+import { QuickModelToggle } from "@/components/quick-model-toggle";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useElevenLabsSpeech } from "@/hooks/use-elevenlabs-speech";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +19,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { Message, Profile, AIStatus, AppMode, MemoryStats } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
+import { getModelPreference } from "@shared/modelSelection";
 import { nanoid } from "nanoid";
 import { cn } from "@/lib/utils";
 
@@ -62,11 +64,15 @@ export default function JazzDashboard() {
     // Mutations
     const sendMessageMutation = useMutation({
         mutationFn: async (data: { conversationId: string; content: string }) => {
+            // Get selected model from preferences
+            const selectedModel = getModelPreference('chat');
+            
             const response = await apiRequest('POST', '/api/chat', {
                 conversationId: data.conversationId,
                 message: data.content,
                 profileId: activeProfile?.id,
                 mode: appMode,
+                selectedModel,
             });
             return response.json();
         },
@@ -232,58 +238,44 @@ export default function JazzDashboard() {
             <NotesModal open={isNotesModalOpen} onOpenChange={setIsNotesModalOpen} />
 
             {/* Main Dashboard */}
-            <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-                {/*  Compact Header */}
-                <header className="sticky top-0 z-50 border-b backdrop-blur-modern">
-                    <div className="container flex h-16 items-center justify-between px-4">
-                        {/* Logo */}
-                        <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl jazz-gradient shadow-jazz">
-                                <span className="text-2xl">🎷</span>
-                            </div>
-                            <div className="hidden sm:block">
-                                <h1 className="text-lg font-bold text-gradient tracking-tight">
-                                    {activeProfile?.name || "Nicky A.I. Dente"}
-                                </h1>
-                                <p className="text-xs text-muted-foreground">"Noodle Arms" Co-Host</p>
-                            </div>
-                        </div>
+            <div className="h-full flex flex-col gap-4">
+                {/* Toolbar */}
+                <div className="flex items-center justify-between pb-2 border-b">
+                    <h2 className="text-lg font-semibold">Chat Session</h2>
+                    <div className="flex items-center gap-3">
+                        {/* Quick Model Toggle */}
+                        <QuickModelToggle compact={true} />
+                        
+                        <StatusIndicator status={aiStatus} />
 
-                        {/* Status + Mode + Actions */}
-                        <div className="flex items-center gap-3">
-                            <StatusIndicator status={aiStatus} />
+                        <ToggleGroup
+                            type="single"
+                            value={appMode}
+                            onValueChange={(value) => value && setAppMode(value as AppMode)}
+                            size="sm"
+                            className="hidden sm:flex"
+                        >
+                            <ToggleGroupItem value="PODCAST" className={cn(appMode === "PODCAST" && "animate-spring")}>
+                                <i className="fas fa-podcast mr-2" />
+                                Podcast
+                            </ToggleGroupItem>
+                            <ToggleGroupItem value="STREAMING" className={cn(appMode === "STREAMING" && "animate-spring")}>
+                                <i className="fas fa-broadcast-tower mr-2" />
+                                Streaming
+                            </ToggleGroupItem>
+                        </ToggleGroup>
 
-                            <ToggleGroup
-                                type="single"
-                                value={appMode}
-                                onValueChange={(value) => value && setAppMode(value as AppMode)}
-                                size="sm"
-                                className="hidden sm:flex"
-                            >
-                                <ToggleGroupItem value="PODCAST" className={cn(appMode === "PODCAST" && "animate-spring")}>
-                                    <i className="fas fa-podcast mr-2" />
-                                    Podcast
-                                </ToggleGroupItem>
-                                <ToggleGroupItem value="STREAMING" className={cn(appMode === "STREAMING" && "animate-spring")}>
-                                    <i className="fas fa-broadcast-tower mr-2" />
-                                    Streaming
-                                </ToggleGroupItem>
-                            </ToggleGroup>
-
-                            <Button
-                                variant="ghost" size="sm"
-                                className="sm:hidden"
-                                onClick={() => setIsHistorySheetOpen(true)}
-                            >
-                                <i className="fas fa-clock-rotate-left" />
-                            </Button>
-                        </div>
+                        <Button
+                            variant="ghost" size="sm"
+                            className="sm:hidden"
+                            onClick={() => setIsHistorySheetOpen(true)}
+                        >
+                            <i className="fas fa-clock-rotate-left" />
+                        </Button>
                     </div>
-                </header>
+                </div>
 
-                {/* Main Content */}
-                <main className="container py-6">
-                    <div className="grid gap-4 lg:grid-cols-[280px_1fr] xl:grid-cols-[280px_1fr_320px] h-[calc(100vh-7rem)]">
+                <div className="grid gap-4 lg:grid-cols-[280px_1fr] xl:grid-cols-[280px_1fr_320px] h-[calc(100vh-12rem)]">
                         {/* Sidebar: Conversation History (Desktop) */}
                         <Card className="hidden lg:flex flex-col min-h-0 overflow-hidden card-hover">
                             <CardHeader className="border-b px-4 py-3">
@@ -307,7 +299,7 @@ export default function JazzDashboard() {
                         <div className="flex flex-col gap-4 min-h-0">
                             {/* Chat Panel */}
                             <Card className="flex-1 flex flex-col min-h-0 overflow-hidden shadow-jazz">
-                                <CardContent className="flex-1 p-0">
+                                <CardContent className="flex-1 p-0 flex flex-col min-h-0">
                                     <ChatPanel
                                         messages={messages}
                                         sessionDuration={getSessionDuration()}
@@ -354,7 +346,6 @@ export default function JazzDashboard() {
                             </CardContent>
                         </Card>
                     </div>
-                </main>
             </div>
 
             {/* Memory Checker */}

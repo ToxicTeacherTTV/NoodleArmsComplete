@@ -20,13 +20,17 @@ export class RedditService {
   private reddit: any;
   
   constructor() {
-    this.reddit = new snoowrap({
-      userAgent: 'Nicky-AI-Content-Bot/2.0.0',
-      clientId: process.env.REDDIT_CLIENT_ID!,
-      clientSecret: process.env.REDDIT_CLIENT_SECRET!,
-      username: process.env.REDDIT_USERNAME!,
-      password: process.env.REDDIT_PASSWORD!,
-    });
+    if (process.env.REDDIT_CLIENT_ID && process.env.REDDIT_CLIENT_SECRET && process.env.REDDIT_USERNAME && process.env.REDDIT_PASSWORD) {
+      this.reddit = new snoowrap({
+        userAgent: 'Nicky-AI-Content-Bot/2.0.0',
+        clientId: process.env.REDDIT_CLIENT_ID,
+        clientSecret: process.env.REDDIT_CLIENT_SECRET,
+        username: process.env.REDDIT_USERNAME,
+        password: process.env.REDDIT_PASSWORD,
+      });
+    } else {
+      console.warn('⚠️ Reddit credentials missing. Reddit ingestion will be disabled.');
+    }
   }
 
   // 🎮 Dead by Daylight Keywords
@@ -193,6 +197,11 @@ export class RedditService {
   }
 
   async collectContent(sourceId: string, profileId: string): Promise<number> {
+    if (!this.reddit) {
+      console.warn('⚠️ Reddit service not initialized (missing credentials). Skipping collection.');
+      return 0;
+    }
+
     try {
       console.log('🚀 Starting multi-subreddit content collection for NNN & Word from the Don...');
       

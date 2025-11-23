@@ -51,7 +51,7 @@ export default function PersonalitySurgePanel() {
 
   const getPresetColor = (preset: string) => {
     switch (preset) {
-      case 'Chill Nicky': return 'bg-blue-500';
+      case 'Chill Nicky': return 'bg-gray-600'; // Grumpy gray instead of chill blue
       case 'Roast Mode': return 'bg-orange-500';
       case 'Unhinged': return 'bg-red-500';
       case 'Patch Roast': return 'bg-yellow-500';
@@ -208,7 +208,7 @@ export default function PersonalitySurgePanel() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="keep-current">Keep current</SelectItem>
-                    <SelectItem value="Chill Nicky">Chill Nicky</SelectItem>
+                    <SelectItem value="Chill Nicky">Grumpy Mode (Level 6)</SelectItem>
                     <SelectItem value="Roast Mode">Roast Mode</SelectItem>
                     <SelectItem value="Unhinged">Unhinged</SelectItem>
                     <SelectItem value="Patch Roast">Patch Roast</SelectItem>

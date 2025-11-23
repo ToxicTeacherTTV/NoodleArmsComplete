@@ -154,6 +154,8 @@ export function IntelligenceDashboard() {
   const [selectedMemories, setSelectedMemories] = useState<string[]>([]);
   const [isReconstructing, setIsReconstructing] = useState(false);
   const [reconstructionResult, setReconstructionResult] = useState<any>(null);
+  const [mergingClusterId, setMergingClusterId] = useState<string | null>(null);
+  const [mergedClusters, setMergedClusters] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   // Orphan facts repair mutation
@@ -195,11 +197,13 @@ export function IntelligenceDashboard() {
 
   // Bulk operations mutation
   const bulkActionMutation = useMutation({
-    mutationFn: async ({ action, memoryIds, options }: {
+    mutationFn: async ({ action, memoryIds, options, clusterId }: {
       action: string;
       memoryIds?: string[];
       options?: any;
+      clusterId?: string;
     }) => {
+      if (clusterId) setMergingClusterId(clusterId);
       return apiRequest('POST', '/api/intelligence/bulk-action', { 
         action, 
         memoryIds, 
@@ -207,24 +211,38 @@ export function IntelligenceDashboard() {
         trustAI: trustAIMode 
       });
     },
-    onSuccess: (data: any) => {
-      toast({
-        title: "Bulk Operation Complete",
-        description: data?.message || "Operation completed successfully",
-      });
+    onSuccess: (data: any, variables) => {
+      const action = variables.action;
+      const clusterId = variables.clusterId;
+      
+      if (action === 'merge_cluster' && clusterId) {
+        setMergedClusters(prev => new Set([...prev, clusterId]));
+        toast({
+          title: "✅ Cluster Merged",
+          description: `Successfully merged ${variables.memoryIds?.length || 0} facts into one memory`,
+        });
+      } else {
+        toast({
+          title: "Bulk Operation Complete",
+          description: data?.message || "Operation completed successfully",
+        });
+      }
+      
       // Invalidate all intelligence-related queries to ensure fresh data
       queryClient.invalidateQueries({ queryKey: ['/api/intelligence/analysis'] });
       queryClient.invalidateQueries({ queryKey: ['/api/intelligence/summaries'] });
       queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
       queryClient.invalidateQueries({ queryKey: ['/api/memory/stats'] });
       setSelectedMemories([]);
+      setMergingClusterId(null);
     },
-    onError: (error: any) => {
+    onError: (error: any, variables) => {
       toast({
         title: "Operation Failed",
         description: error.message || "Failed to perform bulk operation",
         variant: "destructive",
       });
+      setMergingClusterId(null);
     }
   });
 
@@ -707,7 +725,7 @@ export function IntelligenceDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {(analysis?.factClusters || []).length > 0 ? (analysis.factClusters || []).map((cluster) => (
+              {(analysis?.factClusters || []).filter(c => !mergedClusters.has(c.clusterId)).length > 0 ? (analysis.factClusters || []).filter(c => !mergedClusters.has(c.clusterId)).map((cluster) => (
                 <div
                   key={cluster.clusterId}
                   className="p-4 border rounded-lg space-y-3"
@@ -750,14 +768,15 @@ export function IntelligenceDashboard() {
                         bulkActionMutation.mutate({
                           action: 'merge_cluster',
                           memoryIds: cluster.factIds,
-                          options: { mergedContent: cluster.suggestedMerge }
+                          options: { mergedContent: cluster.suggestedMerge },
+                          clusterId: cluster.clusterId
                         });
                       }}
-                      disabled={bulkActionMutation.isPending}
+                      disabled={mergingClusterId === cluster.clusterId}
                       data-testid={`button-merge-cluster-${cluster.clusterId}`}
                       className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900 dark:hover:bg-blue-800 dark:text-blue-200"
                     >
-                      {bulkActionMutation.isPending ? (
+                      {mergingClusterId === cluster.clusterId ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                           Merging...
