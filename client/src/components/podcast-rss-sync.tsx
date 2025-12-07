@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -19,6 +20,7 @@ interface PodcastEpisode {
   id: string;
   episodeNumber?: number;
   title: string;
+  podcastName?: string;
   publishedAt?: string;
   processingStatus: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
   transcriptFilename?: string;
@@ -29,6 +31,7 @@ interface PodcastEpisode {
 export function PodcastRssSync() {
   const [feedUrl, setFeedUrl] = useState('');
   const [transcriptDir, setTranscriptDir] = useState('./podcast_transcripts');
+  const [podcastName, setPodcastName] = useState('Camping Them Softly');
   const { toast } = useToast();
 
   // Fetch RSS config
@@ -47,6 +50,7 @@ export function PodcastRssSync() {
       return apiRequest('POST', '/api/podcast/rss/sync', {
         feedUrl,
         transcriptDir,
+        podcastName,
         processTranscripts: true
       });
     },
@@ -135,6 +139,19 @@ export function PodcastRssSync() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
+            <Label htmlFor="podcastName">Podcast Show</Label>
+            <Select value={podcastName} onValueChange={setPodcastName}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select Podcast" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Camping Them Softly">Camping Them Softly (DbD)</SelectItem>
+                <SelectItem value="Camping the Extract">Camping the Extract (ARC)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="feedUrl">Podcast RSS Feed URL</Label>
             <Input
               id="feedUrl"
@@ -217,9 +234,16 @@ export function PodcastRssSync() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="font-medium">
-                        {episode.episodeNumber && `Episode ${episode.episodeNumber}: `}
-                        {episode.title}
+                      <div className="flex items-center gap-2">
+                        {episode.podcastName && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {episode.podcastName === 'Camping Them Softly' ? 'DbD' : 'ARC'}
+                          </Badge>
+                        )}
+                        <span className="font-medium">
+                          {episode.episodeNumber && `Episode ${episode.episodeNumber}: `}
+                          {episode.title}
+                        </span>
                       </div>
                       {episode.publishedAt && (
                         <div className="text-sm text-gray-500">

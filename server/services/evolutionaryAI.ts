@@ -23,7 +23,7 @@ class EvolutionaryAI {
         const error = new Error(
           `🚫 FLASH MODEL BLOCKED in EvolutionaryAI: "${config.model}" is permanently banned.\n` +
           `Reason: Flash models hallucinate facts and corrupt memory.\n` +
-          `Only gemini-2.5-pro is approved for use.`
+          `Only gemini-3-pro-preview is approved for use.`
         );
         console.error(error.message);
         throw error;
@@ -69,7 +69,7 @@ Only include strong, meaningful relationships (strength >= 6).`;
 
     try {
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model: "gemini-3-pro-preview",
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -143,7 +143,7 @@ Return JSON array of clusters:
 
     try {
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model: "gemini-3-pro-preview",
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -221,7 +221,7 @@ Return JSON array:
 
     try {
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model: "gemini-3-pro-preview",
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -266,9 +266,10 @@ Return JSON array:
 
 Consolidate these facts while:
 1. Resolving contradictions (keep newer preferences, note evolution)
-2. Merging complementary information
+2. Merging related facts into comprehensive entries
 3. Preserving temporal context (when things changed)
 4. Maintaining character depth and nuance
+5. REMOVING SEARCH ARTIFACTS: Delete any memories that look like web search results, citations, or tool outputs (e.g., "Source: youtube.com", "searched for:", "According to the web").
 
 Facts to consolidate:
 ${facts.map(f => `[${f.createdAt}] ${f.content} (Type: ${f.type}, Importance: ${f.importance})`).join('\n')}
@@ -279,6 +280,9 @@ Rules:
 - Preserve all unique information
 - Add temporal context when relevant
 - Boost importance for frequently referenced facts
+- **CRITICAL: Keep facts ATOMIC and CONCISE.** Do not create "walls of text". Each entry should be a single, clear concept.
+- **CRITICAL: Do not split a single coherent story into fragmented sentences.** Keep narrative beats together.
+- **CRITICAL: Ensure each fact is a complete, standalone thought.** Do not leave dangling sentences.
 
 Return optimized facts in JSON:
 [
@@ -295,7 +299,7 @@ Return optimized facts in JSON:
 
     try {
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model: "gemini-3-pro-preview",
         config: {
           responseMimeType: "application/json",
           responseSchema: {

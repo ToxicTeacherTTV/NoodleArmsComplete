@@ -18,6 +18,7 @@ import type { MemoryEntry } from "@/types";
 interface PodcastEpisode {
   id: string;
   profileId: string;
+  podcastName?: string;
   episodeNumber: number;
   title: string;
   description?: string;
@@ -118,6 +119,7 @@ export default function PodcastManagementPanel() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedPodcast, setSelectedPodcast] = useState<string>("all");
   const [isCreateEpisodeOpen, setIsCreateEpisodeOpen] = useState(false);
   const [isEditEpisodeOpen, setIsEditEpisodeOpen] = useState(false);
   const [isSegmentDialogOpen, setIsSegmentDialogOpen] = useState(false);
@@ -137,6 +139,7 @@ export default function PodcastManagementPanel() {
   const [newEpisode, setNewEpisode] = useState({
     title: "",
     description: "",
+    podcastName: "Camping Them Softly",
     episodeNumber: 1,
     guestInfo: "",
     transcript: "",
@@ -185,6 +188,7 @@ export default function PodcastManagementPanel() {
       setNewEpisode({
         title: "",
         description: "",
+        podcastName: "Camping Them Softly",
         episodeNumber: nextEpisodeNumber + 1,
         guestInfo: "",
         transcript: "",
@@ -495,11 +499,17 @@ export default function PodcastManagementPanel() {
   const isSavingSegment = createSegmentMutation.isPending || updateSegmentMutation.isPending;
   const isDeletingSegment = deleteSegmentMutation.isPending;
 
-  const filteredEpisodes = episodes.filter((episode: PodcastEpisode) =>
-    episode.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    episode.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    episode.notes?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredEpisodes = episodes.filter((episode: PodcastEpisode) => {
+    const matchesSearch = episode.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      episode.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      episode.notes?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesPodcast = selectedPodcast === "all" || 
+      (selectedPodcast === "Camping Them Softly" && (!episode.podcastName || episode.podcastName === "Camping Them Softly")) ||
+      episode.podcastName === selectedPodcast;
+
+    return matchesSearch && matchesPodcast;
+  });
 
   const canExtractFacts = Boolean(selectedEpisode?.transcript && selectedEpisode.transcript.trim() !== "");
   const processingStatus = selectedEpisode?.processingStatus ?? "PENDING";
@@ -512,14 +522,25 @@ export default function PodcastManagementPanel() {
   return (
     <div className="space-y-6" data-testid="podcast-management-panel">
       {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between w-full">
+        <div className="flex-1 min-w-[300px]">
           <h2 className="text-2xl font-bold">Podcast Library &amp; Memory Curation</h2>
-          <p className="text-gray-600 dark:text-gray-300">
+          <p className="text-gray-600 dark:text-gray-300 mt-1">
             Import past episodes, mark standout moments, and push the best material into Nicky&apos;s memories.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Select value={selectedPodcast} onValueChange={setSelectedPodcast}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Select Podcast" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Podcasts</SelectItem>
+              <SelectItem value="Camping Them Softly">Camping Them Softly (DbD)</SelectItem>
+              <SelectItem value="Camping the Extract">Camping the Extract (ARC)</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Dialog open={isSyncDialogOpen} onOpenChange={setIsSyncDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" data-testid="button-sync-library">
@@ -569,6 +590,21 @@ export default function PodcastManagementPanel() {
                 </DialogDescription>
               </DialogHeader>
             <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">Podcast Show</label>
+                <Select 
+                  value={newEpisode.podcastName} 
+                  onValueChange={(val) => setNewEpisode({ ...newEpisode, podcastName: val })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select Podcast" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Camping Them Softly">Camping Them Softly (DbD)</SelectItem>
+                    <SelectItem value="Camping the Extract">Camping the Extract (ARC)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div>
                 <label className="text-sm font-medium">Episode Number</label>
                 <Input
@@ -932,9 +968,9 @@ export default function PodcastManagementPanel() {
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Episodes List */}
-        <Card>
+        <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Mic className="h-5 w-5" />
@@ -980,6 +1016,11 @@ export default function PodcastManagementPanel() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <Badge variant="outline">#{episode.episodeNumber}</Badge>
+                              {episode.podcastName && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {episode.podcastName === 'Camping Them Softly' ? 'DbD' : 'ARC'}
+                                </Badge>
+                              )}
                             </div>
                             <h4 className="font-medium line-clamp-1" data-testid={`episode-title-${episode.id}`}>
                               {episode.title}
@@ -1013,7 +1054,7 @@ export default function PodcastManagementPanel() {
         </Card>
 
         {/* Episode Details & Segments */}
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />

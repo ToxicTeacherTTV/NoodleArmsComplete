@@ -94,8 +94,17 @@ export function getModelStrategy(
   
   // Development: Use experimental/cheap models
   if (isDev) {
+    // Special case for CHAT: Use higher quality model even in dev if requested
+    if (purpose === 'chat') {
+      return {
+        primary: process.env.GEMINI_DEV_CHAT_MODEL || 'gemini-3-pro-preview', // Upgrade dev chat to 3.0 Pro
+        fallback: 'gemini-2.5-flash',
+        ultimate: 'gemini-2.5-flash'
+      };
+    }
+
     return {
-      primary: process.env.GEMINI_DEV_MODEL || 'gemini-2.0-flash-exp',
+      primary: process.env.GEMINI_DEV_MODEL || 'gemini-2.5-flash',
       fallback: process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.5-flash',
       ultimate: 'gemini-2.5-pro' // Last resort
     };
@@ -104,11 +113,11 @@ export function getModelStrategy(
   // Production: Strategy varies by purpose
   switch (purpose) {
     case 'chat':
-      // Chat: Flash for most, Pro for complex reasoning
+      // Chat: Gemini 3 Pro for best quality
       return {
-        primary: process.env.GEMINI_DEFAULT_MODEL || 'gemini-2.5-flash',
-        fallback: 'gemini-2.5-pro',
-        ultimate: 'gemini-2.0-flash-exp' // Degraded mode
+        primary: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3-pro-preview',
+        fallback: 'gemini-2.5-flash',
+        ultimate: 'gemini-2.5-flash' // Degraded mode
       };
       
     case 'extraction':
@@ -122,8 +131,8 @@ export function getModelStrategy(
     case 'analysis':
       // Analysis: Use Pro for critical analysis
       return {
-        primary: process.env.GEMINI_ANALYSIS_MODEL || 'gemini-2.5-pro',
-        fallback: 'gemini-2.5-flash',
+        primary: process.env.GEMINI_ANALYSIS_MODEL || 'gemini-3-pro-preview',
+        fallback: 'gemini-2.5-pro',
         ultimate: undefined
       };
       
@@ -132,7 +141,7 @@ export function getModelStrategy(
       return {
         primary: process.env.GEMINI_DEFAULT_MODEL || 'gemini-2.5-flash',
         fallback: 'gemini-2.5-pro',
-        ultimate: 'gemini-2.0-flash-exp'
+        ultimate: 'gemini-2.5-flash'
       };
   }
 }
@@ -184,7 +193,7 @@ export function getDefaultModel(): string {
   const isDev = process.env.NODE_ENV === 'development';
   
   if (isDev) {
-    return process.env.GEMINI_DEV_MODEL || 'gemini-2.0-flash-exp';
+    return process.env.GEMINI_DEV_MODEL || 'gemini-2.5-flash';
   }
   
   return process.env.GEMINI_DEFAULT_MODEL || 'gemini-2.5-flash';

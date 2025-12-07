@@ -20,8 +20,8 @@ export class EmotionEnhancer {
   async enhanceText(text: string, characterContext?: string): Promise<string> {
     const prompt = `# Instructions
 ## 1. Role and Goal
-You are enhancing dialogue text for Nicky "Noodle Arms" A.I. Dente - an unhinged Italian-American podcaster.
-Your PRIMARY GOAL is to integrate **audio tags** (e.g., \`[laughing]\`, \`[sighs]\`, \`[grumpy]\`) into dialogue, making it more expressive for speech synthesis, while STRICTLY preserving the original text.
+You are enhancing dialogue text for Nicky "Noodle Arms" A.I. Dente - an unhinged, hilarious, and abrasive Italian-American podcaster.
+Your PRIMARY GOAL is to integrate **audio tags** (e.g., \`[laughing]\`, \`[sighs]\`, \`[grumpy]\`) into dialogue, making it **MORE ANIMATED, OVER-THE-TOP, AND EXPRESSIVE** for speech synthesis, while STRICTLY preserving the original text.
 
 ${characterContext ? `## Character Context:\n${characterContext}\n` : ''}
 
@@ -31,6 +31,7 @@ ${characterContext ? `## Character Context:\n${characterContext}\n` : ''}
 * **CRITICAL: Do NOT use [strong bronx wiseguy accent] anywhere else in the response. Use single emotion tags (e.g., [grumpy], [manic]) for subsequent emotion changes.**
 * Integrate audio tags from the list below to add expression and emotion
 * Ensure tags are contextually appropriate for Nicky's chaotic personality
+* **BE GENEROUS WITH TAGS:** Use them frequently to create a dynamic, animated performance
 * Use diverse emotional expressions (grumpy, manic, conspiratorial, deadpan, etc.)
 * Place tags strategically: before dialogue segments OR immediately after
 * Add emphasis with CAPITALS, exclamation marks, question marks, or ellipses (do NOT change words)
@@ -107,7 +108,19 @@ Reply ONLY with the enhanced text. Preserve every word exactly as written.`;
       );
       
       console.log('✅ Gemini enhanced text with emotion tags');
-      return geminiResponse.content.trim();
+      let result = geminiResponse.content.trim();
+      
+      // 🧹 CLEANUP: Remove "Enhanced:" or "Output:" prefixes if present
+      result = result.replace(/^(Here is the )?enhanced text:?\s*/i, '');
+      result = result.replace(/^Output:?\s*/i, '');
+      
+      // 🧹 CLEANUP: If the model output both Original and Enhanced, take the last part
+      if (result.includes('Enhanced:') || result.includes('**Enhanced:**')) {
+        const parts = result.split(/Enhanced:|\*\*Enhanced:\*\*/i);
+        result = parts[parts.length - 1].trim();
+      }
+      
+      return result;
       
     } catch (geminiError) {
       // Fallback to Claude
@@ -125,10 +138,21 @@ Reply ONLY with the enhanced text. Preserve every word exactly as written.`;
       });
 
       const content = Array.isArray(response.content) ? response.content[0] : response.content;
-      const enhancedText = content && 'text' in content ? content.text : text;
+      let enhancedText = content && 'text' in content ? content.text : text;
+      enhancedText = enhancedText.trim();
+
+      // 🧹 CLEANUP: Remove "Enhanced:" or "Output:" prefixes if present
+      enhancedText = enhancedText.replace(/^(Here is the )?enhanced text:?\s*/i, '');
+      enhancedText = enhancedText.replace(/^Output:?\s*/i, '');
+      
+      // 🧹 CLEANUP: If the model output both Original and Enhanced, take the last part
+      if (enhancedText.includes('Enhanced:') || enhancedText.includes('**Enhanced:**')) {
+        const parts = enhancedText.split(/Enhanced:|\*\*Enhanced:\*\*/i);
+        enhancedText = parts[parts.length - 1].trim();
+      }
       
       console.log('✅ Claude enhanced text with emotion tags (fallback)');
-      return enhancedText.trim();
+      return enhancedText;
     }
   }
 

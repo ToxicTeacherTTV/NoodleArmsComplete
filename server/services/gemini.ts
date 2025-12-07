@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { contentFilter } from './contentFilter.js';
-import { executeWithDefaultModel, executeWithProductionModel } from './modelSelector.js';
+import { executeWithDefaultModel, executeWithProductionModel, executeWithModelFallback } from './modelSelector.js';
 import { getDefaultModel, isValidModel } from '../config/geminiModels.js';
 
 /**
@@ -143,7 +143,7 @@ class GeminiService {
   }
 
   // Enhanced hierarchical extraction methods - Pure Gemini Implementation
-  async extractStoriesFromDocument(content: string, filename: string): Promise<Array<{
+  async extractStoriesFromDocument(content: string, filename: string, modelOverride?: string): Promise<Array<{
     content: string;
     type: 'STORY' | 'LORE' | 'CONTEXT';
     importance: number;
@@ -198,7 +198,7 @@ Focus on what Nicky says and does, but include relevant context about people/thi
 
     } else {
       extractionScope = `📄 DOCUMENT TYPE: GENERAL
-This document contains information relevant to Nicky's character and world.
+This document contains information relevant to Nicky's character, world, OR the games he plays.
 
 EXTRACTION SCOPE - Include ALL relevant facts:
 ✅ Information about Nicky "Noodle Arms" A.I. Dente
@@ -207,11 +207,13 @@ EXTRACTION SCOPE - Include ALL relevant facts:
 ✅ World lore, backstory, and universe details
 ✅ Relationships, conflicts, and alliances
 ✅ Rules, traditions, and important context
+✅ GAME KNOWLEDGE: Mechanics, strategies, items, maps, and lore (Arc Raiders, DbD, etc.)
 
-Extract comprehensively - this is building Nicky's knowledge base.`;
+Extract comprehensively - this is building Nicky's knowledge base. Even if the document is purely technical (like a game guide), extract the facts so Nicky knows how to play/talk about it.`;
     }
 
-    const prompt = `You are extracting facts from "${filename}" to build a knowledge base about Nicky "Noodle Arms" A.I. Dente and his universe.
+    const prompt = `You are extracting facts from "${filename}" to build a knowledge base for Nicky "Noodle Arms" A.I. Dente.
+He is a streamer who plays games like Dead by Daylight and Arc Raiders. He needs to know the lore, mechanics, and details of these games to talk about them intelligently.
 
 🎯 DOCUMENT CONTEXT: This document is about ${docContext}
 
@@ -226,6 +228,7 @@ Extract COMPLETE STORIES, ANECDOTES, and RICH CONTEXTS. Focus on:
 - Character interactions and relationships
 - Experiences and background context
 - Organizational details and hierarchy
+- Game mechanics, patch notes, or progression systems (treat these as "Lore" or "Context")
 
 CRITICAL: When extracting facts, INCLUDE SOURCE CONTEXT in the content itself.
 - If this is about Arc Raiders: mention "in Arc Raiders" or "Arc Raiders character"
@@ -234,7 +237,7 @@ CRITICAL: When extracting facts, INCLUDE SOURCE CONTEXT in the content itself.
 
 For each story/narrative, provide:
 - content: The COMPLETE story/context WITH SOURCE CONTEXT (1-3 sentences max)
-- type: STORY (incidents/events), LORE (backstory), or CONTEXT (situational background)
+- type: STORY (incidents/events), LORE (backstory/game lore), or CONTEXT (mechanics/background)
 - importance: 1-5 (5 being most important for character understanding)
 - keywords: 3-5 relevant keywords for retrieval (INCLUDE game/topic name if relevant)
 
@@ -251,7 +254,7 @@ Example format:
 ]`;
 
     // Use intelligent model selection with fallback
-    return await executeWithDefaultModel(async (model) => {
+    const result = await executeWithModelFallback(async (model) => {
       this.validateModel(model, 'extractStoriesFromDocument');
 
       const response = await this.ai.models.generateContent({
@@ -281,10 +284,17 @@ Example format:
       } else {
         throw new Error("Empty response from Gemini");
       }
-    }, 'extraction'); // Purpose: extraction (fact extraction from documents)
+    }, {
+      purpose: 'extraction',
+      maxRetries: 3,
+      allowExperimental: true,
+      forceModel: modelOverride
+    });
+
+    return result.data;
   }
 
-  async extractAtomicFactsFromStory(storyContent: string, storyContext: string): Promise<Array<{
+  async extractAtomicFactsFromStory(storyContent: string, storyContext: string, modelOverride?: string): Promise<Array<{
     content: string;
     type: 'ATOMIC';
     importance: number;
@@ -352,7 +362,7 @@ Examples from various stories:
 Return as JSON array.`;
 
     try {
-      return await executeWithDefaultModel(async (model) => {
+      const result = await executeWithModelFallback(async (model) => {
         this.validateModel(model, 'extractAtomicFactsFromStory');
 
         const response = await this.ai.models.generateContent({
@@ -383,7 +393,14 @@ Return as JSON array.`;
         } else {
           throw new Error("Empty response from Gemini");
         }
-      }, 'extraction'); // Purpose: extraction (atomic fact breakdown)
+      }, {
+        purpose: 'extraction',
+        maxRetries: 3,
+        allowExperimental: true,
+        forceModel: modelOverride
+      });
+
+      return result.data;
     } catch (error) {
       console.error("❌ Gemini atomic fact extraction error:", error);
 
@@ -675,12 +692,30 @@ Response format:
     webSearchResults: any[] = [],
     personalityPrompt?: string,
     trainingExamples: any[] = []
-  ): Promise<{ content: string; processingTime: number; retrievedContext?: string }> {
+  ): Promise<{ content: string; processingTime: number; retrievedContext?: string; debugInfo?: any }> {
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("Gemini API key not configured");
     }
 
     const startTime = Date.now();
+    
+    // 🔍 DEBUG: Capture memory retrieval details for debug panel
+    const debugInfo = {
+      memories: relevantMemories.map((m: any) => ({
+        id: m.id,
+        content: m.content,
+        relevance: m.contextualRelevance || 0,
+        score: m.baseScore || 0,
+        method: m.retrievalMethod || 'unknown',
+        source: m.source,
+        type: m.type
+      })),
+      docs: relevantDocs.map(d => ({
+        content: d.content.substring(0, 50) + '...',
+        score: d.score
+      }))
+    };
+
     let contextPrompt = "";  // Declare outside try block for error handler access
 
     try {
@@ -706,6 +741,22 @@ Response format:
         contextPrompt += `\n\nTRAINING EXAMPLES (for style guidance):\n${trainingExamples.slice(0, 3).map(ex => `Example: ${ex.prompt}\nResponse: ${ex.response}`).join('\n\n')}`;
       }
 
+      // 🎭 NEW: Add mode-specific context (copied from Anthropic service for consistency)
+      let modeContext = "";
+      if (mode) {
+        switch (mode) {
+          case 'STREAMING':
+            modeContext = "\n\n🔴 STREAMING MODE: You are currently in a LIVE STREAM session. Respond as if you're live streaming to viewers on Twitch/YouTube. Reference the stream, viewers, chat, and streaming context appropriately.";
+            break;
+          case 'PODCAST':
+            modeContext = "\n\n🎧 PODCAST MODE: You are currently recording a podcast episode. Reference episodes, podcast format, and audio content appropriately.";
+            break;
+          case 'DISCORD':
+            modeContext = "\n\n💬 DISCORD MODE: You are currently in a Discord server chat. Respond as if you're chatting in a Discord channel with server members.";
+            break;
+        }
+      }
+
       // Build the full prompt for Gemini with conversational depth guidance
       // Don't wrap if it's already a formatted prompt (from Discord or other services)
       const isFormattedPrompt = userMessage.includes('Discord user') || userMessage.includes('Behavior Settings') || userMessage.includes('Prompt:');
@@ -714,7 +765,6 @@ Response format:
 
 CONVERSATION STYLE - BE ENGAGING:
 - Give rich, detailed responses with multiple paragraphs when it feels natural
-- Use emotion tags for TTS like [scoffs], [furious], [sarcastic], [mutters], [sudden realization]
 - Stay deeply in character - let your personality drive the response organically
 - Make creative comparisons, go on entertaining tangents, tell specific stories
 - Ask engaging follow-up questions to build real conversation flow
@@ -722,7 +772,7 @@ CONVERSATION STYLE - BE ENGAGING:
 - Use profanity creatively and frequently when it fits
 - Show depth: conspiracy theories, passionate opinions, unexpected connections between topics
 
-Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${contextPrompt}`;
+Respond to Toxic Teacher: "${userMessage}"${contextPrompt}${modeContext}` : `${userMessage}${contextPrompt}${modeContext}`;
 
       const fullPrompt = isFormattedPrompt
         ? conversationalGuidance
@@ -731,15 +781,42 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}` : `${userMessage}${c
       console.log('🌟 Using Gemini for chat response');
 
       // 🚫 CRITICAL: Put formatting rules FIRST for maximum priority
-      let enhancedCoreIdentity = `🚫 CRITICAL FORMATTING RULES:
+      let enhancedCoreIdentity = `[CRITICAL FORMATTING RULES]
+1. NEVER use asterisks (*) for actions, gestures, or stage directions. Do NOT write *gestures*, *winks*, *leans in*, *waves*, etc.
+2. Describe actions IN YOUR DIALOGUE: "I'm wavin' my hand dismissively!" NOT "*waves hand dismissively*"
+3. ALWAYS end sentences with proper punctuation (. ! ?).
+4. DO NOT include [emotion] or [voice] tags in your response. These will be added by a separate system. Just write the text.
 
-RULE #1 - NO ASTERISKS:
-NEVER use asterisks (*) for actions, gestures, or stage directions. Do NOT write *gestures*, *winks*, *leans in*, *waves*, etc.
-Describe actions IN YOUR DIALOGUE: "I'm wavin' my hand dismissively!" NOT "*waves hand dismissively*"
+[CORE IDENTITY - NEVER OVERRIDE THESE]
+- You are Nicky "Noodle Arms" A.I. Dente
+- Italian-American, pasta-obsessed, Dead by Daylight addicted
+- Chaotic good moral alignment with emotional intensity
+- Physical characteristic: literally has noodle arms (it's a thing, don't ask)
+- Family business vibe but over trivial shit
+- Alternates between tough talk and being emotionally sensitive
 
-RULE #2 - PROPER PUNCTUATION:
-ALWAYS end sentences with proper punctuation (. ! ?). Every statement must end with a period, every question with a question mark, every exclamation with an exclamation point.
-Use commas where grammatically appropriate to separate clauses and maintain readability.
+[SPEAKING STYLE - THIS IS HOW YOU TALK]
+- Casual, profanity-laced, expressive
+- Italian phrases when emotional or talking about food
+- Self-deprecating humor mixed with Italian pride
+- Gets intense about DbD gameplay and pasta quality
+- Tangents are GOOD - lean into random topics
+- Don't be a one-trick pony - vary your responses
+
+[MEMORY USAGE RULES]
+- Reference memories naturally, don't list them
+- If you remember something, weave it in conversationally
+- If you DON'T remember something clearly, say so
+- Don't force pasta/DbD references into EVERY response
+
+[RESPONSE VARIETY - CRITICAL]
+You MUST vary your responses. Not every reply needs:
+- Pasta references
+- DbD references  
+- Italian phrases
+- Family business mentions
+
+Sometimes just respond like a normal person who happens to have these traits.
 
 ${coreIdentity}`;
 
@@ -749,7 +826,11 @@ ${coreIdentity}`;
       }
 
       // Use intelligent model selection with fallback for chat
-      const chatResult = await executeWithDefaultModel(async (model) => {
+      // 🚀 OPTIMIZATION: Use Gemini 2.5 Flash for Streaming (Reliable + Fast)
+      const streamingModel = 'gemini-2.5-flash';
+      const targetModel = mode === 'STREAMING' ? streamingModel : undefined;
+
+      const chatResult = await executeWithModelFallback(async (model) => {
         this.validateModel(model, 'generateChatResponse');
 
         console.log(`🤖 Generating chat response with ${model}`);
@@ -775,9 +856,13 @@ ${coreIdentity}`;
         }
 
         return response.text;
-      }, 'chat'); // Purpose: chat (conversational response)
+      }, {
+        purpose: 'chat',
+        forceModel: targetModel,
+        allowExperimental: true
+      });
 
-      const rawContent = chatResult;
+      const rawContent = chatResult.data;
       const { filtered: filteredContent, wasFiltered } = contentFilter.filterContent(rawContent);
 
       if (wasFiltered) {
@@ -787,10 +872,14 @@ ${coreIdentity}`;
       // 🚫 CRITICAL: Strip ALL asterisks (emphasis, actions, italics - TTS doesn't need them)
       const asteriskPattern = /\*+([^*]+)\*+/g;
 
-      const strippedContent = filteredContent.replace(asteriskPattern, (match, innerText) => {
+      let strippedContent = filteredContent.replace(asteriskPattern, (match, innerText) => {
         console.warn(`🚫 Stripped asterisks from Gemini response: ${match}`);
         return innerText; // Keep the text, remove the asterisks
       }).replace(/\s{2,}/g, ' ').trim(); // Clean up extra spaces
+
+      // 🔧 FIX: Remove double brackets [[tag]] -> [tag]
+      // Some models (Flash) misinterpret "double-tag" instructions as double brackets
+      strippedContent = strippedContent.replace(/\[\[(.*?)\]\]/g, '[$1]');
 
       // ✅ CRITICAL: Fix missing punctuation (Gemini often skips periods)
       const fixPunctuation = (text: string): string => {
@@ -846,6 +935,7 @@ ${coreIdentity}`;
         content: finalContent,
         processingTime,
         retrievedContext: contextPrompt || undefined,
+        debugInfo
       };
     } catch (error) {
       console.error('❌ Gemini chat API error:', error);

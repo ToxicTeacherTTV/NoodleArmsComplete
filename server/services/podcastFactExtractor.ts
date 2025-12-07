@@ -1,4 +1,4 @@
-import { InsertMemoryEntry } from '@shared/schema';
+import { InsertMemoryEntry, InsertDocument } from '@shared/schema';
 import { IStorage } from '../storage.js';
 import { entityExtraction } from './entityExtraction.js';
 import { GoogleGenAI } from "@google/genai";
@@ -91,6 +91,61 @@ JSON FORMAT:
     } catch (error) {
       console.error("❌ AI Fact Extraction failed:", error);
       return [];
+    }
+  }
+
+  private extractNickyDialogue(transcript: string): string {
+    // Parse transcript and extract only Nicky's speaking parts
+    // Common formats: "Nicky:", "Nicky says:", "[Nicky]"
+    const lines = transcript.split('\n');
+    const nickyLines: string[] = [];
+    
+    for (const line of lines) {
+      if (line.match(/^(Nicky|NICKY|Noodle Arms|NOODLE ARMS):?\s/i) || 
+          line.match(/^\[(Nicky|NICKY|Noodle Arms|NOODLE ARMS)\]/i)) {
+        const cleaned = line
+          .replace(/^(Nicky|NICKY|Noodle Arms|NOODLE ARMS):?\s/i, '')
+          .replace(/^\[(Nicky|NICKY|Noodle Arms|NOODLE ARMS)\]\s*/i, '')
+          .trim();
+        if (cleaned) nickyLines.push(cleaned);
+      }
+    }
+    
+    return nickyLines.join('\n\n');
+  }
+
+  private async createTrainingExampleFromTranscript(
+    storage: IStorage,
+    profileId: string,
+    episodeId: string,
+    episodeNumber: number,
+    title: string,
+    transcript: string
+  ): Promise<void> {
+    // Extract only Nicky's lines from transcript
+    const nickyLines = this.extractNickyDialogue(transcript);
+    
+    if (nickyLines.length < 100) { // Minimum length check
+        console.log(`⚠️ Not enough Nicky dialogue found in Episode ${episodeNumber} for training example.`);
+        return; 
+    }
+    
+    try {
+        // Create training example document
+        await storage.createDocument({
+          profileId,
+          name: `Training: Episode ${episodeNumber} - ${title}`,
+          filename: `ep${episodeNumber}_training.txt`,
+          contentType: 'text/plain',
+          documentType: 'TRAINING_EXAMPLE',
+          size: nickyLines.length,
+          extractedContent: nickyLines,
+          processingStatus: 'COMPLETED'
+        });
+        
+        console.log(`📚 Created training example from Episode ${episodeNumber} (${nickyLines.length} chars)`);
+    } catch (error) {
+        console.error(`❌ Failed to create training example for Episode ${episodeNumber}:`, error);
     }
   }
 
@@ -217,7 +272,7 @@ JSON FORMAT:
 
         if (entitiesCreated > 0) {
           console.log(`✨ Extracted ${entitiesCreated} new entities from Episode ${episodeNumber}`);
-          console.log(`   📊 Entity breakdown: ${entityResult.personIds.length} people, ${entityResult.placeIds.length} places, ${entityResult.eventIds.length} events`);
+          console.log(`   📊 Entity breakdown: ${entityResult.personIds.length} people, ${entityResult.placeIds.length} places, ${entityResult.eventIds.length} events, ${entityResult.conceptIds.length} concepts, ${entityResult.itemIds.length} items, ${entityResult.miscIds.length} misc`);
         } else {
           console.log(`ℹ️ No new entities found in Episode ${episodeNumber} (may have matched existing entities)`);
         }
@@ -225,6 +280,18 @@ JSON FORMAT:
       } catch (entityError) {
         console.warn(`⚠️ Entity extraction failed for Episode ${episodeNumber}, continuing with facts only:`, entityError);
         // Don't fail the whole operation if entity extraction fails
+      }
+
+      // 📚 NEW: Create training example from transcript
+      if (transcript.length > 500) {
+        await this.createTrainingExampleFromTranscript(
+            storage,
+            profileId,
+            episodeId,
+            episodeNumber,
+            title,
+            transcript
+        );
       }
 
       return { success: true, factsCreated, entitiesCreated };

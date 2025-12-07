@@ -31,6 +31,16 @@
 - **Focus:** Balance character flavor with actually answering questions
 - **Status:** Needs user testing and feedback for further tuning
 
+#### Arc Raiders Personality & Sticky Context (Dec 7, 2025)
+- **Problem:** User had to mention "Arc Raiders" in every message or Nicky would revert to generic/DbD chat.
+- **Solution:** Implemented a 6-message lookback window. If "Arc Raiders" was mentioned recently, the "Squad" context (Vinny, Paulie, Anthony) remains active.
+- **Creative Freedom:** Explicitly instructed the model to invent scenarios/glitches/family members to keep the humor high.
+
+#### Vector Crash Fix (Dec 7, 2025)
+- **Issue:** `SyntaxError: Unexpected non-whitespace character after JSON` in `embeddingService.ts`.
+- **Cause:** `pgvector` driver returns native Arrays, but code was blindly calling `JSON.parse()`.
+- **Fix:** Implemented a robust parser that handles Arrays, JSON strings, and raw Postgres strings across all vector services.
+
 #### STREAMING Mode Optimizations (Oct-Nov 2025)
 - **Target:** Reduce response time from 9-18s to 4-8s
 - **Implemented:**

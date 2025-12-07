@@ -6,6 +6,8 @@ This repository contains **Nicky "Noodle Arms" A.I. Dente** — an AI-powered co
 
 **Tech Stack:** React + TypeScript + Vite frontend | Express + TypeScript backend | PostgreSQL (Neon) with Drizzle ORM | Gemini AI (primary) + Claude (fallback) | ElevenLabs voice synthesis
 
+> 📘 **New to the project?** Check out the [Master Architecture Document](./MASTER_ARCHITECTURE.md) for a complete overview of how the system works, including memory, personality, and voice pipelines.
+
 ---
 
 ## 🎯 Current Architecture (November 2025)

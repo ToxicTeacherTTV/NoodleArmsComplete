@@ -30,6 +30,7 @@ class PersonalityController {
   private static instance: PersonalityController;
   private state: UnifiedPersonalityState;
   private initializePromise: Promise<void> | null = null;
+  private temporaryOverride: Partial<PersonalityControl> | null = null;
 
   constructor() {
     this.state = {
@@ -235,11 +236,36 @@ class PersonalityController {
       await this.initializePromise;
     }
 
-    const temporary = { ...this.state.effectivePersonality, ...override };
-    console.log(`🎭 Temporary personality override: ${JSON.stringify(override)}`);
+    this.temporaryOverride = override;
     
-    // Don't save this to state - it's temporary
-    return temporary;
+    // Recalculate effective personality to include override for UI visibility
+    const baseEffective = this.calculateEffectivePersonality(this.state.basePersonality, this.state.chaosInfluence);
+    this.state.effectivePersonality = {
+        ...baseEffective,
+        ...override
+    };
+    
+    console.log(`🎭 Temporary personality override set: ${JSON.stringify(override)}`);
+    
+    return this.state.effectivePersonality;
+  }
+
+  // Consume the effective personality (clearing any temporary override)
+  async consumeEffectivePersonality(): Promise<PersonalityControl> {
+    if (this.initializePromise) {
+      await this.initializePromise;
+    }
+    
+    const effective = { ...this.state.effectivePersonality };
+    
+    if (this.temporaryOverride) {
+        console.log('🎭 Consuming temporary personality override');
+        this.temporaryOverride = null;
+        // Revert effective personality to base + chaos
+        this.state.effectivePersonality = this.calculateEffectivePersonality(this.state.basePersonality, this.state.chaosInfluence);
+    }
+    
+    return effective;
   }
 
   // CLUSTER-BASED PERSONALITY ROTATION SYSTEM

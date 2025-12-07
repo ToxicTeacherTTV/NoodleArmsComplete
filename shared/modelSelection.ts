@@ -36,17 +36,17 @@ export const DEFAULT_MODEL_CONFIG: Record<AIOperation, ModelSelectionConfig> = {
   'chat': {
     operation: 'chat',
     selectedModel: 'claude-sonnet-4.5',
-    fallbackModel: 'gemini-2.5-flash'
+    fallbackModel: 'gemini-3-pro-preview'
   },
   'document-processing': {
     operation: 'document-processing',
     selectedModel: 'claude-sonnet-4.5',
-    fallbackModel: 'gemini-2.5-pro'
+    fallbackModel: 'gemini-2.5-flash'
   },
   'podcast-training': {
     operation: 'podcast-training',
     selectedModel: 'claude-sonnet-4.5',
-    fallbackModel: 'gemini-2.5-pro'
+    fallbackModel: 'gemini-2.5-flash'
   },
   'memory-consolidation': {
     operation: 'memory-consolidation',
@@ -56,12 +56,12 @@ export const DEFAULT_MODEL_CONFIG: Record<AIOperation, ModelSelectionConfig> = {
   'fact-extraction': {
     operation: 'fact-extraction',
     selectedModel: 'claude-sonnet-4.5',
-    fallbackModel: 'gemini-2.5-pro'
+    fallbackModel: 'gemini-2.5-flash'
   },
   'style-analysis': {
     operation: 'style-analysis',
     selectedModel: 'claude-sonnet-4.5',
-    fallbackModel: 'gemini-2.5-pro'
+    fallbackModel: 'gemini-3-pro-preview'
   }
 };
 

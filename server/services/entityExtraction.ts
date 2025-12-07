@@ -18,7 +18,7 @@ import { getDefaultModel, isValidModel } from '../config/geminiModels.js';
 
 interface DetectedEntity {
   name: string;
-  type: 'PERSON' | 'PLACE' | 'EVENT';
+  type: 'PERSON' | 'PLACE' | 'EVENT' | 'CONCEPT' | 'ITEM' | 'MISC';
   disambiguation: string;
   aliases: string[];
   context: string;
@@ -33,6 +33,9 @@ interface EntityExtractionResult {
     personId?: string;
     placeId?: string;
     eventId?: string;
+    conceptId?: string;
+    itemId?: string;
+    miscId?: string;
   };
 }
 
@@ -131,6 +134,9 @@ class EntityExtractionService {
     people: Array<{ id: string; canonicalName: string; disambiguation?: string; aliases?: string[] }>;
     places: Array<{ id: string; canonicalName: string; locationType?: string; description?: string }>;
     events: Array<{ id: string; canonicalName: string; eventDate?: string; description?: string }>;
+    concepts?: Array<{ id: string; canonicalName: string; category?: string; description?: string }>;
+    items?: Array<{ id: string; canonicalName: string; type?: string; description?: string }>;
+    misc?: Array<{ id: string; canonicalName: string; type?: string; description?: string }>;
   }): Promise<EntityExtractionResult> {
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("Gemini API key not configured");
@@ -139,7 +145,7 @@ class EntityExtractionService {
     const prompt = `You are analyzing Nicky "Noodle Arms" A.I. Dente's memory content to extract entities for his knowledge database.
 
 CRITICAL INSTRUCTIONS:
-- Extract PEOPLE, PLACES, and EVENTS mentioned in the content
+- Extract PEOPLE, PLACES, EVENTS, CONCEPTS, ITEMS, and MISC entities mentioned in the content
 - Provide disambiguation for entities with common names (e.g., "Sal the Butcher" vs "Sal my cousin")
 - Extract all alias/nickname variations mentioned
 - Include SOURCE CONTEXT in disambiguation to distinguish between entities from different games/media (e.g., "Character from Arc Raiders" vs "Character from Dead by Daylight")
@@ -154,14 +160,17 @@ EXISTING ENTITIES TO CONSIDER:
 People: ${existingEntities.people.map(p => `${p.canonicalName}${p.disambiguation ? ` (${p.disambiguation})` : ''}`).join(', ')}
 Places: ${existingEntities.places.map(p => `${p.canonicalName}${p.locationType ? ` (${p.locationType})` : ''}`).join(', ')}
 Events: ${existingEntities.events.map(e => `${e.canonicalName}${e.eventDate ? ` (${e.eventDate})` : ''}`).join(', ')}
+Concepts: ${existingEntities.concepts?.map(c => `${c.canonicalName}${c.category ? ` (${c.category})` : ''}`).join(', ') || ''}
+Items: ${existingEntities.items?.map(i => `${i.canonicalName}${i.type ? ` (${i.type})` : ''}`).join(', ') || ''}
+Misc: ${existingEntities.misc?.map(m => `${m.canonicalName}${m.type ? ` (${m.type})` : ''}`).join(', ') || ''}
 
 If you find entities that match existing ones, note the similarity in your analysis.
 ` : ''}
 
 For each detected entity, provide:
 - name: The canonical/primary name for this entity
-- type: PERSON, PLACE, or EVENT
-- disambiguation: Human-readable descriptor INCLUDING SOURCE/GAME NAME for game/media entities (e.g., "Character from Arc Raiders", "DBD Character", "Arc Raiders Game Mode", "From Little Italy", "The 1993 Incident")
+- type: PERSON, PLACE, EVENT, CONCEPT, ITEM, or MISC
+- disambiguation: Human-readable descriptor INCLUDING SOURCE/GAME NAME for game/media entities (e.g., "Character from Arc Raiders", "DBD Character", "Arc Raiders Game Mode", "From Little Italy", "The 1993 Incident", "Game Mechanic", "Weapon")
 - aliases: All name variations/nicknames mentioned in the content
 - context: Relevant context about this entity from the memory, INCLUDING what game/media it's from
 - confidence: 0.0-1.0 confidence this is a distinct entity
@@ -187,12 +196,30 @@ Return as JSON with this structure:
       "context": "Playable character in Arc Raiders, a tactical shooter game",
       "confidence": 0.9,
       "mentions": ["The Enforcer", "Enforcer character"]
+    },
+    {
+      "name": "Looping",
+      "type": "CONCEPT",
+      "disambiguation": "Dead by Daylight Mechanic",
+      "aliases": ["Running the killer", "Juicing"],
+      "context": "The act of running around obstacles to waste the killer's time",
+      "confidence": 0.9,
+      "mentions": ["looping", "run the killer"]
+    },
+    {
+      "name": "Flashlight",
+      "type": "ITEM",
+      "disambiguation": "Dead by Daylight Item",
+      "aliases": ["Beamer", "Clicky clicky"],
+      "context": "Item used to blind the killer",
+      "confidence": 0.95,
+      "mentions": ["flashlight", "beamer"]
     }
   ]
 }
 
 ONLY extract entities that are:
-1. Specific people, places, or events (not generic references)
+1. Specific people, places, events, concepts, items, or misc entities (not generic references)
 2. Important to Nicky's stories, relationships, or experiences
 3. Named or uniquely identifiable
 
@@ -202,9 +229,10 @@ DO extract:
 - Named places (Little Italy, specific restaurants, locations, game maps with source context)
 - Named shows/media/games as EVENT entities (e.g., "Arc Raiders", "Dead by Daylight", "Stranger Things")
 - Specific events with dates or context
+- Specific game mechanics or lore terms as CONCEPTS (e.g., "The Entity", "Gen Rushing", "Tunneling")
+- Specific items or objects as ITEMS (e.g., "Medkit", "Key", "Grandma's Recipe Book")
 
 DO NOT extract:
-- Generic game mechanics (gens, hooks, perks, abilities) without specific names
 - Generic pronouns (he, she, it, they)
 - Generic place types without names (a restaurant, the school)
 - Generic role terms (survivor, killer, raider) unless referring to a specific character
@@ -226,7 +254,7 @@ DO NOT extract:
                     type: "object",
                     properties: {
                       name: { type: "string" },
-                      type: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
+                      type: { type: "string", enum: ["PERSON", "PLACE", "EVENT", "CONCEPT", "ITEM", "MISC"] },
                       disambiguation: { type: "string" },
                       aliases: { type: "array", items: { type: "string" } },
                       context: { type: "string" },
@@ -270,9 +298,12 @@ DO NOT extract:
       people: Array<{ id: string; canonicalName: string; disambiguation?: string; aliases?: string[] }>;
       places: Array<{ id: string; canonicalName: string; locationType?: string; description?: string }>;
       events: Array<{ id: string; canonicalName: string; eventDate?: string; description?: string }>;
+      concepts?: Array<{ id: string; canonicalName: string; category?: string; description?: string }>;
+      items?: Array<{ id: string; canonicalName: string; type?: string; description?: string }>;
+      misc?: Array<{ id: string; canonicalName: string; type?: string; description?: string }>;
     }
   ): Promise<{
-    matches: Array<{ detectedEntity: DetectedEntity; existingEntityId: string; matchType: 'PERSON' | 'PLACE' | 'EVENT'; confidence: number }>;
+    matches: Array<{ detectedEntity: DetectedEntity; existingEntityId: string; matchType: 'PERSON' | 'PLACE' | 'EVENT' | 'CONCEPT' | 'ITEM' | 'MISC'; confidence: number }>;
     newEntities: DetectedEntity[];
   }> {
     if (!process.env.GEMINI_API_KEY) {
@@ -291,8 +322,14 @@ Places: ${existingEntities.places.map(p => `ID:${p.id} - ${p.canonicalName}${p.l
 
 Events: ${existingEntities.events.map(e => `ID:${e.id} - ${e.canonicalName}${e.eventDate ? ` (${e.eventDate})` : ''}`).join('\n')}
 
+Concepts: ${existingEntities.concepts?.map(c => `ID:${c.id} - ${c.canonicalName}${c.category ? ` (${c.category})` : ''}`).join('\n') || ''}
+
+Items: ${existingEntities.items?.map(i => `ID:${i.id} - ${i.canonicalName}${i.type ? ` (${i.type})` : ''}`).join('\n') || ''}
+
+Misc: ${existingEntities.misc?.map(m => `ID:${m.id} - ${m.canonicalName}${m.type ? ` (${m.type})` : ''}`).join('\n') || ''}
+
 For each detected entity, determine:
-1. Does it match an existing entity? (same person/place/event with different names)
+1. Does it match an existing entity? (same person/place/event/concept/item/misc with different names)
 2. If yes, provide the existing entity ID and confidence (0.0-1.0)
 3. If no, mark as new entity
 
@@ -342,7 +379,7 @@ Be conservative with matches - only match if confidence > 0.7`;
                     properties: {
                       detectedEntityName: { type: "string" },
                       existingEntityId: { type: "string" },
-                      matchType: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
+                      matchType: { type: "string", enum: ["PERSON", "PLACE", "EVENT", "CONCEPT", "ITEM", "MISC"] },
                       confidence: { type: "number" },
                       reason: { type: "string" }
                     },
@@ -355,7 +392,7 @@ Be conservative with matches - only match if confidence > 0.7`;
                     type: "object",
                     properties: {
                       name: { type: "string" },
-                      type: { type: "string", enum: ["PERSON", "PLACE", "EVENT"] },
+                      type: { type: "string", enum: ["PERSON", "PLACE", "EVENT", "CONCEPT", "ITEM", "MISC"] },
                       disambiguation: { type: "string" },
                       reason: { type: "string" }
                     },
@@ -377,7 +414,7 @@ Be conservative with matches - only match if confidence > 0.7`;
           const matches = result.matches.map((match: any) => ({
             detectedEntity: detectedEntities.find(e => e.name === match.detectedEntityName) || detectedEntities[0],
             existingEntityId: match.existingEntityId,
-            matchType: match.matchType as 'PERSON' | 'PLACE' | 'EVENT',
+            matchType: match.matchType as 'PERSON' | 'PLACE' | 'EVENT' | 'CONCEPT' | 'ITEM' | 'MISC',
             confidence: match.confidence
           }));
 
@@ -476,6 +513,9 @@ Be conservative with matches - only match if confidence > 0.7`;
     personIds: string[];
     placeIds: string[];
     eventIds: string[];
+    conceptIds: string[];
+    itemIds: string[];
+    miscIds: string[];
     entitiesCreated: number;
   }> {
     try {
@@ -483,7 +523,7 @@ Be conservative with matches - only match if confidence > 0.7`;
       
       // Get existing entities from database
       const existingEntities = await storage.getAllEntities(profileId);
-      console.log(`📚 DEBUG: Found ${existingEntities.people.length} people, ${existingEntities.places.length} places, ${existingEntities.events.length} events`);
+      console.log(`📚 DEBUG: Found ${existingEntities.people.length} people, ${existingEntities.places.length} places, ${existingEntities.events.length} events, ${existingEntities.concepts.length} concepts, ${existingEntities.items.length} items, ${existingEntities.misc.length} misc`);
       
       // Extract entities from memory content
       console.log(`🤖 DEBUG: Calling extractEntitiesFromMemory...`);
@@ -492,7 +532,7 @@ Be conservative with matches - only match if confidence > 0.7`;
       
       if (extraction.entities.length === 0) {
         console.log(`⚠️ DEBUG: No entities extracted, returning empty result`);
-        return { personIds: [], placeIds: [], eventIds: [], entitiesCreated: 0 };
+        return { personIds: [], placeIds: [], eventIds: [], conceptIds: [], itemIds: [], miscIds: [], entitiesCreated: 0 };
       }
 
       // Disambiguate against existing entities
@@ -501,6 +541,9 @@ Be conservative with matches - only match if confidence > 0.7`;
       const personIds: string[] = [];
       const placeIds: string[] = [];
       const eventIds: string[] = [];
+      const conceptIds: string[] = [];
+      const itemIds: string[] = [];
+      const miscIds: string[] = [];
       let entitiesCreated = 0;
 
       // Process matches (link to existing entities)
@@ -512,6 +555,12 @@ Be conservative with matches - only match if confidence > 0.7`;
             placeIds.push(match.existingEntityId);
           } else if (match.matchType === 'EVENT' && !eventIds.includes(match.existingEntityId)) {
             eventIds.push(match.existingEntityId);
+          } else if (match.matchType === 'CONCEPT' && !conceptIds.includes(match.existingEntityId)) {
+            conceptIds.push(match.existingEntityId);
+          } else if (match.matchType === 'ITEM' && !itemIds.includes(match.existingEntityId)) {
+            itemIds.push(match.existingEntityId);
+          } else if (match.matchType === 'MISC' && !miscIds.includes(match.existingEntityId)) {
+            miscIds.push(match.existingEntityId);
           }
         }
       }
@@ -641,6 +690,90 @@ Be conservative with matches - only match if confidence > 0.7`;
                 console.log(`✨ Created new event: ${newEntity.name}`);
               }
             }
+          } else if (newEntity.type === 'CONCEPT') {
+            existingEntity = this.findMatchingEntity(
+              existingEntities.concepts,
+              newEntity.name,
+              []
+            );
+            
+            if (existingEntity) {
+              const updatedDescription = this.mergeEntityContext(
+                existingEntity.description || '',
+                newEntity.context
+              );
+              await storage.updateConcept(existingEntity.id, { description: updatedDescription });
+              if (!conceptIds.includes(existingEntity.id)) conceptIds.push(existingEntity.id);
+              console.log(`📝 Updated existing concept: ${newEntity.name}`);
+            } else {
+              const createdEntity = await storage.createConcept({
+                profileId: profileId,
+                canonicalName: newEntity.name,
+                category: newEntity.disambiguation,
+                description: newEntity.context
+              });
+              if (createdEntity?.id && !conceptIds.includes(createdEntity.id)) {
+                conceptIds.push(createdEntity.id);
+                entitiesCreated++;
+                console.log(`✨ Created new concept: ${newEntity.name}`);
+              }
+            }
+          } else if (newEntity.type === 'ITEM') {
+            existingEntity = this.findMatchingEntity(
+              existingEntities.items,
+              newEntity.name,
+              []
+            );
+            
+            if (existingEntity) {
+              const updatedDescription = this.mergeEntityContext(
+                existingEntity.description || '',
+                newEntity.context
+              );
+              await storage.updateItem(existingEntity.id, { description: updatedDescription });
+              if (!itemIds.includes(existingEntity.id)) itemIds.push(existingEntity.id);
+              console.log(`📝 Updated existing item: ${newEntity.name}`);
+            } else {
+              const createdEntity = await storage.createItem({
+                profileId: profileId,
+                canonicalName: newEntity.name,
+                type: newEntity.disambiguation,
+                description: newEntity.context
+              });
+              if (createdEntity?.id && !itemIds.includes(createdEntity.id)) {
+                itemIds.push(createdEntity.id);
+                entitiesCreated++;
+                console.log(`✨ Created new item: ${newEntity.name}`);
+              }
+            }
+          } else if (newEntity.type === 'MISC') {
+            existingEntity = this.findMatchingEntity(
+              existingEntities.misc,
+              newEntity.name,
+              []
+            );
+            
+            if (existingEntity) {
+              const updatedDescription = this.mergeEntityContext(
+                existingEntity.description || '',
+                newEntity.context
+              );
+              await storage.updateMiscEntity(existingEntity.id, { description: updatedDescription });
+              if (!miscIds.includes(existingEntity.id)) miscIds.push(existingEntity.id);
+              console.log(`📝 Updated existing misc entity: ${newEntity.name}`);
+            } else {
+              const createdEntity = await storage.createMiscEntity({
+                profileId: profileId,
+                canonicalName: newEntity.name,
+                type: newEntity.disambiguation,
+                description: newEntity.context
+              });
+              if (createdEntity?.id && !miscIds.includes(createdEntity.id)) {
+                miscIds.push(createdEntity.id);
+                entitiesCreated++;
+                console.log(`✨ Created new misc entity: ${newEntity.name}`);
+              }
+            }
           }
         } catch (error) {
           console.error(`Error processing ${newEntity.type} entity:`, error);
@@ -652,11 +785,14 @@ Be conservative with matches - only match if confidence > 0.7`;
         personIds,
         placeIds,
         eventIds,
+        conceptIds,
+        itemIds,
+        miscIds,
         entitiesCreated
       };
     } catch (error) {
       console.error("Error processing memory for entity linking:", error);
-      return { personIds: [], placeIds: [], eventIds: [], entitiesCreated: 0 };
+      return { personIds: [], placeIds: [], eventIds: [], conceptIds: [], itemIds: [], miscIds: [], entitiesCreated: 0 };
     }
   }
 

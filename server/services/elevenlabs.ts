@@ -154,15 +154,15 @@ class ElevenLabsService {
     if (context?.useAI !== false && context?.contentType) {
       try {
         console.log(`🎭 Generating AI emotion tags for ${context.contentType}`);
-        const aiTags = await emotionTagGenerator.generateEmotionTags({
+        
+        // 🚀 NEW: Use the enhanced dialogue generator (ElevenLabs Best Practices)
+        // This replaces the old sectioned delivery with a smarter full-text enhancer
+        enhancedText = await emotionTagGenerator.enhanceDialogue(text, {
           content: text,
           contentType: context.contentType,
           personality: context.personality,
           mood: context.mood
         });
-
-        // Apply AI-generated tags
-        enhancedText = this.applySectionedDeliveryWithAI(text, aiTags);
         
         // v3-compatible settings: ONLY stability (0.0 = "Creative" mode for maximum Audio Tag responsiveness)
         settings = voiceSettings || {
@@ -170,7 +170,7 @@ class ElevenLabsService {
           seed: Math.floor(Math.random() * 1000000) // Optional: for deterministic generation
         };
         
-        console.log(`🎭 Applied AI emotion tags: ${JSON.stringify(aiTags)}`);
+        console.log(`🎭 Applied AI emotion tags via enhancement`);
       } catch (aiError) {
         console.warn('🎭 AI emotion tag generation failed, using fallback:', aiError);
         // Fall back to original hardcoded system
@@ -433,9 +433,12 @@ class ElevenLabsService {
           const detectedEnergy = this.detectTextEnergy(currentSentence);
           const emotionTag = detectedEnergy || emotionStages[stage];
           
-          // Only add [bronx] to the very first tag of the response
+          // Strip existing brackets to prevent double-bracketing [[tag]]
+          const cleanTag = emotionTag.replace(/^\[+|\]+$/g, '');
+
+          // Only add [strong bronx wiseguy accent] to the very first tag of the response
           const isFirstTag = result.length === 0;
-          const finalTag = isFirstTag ? `[bronx][${emotionTag}]` : `[${emotionTag}]`;
+          const finalTag = isFirstTag ? `[strong bronx wiseguy accent][${cleanTag}]` : `[${cleanTag}]`;
           
           if (result.trim()) {
             result += ` ${finalTag} ${currentSentence.trim()}`;
@@ -466,6 +469,37 @@ class ElevenLabsService {
     
     console.log(`🎭 Applied emotion tags across ${totalSentences} sentences`);
     return result;
+  }
+
+  // 🔥 NEW: Detect text energy for dynamic tag overrides
+  private detectTextEnergy(text: string): string | null {
+    // SHOUTING: All caps (at least 4 words or 20 chars)
+    const capsMatch = text.match(/[A-Z]{3,}/g);
+    const capsLength = capsMatch ? capsMatch.join('').length : 0;
+    const isShouting = capsLength > 15 || (capsMatch && capsMatch.length > 3);
+    
+    if (isShouting) {
+      // Check for specific keywords to refine the shouting emotion
+      if (text.includes('!') && (text.includes('?') || text.toLowerCase().includes('what'))) {
+        return '[incredulous shouting]';
+      }
+      if (text.toLowerCase().includes('laugh') || text.toLowerCase().includes('funny') || text.toLowerCase().includes('joke')) {
+        return '[manic laughter]';
+      }
+      return '[yelling furiously]';
+    }
+    
+    // LAUGHTER: Detect laughter keywords
+    if (/\b(haha|hehe|lol|lmao|rofl)\b/i.test(text) || text.includes('😂') || text.includes('🤣')) {
+      return '[laughing]';
+    }
+    
+    // WHISPERING: Detect whispering keywords or parentheses
+    if (text.startsWith('(') && text.endsWith(')')) {
+      return '[whispering]';
+    }
+    
+    return null;
   }
 
   public applySectionedDeliveryWithAI(text: string, aiTags: {hook: string, body: string, cta: string}): string {
@@ -514,10 +548,13 @@ class ElevenLabsService {
             tagIndex++;
           }
           
+          // Strip existing brackets to prevent double-bracketing [[tag]]
+          const cleanTag = emotionTag.replace(/^\[+|\]+$/g, '');
+
           // CRITICAL: Use [strong bronx wiseguy accent][emotion] double-tag pattern ONLY for the first tag
           // Subsequent tags should be single [emotion] tags
           const isFirstTag = result.length === 0;
-          const finalTag = isFirstTag ? `[strong bronx wiseguy accent]${emotionTag}` : emotionTag;
+          const finalTag = isFirstTag ? `[strong bronx wiseguy accent][${cleanTag}]` : `[${cleanTag}]`;
           
           if (result.trim()) {
             result += ` ${finalTag} ${currentSentence.trim()}`;
@@ -540,7 +577,14 @@ class ElevenLabsService {
     
     // Handle any remaining text (edge case)
     if (currentSentence.trim()) {
-      result += ` ${aiTags.cta} ${currentSentence.trim()}`;
+      // Strip existing brackets to prevent double-bracketing [[tag]]
+      const cleanTag = aiTags.cta.replace(/^\[+|\]+$/g, '');
+      
+      // Check if this is the first tag (unlikely but possible if text had no punctuation)
+      const isFirstTag = result.length === 0;
+      const finalTag = isFirstTag ? `[strong bronx wiseguy accent][${cleanTag}]` : `[${cleanTag}]`;
+
+      result += ` ${finalTag} ${currentSentence.trim()}`;
       console.log(`🎭 Applied final CTA tag to remaining text: "${currentSentence.substring(0, 30)}..."`);
     }
     

@@ -34,7 +34,7 @@ export default function AppShell({ children, activeProfile }: AppShellProps) {
         <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
             {/* Top Bar */}
             <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                <div className="container flex h-16 items-center justify-between px-4">
+                <div className="w-full px-4 md:px-8 flex h-16 items-center justify-between">
                     {/* Logo & Title */}
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary">
@@ -79,8 +79,8 @@ export default function AppShell({ children, activeProfile }: AppShellProps) {
 
                 {/* Tab Navigation */}
                 <div className="border-t bg-muted/30">
-                    <div className="container">
-                        <nav className="flex items-center gap-1 overflow-x-auto px-2" role="tablist">
+                    <div className="w-full px-4 md:px-8">
+                        <nav className="flex items-center gap-1 overflow-x-auto">
                             {tabs.map((tab) => (
                                 <button
                                     key={tab.id}
@@ -92,8 +92,7 @@ export default function AppShell({ children, activeProfile }: AppShellProps) {
                                             ? "text-primary"
                                             : "text-muted-foreground"
                                     )}
-                                    role="tab"
-                                    aria-selected={activeTab.id === tab.id}
+                                    aria-current={activeTab.id === tab.id ? "page" : undefined}
                                 >
                                     <i className={`fas ${tab.icon}`} />
                                     <span className="hidden sm:inline">{tab.label}</span>
@@ -108,7 +107,7 @@ export default function AppShell({ children, activeProfile }: AppShellProps) {
             </header>
 
             {/* Main Content */}
-            <main className="container py-6">
+            <main className="w-full px-4 md:px-8 py-6">
                 {children}
             </main>
         </div>

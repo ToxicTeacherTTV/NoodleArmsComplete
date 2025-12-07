@@ -180,6 +180,12 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     if (!isSupported) return;
 
     if (audioRef.current) {
+      // Prevent event handlers from firing
+      audioRef.current.onended = null;
+      audioRef.current.onpause = null;
+      audioRef.current.onplay = null;
+      audioRef.current.onerror = null;
+      
       audioRef.current.pause();
       audioRef.current = null;
     }

@@ -17,6 +17,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2025-12-07
+
+### Fixed - Critical Vector Crash
+- **Vector Parsing Fix:** Fixed a server crash (`SyntaxError: Unexpected non-whitespace character after JSON`) caused by `pgvector` returning native Arrays instead of JSON strings.
+  - Applied robust parsing logic to `embeddingService.ts`, `memoryDeduplicator.ts`, and `documentDuplicateDetector.ts`.
+  - Now handles: Native Arrays, JSON strings, and raw Postgres strings (e.g., `"{0.1,0.2}"`).
+
+### Added - Arc Raiders Personality Mode
+- **Sticky Context:** Nicky now remembers you are talking about "Arc Raiders" for up to 6 messages, even if you don't mention the game name explicitly.
+- **The Squad:** Added specific family members for Arc Raiders context:
+  - **Cousin Vinny:** The Heavy who refuses to use shields.
+  - **Uncle Paulie:** The Sniper with bad eyesight who blames lag.
+  - **Little Anthony:** The Loot Goblin who steals everything.
+- **Creative Freedom:** Explicitly authorized Nicky to "make shit up," invent glitches, and exaggerate stories for comedic effect.
+
+### Fixed - Fact Extraction
+- **Scope Expansion:** Updated `gemini.ts` to explicitly extract "Game Knowledge" (mechanics, strategies, maps) instead of just lore/story.
+- **Result:** Game guides and patch notes now correctly generate facts instead of returning "Zero facts found."
+
 ## [1.1.0] - 2025-11-10
 
 ### Added - Vector Embeddings & Semantic Search

@@ -91,6 +91,21 @@ This document tracks suggested improvements and their implementation status.
 
 **Files:** `server/services/intelligenceEngine.ts`
 
+### Debug Mode Toggle ✅ COMPLETED
+**Status:** DEPLOYED - Full observability into AI decision making
+
+**Changes Made:**
+- ✅ Updated `anthropic.ts` and `gemini.ts` to return structured `debugInfo` (scores, retrieval methods)
+- ✅ Updated `shared/schema.ts` to store `debug_info` in message metadata
+- ✅ Updated `client/src/components/chat-panel.tsx` to visualize memory scores and sources
+- ✅ Added "Debug Mode" toggle to UI that reveals:
+  - Memory retrieval scores (0-100%)
+  - Retrieval method (semantic vs keyword)
+  - Source document/memory ID
+  - Context usage stats
+
+**Files:** `server/services/anthropic.ts`, `server/services/gemini.ts`, `server/routes.ts`, `shared/schema.ts`, `client/src/components/chat-panel.tsx`
+
 ### Intelligence Dashboard Per-Cluster Loading ✅ COMPLETED
 **Status:** DEPLOYED - Individual cluster merge buttons work correctly
 
