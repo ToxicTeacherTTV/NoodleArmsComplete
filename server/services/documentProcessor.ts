@@ -8,6 +8,7 @@ import { conversationParser } from './conversationParser';
 import { entityExtraction } from './entityExtraction';
 import natural from 'natural';
 import { encoding_for_model } from 'tiktoken';
+import { AIModel } from '@shared/modelSelection';
 
 interface DocumentChunk {
   content: string;
@@ -136,18 +137,24 @@ class DocumentProcessor {
   }
 
   // 🚀 NEW: Public method for reprocessing documents without full pipeline
-  async reprocessDocument(profileId: string, extractedContent: string, filename: string, documentId: string): Promise<void> {
+  async reprocessDocument(profileId: string, extractedContent: string, filename: string, documentId: string, modelOverride?: AIModel): Promise<void> {
     console.log(`🔄 Reprocessing document ${filename} for enhanced narrative context...`);
+    if (modelOverride) {
+      console.log(`🤖 Using model override: ${modelOverride}`);
+    }
 
     // Call the private hierarchical extraction method directly
-    await this.extractAndStoreHierarchicalKnowledge(profileId, extractedContent, filename, documentId);
+    await this.extractAndStoreHierarchicalKnowledge(profileId, extractedContent, filename, documentId, modelOverride);
 
     console.log(`✅ Document reprocessing completed for ${filename}`);
   }
 
   // 🎯 BACKGROUND: Start entity extraction in the background without blocking
-  async startBackgroundProcessing(profileId: string, extractedContent: string, filename: string, documentId: string): Promise<void> {
+  async startBackgroundProcessing(profileId: string, extractedContent: string, filename: string, documentId: string, modelOverride?: AIModel): Promise<void> {
     console.log(`🚀 Starting background processing for ${filename}...`);
+    if (modelOverride) {
+      console.log(`🤖 Using model override: ${modelOverride}`);
+    }
 
     // Update status to indicate processing has started
     await storage.updateDocument(documentId, {
@@ -158,7 +165,7 @@ class DocumentProcessor {
     // Run extraction in the background (don't await)
     setImmediate(async () => {
       try {
-        await this.extractAndStoreHierarchicalKnowledgeInBackground(profileId, extractedContent, filename, documentId);
+        await this.extractAndStoreHierarchicalKnowledgeInBackground(profileId, extractedContent, filename, documentId, modelOverride);
 
         // Mark as completed
         await storage.updateDocument(documentId, {
@@ -184,7 +191,8 @@ class DocumentProcessor {
     profileId: string,
     content: string,
     filename: string,
-    documentId: string
+    documentId: string,
+    modelOverride?: AIModel
   ): Promise<void> {
     console.log(`🔄 Running FULL entity extraction in background for ${filename}...`);
 
@@ -194,7 +202,7 @@ class DocumentProcessor {
     try {
       // Just call the full extraction method and update progress along the way
       // This does ALL the entity extraction, story parsing, etc.
-      await this.extractAndStoreHierarchicalKnowledgeWithProgress(profileId, content, filename, documentId);
+      await this.extractAndStoreHierarchicalKnowledgeWithProgress(profileId, content, filename, documentId, modelOverride);
 
       console.log(`✅ Full background extraction completed for ${filename}`);
     } catch (error) {
@@ -208,14 +216,15 @@ class DocumentProcessor {
     profileId: string,
     content: string,
     filename: string,
-    documentId: string
+    documentId: string,
+    modelOverride?: AIModel
   ): Promise<void> {
     // Step 1: Chunk large documents to prevent API overload
     await storage.updateDocument(documentId, { processingProgress: 10 });
     console.log(`📖 Processing full document content (${content.length} chars)...`);
 
-    // Chunk the content first if it's too large (>100k chars = ~25k tokens)
-    const MAX_CHUNK_SIZE = 100000; // ~25k tokens
+    // Chunk the content first if it's too large (>50k chars = ~12k tokens)
+    const MAX_CHUNK_SIZE = 50000; // Reduced from 100k to prevent timeouts
     const chunks: string[] = [];
 
     if (content.length > MAX_CHUNK_SIZE) {
@@ -234,21 +243,42 @@ class DocumentProcessor {
     // Step 2: Extract stories from each chunk (15% -> 40%)
     console.log(`📖 Extracting stories from ${chunks.length} chunks...`);
     const allStories = [];
-
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      console.log(`📝 Processing chunk ${i + 1}/${chunks.length}...`);
-
-      const chunkStories = await aiOrchestrator.extractStoriesFromDocument(chunk, `${filename} (chunk ${i + 1})`, 'gemini-2.5-flash');
-      allStories.push(...chunkStories);
+    
+    // Process in batches to avoid rate limits but speed up processing
+    const BATCH_SIZE = 3;
+    
+    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+      const batchEnd = Math.min(i + BATCH_SIZE, chunks.length);
+      console.log(`📝 Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(chunks.length/BATCH_SIZE)} (Chunks ${i+1}-${batchEnd})...`);
+      
+      const batchPromises = chunks.slice(i, batchEnd).map(async (chunk, index) => {
+        const chunkIndex = i + index;
+        try {
+          return await aiOrchestrator.extractStoriesFromDocument(
+            chunk, 
+            `${filename} (chunk ${chunkIndex + 1})`, 
+            (modelOverride || 'gemini-2.5-flash') as AIModel
+          );
+        } catch (err) {
+          console.error(`❌ Error processing chunk ${chunkIndex + 1}:`, err);
+          return []; // Return empty array on failure so other chunks continue
+        }
+      });
+      
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Flatten results
+      for (const result of batchResults) {
+        allStories.push(...result);
+      }
 
       // Update progress
-      const progress = 15 + Math.floor((i + 1) / chunks.length * 15);
+      const progress = 15 + Math.floor(batchEnd / chunks.length * 15);
       await storage.updateDocument(documentId, { processingProgress: Math.min(progress, 30) });
 
-      // Small delay between chunks to avoid rate limiting
-      if (i < chunks.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      // Small delay between batches
+      if (batchEnd < chunks.length) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
 
@@ -277,14 +307,14 @@ class DocumentProcessor {
 
     await storage.updateDocument(documentId, { processingProgress: 40 });
 
-    // Step 3: Extract atomic facts (40% -> 95%)
+    // Step 3: Extract atomic facts from stories (40% -> 95%)
     console.log(`⚛️ Extracting atomic facts from stories...`);
     let totalAtomicFacts = 0;
 
     for (let i = 0; i < stories.length; i++) {
       const story = stories[i];
       const storyContextSnippet = story.content.substring(0, 200);
-      const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(story.content, storyContextSnippet, 'gemini-2.5-flash');
+      const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(story.content, storyContextSnippet, (modelOverride || 'gemini-2.5-flash') as AIModel);
 
       for (const atomicFact of atomicFacts) {
         const canonicalKey = this.generateCanonicalKey(atomicFact.content);
@@ -465,9 +495,12 @@ class DocumentProcessor {
   }
 
   // New hierarchical extraction method with content-type routing
-  public async extractAndStoreHierarchicalKnowledge(profileId: string, content: string, filename: string, documentId: string): Promise<void> {
+  public async extractAndStoreHierarchicalKnowledge(profileId: string, content: string, filename: string, documentId: string, modelOverride?: AIModel): Promise<void> {
     try {
       console.log(`🧠 Starting hierarchical extraction for ${filename}...`);
+      if (modelOverride) {
+        console.log(`🤖 Using model override: ${modelOverride}`);
+      }
 
       // 🚀 NEW: Classify content type and route accordingly
       const classification = this.classifyContent(content, filename);
@@ -493,7 +526,7 @@ class DocumentProcessor {
 
       // PASS 1: Extract rich stories and contexts (from processed content)
       console.log(`📖 Pass 1: Extracting stories and contexts from processed content...`);
-      const stories = await aiOrchestrator.extractStoriesFromDocument(contentToProcess, filename, 'gemini-2.5-flash');
+      const stories = await aiOrchestrator.extractStoriesFromDocument(contentToProcess, filename, (modelOverride || 'gemini-2.5-flash') as AIModel);
       console.log(`✅ Extracted ${stories.length} stories/contexts`);
 
       const storyIds: string[] = [];
@@ -526,7 +559,7 @@ class DocumentProcessor {
           storyIds.push(storyFact.id);
           console.log(`📚 Stored story: ${story.content.substring(0, 60)}...`);
 
-          // � OPTIMIZATION: Skip per-memory entity extraction, batch it at the end
+          //  OPTIMIZATION: Skip per-memory entity extraction, batch it at the end
           // Entities will be extracted in one batch after all memories are created
         } else {
           console.warn(`⚠️ Failed to store story, skipping atomic fact extraction for this story`);
@@ -548,7 +581,7 @@ class DocumentProcessor {
           const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(
             story.content,
             `${story.type}: ${story.keywords.join(', ')}`,
-            'gemini-2.5-flash'
+            (modelOverride || 'gemini-2.5-flash') as AIModel
           );
 
           console.log(`⚛️ Extracted ${atomicFacts.length} atomic facts from story ${i + 1}`);
@@ -577,7 +610,7 @@ class DocumentProcessor {
 
             totalAtomicFacts++;
 
-            // � OPTIMIZATION: Skip per-memory entity extraction, batch it at the end
+            //  OPTIMIZATION: Skip per-memory entity extraction, batch it at the end
             // Entities will be extracted in one batch after all memories are created
           }
         } catch (error) {
@@ -586,150 +619,42 @@ class DocumentProcessor {
         }
       }
 
-      console.log(`🎉 Hierarchical extraction complete!`);
-      console.log(`📊 Results: ${stories.length} stories, ${totalAtomicFacts} atomic facts`);
+      // Step 3: Extract atomic facts from stories (40% -> 95%)
+      console.log(`⚛️ Extracting atomic facts from stories...`);
+      totalAtomicFacts = 0;
 
-      // 🚀 BATCHED ENTITY EXTRACTION: Extract entities once for ALL memories (stories + atomic facts)
-      const allMemoryIds = [...storyIds, ...atomicFactIds].filter(id => id);
-      console.log(`🔗 Starting batched entity extraction for all ${allMemoryIds.length} memories...`);
-      try {
-        // Get all the memories we just created
-        const allMemoriesFromDb = await storage.getMemoryEntries(profileId, 10000);
-        const allMemories = allMemoriesFromDb
-          .filter(m => allMemoryIds.includes(m.id))
-          .map(m => ({ id: m.id, content: m.content }));
+      for (let i = 0; i < stories.length; i++) {
+        const story = stories[i];
+        const storyContextSnippet = story.content.substring(0, 200);
+        const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(story.content, storyContextSnippet, (modelOverride || 'gemini-2.5-flash') as AIModel);
 
-        if (allMemories.length > 0) {
-          // Get existing entities ONCE
-          const existingEntitiesRaw = await storage.getAllEntities(profileId);
-
-          // Convert null to undefined for type compatibility
-          const existingEntities = {
-            people: existingEntitiesRaw.people.map(p => ({
-              id: p.id,
-              canonicalName: p.canonicalName,
-              disambiguation: p.disambiguation ?? undefined,
-              aliases: p.aliases ?? undefined
-            })),
-            places: existingEntitiesRaw.places.map(p => ({
-              id: p.id,
-              canonicalName: p.canonicalName,
-              locationType: p.locationType ?? undefined,
-              description: p.description ?? undefined
-            })),
-            events: existingEntitiesRaw.events.map(e => ({
-              id: e.id,
-              canonicalName: e.canonicalName,
-              eventDate: e.eventDate ?? undefined,
-              description: e.description ?? undefined
-            }))
-          };
-
-          console.log(`📚 Found ${existingEntities.people.length} people, ${existingEntities.places.length} places, ${existingEntities.events.length} events`);
-
-          // Extract entities from ALL memories in one batch
-          const batchResults = await entityExtraction.extractEntitiesFromMultipleMemories(
-            allMemories,
-            existingEntities
-          );
-
-          let totalEntitiesLinked = 0;
-
-          // Process results and link entities
-          for (const result of batchResults) {
-            if (result.entities.length > 0) {
-              // Disambiguate this memory's entities
-              const disambiguation = await entityExtraction.disambiguateEntities(
-                result.entities,
-                existingEntities
-              );
-
-              const personIds: string[] = [];
-              const placeIds: string[] = [];
-              const eventIds: string[] = [];
-              let entitiesCreated = 0;
-
-              // Process matches
-              for (const match of disambiguation.matches) {
-                if (match.confidence > 0.7) {
-                  if (match.matchType === 'PERSON') personIds.push(match.existingEntityId);
-                  else if (match.matchType === 'PLACE') placeIds.push(match.existingEntityId);
-                  else if (match.matchType === 'EVENT') eventIds.push(match.existingEntityId);
-                }
-              }
-
-              // Create new entities
-              for (const newEntity of disambiguation.newEntities) {
-                try {
-                  if (newEntity.type === 'PERSON') {
-                    const created = await storage.createPerson({
-                      profileId,
-                      canonicalName: newEntity.name,
-                      disambiguation: newEntity.disambiguation,
-                      aliases: newEntity.aliases,
-                      relationship: '',
-                      description: newEntity.context
-                    });
-                    if (created?.id) {
-                      personIds.push(created.id);
-                      entitiesCreated++;
-                    }
-                  } else if (newEntity.type === 'PLACE') {
-                    const created = await storage.createPlace({
-                      profileId,
-                      canonicalName: newEntity.name,
-                      locationType: newEntity.disambiguation,
-                      description: newEntity.context
-                    });
-                    if (created?.id) {
-                      placeIds.push(created.id);
-                      entitiesCreated++;
-                    }
-                  } else if (newEntity.type === 'EVENT') {
-                    const created = await storage.createEvent({
-                      profileId,
-                      canonicalName: newEntity.name,
-                      eventDate: newEntity.disambiguation,
-                      description: newEntity.context,
-                      isCanonical: true
-                    });
-                    if (created?.id) {
-                      eventIds.push(created.id);
-                      entitiesCreated++;
-                    }
-                  }
-                } catch (error) {
-                  console.error(`Error creating ${newEntity.type}:`, error);
-                }
-              }
-
-              // Link this memory to its entities
-              if (personIds.length > 0 || placeIds.length > 0 || eventIds.length > 0) {
-                await storage.linkMemoryToEntities(result.memoryId, {
-                  personIds,
-                  placeIds,
-                  eventIds
-                });
-                totalEntitiesLinked++;
-              }
-
-              if (entitiesCreated > 0) {
-                console.log(`✨ Created ${entitiesCreated} new entities for memory ${result.memoryId.substring(0, 8)}`);
-              }
-            }
-          }
-
-          console.log(`✅ Batched entity extraction complete: linked ${totalEntitiesLinked} memories to entities`);
+        for (const atomicFact of atomicFacts) {
+          const canonicalKey = this.generateCanonicalKey(atomicFact.content);
+          await storage.addMemoryEntry({
+            profileId,
+            type: atomicFact.type,
+            content: atomicFact.content,
+            importance: atomicFact.importance,
+            keywords: atomicFact.keywords,
+            source: filename,
+            sourceId: documentId,
+            canonicalKey,
+            isAtomicFact: true,
+            parentFactId: storyIds[i],
+            storyContext: storyContextSnippet,
+          });
+          totalAtomicFacts++;
         }
-      } catch (error) {
-        console.error(`❌ Batched entity extraction failed:`, error);
-        // Don't fail the whole reprocessing
+
+        // Update progress based on stories processed
+        const progress = 40 + Math.floor((i + 1) / stories.length * 55);
+        await storage.updateDocument(documentId, { processingProgress: Math.min(progress, 95) });
+
+        // Small delay between stories
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
 
-      // Run contradiction detection on atomic facts
-      console.log(`🔍 Running contradiction detection...`);
-      // Note: Contradiction detection runs automatically during memory entry creation
-
+      console.log(`✅ Extracted ${totalAtomicFacts} atomic facts from ${stories.length} stories`);
     } catch (error) {
       console.error('❌ Hierarchical knowledge extraction failed:', error);
       // Fallback to legacy extraction

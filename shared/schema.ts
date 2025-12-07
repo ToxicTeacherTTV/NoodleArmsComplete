@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, json, boolean, uniqueIndex, jsonb, customType } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, json, boolean, uniqueIndex, jsonb, customType, vector, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -62,6 +62,7 @@ export const messages = pgTable("messages", {
     speaker?: string;
     processingTime?: number;
     retrieved_context?: string;
+    debug_info?: any;
   }>(),
   createdAt: timestamp("created_at").default(sql`now()`),
 });
@@ -133,7 +134,7 @@ export const memoryEntries = pgTable("memory_entries", {
   firstSeenAt: timestamp("first_seen_at").default(sql`now()`),
   lastSeenAt: timestamp("last_seen_at").default(sql`now()`),
   contradictionGroupId: varchar("contradiction_group_id"), // Groups conflicting facts together
-  canonicalKey: text("canonical_key").notNull(), // Unique key for fact deduplication
+  canonicalKey: text("canonical_key"), // Unique key for fact deduplication
   status: text("status").$type<'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'>().default('ACTIVE'),
   isProtected: boolean("is_protected").default(false), // Protected facts can't be deprecated by contradictions
   // Hierarchical fact support  
@@ -141,7 +142,7 @@ export const memoryEntries = pgTable("memory_entries", {
   isAtomicFact: boolean("is_atomic_fact").default(false), // True for granular facts extracted from stories
   storyContext: text("story_context"), // Brief context about which part of the story this relates to
   // Semantic search support
-  embedding: text("embedding"), // JSON array of vector embeddings for semantic search
+  embedding: vector("embedding", { dimensions: 768 }), // Vector embeddings for semantic search
   embeddingModel: text("embedding_model"), // Model used to generate embedding (e.g., 'gemini-embedding-001')
   embeddingUpdatedAt: timestamp("embedding_updated_at"), // When embedding was last generated
   // PostgreSQL Full-Text Search support
@@ -152,6 +153,8 @@ export const memoryEntries = pgTable("memory_entries", {
 }, (table) => ({
   // Unique constraint to prevent duplicate canonical keys per profile
   uniqueCanonicalKey: uniqueIndex("unique_profile_canonical_key_idx").on(table.profileId, table.canonicalKey),
+  // Vector similarity search index
+  embeddingIndex: index("memory_embedding_idx").using("hnsw", table.embedding.op("vector_cosine_ops")),
 }));
 
 // === NEW: Entity Disambiguation System ===
@@ -179,7 +182,7 @@ export const people = pgTable("people", {
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 }, (table) => ({
-  uniqueCanonicalName: uniqueIndex("unique_person_profile_name_idx").on(table.profileId, table.canonicalName),
+  // uniqueCanonicalName: uniqueIndex("unique_person_profile_name_idx").on(table.profileId, table.canonicalName),
 }));
 
 // The "Atlas" for all significant locations
@@ -192,7 +195,7 @@ export const places = pgTable("places", {
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 }, (table) => ({
-  uniqueCanonicalName: uniqueIndex("unique_place_profile_name_idx").on(table.profileId, table.canonicalName),
+  // uniqueCanonicalName: uniqueIndex("unique_place_profile_name_idx").on(table.profileId, table.canonicalName),
 }));
 
 // The "Chronicle" for the timeline of events
@@ -206,8 +209,41 @@ export const events = pgTable("events", {
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 }, (table) => ({
-  uniqueCanonicalName: uniqueIndex("unique_event_profile_name_idx").on(table.profileId, table.canonicalName),
+  // uniqueCanonicalName: uniqueIndex("unique_event_profile_name_idx").on(table.profileId, table.canonicalName),
 }));
+
+// The "Concepts" for abstract ideas, lore terms, and recurring themes
+export const concepts = pgTable("concepts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  canonicalName: text("canonical_name").notNull(),
+  description: text("description"),
+  category: text("category"), // e.g., "Game Mechanic", "Philosophy", "Inside Joke"
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+// The "Items" for physical objects, game items, or significant props
+export const items = pgTable("items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  canonicalName: text("canonical_name").notNull(),
+  description: text("description"),
+  type: text("type"), // e.g., "Weapon", "Food", "Tool"
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+// The "Misc" for anything that doesn't fit elsewhere
+export const miscEntities = pgTable("misc_entities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  canonicalName: text("canonical_name").notNull(),
+  description: text("description"),
+  type: text("type"), // Flexible categorization
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
 
 // Junction tables for many-to-many memory-entity relationships
 export const memoryPeopleLinks = pgTable("memory_people_links", {
@@ -216,7 +252,7 @@ export const memoryPeopleLinks = pgTable("memory_people_links", {
   personId: varchar("person_id").references(() => people.id, { onDelete: 'cascade' }).notNull(),
   createdAt: timestamp("created_at").default(sql`now()`),
 }, (table) => ({
-  uniqueMemoryPerson: uniqueIndex("unique_memory_person_link_idx").on(table.memoryId, table.personId),
+  // uniqueMemoryPerson: uniqueIndex("unique_memory_person_link_idx").on(table.memoryId, table.personId),
 }));
 
 export const memoryPlaceLinks = pgTable("memory_place_links", {
@@ -225,7 +261,7 @@ export const memoryPlaceLinks = pgTable("memory_place_links", {
   placeId: varchar("place_id").references(() => places.id, { onDelete: 'cascade' }).notNull(),
   createdAt: timestamp("created_at").default(sql`now()`),
 }, (table) => ({
-  uniqueMemoryPlace: uniqueIndex("unique_memory_place_link_idx").on(table.memoryId, table.placeId),
+  // uniqueMemoryPlace: uniqueIndex("unique_memory_place_link_idx").on(table.memoryId, table.placeId),
 }));
 
 export const memoryEventLinks = pgTable("memory_event_links", {
@@ -234,8 +270,29 @@ export const memoryEventLinks = pgTable("memory_event_links", {
   eventId: varchar("event_id").references(() => events.id, { onDelete: 'cascade' }).notNull(),
   createdAt: timestamp("created_at").default(sql`now()`),
 }, (table) => ({
-  uniqueMemoryEvent: uniqueIndex("unique_memory_event_link_idx").on(table.memoryId, table.eventId),
+  // uniqueMemoryEvent: uniqueIndex("unique_memory_event_link_idx").on(table.memoryId, table.eventId),
 }));
+
+export const memoryConceptLinks = pgTable("memory_concept_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  memoryId: varchar("memory_id").references(() => memoryEntries.id, { onDelete: 'cascade' }).notNull(),
+  conceptId: varchar("concept_id").references(() => concepts.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+export const memoryItemLinks = pgTable("memory_item_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  memoryId: varchar("memory_id").references(() => memoryEntries.id, { onDelete: 'cascade' }).notNull(),
+  itemId: varchar("item_id").references(() => items.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+export const memoryMiscLinks = pgTable("memory_misc_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  memoryId: varchar("memory_id").references(() => memoryEntries.id, { onDelete: 'cascade' }).notNull(),
+  miscId: varchar("misc_id").references(() => miscEntities.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
 
 // Duplicate Scan Results - Persistent storage for deep scan results
 export const duplicateScanResults = pgTable("duplicate_scan_results", {
@@ -357,6 +414,30 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   memoryEntries: many(memoryEntries),
 }));
 
+export const conceptsRelations = relations(concepts, ({ one, many }) => ({
+  profile: one(profiles, {
+    fields: [concepts.profileId],
+    references: [profiles.id],
+  }),
+  memoryEntries: many(memoryEntries),
+}));
+
+export const itemsRelations = relations(items, ({ one, many }) => ({
+  profile: one(profiles, {
+    fields: [items.profileId],
+    references: [profiles.id],
+  }),
+  memoryEntries: many(memoryEntries),
+}));
+
+export const miscEntitiesRelations = relations(miscEntities, ({ one, many }) => ({
+  profile: one(profiles, {
+    fields: [miscEntities.profileId],
+    references: [profiles.id],
+  }),
+  memoryEntries: many(memoryEntries),
+}));
+
 // Insert schemas
 export const insertProfileSchema = createInsertSchema(profiles).omit({
   id: true,
@@ -421,6 +502,24 @@ export const insertEventSchema = createInsertSchema(events).omit({
   updatedAt: true,
 });
 
+export const insertConceptSchema = createInsertSchema(concepts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertItemSchema = createInsertSchema(items).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMiscEntitySchema = createInsertSchema(miscEntities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertMemoryPeopleLinkSchema = createInsertSchema(memoryPeopleLinks).omit({
   id: true,
   createdAt: true,
@@ -432,6 +531,21 @@ export const insertMemoryPlaceLinkSchema = createInsertSchema(memoryPlaceLinks).
 });
 
 export const insertMemoryEventLinkSchema = createInsertSchema(memoryEventLinks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMemoryConceptLinkSchema = createInsertSchema(memoryConceptLinks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMemoryItemLinkSchema = createInsertSchema(memoryItemLinks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMemoryMiscLinkSchema = createInsertSchema(memoryMiscLinks).omit({
   id: true,
   createdAt: true,
 });
@@ -461,12 +575,24 @@ export type Place = typeof places.$inferSelect;
 export type InsertPlace = z.infer<typeof insertPlaceSchema>;
 export type Event = typeof events.$inferSelect;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
+export type Concept = typeof concepts.$inferSelect;
+export type InsertConcept = z.infer<typeof insertConceptSchema>;
+export type Item = typeof items.$inferSelect;
+export type InsertItem = z.infer<typeof insertItemSchema>;
+export type MiscEntity = typeof miscEntities.$inferSelect;
+export type InsertMiscEntity = z.infer<typeof insertMiscEntitySchema>;
 export type MemoryPeopleLink = typeof memoryPeopleLinks.$inferSelect;
 export type InsertMemoryPeopleLink = z.infer<typeof insertMemoryPeopleLinkSchema>;
 export type MemoryPlaceLink = typeof memoryPlaceLinks.$inferSelect;
 export type InsertMemoryPlaceLink = z.infer<typeof insertMemoryPlaceLinkSchema>;
 export type MemoryEventLink = typeof memoryEventLinks.$inferSelect;
 export type InsertMemoryEventLink = z.infer<typeof insertMemoryEventLinkSchema>;
+export type MemoryConceptLink = typeof memoryConceptLinks.$inferSelect;
+export type InsertMemoryConceptLink = z.infer<typeof insertMemoryConceptLinkSchema>;
+export type MemoryItemLink = typeof memoryItemLinks.$inferSelect;
+export type InsertMemoryItemLink = z.infer<typeof insertMemoryItemLinkSchema>;
+export type MemoryMiscLink = typeof memoryMiscLinks.$inferSelect;
+export type InsertMemoryMiscLink = z.infer<typeof insertMemoryMiscLinkSchema>;
 
 // Emergent Lore System - Nicky's ongoing life events
 export const loreEvents = pgTable("lore_events", {
@@ -697,6 +823,7 @@ export const podcastEpisodes = pgTable("podcast_episodes", {
   profileId: varchar("profile_id").references(() => profiles.id).notNull(),
   // RSS feed metadata
   guid: text("guid"), // Unique episode identifier from RSS feed
+  podcastName: text("podcast_name").default('Camping Them Softly'), // Distinguish between shows
   episodeNumber: integer("episode_number"),
   seasonNumber: integer("season_number"),
   title: text("title").notNull(),

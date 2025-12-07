@@ -222,12 +222,14 @@ export default function JazzDashboard() {
     }
   }, [conversationMessages]);
 
-  // Initialize conversation on mount
+  // Initialize conversation on mount - REMOVED to prevent blank sessions
+  /*
   useEffect(() => {
     if (!currentConversationId && activeProfile?.id) {
       createConversationMutation.mutate();
     }
   }, [activeProfile?.id]);
+  */
 
   // Handle speech recognition transcript - always update pending transcript (manual mode)
   useEffect(() => {
@@ -249,26 +251,41 @@ export default function JazzDashboard() {
       // Capture final text from available sources to avoid race conditions
       const finalText = (transcript || interimTranscript || pendingTranscript).trim();
       
-      if (finalText && currentConversationId) {
-        const userMessage: Message = {
-          id: nanoid(),
-          conversationId: currentConversationId,
-          type: 'USER',
-          content: finalText,
-          rating: null,
-          metadata: { voice: true },
-          createdAt: new Date().toISOString(),
-        };
+      // Allow sending even if no conversation ID yet (will be created)
+      if (finalText) {
+        const handleVoiceSend = async () => {
+            let activeId = currentConversationId;
+            if (!activeId) {
+                try {
+                    const newConv = await createConversationMutation.mutateAsync();
+                    activeId = newConv.id;
+                } catch (e) {
+                    console.error("Failed to create conversation for voice", e);
+                    return;
+                }
+            }
 
-        setMessages(prev => [...prev, userMessage]);
-        
-        // Send to backend
-        sendMessageMutation.mutate({
-          conversationId: currentConversationId,
-          type: 'USER',
-          content: finalText,
-          metadata: { voice: true },
-        });
+            const userMessage: Message = {
+              id: nanoid(),
+              conversationId: activeId,
+              type: 'USER',
+              content: finalText,
+              rating: null,
+              metadata: { voice: true },
+              createdAt: new Date().toISOString(),
+            };
+
+            setMessages(prev => [...prev, userMessage]);
+            
+            // Send to backend
+            sendMessageMutation.mutate({
+              conversationId: activeId,
+              type: 'USER',
+              content: finalText,
+              metadata: { voice: true },
+            });
+        };
+        handleVoiceSend();
       }
       
       // Clear pending transcript
@@ -319,7 +336,8 @@ export default function JazzDashboard() {
 
   // Handle new chat creation
   const handleNewChat = () => {
-    createConversationMutation.mutate();
+    // Don't create immediately, just clear state
+    setCurrentConversationId("");
     setMessages([]);
   };
 
@@ -492,6 +510,13 @@ export default function JazzDashboard() {
                             }
                           }
                         }}
+                        onStopAudio={() => {
+                          if (appMode === 'PODCAST') {
+                            stopSpeakingElevenLabs();
+                          } else {
+                            stopSpeaking();
+                          }
+                        }}
                         onReplayAudio={() => {
                           if (appMode === 'PODCAST') {
                             replayElevenLabs();
@@ -527,7 +552,7 @@ export default function JazzDashboard() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <form
-                        onSubmit={(e) => {
+                        onSubmit={async (e) => {
                           e.preventDefault();
                           const formData = new FormData(e.target as HTMLFormElement);
                           const message = (formData.get('message') as string) || '';
@@ -536,9 +561,20 @@ export default function JazzDashboard() {
                             return;
                           }
 
+                          let activeId = currentConversationId;
+                          if (!activeId) {
+                              try {
+                                  const newConv = await createConversationMutation.mutateAsync();
+                                  activeId = newConv.id;
+                              } catch (err) {
+                                  console.error("Failed to create conversation", err);
+                                  return;
+                              }
+                          }
+
                           const userMessage: Message = {
                             id: nanoid(),
-                            conversationId: currentConversationId,
+                            conversationId: activeId,
                             type: 'USER',
                             content: trimmed,
                             createdAt: new Date().toISOString(),
@@ -549,7 +585,7 @@ export default function JazzDashboard() {
                           setMessages(prev => [...prev, userMessage]);
                           setAiStatus('PROCESSING');
                           sendMessageMutation.mutate({
-                            conversationId: currentConversationId,
+                            conversationId: activeId,
                             type: 'USER',
                             content: trimmed,
                           });

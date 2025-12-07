@@ -129,7 +129,24 @@ class DocumentDuplicateDetector {
         if (!doc.embedding) continue;
         
         try {
-          const docEmbedding = JSON.parse(doc.embedding);
+          let docEmbedding: number[];
+          if (Array.isArray(doc.embedding)) {
+            docEmbedding = doc.embedding;
+          } else if (typeof doc.embedding === 'string') {
+            try {
+              docEmbedding = JSON.parse(doc.embedding);
+            } catch (e) {
+              const cleaned = doc.embedding.replace(/^\[|\]$/g, '');
+              docEmbedding = cleaned.split(',').map(n => parseFloat(n.trim()));
+              if (docEmbedding.some(isNaN)) {
+                 console.error(`[DocumentDuplicateDetector] Failed to parse embedding: ${doc.embedding.substring(0, 50)}...`);
+                 continue;
+              }
+            }
+          } else {
+            continue;
+          }
+          
           const similarity = embeddingService.cosineSimilarity(embedding, docEmbedding);
           
           if (similarity >= threshold) {

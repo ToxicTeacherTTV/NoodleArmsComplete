@@ -580,13 +580,23 @@ Focus on actionable flags that help maintain Nicky's character consistency.`;
           }
           
           // Link memory to entities if any were found
-          if (entityResult.personIds.length > 0 || entityResult.placeIds.length > 0 || entityResult.eventIds.length > 0) {
+          if (
+            entityResult.personIds.length > 0 || 
+            entityResult.placeIds.length > 0 || 
+            entityResult.eventIds.length > 0 ||
+            entityResult.conceptIds.length > 0 ||
+            entityResult.itemIds.length > 0 ||
+            entityResult.miscIds.length > 0
+          ) {
             await storage.linkMemoryToEntities(memoryId, entityResult);
             
             console.log(`🔗 Linked memory ${memoryId} to entities: ${[
               entityResult.personIds.length > 0 ? `${entityResult.personIds.length} people` : null,
               entityResult.placeIds.length > 0 ? `${entityResult.placeIds.length} places` : null,
-              entityResult.eventIds.length > 0 ? `${entityResult.eventIds.length} events` : null
+              entityResult.eventIds.length > 0 ? `${entityResult.eventIds.length} events` : null,
+              entityResult.conceptIds.length > 0 ? `${entityResult.conceptIds.length} concepts` : null,
+              entityResult.itemIds.length > 0 ? `${entityResult.itemIds.length} items` : null,
+              entityResult.miscIds.length > 0 ? `${entityResult.miscIds.length} misc` : null
             ].filter(Boolean).join(', ')}`);
           }
         } catch (entityError) {

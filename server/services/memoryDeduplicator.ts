@@ -19,6 +19,7 @@ export interface DuplicateGroup {
   similarity: number;
   mergedContent: string;
   combinedImportance: number;
+  combinedConfidence: number;
   combinedKeywords: string[];
   combinedRelationships: string[];
 }
@@ -235,6 +236,7 @@ export class MemoryDeduplicator {
               1.0,
             mergedContent: this.mergeContent(currentMemory, duplicates),
             combinedImportance: this.calculateCombinedImportance(currentMemory, duplicates),
+            combinedConfidence: this.calculateCombinedConfidence(currentMemory, duplicates),
             combinedKeywords: this.mergeKeywords(currentMemory, duplicates),
             combinedRelationships: this.mergeRelationships(currentMemory, duplicates)
           };
@@ -383,6 +385,25 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
     // Use max importance but boost slightly based on multiple confirmations
     return Math.min(10, Math.round(maxImportance + (avgImportance * 0.1)));
   }
+
+  /**
+   * Calculate combined confidence score
+   * Boosts confidence when multiple sources confirm the same fact
+   */
+  private calculateCombinedConfidence(master: MemoryEntry, duplicates: MemoryEntry[]): number {
+    const allConfidence = [master.confidence || 50, ...duplicates.map(d => d.confidence || 50)];
+    const maxConfidence = Math.max(...allConfidence);
+    
+    // If any source is fully confident/protected (100), the result is 100
+    if (maxConfidence >= 100) return 100;
+
+    // Boost confidence based on number of corroborating sources
+    // +5% for each duplicate confirmation
+    const boost = duplicates.length * 5;
+    
+    // Cap at 95% (only manual protection/verification can reach 100%)
+    return Math.min(95, maxConfidence + boost);
+  }
   
   /**
    * Merge keywords from all entries
@@ -446,6 +467,7 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
           .set({
             content: duplicateGroup.mergedContent,
             importance: duplicateGroup.combinedImportance,
+            confidence: duplicateGroup.combinedConfidence,
             keywords: duplicateGroup.combinedKeywords,
             relationships: duplicateGroup.combinedRelationships,
             retrievalCount: (duplicateGroup.masterEntry.retrievalCount || 0) + 
@@ -496,6 +518,7 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
         .set({
           content: duplicateGroup.mergedContent,
           importance: duplicateGroup.combinedImportance,
+          confidence: duplicateGroup.combinedConfidence,
           keywords: duplicateGroup.combinedKeywords,
           relationships: duplicateGroup.combinedRelationships,
           retrievalCount: (duplicateGroup.masterEntry.retrievalCount || 0) + 
@@ -545,17 +568,61 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
 
     console.log(`📊 Processing ${memories.length} memories with stored embeddings...`);
     
+    // 🚀 OPTIMIZATION: Pre-parse all embeddings to avoid JSON.parse in O(N^2) loop
+    console.log('🔄 Pre-parsing embeddings for performance...');
+    const memoriesWithVectors = memories
+      .filter(m => m.embedding)
+      .map(m => {
+        try {
+          let vector: number[];
+          if (Array.isArray(m.embedding)) {
+             vector = m.embedding;
+          } else if (typeof m.embedding === 'string') {
+             try {
+                vector = JSON.parse(m.embedding);
+             } catch (e) {
+                const cleaned = m.embedding.replace(/^\[|\]$/g, '');
+                vector = cleaned.split(',').map(n => parseFloat(n.trim()));
+                if (vector.some(isNaN)) throw e;
+             }
+          } else {
+             return null;
+          }
+          return {
+            id: m.id,
+            content: m.content,
+            vector
+          };
+        } catch (e) {
+          return null;
+        }
+      })
+      .filter((m): m is { id: string; content: string; vector: number[] } => m !== null);
+      
+    console.log(`✅ Successfully parsed ${memoriesWithVectors.length} embeddings`);
+
     const duplicateGroups: DuplicateGroup[] = [];
     const processedIds = new Set<string>();
     
     // Find all duplicate groups using vector embeddings
-    for (const memory of memories) {
+    for (let i = 0; i < memories.length; i++) {
+      const memory = memories[i];
       if (processedIds.has(memory.id)) continue;
       
-      // 🚀 OPTIMIZATION: Use stored embeddings directly (no API call!)
-      const vectorDuplicates = embeddingService.findDuplicatesFromStoredEmbeddings(
-        memory,
-        memories,
+      // Yield to event loop every 50 iterations to prevent blocking
+      if (i % 50 === 0) {
+        await new Promise(resolve => setImmediate(resolve));
+      }
+
+      // Find the vector for the current memory
+      const sourceVectorObj = memoriesWithVectors.find(m => m.id === memory.id);
+      if (!sourceVectorObj) continue;
+      
+      // 🚀 OPTIMIZATION: Use pre-parsed vectors
+      const vectorDuplicates = embeddingService.findDuplicatesFromVectors(
+        memory.id,
+        sourceVectorObj.vector,
+        memoriesWithVectors,
         autoMergeThreshold
       );
       
@@ -578,6 +645,7 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
             1.0,
           mergedContent: this.mergeContent(memory, actualDuplicates),
           combinedImportance: this.calculateCombinedImportance(memory, actualDuplicates),
+          combinedConfidence: this.calculateCombinedConfidence(memory, actualDuplicates),
           combinedKeywords: this.mergeKeywords(memory, actualDuplicates),
           combinedRelationships: this.mergeRelationships(memory, actualDuplicates)
         };
@@ -805,6 +873,39 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
     
     console.log(`📊 Scanning ${memories.length} memories for duplicates using stored embeddings (no API calls needed)...`);
     
+    // 🚀 OPTIMIZATION: Pre-parse all embeddings to avoid JSON.parse in O(N^2) loop
+    console.log('🔄 Pre-parsing embeddings for performance...');
+    const memoriesWithVectors = memories
+      .filter(m => m.embedding)
+      .map(m => {
+        try {
+          let vector: number[];
+          if (Array.isArray(m.embedding)) {
+             vector = m.embedding;
+          } else if (typeof m.embedding === 'string') {
+             try {
+                vector = JSON.parse(m.embedding);
+             } catch (e) {
+                const cleaned = m.embedding.replace(/^\[|\]$/g, '');
+                vector = cleaned.split(',').map(n => parseFloat(n.trim()));
+                if (vector.some(isNaN)) throw e;
+             }
+          } else {
+             return null;
+          }
+          return {
+            id: m.id,
+            content: m.content,
+            vector
+          };
+        } catch (e) {
+          return null;
+        }
+      })
+      .filter((m): m is { id: string; content: string; vector: number[] } => m !== null);
+      
+    console.log(`✅ Successfully parsed ${memoriesWithVectors.length} embeddings`);
+
     const duplicateGroups: Array<{
       masterId: string;
       masterContent: string;
@@ -821,10 +922,20 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
       // Skip if already processed as a duplicate
       if (processedIds.has(memory.id)) continue;
       
-      // 🚀 OPTIMIZATION: Use stored embeddings directly (no API call!)
-      const duplicates = embeddingService.findDuplicatesFromStoredEmbeddings(
-        memory,
-        memories,
+      // Yield to event loop every 50 iterations to prevent blocking
+      if (i % 50 === 0) {
+        await new Promise(resolve => setImmediate(resolve));
+      }
+
+      // Find the vector for the current memory
+      const sourceVectorObj = memoriesWithVectors.find(m => m.id === memory.id);
+      if (!sourceVectorObj) continue;
+      
+      // 🚀 OPTIMIZATION: Use pre-parsed vectors
+      const duplicates = embeddingService.findDuplicatesFromVectors(
+        memory.id,
+        sourceVectorObj.vector,
+        memoriesWithVectors,
         similarityThreshold
       );
       

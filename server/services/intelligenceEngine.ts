@@ -65,12 +65,20 @@ interface IntelligenceSummary {
   actionRequired: number;
   autoHandled: number;
   priorityActions: string[];
+  summary?: {
+    totalIssues: number;
+    highPriority: number;
+    mediumPriority: number;
+    autoHandled: number;
+  };
 }
 
 export class IntelligenceEngine {
   private anthropic: Anthropic;
   private gemini: any;
   private storage: any;
+  private analysisCache: Map<string, { data: IntelligenceSummary, timestamp: number }> = new Map();
+  private CACHE_TTL = 1000 * 60 * 60; // 1 hour cache
 
   constructor() {
     this.storage = storage;
@@ -173,7 +181,7 @@ If no clusters found, return: []`;
     try {
       // 🎯 PRIMARY: Try Gemini first (free tier)
       const geminiResponse = await this.gemini.ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model: "gemini-3-pro-preview",
         config: {
           responseMimeType: "application/json",
           temperature: 0.3
@@ -379,7 +387,7 @@ If no drift detected, return: []`;
     try {
       // 🎯 PRIMARY: Try Gemini first (free tier)
       const geminiResponse = await this.gemini.ai.models.generateContent({
-        model: "gemini-2.5-pro",
+        model: "gemini-3-pro-preview",
         config: {
           responseMimeType: "application/json",
           temperature: 0.3
@@ -732,8 +740,18 @@ If no drift detected, return: []`;
    */
   async runFullIntelligenceAnalysis(
     db: PostgresJsDatabase<any>,
-    profileId: string
+    profileId: string,
+    forceRefresh: boolean = false
   ): Promise<IntelligenceSummary> {
+    // Check cache first
+    if (!forceRefresh) {
+      const cached = this.analysisCache.get(profileId);
+      if (cached && (Date.now() - cached.timestamp < this.CACHE_TTL)) {
+        console.log(`🧠 Returning cached intelligence analysis for profile ${profileId} (Age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`);
+        return cached.data;
+      }
+    }
+
     console.log(`🧠 Running full intelligence analysis for profile ${profileId}`);
 
     // Run analyses individually with error handling to ensure partial success
@@ -783,7 +801,7 @@ If no drift detected, return: []`;
 
     console.log(`✅ Intelligence analysis complete: ${actionRequired} actions needed, ${autoHandled} auto-handled`);
 
-    return {
+    const result: IntelligenceSummary = {
       factClusters: clusterAnalysis || [],
       sourceReliability: sourceReliability || [],
       personalityDrift: personalityDrift || [],
@@ -800,6 +818,14 @@ If no drift detected, return: []`;
       autoHandled,
       priorityActions
     };
+
+    // Update cache
+    this.analysisCache.set(profileId, {
+      data: result,
+      timestamp: Date.now()
+    });
+
+    return result;
   }
 
   /**

@@ -359,6 +359,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update conversation title
+  app.patch('/api/conversations/:id/title', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { title } = req.body;
+      
+      if (!title || typeof title !== 'string' || title.trim().length === 0) {
+        return res.status(400).json({ error: 'Title is required' });
+      }
+      
+      const updated = await storage.updateConversationTitle(id, title.trim());
+      res.json(updated);
+    } catch (error) {
+      console.error('Failed to update conversation title:', error);
+      res.status(500).json({ error: 'Failed to update title' });
+    }
+  });
+
   app.post('/api/conversations/:id/export', async (req, res) => {
     try {
       const { id } = req.params;
@@ -393,7 +411,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { message, conversationId, mode, personalityControl, selectedModel } = req.body;
 
-      console.log(`🤖 Selected AI Model: ${selectedModel || 'default (claude-sonnet-4.5)'}`);
+      console.log(`🤖 Selected AI Model: ${selectedModel || 'default (gemini-3-pro-preview)'}`);
 
       if (!message || !conversationId) {
         return res.status(400).json({ error: 'Message and conversation ID required' });
@@ -407,12 +425,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 🎭 UNIFIED: Get personality with advisory chaos influence (non-mutating)
       const { personalityController } = await import('./services/personalityController');
 
-      // Get base personality from unified controller
-      let basePersonality = await personalityController.getEffectivePersonality();
+      // Get base personality from unified controller (and consume any temporary override)
+      let basePersonality = await personalityController.consumeEffectivePersonality();
 
-      // Apply manual personality control override if provided
+      // Apply manual personality control override if provided (request-scoped)
       if (personalityControl) {
-        basePersonality = await personalityController.createTemporaryOverride(personalityControl);
+        basePersonality = { ...basePersonality, ...personalityControl };
         console.log(`🎭 Manual personality override applied:`, JSON.stringify(personalityControl));
       }
 
@@ -458,7 +476,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 🚀 STREAMING OPTIMIZATION: Check response cache first
       const { responseCache } = await import('./services/responseCache');
-      const cacheKey = responseCache.getCacheKey(message, mode, activeProfile.id);
+      const cacheKey = responseCache.getCacheKey(message, mode, activeProfile.id, controls.preset);
 
       if (responseCache.shouldCache(message, mode)) {
         const cachedResponse = await responseCache.get(cacheKey);
@@ -727,47 +745,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const { elevenlabsService } = await import('./services/elevenlabs');
 
           // 🚀 OPTIMIZATION: Use fast pattern-based arc for STREAMING (no AI call)
-          const useFastMode = mode === 'STREAMING';
+          // UPDATE (Dec 2, 2025): User requested full enhancer for streaming too for better quality
+          const useFastMode = false; 
 
-          // Generate 5-stage emotional arc for natural progression
-          const emotionalArc = await emotionTagGenerator.generateEmotionalArc({
-            content: processedContent,
-            personality: activeProfile.name,
-            contentType: 'voice_response',
-            mood: controls.preset === 'Chill Nicky' ? 'grumpy' :
-              controls.preset === 'Roast Mode' ? 'aggressive' :
-                controls.preset === 'Unhinged' ? 'chaotic' : 'balanced',
-            intensity: controls.intensity === 'low' ? 'low' :
-              controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
-          }, useFastMode);
-
-          perfTimers.emotionTags = Date.now() - emotionStart;
-
-          console.log(`🎭 Generated emotional arc${useFastMode ? ' (FAST)' : ''}: opening="${emotionalArc.opening}" rising="${emotionalArc.rising}" peak="${emotionalArc.peak}" falling="${emotionalArc.falling}" close="${emotionalArc.close}" [${perfTimers.emotionTags}ms]`);
-
-          // Check if AI already added proper [strong bronx wiseguy accent][emotion] double-tag pattern
-          const hasBronxEmotionPattern = /^\[strong bronx wiseguy accent\]\[[\w\s]+\]/i.test(processedContent.trim());
-          const hasEmotionTags = /\[[a-z\s]+\]/i.test(processedContent);
-
-          // Only apply emotional arc if proper double-tag pattern is missing
-          if (!hasBronxEmotionPattern) {
-            // Strip existing malformed tags (including lone [bronx] without emotion)
-            let cleanedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
-
-            // Apply emotional arc with natural progression
-            const taggedContent = elevenlabsService.applyEmotionalArc(cleanedContent, emotionalArc);
-            processedContent = taggedContent;
-            console.log(`🎭 Applied emotional arc (proper [strong bronx wiseguy accent][emotion] pattern was missing)`);
+          // 🎭 AUTO-ENHANCE: Use the full EmotionEnhancer for PODCAST and STREAMING mode to get high-quality tags
+          // This replaces the simple "Emotional Arc" with the full "Enhance" logic the user likes
+          if ((mode === 'PODCAST' || mode === 'STREAMING') && !useFastMode) {
+            console.log(`🎭 Auto-Enhancing response for ${mode} mode...`);
+            const { emotionEnhancer } = await import('./services/emotionEnhancer');
+            
+            // Use the full enhancer which adds [strong bronx wiseguy accent][emotion] and internal tags
+            processedContent = await emotionEnhancer.enhanceText(processedContent, `Current Personality: ${controls.preset} (${controls.intensity} intensity)`);
+            
+            console.log(`🎭 Auto-Enhanced result: ${processedContent.substring(0, 100)}...`);
           } else {
-            console.log(`🎭 AI already added proper [strong bronx wiseguy accent][emotion] pattern - keeping it as-is`);
+            // Fallback to the lighter "Emotional Arc" if Enhance fails (or if fast mode was enabled)
+            // Generate 5-stage emotional arc for natural progression
+            const emotionalArc = await emotionTagGenerator.generateEmotionalArc({
+                content: processedContent,
+                personality: activeProfile.name,
+                contentType: 'voice_response',
+                mood: controls.preset === 'Chill Nicky' ? 'grumpy' :
+                controls.preset === 'Roast Mode' ? 'aggressive' :
+                    controls.preset === 'Unhinged' ? 'chaotic' : 'balanced',
+                intensity: controls.intensity === 'low' ? 'low' :
+                controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
+            }, useFastMode);
+
+            perfTimers.emotionTags = Date.now() - emotionStart;
+
+            console.log(`🎭 Generated emotional arc${useFastMode ? ' (FAST)' : ''}: opening="${emotionalArc.opening}" rising="${emotionalArc.rising}" peak="${emotionalArc.peak}" falling="${emotionalArc.falling}" close="${emotionalArc.close}" [${perfTimers.emotionTags}ms]`);
+
+            // Check if AI already added proper [strong bronx wiseguy accent][emotion] double-tag pattern
+            const hasBronxEmotionPattern = /^\[strong bronx wiseguy accent\]\[[\w\s]+\]/i.test(processedContent.trim());
+            
+            // Only apply emotional arc if proper double-tag pattern is missing
+            if (!hasBronxEmotionPattern) {
+                // Strip existing malformed tags (including lone [bronx] without emotion)
+                let cleanedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
+
+                // Apply emotional arc with natural progression
+                const taggedContent = elevenlabsService.applyEmotionalArc(cleanedContent, emotionalArc);
+                processedContent = taggedContent;
+                console.log(`🎭 Applied emotional arc (proper [strong bronx wiseguy accent][emotion] pattern was missing)`);
+            } else {
+                console.log(`🎭 AI already added proper [strong bronx wiseguy accent][emotion] pattern - keeping it as-is`);
+            }
           }
 
         } catch (error) {
           console.warn('⚠️ Failed to generate emotion tags:', error);
           // Continue with original content if emotion tag generation fails
 
-          // Still add [strong bronx wiseguy accent][grumpy] for podcast mode if emotion tagging fails
-          if (mode === 'PODCAST' && !processedContent.includes('[strong bronx wiseguy accent]')) {
+          // Still add [strong bronx wiseguy accent][grumpy] for podcast/streaming mode if emotion tagging fails
+          if ((mode === 'PODCAST' || mode === 'STREAMING') && !processedContent.includes('[strong bronx wiseguy accent]')) {
             processedContent = `[strong bronx wiseguy accent][grumpy] ${processedContent}`;
           }
         }
@@ -810,11 +841,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           processingTime: response.processingTime,
           retrieved_context: response.retrievedContext,
+          debug_info: response.debugInfo,
           // Note: webSearch info stored separately (not in message metadata schema)
         },
       });
 
       // 📚 NEW: Auto-save high-quality messages as training examples
+      /* DISABLED: User requested to stop auto-saving training examples
       try {
         const { messageTrainingCollector } = await import('./services/messageTrainingCollector');
 
@@ -847,6 +880,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.warn('⚠️ Message training collector import failed:', error);
       }
+      */
 
       // 🌐 ENHANCED: Post-response memory consolidation for web search results
       if (webSearchUsed && webSearchResults.length > 0) {
@@ -1066,12 +1100,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } : undefined;
 
       // Use AI emotion tags for ads, hardcoded for other content types
+      console.log(`🔊 Synthesizing speech for text length: ${text.length}`);
       const audioBuffer = await elevenlabsService.synthesizeSpeech(
         text,
         emotionProfile,
         voiceSettings,
         context
       );
+      console.log(`🔊 Audio generated, buffer size: ${audioBuffer.length} bytes`);
 
       res.setHeader('Content-Type', 'audio/mpeg');
       res.setHeader('Content-Length', audioBuffer.length);
@@ -1581,6 +1617,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/documents/:id/extract-facts', async (req, res) => {
     try {
       const { id } = req.params;
+      const { model } = req.body; // Get model override from request body
+
       const activeProfile = await storage.getActiveProfile();
       if (!activeProfile) {
         return res.status(400).json({ error: 'No active profile found' });
@@ -1600,7 +1638,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         activeProfile.id,
         document.extractedContent,
         document.filename,
-        document.id
+        document.id,
+        model // Pass model override
       );
 
       res.json({
@@ -1786,7 +1825,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get all entries for search functionality
       const limit = parseInt(req.query.limit as string) || 10000; // Large limit for search
-      const entries = await storage.getMemoryEntries(activeProfile.id, limit);
+      
+      // Use getMemoryWithEntityLinks to include linked entities
+      const entries = await storage.getMemoryWithEntityLinks(activeProfile.id, limit);
       res.json(entries);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch memory entries' });
@@ -3311,7 +3352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/documents/:id/reprocess', async (req, res) => {
     try {
       const { id: documentId } = req.params;
-      const { preserveExisting = true, improveAtomization = false } = req.body;
+      const { preserveExisting = true, improveAtomization = false, model } = req.body; // Get model override
 
       console.log(`📄 Starting reprocessing for document ${documentId}...`);
 
@@ -3361,7 +3402,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             doc.profileId,
             doc.extractedContent,
             doc.filename,
-            doc.id
+            doc.id,
+            model // Pass model override
           );
 
           console.log(`✅ Reprocessing completed for ${doc.filename}`);
@@ -4805,13 +4847,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      const [people, places, events] = await Promise.all([
+      const [people, places, events, concepts, items, misc] = await Promise.all([
         storage.getProfilePeople(profile.id),
         storage.getProfilePlaces(profile.id),
-        storage.getProfileEvents(profile.id)
+        storage.getProfileEvents(profile.id),
+        storage.getProfileConcepts(profile.id),
+        storage.getProfileItems(profile.id),
+        storage.getProfileMiscEntities(profile.id)
       ]);
 
-      res.json({ people, places, events });
+      res.json({ people, places, events, concepts, items, misc });
     } catch (error) {
       console.error('Error fetching entities:', error);
       res.status(500).json({ error: 'Failed to fetch entities' });
@@ -5055,10 +5100,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get existing entities for context
-      const [people, places, events] = await Promise.all([
+      const [people, places, events, concepts, items, misc] = await Promise.all([
         storage.getProfilePeople(profile.id),
         storage.getProfilePlaces(profile.id),
-        storage.getProfileEvents(profile.id)
+        storage.getProfileEvents(profile.id),
+        storage.getProfileConcepts(profile.id),
+        storage.getProfileItems(profile.id),
+        storage.getProfileMiscEntities(profile.id)
       ]);
 
       // Transform database entities to match extraction service interface
@@ -5080,6 +5128,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eventDate: e.eventDate ?? undefined,
         description: e.description ?? undefined
       }));
+      const transformedConcepts = concepts.map(c => ({
+        id: c.id,
+        canonicalName: c.canonicalName,
+        category: c.category ?? undefined,
+        description: c.description ?? undefined
+      }));
+      const transformedItems = items.map(i => ({
+        id: i.id,
+        canonicalName: i.canonicalName,
+        type: i.type ?? undefined,
+        description: i.description ?? undefined
+      }));
+      const transformedMisc = misc.map(m => ({
+        id: m.id,
+        canonicalName: m.canonicalName,
+        type: m.type ?? undefined,
+        description: m.description ?? undefined
+      }));
 
       // Extract entities using AI
       const extractionResult = await entityExtraction.extractEntitiesFromMemory(
@@ -5087,7 +5153,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         {
           people: transformedPeople,
           places: transformedPlaces,
-          events: transformedEvents
+          events: transformedEvents,
+          concepts: transformedConcepts,
+          items: transformedItems,
+          misc: transformedMisc
         }
       );
 
@@ -5097,7 +5166,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         {
           people: transformedPeople,
           places: transformedPlaces,
-          events: transformedEvents
+          events: transformedEvents,
+          concepts: transformedConcepts,
+          items: transformedItems,
+          misc: transformedMisc
         }
       );
 
@@ -5384,10 +5456,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .map(memory => ({ id: memory.id, content: memory.content }));
 
       // Get existing entities for context
-      const [people, places, events] = await Promise.all([
+      const [people, places, events, concepts, items, misc] = await Promise.all([
         storage.getProfilePeople(profile.id),
         storage.getProfilePlaces(profile.id),
-        storage.getProfileEvents(profile.id)
+        storage.getProfileEvents(profile.id),
+        storage.getProfileConcepts(profile.id),
+        storage.getProfileItems(profile.id),
+        storage.getProfileMiscEntities(profile.id)
       ]);
 
       // Transform database entities to match extraction service interface
@@ -5409,6 +5484,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eventDate: e.eventDate ?? undefined,
         description: e.description ?? undefined
       }));
+      const transformedConcepts = concepts.map(c => ({
+        id: c.id,
+        canonicalName: c.canonicalName,
+        category: c.category ?? undefined,
+        description: c.description ?? undefined
+      }));
+      const transformedItems = items.map(i => ({
+        id: i.id,
+        canonicalName: i.canonicalName,
+        type: i.type ?? undefined,
+        description: i.description ?? undefined
+      }));
+      const transformedMisc = misc.map(m => ({
+        id: m.id,
+        canonicalName: m.canonicalName,
+        type: m.type ?? undefined,
+        description: m.description ?? undefined
+      }));
 
       // Extract entities from all memories
       const extractionResults = await entityExtraction.extractEntitiesFromMultipleMemories(
@@ -5416,7 +5509,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         {
           people: transformedPeople,
           places: transformedPlaces,
-          events: transformedEvents
+          events: transformedEvents,
+          concepts: transformedConcepts,
+          items: transformedItems,
+          misc: transformedMisc
         }
       );
 
@@ -5434,7 +5530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Link memory to entities
   app.post('/api/entities/link-memory', async (req, res) => {
     try {
-      const { memoryId, personId, placeId, eventId } = req.body;
+      const { memoryId, personId, placeId, eventId, conceptId, itemId, miscId } = req.body;
 
       if (!memoryId) {
         return res.status(400).json({ error: 'memoryId is required' });
@@ -5443,7 +5539,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedMemory = await storage.linkMemoryToEntities(memoryId, {
         personIds: personId ? [personId] : undefined,
         placeIds: placeId ? [placeId] : undefined,
-        eventIds: eventId ? [eventId] : undefined
+        eventIds: eventId ? [eventId] : undefined,
+        conceptIds: conceptId ? [conceptId] : undefined,
+        itemIds: itemId ? [itemId] : undefined,
+        miscIds: miscId ? [miscId] : undefined
       });
 
       res.json(updatedMemory);
@@ -6400,9 +6499,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
+      // Check for force refresh parameter
+      const forceRefresh = req.query.refresh === 'true';
+
       const analysis = await intelligenceEngine.runFullIntelligenceAnalysis(
         storage.db,
-        activeProfile.id
+        activeProfile.id,
+        forceRefresh
       );
 
       res.json(analysis);
@@ -7037,7 +7140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // RSS Feed Sync for Podcast Episodes
   app.post('/api/podcast/rss/sync', async (req, res) => {
     try {
-      const { feedUrl, transcriptDir, processTranscripts } = req.body;
+      const { feedUrl, transcriptDir, processTranscripts, podcastName } = req.body;
 
       if (!feedUrl || typeof feedUrl !== 'string') {
         return res.status(400).json({ error: 'RSS feed URL is required' });
@@ -7055,7 +7158,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         db,
         activeProfile.id,
         feedUrl,
-        processTranscripts !== false
+        processTranscripts !== false,
+        podcastName || 'Camping Them Softly'
       );
 
       res.json(result);

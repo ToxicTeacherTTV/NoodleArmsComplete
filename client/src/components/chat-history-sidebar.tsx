@@ -13,6 +13,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface ConversationWithMeta {
   id: string;
@@ -40,6 +56,8 @@ export default function ChatHistorySidebar({
   className,
 }: ChatHistorySidebarProps) {
   const [showArchived, setShowArchived] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [newTitle, setNewTitle] = useState("");
   const { toast } = useToast();
 
   const { data: conversations = [], isLoading } = useQuery<ConversationWithMeta[]>({
@@ -61,6 +79,21 @@ export default function ChatHistorySidebar({
       toast({
         title: showArchived ? "Unarchived" : "Archived",
         description: showArchived ? "Conversation restored to main list" : "Conversation archived",
+      });
+    },
+  });
+
+  const renameMutation = useMutation({
+    mutationFn: async ({ id, title }: { id: string; title: string }) => {
+      return await apiRequest('PATCH', `/api/conversations/${id}/title`, { title });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations/web'] });
+      setRenamingId(null);
+      setNewTitle("");
+      toast({
+        title: "Renamed",
+        description: "Conversation title updated",
       });
     },
   });
@@ -226,92 +259,139 @@ export default function ChatHistorySidebar({
                   </h3>
                   <div className="space-y-1">
                     {convs.map((conv) => (
-                      <div key={conv.id} className="group relative">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => onSelectConversation(conv.id)}
-                            className={`flex-1 text-left px-3 py-2 rounded-lg transition-colors ${
-                              conv.id === currentConversationId
-                                ? 'bg-primary text-primary-foreground'
-                                : 'hover:bg-muted text-foreground'
-                            }`}
-                            data-testid={`conversation-${conv.id}`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">
-                                  {generateTitle(conv)}
-                                </p>
-                                <p className={`text-xs mt-1 ${
-                                  conv.id === currentConversationId 
-                                    ? 'text-primary-foreground/70' 
-                                    : 'text-muted-foreground'
-                                }`}>
-                                  {getRelativeTime(conv.createdAt)}
-                                </p>
+                      <ContextMenu key={conv.id}>
+                        <ContextMenuTrigger asChild>
+                          <div className="group relative">
+                            <button
+                              onClick={() => onSelectConversation(conv.id)}
+                              className={`w-full text-left px-3 py-2 pr-9 rounded-lg transition-colors ${
+                                conv.id === currentConversationId
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'hover:bg-muted text-foreground'
+                              }`}
+                              data-testid={`conversation-${conv.id}`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">
+                                    {generateTitle(conv)}
+                                  </p>
+                                  <p className={`text-xs mt-1 ${
+                                    conv.id === currentConversationId 
+                                      ? 'text-primary-foreground/70' 
+                                      : 'text-muted-foreground'
+                                  }`}>
+                                    {getRelativeTime(conv.createdAt)}
+                                  </p>
+                                </div>
+                                {conv.messageCount > 0 && (
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    conv.id === currentConversationId
+                                      ? 'bg-primary-foreground/20 text-primary-foreground'
+                                      : 'bg-muted text-muted-foreground'
+                                  }`}>
+                                    {conv.messageCount}
+                                  </span>
+                                )}
                               </div>
-                              {conv.messageCount > 0 && (
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                  conv.id === currentConversationId
-                                    ? 'bg-primary-foreground/20 text-primary-foreground'
-                                    : 'bg-muted text-muted-foreground'
-                                }`}>
-                                  {conv.messageCount}
-                                </span>
-                              )}
+                            </button>
+                            
+                            <div className={`absolute right-1 top-1/2 -translate-y-1/2 ${
+                              conv.id === currentConversationId ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            } transition-opacity`}>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className={`h-7 w-7 p-0 ${
+                                      conv.id === currentConversationId
+                                        ? 'text-primary-foreground hover:bg-primary-foreground/20'
+                                        : 'text-muted-foreground hover:bg-muted'
+                                    }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                    }}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    data-testid={`conversation-menu-${conv.id}`}
+                                  >
+                                    <i className="fas fa-ellipsis-v text-xs"></i>
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setRenamingId(conv.id);
+                                      setNewTitle(conv.title || "");
+                                    }}
+                                  >
+                                    <i className="fas fa-pen mr-2"></i>
+                                    Rename
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      exportMutation.mutate({ id: conv.id, format: 'txt' });
+                                    }}
+                                    data-testid={`export-txt-${conv.id}`}
+                                  >
+                                    <i className="fas fa-download mr-2"></i>
+                                    Export as TXT
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      exportMutation.mutate({ id: conv.id, format: 'json' });
+                                    }}
+                                    data-testid={`export-json-${conv.id}`}
+                                  >
+                                    <i className="fas fa-file-code mr-2"></i>
+                                    Export as JSON
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      archiveMutation.mutate({ id: conv.id, isArchived: !showArchived });
+                                    }}
+                                    data-testid={`archive-${conv.id}`}
+                                  >
+                                    <i className={`fas ${showArchived ? 'fa-inbox' : 'fa-archive'} mr-2`}></i>
+                                    {showArchived ? 'Unarchive' : 'Archive'}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
-                          </button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className={`h-8 w-8 p-0 shrink-0 ${
-                                  conv.id === currentConversationId
-                                    ? 'text-primary-foreground hover:bg-primary-foreground/20'
-                                    : 'text-muted-foreground hover:bg-muted'
-                                }`}
-                                onClick={(e) => e.stopPropagation()}
-                                data-testid={`conversation-menu-${conv.id}`}
-                              >
-                                <i className="fas fa-ellipsis-v text-xs"></i>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  exportMutation.mutate({ id: conv.id, format: 'txt' });
-                                }}
-                                data-testid={`export-txt-${conv.id}`}
-                              >
-                                <i className="fas fa-download mr-2"></i>
-                                Export as TXT
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  exportMutation.mutate({ id: conv.id, format: 'json' });
-                                }}
-                                data-testid={`export-json-${conv.id}`}
-                              >
-                                <i className="fas fa-file-code mr-2"></i>
-                                Export as JSON
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  archiveMutation.mutate({ id: conv.id, isArchived: !showArchived });
-                                }}
-                                data-testid={`archive-${conv.id}`}
-                              >
-                                <i className={`fas ${showArchived ? 'fa-inbox' : 'fa-archive'} mr-2`}></i>
-                                {showArchived ? 'Unarchive' : 'Archive'}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
+                          </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem
+                            onClick={() => {
+                              setRenamingId(conv.id);
+                              setNewTitle(conv.title || "");
+                            }}
+                          >
+                            <i className="fas fa-pen mr-2"></i>
+                            Rename
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onClick={() => {
+                              archiveMutation.mutate({ id: conv.id, isArchived: !showArchived });
+                            }}
+                          >
+                            <i className={`fas ${showArchived ? 'fa-inbox' : 'fa-archive'} mr-2`}></i>
+                            {showArchived ? 'Unarchive' : 'Archive'}
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onClick={() => {
+                              exportMutation.mutate({ id: conv.id, format: 'txt' });
+                            }}
+                          >
+                            <i className="fas fa-download mr-2"></i>
+                            Export as TXT
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
                     ))}
                   </div>
                 </div>
@@ -320,6 +400,54 @@ export default function ChatHistorySidebar({
           )}
         </div>
       </ScrollArea>
+
+      <Dialog open={!!renamingId} onOpenChange={(open) => !open && setRenamingId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Conversation</DialogTitle>
+            <DialogDescription>
+              Enter a new title for this conversation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Title
+              </Label>
+              <Input
+                id="name"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                className="col-span-3"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (renamingId && newTitle.trim()) {
+                      renameMutation.mutate({ id: renamingId, title: newTitle.trim() });
+                    }
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenamingId(null)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                if (renamingId && newTitle.trim()) {
+                  renameMutation.mutate({ id: renamingId, title: newTitle.trim() });
+                }
+              }}
+              disabled={!newTitle.trim() || renameMutation.isPending}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

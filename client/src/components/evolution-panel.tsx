@@ -3,6 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import NeuralMap from './neural-map';
+import { Check, Save, ListTodo, HelpCircle, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface EvolutionMetrics {
   totalFacts: number;
@@ -46,19 +50,44 @@ export default function EvolutionPanel({ profileId }: EvolutionPanelProps) {
     onSuccess: (result) => {
       setOptimizationResults(result);
       toast({
-        title: "🧠 Evolution Complete!",
-        description: `Knowledge optimized: ${result.summary.originalFacts} → ${result.summary.optimizedFacts} facts`,
+        title: "🧠 Evolution Analysis Complete!",
+        description: `Found ${result.knowledgeGaps.length} knowledge gaps and optimized ${result.summary.originalFacts} facts. Review below.`,
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/memory/stats'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/memory/evolution-metrics'] });
     },
     onError: (error) => {
       toast({
-        title: "Evolution Failed",
-        description: "Failed to optimize knowledge base",
+        title: "Evolution Analysis Failed",
+        description: "Failed to analyze knowledge base",
         variant: "destructive",
       });
     },
+  });
+
+  const applyEvolutionMutation = useMutation({
+    mutationFn: async () => {
+      if (!optimizationResults) return;
+      const response = await apiRequest('POST', '/api/memory/apply-evolution', {
+        profileId,
+        optimizedFacts: optimizationResults.optimizedFacts
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "✅ Evolution Applied!",
+        description: `Brain updated with ${data.count} optimized memories.`,
+      });
+      setOptimizationResults(null); // Clear results after applying
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/evolution-metrics'] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to apply evolution changes",
+        variant: "destructive",
+      });
+    }
   });
 
   if (isLoading) {
@@ -145,94 +174,132 @@ export default function EvolutionPanel({ profileId }: EvolutionPanelProps) {
           className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200 ${
             evolutionMutation.isPending
               ? 'bg-muted text-muted-foreground cursor-not-allowed'
-              : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white'
+              : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg hover:shadow-purple-500/20'
           }`}
           data-testid="button-evolutionary-optimization"
         >
           {evolutionMutation.isPending ? (
             <div className="flex items-center justify-center">
               <i className="fas fa-spinner fa-spin mr-2"></i>
-              Evolving Intelligence...
+              Analyzing Brain Structure...
             </div>
           ) : (
             <div className="flex items-center justify-center">
               <i className="fas fa-dna mr-2"></i>
-              Run Evolutionary Optimization
+              Run Evolutionary Analysis
             </div>
           )}
         </button>
 
         <div className="mt-2 text-xs text-muted-foreground text-center">
-          Advanced AI that discovers relationships, clusters concepts, and optimizes knowledge
+          Analyzes knowledge gaps, clusters concepts, and prepares optimization. 
+          <br/><strong>Does not auto-save.</strong> You can review changes first.
         </div>
       </div>
 
       {/* Evolution Results */}
       {optimizationResults && (
-        <div className="bg-card border border-border rounded-lg p-4">
-          <h4 className="text-md font-semibold text-foreground mb-3 flex items-center">
-            <i className="fas fa-chart-line mr-2 text-green-400"></i>
-            Evolution Results
-          </h4>
-
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="text-center p-2 bg-muted/50 rounded">
-              <div className="text-lg font-bold text-green-400">
-                {optimizationResults.summary.relationships}
-              </div>
-              <div className="text-xs text-muted-foreground">Relationships</div>
-            </div>
-
-            <div className="text-center p-2 bg-muted/50 rounded">
-              <div className="text-lg font-bold text-blue-400">
-                {optimizationResults.summary.clusters}
-              </div>
-              <div className="text-xs text-muted-foreground">Clusters</div>
-            </div>
-
-            <div className="text-center p-2 bg-muted/50 rounded">
-              <div className="text-lg font-bold text-purple-400">
-                {optimizationResults.summary.knowledgeGaps}
-              </div>
-              <div className="text-xs text-muted-foreground">Knowledge Gaps</div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Quality Score:</span>
-              <span className={getQualityColor(optimizationResults.summary.qualityImprovement)}>
-                {optimizationResults.summary.qualityImprovement.toFixed(1)}/10
-              </span>
-            </div>
-
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Knowledge Coverage:</span>
-              <span className="text-foreground">
-                {(optimizationResults.summary.knowledgeCoverage * 100).toFixed(0)}%
-              </span>
-            </div>
-
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Facts Optimized:</span>
-              <span className="text-foreground">
-                {optimizationResults.summary.originalFacts} → {optimizationResults.summary.optimizedFacts}
-              </span>
-            </div>
-          </div>
-
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          
+          {/* 1. Knowledge Gaps (To-Do List) */}
           {optimizationResults.knowledgeGaps && optimizationResults.knowledgeGaps.length > 0 && (
-            <div className="mt-4 p-3 bg-muted/30 rounded border-l-4 border-yellow-400">
-              <div className="text-sm font-semibold text-foreground mb-2">
-                <i className="fas fa-exclamation-triangle mr-1 text-yellow-400"></i>
-                Knowledge Gaps Identified
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Found {optimizationResults.knowledgeGaps.length} areas where Nicky's knowledge could be improved.
-                Consider asking about: {optimizationResults.knowledgeGaps[0]?.category}
-              </div>
-            </div>
+            <Card className="border-l-4 border-l-yellow-500 shadow-md">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center text-yellow-500">
+                  <ListTodo className="mr-2 h-5 w-5" />
+                  Knowledge Gaps (To-Do List)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-muted-foreground mb-4">
+                  Ask Nicky these questions to fill missing spots in his brain:
+                </div>
+                <ScrollArea className="h-[200px] pr-4">
+                  <div className="space-y-4">
+                    {optimizationResults.knowledgeGaps.map((gap: any, idx: number) => (
+                      <div key={idx} className="bg-muted/30 p-3 rounded-lg border border-border">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="font-semibold text-foreground text-sm">{gap.category}</span>
+                          <span className="text-xs bg-yellow-500/10 text-yellow-500 px-2 py-0.5 rounded-full">
+                            Priority {gap.priority}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-2">{gap.description}</p>
+                        <div className="space-y-1">
+                          {gap.suggestedQuestions.map((q: string, qIdx: number) => (
+                            <div key={qIdx} className="flex items-center text-sm text-foreground bg-background/50 p-2 rounded">
+                              <HelpCircle className="h-3 w-3 mr-2 text-purple-400" />
+                              {q}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
           )}
+
+          {/* 2. Optimization Summary & Apply */}
+          <Card className="border-l-4 border-l-green-500 shadow-md">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center text-green-500">
+                <Save className="mr-2 h-5 w-5" />
+                Review & Apply Changes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-3 mb-6">
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-400">
+                    {optimizationResults.summary.relationships}
+                  </div>
+                  <div className="text-xs text-muted-foreground font-medium">New Connections</div>
+                </div>
+
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-400">
+                    {optimizationResults.summary.clusters}
+                  </div>
+                  <div className="text-xs text-muted-foreground font-medium">Topic Clusters</div>
+                </div>
+
+                <div className="text-center p-3 bg-muted/50 rounded-lg">
+                  <div className="text-2xl font-bold text-purple-400">
+                    {optimizationResults.summary.originalFacts - optimizationResults.summary.optimizedFacts}
+                  </div>
+                  <div className="text-xs text-muted-foreground font-medium">Facts Merged</div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between bg-muted/30 p-4 rounded-lg mb-4">
+                <div className="text-sm">
+                  <div className="font-medium text-foreground">Ready to upgrade brain?</div>
+                  <div className="text-muted-foreground text-xs">
+                    This will replace {optimizationResults.summary.originalFacts} raw facts with {optimizationResults.summary.optimizedFacts} optimized memories.
+                  </div>
+                </div>
+                <Button 
+                  onClick={() => applyEvolutionMutation.mutate()}
+                  disabled={applyEvolutionMutation.isPending}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {applyEvolutionMutation.isPending ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin mr-2"></i>
+                      Applying...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Apply Changes
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 

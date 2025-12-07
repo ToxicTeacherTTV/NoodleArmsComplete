@@ -80,7 +80,7 @@ Format the output as a clear, organized list of personality traits and behaviors
       const fullPrompt = `${systemPrompt}\n\n${prompt}`;
       
       const geminiResponse = await geminiService['ai'].models.generateContent({
-        model: 'gemini-2.5-pro', // 🚫 NEVER Flash - corrupts personality consolidation
+        model: 'gemini-3-pro-preview', // 🚫 NEVER Flash - corrupts personality consolidation
         contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
         config: {
           maxOutputTokens: 2000,

@@ -43,7 +43,7 @@ export default function JazzDashboard() {
 
     // Voice hooks
     const { isListening, startListening, stopListening, transcript, interimTranscript, resetTranscript } = useSpeechRecognition();
-    const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs, replay: replayElevenLabs, canReplay: canReplayElevenLabs, saveAudio: saveAudioElevenLabs, canSave: canSaveElevenLabs } = useElevenLabsSpeech();
+    const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs, replay: replayElevenLabs, canReplay: canReplayElevenLabs, saveAudio: saveAudioElevenLabs, canSave: canSaveElevenLabs } = useElevenLabsSpeech();
 
     // Queries
     const { data: activeProfile } = useQuery<Profile>({
@@ -76,7 +76,7 @@ export default function JazzDashboard() {
             });
             return response.json();
         },
-        onSuccess: (response) => {
+        onSuccess: async (response, variables) => {
             if (response?.content) {
                 const aiMessage: Message = {
                     id: nanoid(),
@@ -85,7 +85,11 @@ export default function JazzDashboard() {
                     content: response.content,
                     createdAt: new Date().toISOString(),
                     rating: null,
-                    metadata: { processingTime: response.processingTime },
+                    metadata: { 
+                        processingTime: response.processingTime,
+                        retrieved_context: response.retrievedContext,
+                        debug_info: response.debugInfo
+                    },
                 };
                 setMessages(prev => [...prev, aiMessage]);
 
@@ -95,7 +99,13 @@ export default function JazzDashboard() {
                 }
             }
             queryClient.invalidateQueries({ queryKey: ['/api/conversations/web'] });
-            setAiStatus('IDLE');
+            // Ensure we fetch the persisted messages to sync state
+            await queryClient.invalidateQueries({ queryKey: ['/api/conversations', variables.conversationId, 'messages'] });
+            // Refresh personality state to clear any temporary overrides
+            queryClient.invalidateQueries({ queryKey: ['/api/personality/state'] });
+            
+            // Only set to IDLE if we didn't switch to SPEAKING
+            setAiStatus(prev => prev === 'SPEAKING' ? 'SPEAKING' : 'IDLE');
         },
         onError: () => setAiStatus('ERROR'),
     });
@@ -136,16 +146,22 @@ export default function JazzDashboard() {
 
     useEffect(() => {
         if (conversationMessages) {
+            // Don't overwrite optimistic state while processing
+            if (aiStatus === 'PROCESSING') {
+                return;
+            }
             setMessages(conversationMessages);
         }
-    }, [conversationMessages]);
+    }, [conversationMessages, aiStatus]);
 
-    // Initialize conversation
+    // Initialize conversation - REMOVED auto-creation to prevent blank sessions
+    /* 
     useEffect(() => {
         if (!currentConversationId && activeProfile?.id) {
             createConversationMutation.mutate();
         }
     }, [activeProfile?.id]);
+    */
 
     // Voice control
     const toggleListening = () => {
@@ -154,7 +170,8 @@ export default function JazzDashboard() {
         if (isListening) {
             stopListening();
             const finalText = (transcript || interimTranscript).trim();
-            if (finalText && currentConversationId) {
+            // Allow sending even if no conversation ID yet (will be created)
+            if (finalText) {
                 handleSendMessage(finalText);
             }
             resetTranscript();
@@ -167,12 +184,32 @@ export default function JazzDashboard() {
     };
 
     // Handlers
-    const handleSendMessage = (content: string) => {
-        if (!content.trim() || !currentConversationId) return;
+    const handleSendMessage = async (content: string) => {
+        if (!content.trim()) return;
+
+        let activeId = currentConversationId;
+
+        // Create conversation if it doesn't exist
+        if (!activeId) {
+            try {
+                const newConv = await createConversationMutation.mutateAsync();
+                activeId = newConv.id;
+                // Note: setCurrentConversationId is also called in onSuccess, 
+                // but we need the ID immediately for the message
+            } catch (error) {
+                console.error("Failed to create conversation:", error);
+                toast({
+                    title: "Error",
+                    description: "Failed to start new conversation.",
+                    variant: "destructive",
+                });
+                return;
+            }
+        }
 
         const userMessage: Message = {
             id: nanoid(),
-            conversationId: currentConversationId,
+            conversationId: activeId,
             type: 'USER',
             content: content.trim(),
             createdAt: new Date().toISOString(),
@@ -183,7 +220,7 @@ export default function JazzDashboard() {
         setMessages(prev => [...prev, userMessage]);
         setAiStatus('PROCESSING');
         sendMessageMutation.mutate({
-            conversationId: currentConversationId,
+            conversationId: activeId,
             content: content.trim(),
         });
     };
@@ -194,7 +231,8 @@ export default function JazzDashboard() {
     };
 
     const handleNewChat = () => {
-        createConversationMutation.mutate();
+        // Don't create immediately, just clear state
+        setCurrentConversationId("");
         setMessages([]);
     };
 
@@ -308,9 +346,12 @@ export default function JazzDashboard() {
                                         isDebugMode={isDebugMode}
                                         onToggleDebugMode={() => setIsDebugMode(!isDebugMode)}
                                         onPlayAudio={(content) => speakElevenLabs(content)}
+                                        onPauseAudio={pauseElevenLabs}
+                                        onResumeAudio={resumeElevenLabs}
+                                        onStopAudio={stopElevenLabs}
                                         onReplayAudio={replayElevenLabs}
                                         onSaveAudio={saveAudioElevenLabs}
-                                        isPlayingAudio={isSpeakingElevenLabs && !isPausedElevenLabs}
+                                        isPlayingAudio={isSpeakingElevenLabs}
                                         isPausedAudio={isPausedElevenLabs}
                                         canReplay={canReplayElevenLabs}
                                         canSave={canSaveElevenLabs}

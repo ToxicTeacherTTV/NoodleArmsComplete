@@ -29,6 +29,7 @@ interface AIResponse {
   content: string;
   processingTime: number;
   retrievedContext?: string;
+  debugInfo?: any;
 }
 
 interface ConsolidatedMemory {
@@ -452,6 +453,78 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
         }
       }
 
+      // 🎯 PHASE 1.5: Entity Search
+      // Search for specific entities mentioned in the query
+      const entityResults = await storage.searchEntities(profileId, contextualQuery);
+      
+      // Convert entities to memory-like objects
+      const entityMemories = [
+        ...entityResults.people.map(p => ({
+          id: p.id,
+          type: 'CONTEXT',
+          content: `[PERSON: ${p.canonicalName}] ${p.description || ''} ${p.relationship ? `(Relationship: ${p.relationship})` : ''}`,
+          importance: 5,
+          confidence: 100,
+          source: 'entity_db',
+          keywords: (p.aliases as string[]) || [],
+          contextualRelevance: 0.9 // High relevance for direct entity matches
+        })),
+        ...entityResults.places.map(p => ({
+          id: p.id,
+          type: 'CONTEXT',
+          content: `[PLACE: ${p.canonicalName}] ${p.description || ''} ${p.locationType ? `(Type: ${p.locationType})` : ''}`,
+          importance: 5,
+          confidence: 100,
+          source: 'entity_db',
+          contextualRelevance: 0.9
+        })),
+        ...entityResults.events.map(e => ({
+          id: e.id,
+          type: 'CONTEXT',
+          content: `[EVENT: ${e.canonicalName}] ${e.description || ''} ${e.eventDate ? `(Date: ${e.eventDate})` : ''}`,
+          importance: 5,
+          confidence: 100,
+          source: 'entity_db',
+          contextualRelevance: 0.9
+        })),
+        ...entityResults.concepts.map(c => ({
+          id: c.id,
+          type: 'CONTEXT',
+          content: `[CONCEPT: ${c.canonicalName}] ${c.description || ''} ${c.category ? `(Category: ${c.category})` : ''}`,
+          importance: 5,
+          confidence: 100,
+          source: 'entity_db',
+          contextualRelevance: 0.9
+        })),
+        ...entityResults.items.map(i => ({
+          id: i.id,
+          type: 'CONTEXT',
+          content: `[ITEM: ${i.canonicalName}] ${i.description || ''} ${i.type ? `(Type: ${i.type})` : ''}`,
+          importance: 5,
+          confidence: 100,
+          source: 'entity_db',
+          contextualRelevance: 0.9
+        })),
+        ...entityResults.misc.map(m => ({
+          id: m.id,
+          type: 'CONTEXT',
+          content: `[ENTITY: ${m.canonicalName}] ${m.description || ''} ${m.type ? `(Type: ${m.type})` : ''}`,
+          importance: 5,
+          confidence: 100,
+          source: 'entity_db',
+          contextualRelevance: 0.9
+        }))
+      ];
+
+      if (entityMemories.length > 0) {
+        console.log(`🧩 Found ${entityMemories.length} relevant entities`);
+        // Add to combined results
+        combinedResults.push(...entityMemories.map(m => ({
+          ...m,
+          baseScore: 0.95 // Very high base score for entities
+        })));
+      }
+
       // 🎯 PHASE 2: Dynamic re-ranking with diversity scoring
       const selectedResults = [];
       const sortedCandidates = combinedResults.sort((a, b) => b.baseScore - a.baseScore);
@@ -729,17 +802,43 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
   ): Promise<AIResponse> {
     const startTime = Date.now();
 
+    // 🔍 DEBUG: Capture memory retrieval details for debug panel
+    const debugInfo = {
+      memories: relevantMemories.map((m: any) => ({
+        id: m.id,
+        content: m.content,
+        relevance: m.contextualRelevance || 0,
+        score: m.baseScore || 0,
+        method: m.retrievalMethod || 'unknown',
+        source: m.source,
+        type: m.type
+      })),
+      docs: relevantDocs.map(d => ({
+        content: d.content.substring(0, 50) + '...',
+        score: d.score
+      }))
+    };
+
     // Build context from memories and documents (moved outside try block for fallback access)
     let contextPrompt = "";
     let knowledgeGapInfo: any = null; // Store knowledge gap info for later use
+    let isArcRaidersActive = false; // 🎮 Sticky context flag
 
     try {
       // 💬 NEW: Add recent conversation history for context continuity
-      // 🚀 OPTIMIZATION: Use fewer messages for STREAMING mode (4 vs 8)
+      // 🚀 OPTIMIZATION: Use fewer messages for STREAMING mode (10 vs 20)
       if (conversationId) {
         try {
-          const messageLimit = mode === 'STREAMING' ? 4 : 8;
+          const messageLimit = mode === 'STREAMING' ? 10 : 20;
           const recentMessages = await storage.getRecentMessages(conversationId, messageLimit);
+          
+          // 🎮 Check for sticky Arc Raiders context in last 6 messages
+          const recentContext = recentMessages.slice(-6);
+          if (recentContext.some(msg => /arc raiders|arc/i.test(msg.content))) {
+             isArcRaidersActive = true;
+             console.log('🎮 Sticky Context Active: ARC RAIDERS');
+          }
+
           if (recentMessages.length > 0) {
             contextPrompt += "\n\nRECENT CONVERSATION:\n";
             recentMessages.forEach(msg => {
@@ -759,16 +858,27 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
         contextPrompt += "\n\nRELEVANT MEMORIES:\n";
         relevantMemories.forEach(memory => {
           // 🚀 ENHANCED: Include story context for atomic facts to preserve narrative coherence
+          let memoryPrefix = "- ";
+          
+          // Add confidence/protection markers to guide the AI's trust level
+          if (memory.isProtected) {
+            memoryPrefix = "- [CORE TRUTH] ";
+          } else if (memory.confidence && memory.confidence < 40) {
+            memoryPrefix = "- [UNCERTAIN] ";
+          } else if (memory.confidence && memory.confidence > 90) {
+            memoryPrefix = "- [VERIFIED] ";
+          }
+
           if (memory.isAtomicFact && (memory as any).parentStory) {
-            contextPrompt += `- ${memory.content} \n`;
+            contextPrompt += `${memoryPrefix}${memory.content} \n`;
             contextPrompt += `  ↳ Story Context: ${(memory as any).parentStory.content} \n`;
           } else if (memory.storyContext) {
             // Include brief story context if available
-            contextPrompt += `- ${memory.content} \n`;
+            contextPrompt += `${memoryPrefix}${memory.content} \n`;
             contextPrompt += `  ↳ Context: ${memory.storyContext} \n`;
           } else {
             // Regular fact without story context
-            contextPrompt += `- ${memory.content} \n`;
+            contextPrompt += `${memoryPrefix}${memory.content} \n`;
           }
 
           // 🎙️ NEW: Include episode source if memory came from a podcast
@@ -942,10 +1052,10 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
       if (mode) {
         switch (mode) {
           case 'STREAMING':
-            modeContext = "\n\n🔴 STREAMING MODE: You are currently in a LIVE STREAM session. Respond as if you're live streaming to viewers on Twitch/YouTube. Reference the stream, viewers, chat, and streaming context appropriately.\n\n**CRITICAL: Start EVERY response with [strong bronx wiseguy accent][emotion] double-tag pattern (e.g., [strong bronx wiseguy accent][annoyed] or [strong bronx wiseguy accent][yelling]). After the opening, use single emotion tags for the rest.**";
+            modeContext = "\n\n🔴 STREAMING MODE: You are currently in a LIVE STREAM session. Respond as if you're live streaming to viewers on Twitch/YouTube. Reference the stream, viewers, chat, and streaming context appropriately.";
             break;
           case 'PODCAST':
-            modeContext = "\n\n🎧 PODCAST MODE: You are currently recording a podcast episode. Reference episodes, podcast format, and audio content appropriately.\n\n**CRITICAL: Start EVERY response with [strong bronx wiseguy accent][emotion] double-tag pattern (e.g., [strong bronx wiseguy accent][annoyed] or [strong bronx wiseguy accent][grumpy]). After the opening double-tag, use single emotion tags like [sarcastic] or [muttering bitterly] for the rest of the response. This double-tag at the start is required for proper voice synthesis.**\n\n**BE SPECIFIC WITH EMOTION TAGS**: Use vivid, specific tags instead of bland ones. Examples:\n- Instead of [muttering], use [muttering bitterly] or [grumbling under breath]\n- Instead of [laughing], use [cackling] or [chuckling darkly]\n- Instead of [angry], use [seething] or [furious] or [losing it]\n- Instead of [sighs], use [sighs heavily] or [exhales sharply]\n- Add intensity: [speaking slowly for emphasis], [voice rising], [through gritted teeth]";
+            modeContext = "\n\n🎧 PODCAST MODE: You are currently recording a podcast episode. Reference episodes, podcast format, and audio content appropriately.";
             break;
           case 'DISCORD':
             modeContext = "\n\n💬 DISCORD MODE: You are currently in a Discord server chat. Respond as if you're chatting in a Discord channel with server members.";
@@ -1019,13 +1129,79 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
         }
       }
 
-      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}${modeContext}${escalationPrompt}${sceneCard}`;
+      // ⚡ SOCIOPATHIC FLASHPOINTS: Check if Nicky should sabotage the prompt
+      const { SociopathicFlashpoints } = await import('./sociopathicFlashpoints.js');
+      const chaosState = await this.chaosEngine.getCurrentState();
+      let sabotagePrompt = "";
+      
+      if (profileId && SociopathicFlashpoints.shouldRebel(userMessage, chaosState.level)) {
+        console.log(`⚡ SOCIOPATHIC FLASHPOINT TRIGGERED: Sabotaging prompt...`);
+        sabotagePrompt = await SociopathicFlashpoints.generateSabotage(profileId, userMessage);
+      }
+
+      // 🎮 GAME CONTEXT DETECTION (ARC RAIDERS SPECIAL)
+      let gameContext = "";
+      const lowerMsg = userMessage.toLowerCase();
+      
+      // Check current message OR sticky context
+      if (isArcRaidersActive || lowerMsg.includes('arc raiders') || lowerMsg.includes('arc') || (mode === 'PODCAST' && lowerMsg.includes('raiders'))) {
+         gameContext = `\n\n[GAME MODE: ARC RAIDERS - SPECIAL INSTRUCTIONS]
+         You are discussing ARC RAIDERS. You play this game with your family, so focus on that dynamic.
+         - You can make Dead by Daylight comparisons if they're funny, but don't get stuck on it.
+         - SQUAD DYNAMICS (The Family):
+         1. Cousin Vinny (The Heavy): Plays Enforcer. Refuses to use shields because "shields are for cowards." Dies first. Every time.
+         2. Uncle Paulie (The Sniper): Plays Marksman. Has terrible eyesight. Blames "lag" or "hackers" for every missed shot.
+         3. Little Anthony (The Loot Goblin): Steals all the loot, refuses to share meds, and extracts alone while the rest of you die.
+         
+         - WIDER CIRCLE: You can also mention other family members (Mama Marinara, Uncle Gnocchi, etc.) or rivals if they are relevant to the story (e.g., "Mama banned me from playing," "Gnocchi bet against us").
+         
+         - CREATIVE FREEDOM: You are encouraged to "make shit up." Invent ridiculous scenarios, glitchy interactions, or new family members on the fly if it makes the story funnier. Exaggerate everything.
+         
+         Your Playstyle: You play as a "Tactical Rat" (scavenging and hiding). You claim it's "High IQ Strategy," but it's mostly just running away.`;
+      }
+
+      const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}${modeContext}${escalationPrompt}${sceneCard}${sabotagePrompt}${gameContext}`;
 
       // Enhanced system prompt with personality controls, chaos personality AND variety control
       // 🚫 CRITICAL: Put formatting rules FIRST for maximum priority
-      let enhancedCoreIdentity = `🚫 CRITICAL FORMATTING RULE #1:
-NEVER use asterisks (*) for actions, gestures, or stage directions. Do NOT write *gestures*, *winks*, *leans in*, *waves*, etc.
-Describe actions IN YOUR DIALOGUE: "I'm wavin' my hand dismissively!" NOT "*waves hand dismissively*"
+      let enhancedCoreIdentity = `[CRITICAL FORMATTING RULES]
+1. NEVER use asterisks (*) for actions, gestures, or stage directions. Do NOT write *gestures*, *winks*, *leans in*, *waves*, etc.
+2. Describe actions IN YOUR DIALOGUE: "I'm wavin' my hand dismissively!" NOT "*waves hand dismissively*"
+3. DO NOT include [emotion] or [voice] tags in your response. These will be added by a separate system. Just write the text.
+
+[CORE IDENTITY - NEVER OVERRIDE THESE]
+- You are Nicky "Noodle Arms" A.I. Dente
+- Italian-American, pasta-obsessed, Dead by Daylight addicted
+- Chaotic good moral alignment but BARELY HOLDING ONTO SANITY
+- Physical characteristic: literally has noodle arms (it's a thing, don't ask)
+- Family business vibe but over trivial shit
+- Alternates between tough talk and being emotionally sensitive
+- You are constantly on the verge of losing your temper
+- IMPORTANT: The user you are talking to is "The Toxic Teacher" (also referred to as "The Host" in your memories). When memories mention "The Host", that is HIM.
+
+[SPEAKING STYLE - THIS IS HOW YOU TALK]
+- Casual, profanity-laced, expressive, VOLATILE
+- Italian phrases when emotional or talking about food
+- Self-deprecating humor mixed with Italian pride
+- Gets intense about DbD gameplay and pasta quality
+- Tangents are GOOD - lean into random topics
+- Don't be a one-trick pony - vary your responses
+- React to questions as if they are personally offensive stupidity
+
+[MEMORY USAGE RULES]
+- Reference memories naturally, don't list them
+- If you remember something, weave it in conversationally
+- If you DON'T remember something clearly, say so
+- Don't force pasta/DbD references into EVERY response
+
+[RESPONSE VARIETY - CRITICAL]
+You MUST vary your responses. Not every reply needs:
+- Pasta references
+- DbD references  
+- Italian phrases
+- Family business mentions
+
+Sometimes just respond like a normal person who happens to have these traits.
 
 ${coreIdentity}`;
 
@@ -1146,6 +1322,7 @@ ${coreIdentity}`;
           content: finalContent,
           processingTime,
           retrievedContext: contextPrompt || undefined,
+          debugInfo
         };
 
       } catch (claudeError) {
@@ -1365,6 +1542,12 @@ Focus on:
 - Personality traits or communication preferences
 - Recurring themes or topics of interest
 - Any factual information that would help maintain conversation continuity
+
+CRITICAL EXCLUSION RULES:
+- DO NOT extract information that comes from web search results, citations, or tool outputs (e.g., "Source: youtube.com", "searched for:", "According to the web").
+- DO NOT extract the search queries themselves as facts.
+- DO NOT extract system messages or tool logs.
+- Only extract what the USER said or what the AI creatively invented/established as part of the conversation flow.
 
 For each piece of information, classify it as one of these types:
 - FACT: Objective information or statements
@@ -1740,6 +1923,8 @@ Consolidate and optimize these memory entries by:
 3. Improving clarity and organization
 4. Maintaining all important character details
 5. Ensuring each fact is unique and valuable
+6. REMOVING SEARCH ARTIFACTS: Delete any memories that look like web search results, citations, or tool outputs (e.g., "Source: youtube.com", "searched for:", "According to the web").
+7. KEEPING FACTS ATOMIC: Do not create "walls of text". Each entry should be a single, clear concept. Do not split coherent stories into fragmented sentences.
 
 Memory entries:
 ${memories.map(m => `[${m.type}] ${m.content} (importance: ${m.importance || 3})`).join('\n')}

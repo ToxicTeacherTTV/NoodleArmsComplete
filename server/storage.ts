@@ -27,10 +27,16 @@ import {
   people,
   places,
   events,
+  concepts,
+  items,
+  miscEntities,
   // Junction tables for many-to-many relationships
   memoryPeopleLinks,
   memoryPlaceLinks,
   memoryEventLinks,
+  memoryConceptLinks,
+  memoryItemLinks,
+  memoryMiscLinks,
   type Profile,
   type InsertProfile,
   type Conversation,
@@ -81,10 +87,16 @@ import {
   type Place,
   type InsertPlace,
   type Event,
-  type InsertEvent
+  type InsertEvent,
+  type Concept,
+  type InsertConcept,
+  type Item,
+  type InsertItem,
+  type MiscEntity,
+  type InsertMiscEntity
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, like, sql } from "drizzle-orm";
+import { eq, desc, and, or, like, ilike, sql, gt } from "drizzle-orm";
 import { aiFlagger } from "./services/aiFlagger";
 
 export interface IStorage {
@@ -147,10 +159,11 @@ export interface IStorage {
   getMemoryStats(profileId: string): Promise<{ totalFacts: number; conversations: number }>;
 
   // Embedding support for memory entries
+  findSimilarMemories(profileId: string, queryVector: number[], limit?: number, threshold?: number): Promise<Array<MemoryEntry & { similarity: number }>>;
   getMemoryEntriesWithEmbeddings(profileId: string): Promise<MemoryEntry[]>;
   getRecentMemoriesWithEmbeddings(profileId: string, limit: number): Promise<MemoryEntry[]>;
   getMemoryEntriesWithoutEmbeddings(profileId: string): Promise<MemoryEntry[]>;
-  updateMemoryEmbedding(id: string, embedding: { embedding: string, embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void>;
+  updateMemoryEmbedding(id: string, embedding: { embedding: number[], embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void>;
   searchMemoriesByKeywords(profileId: string, keywords: string[], limit?: number): Promise<MemoryEntry[]>;
 
   // Query memories by source (e.g., podcast episode, document)
@@ -231,7 +244,13 @@ export interface IStorage {
   clearPodcastSegments(episodeId: string): Promise<void>;
   searchPodcastContent(profileId: string, query: string): Promise<{ episodes: PodcastEpisode[]; segments: PodcastSegment[] }>;
 
-  // Content Library management
+  // Memory/RAG Integration for Podcast Content
+  getRelevantPodcastContent(profileId: string, keywords: string[]): Promise<{
+    episodes: PodcastEpisode[];
+    segments: PodcastSegment[];
+  }>;
+
+  // Content Library implementation
   createContentLibraryEntry(entry: InsertContentLibraryEntry): Promise<ContentLibraryEntry>;
   getContentLibraryEntry(id: string): Promise<ContentLibraryEntry | undefined>;
   getProfileContentLibrary(profileId: string, category?: string): Promise<ContentLibraryEntry[]>;
@@ -240,60 +259,85 @@ export interface IStorage {
   searchContentLibrary(profileId: string, query: string): Promise<ContentLibraryEntry[]>;
   updateContentLibraryAccess(id: string): Promise<void>;
 
-  // Embedding support for content library
-  getContentLibraryWithEmbeddings(profileId: string): Promise<ContentLibraryEntry[]>;
-  getContentLibraryWithoutEmbeddings(profileId: string): Promise<ContentLibraryEntry[]>;
-  updateContentLibraryEmbedding(id: string, embedding: { embedding: string, embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void>;
-  getContentLibraryEntries(profileId: string): Promise<ContentLibraryEntry[]>;
-
-  // Topic Escalation System
-  trackTopicMention(profileId: string, topic: string, context: string): Promise<TopicEscalation>;
-  getTopicEscalation(profileId: string, topic: string): Promise<TopicEscalation | undefined>;
-  getTopicEscalations(profileId: string): Promise<TopicEscalation[]>;
-  getHighIntensityTopics(profileId: string, minIntensity?: number): Promise<TopicEscalation[]>;
-  updateTopicIntensity(id: string, newIntensity: number): Promise<TopicEscalation>;
-  coolDownTopics(profileId: string): Promise<void>;
-
   // NEW: Entity System Management (Phase 1)
   // Feature flag management
   getEntitySystemConfig(): Promise<EntitySystemConfig | undefined>;
   setEntitySystemEnabled(enabled: boolean): Promise<EntitySystemConfig>;
 
-  // Entity CRUD operations (all optional for backward compatibility)
+  // Entity CRUD operations
   createPerson(person: InsertPerson): Promise<Person>;
   getPerson(id: string): Promise<Person | undefined>;
   getProfilePeople(profileId: string): Promise<Person[]>;
   updatePerson(id: string, updates: Partial<Person>): Promise<Person>;
   deletePerson(id: string): Promise<void>;
+  mergePeople(primaryId: string, duplicateId: string, mergedData?: Partial<Person>): Promise<Person>;
 
   createPlace(place: InsertPlace): Promise<Place>;
   getPlace(id: string): Promise<Place | undefined>;
   getProfilePlaces(profileId: string): Promise<Place[]>;
   updatePlace(id: string, updates: Partial<Place>): Promise<Place>;
   deletePlace(id: string): Promise<void>;
+  mergePlaces(primaryId: string, duplicateId: string, mergedData?: Partial<Place>): Promise<Place>;
 
   createEvent(event: InsertEvent): Promise<Event>;
   getEvent(id: string): Promise<Event | undefined>;
   getProfileEvents(profileId: string): Promise<Event[]>;
   updateEvent(id: string, updates: Partial<Event>): Promise<Event>;
   deleteEvent(id: string): Promise<void>;
+  mergeEvents(primaryId: string, duplicateId: string, mergedData?: Partial<Event>): Promise<Event>;
+
+  createConcept(concept: InsertConcept): Promise<Concept>;
+  getConcept(id: string): Promise<Concept | undefined>;
+  getProfileConcepts(profileId: string): Promise<Concept[]>;
+  updateConcept(id: string, updates: Partial<Concept>): Promise<Concept>;
+  deleteConcept(id: string): Promise<void>;
+
+  createItem(item: InsertItem): Promise<Item>;
+  getItem(id: string): Promise<Item | undefined>;
+  getProfileItems(profileId: string): Promise<Item[]>;
+  updateItem(id: string, updates: Partial<Item>): Promise<Item>;
+  deleteItem(id: string): Promise<void>;
+
+  createMiscEntity(misc: InsertMiscEntity): Promise<MiscEntity>;
+  getMiscEntity(id: string): Promise<MiscEntity | undefined>;
+  getProfileMiscEntities(profileId: string): Promise<MiscEntity[]>;
+  updateMiscEntity(id: string, updates: Partial<MiscEntity>): Promise<MiscEntity>;
+  deleteMiscEntity(id: string): Promise<void>;
+
+  getAllEntities(profileId: string): Promise<{
+    people: Person[];
+    places: Place[];
+    events: Event[];
+    concepts: Concept[];
+    items: Item[];
+    misc: MiscEntity[];
+  }>;
 
   // Entity linking for memory entries (updated to use junction tables)
   linkMemoryToEntities(memoryId: string, entityLinks: {
     personIds?: string[];
     placeIds?: string[];
     eventIds?: string[];
+    conceptIds?: string[];
+    itemIds?: string[];
+    miscIds?: string[];
   }): Promise<void>;
   getMemoryWithEntityLinks(profileId: string, limit?: number): Promise<Array<MemoryEntry & {
     people?: Person[];
     places?: Place[];
     events?: Event[];
+    concepts?: Concept[];
+    items?: Item[];
+    misc?: MiscEntity[];
   }>>;
 
   // Get memories for specific entities
   getMemoriesForPerson(personId: string, profileId: string): Promise<MemoryEntry[]>;
   getMemoriesForPlace(placeId: string, profileId: string): Promise<MemoryEntry[]>;
   getMemoriesForEvent(eventId: string, profileId: string): Promise<MemoryEntry[]>;
+  getMemoriesForConcept(conceptId: string, profileId: string): Promise<MemoryEntry[]>;
+  getMemoriesForItem(itemId: string, profileId: string): Promise<MemoryEntry[]>;
+  getMemoriesForMiscEntity(miscId: string, profileId: string): Promise<MemoryEntry[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -865,11 +909,11 @@ export class DatabaseStorage implements IStorage {
         embedding: memoryEntries.embedding,
         embeddingModel: memoryEntries.embeddingModel,
         embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
-        searchVector: memoryEntries.searchVector,
         createdAt: memoryEntries.createdAt,
         updatedAt: memoryEntries.updatedAt,
+        searchVector: memoryEntries.searchVector,
         // Add relevance score from full-text search
-        relevance: sql<number>`ts_rank(${memoryEntries.searchVector}, plainto_tsquery('english', ${query}))`.as('relevance')
+        relevance: sql`ts_rank(${memoryEntries.searchVector}, plainto_tsquery('english', ${query}))`.as('relevance')
       })
       .from(memoryEntries)
       .where(
@@ -925,8 +969,8 @@ export class DatabaseStorage implements IStorage {
     // Optimized: Single query with subqueries instead of two separate queries
     const [stats] = await db
       .select({
-        totalFacts: sql<number>`(SELECT count(*) FROM memory_entries WHERE profile_id = ${profileId})`,
-        conversations: sql<number>`(SELECT count(*) FROM conversations WHERE profile_id = ${profileId})`,
+        totalFacts: sql`(SELECT count(*) FROM memory_entries WHERE profile_id = ${profileId})`.mapWith(Number),
+        conversations: sql`(SELECT count(*) FROM conversations WHERE profile_id = ${profileId})`.mapWith(Number),
       })
       .from(sql`(SELECT 1) AS dummy`);
 
@@ -1842,7 +1886,7 @@ export class DatabaseStorage implements IStorage {
             like(podcastEpisodes.transcript, `%${query}%`)
           )
         )
-      )
+           )
       .orderBy(desc(podcastEpisodes.episodeNumber));
 
     // Search segments by title, description, transcript, or key quotes
@@ -2036,7 +2080,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(memoryEntries.importance));
   }
 
-  async updateMemoryEmbedding(id: string, embedding: { embedding: string, embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void> {
+  async updateMemoryEmbedding(id: string, embedding: { embedding: number[], embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void> {
     await db
       .update(memoryEntries)
       .set({
@@ -2045,6 +2089,60 @@ export class DatabaseStorage implements IStorage {
         embeddingUpdatedAt: embedding.embeddingUpdatedAt
       })
       .where(eq(memoryEntries.id, id));
+  }
+
+  async findSimilarMemories(profileId: string, queryVector: number[], limit = 5, threshold = 0.5): Promise<Array<MemoryEntry & { similarity: number }>> {
+    // Calculate similarity score: 1 - (cosine distance)
+    // cosine distance returns 0 (identical) to 2 (opposite)
+    const similarity = sql<number>`1 - (${memoryEntries.embedding} <=> ${JSON.stringify(queryVector)})`;
+    
+    // @ts-ignore - Drizzle type inference might struggle with the dynamic selection
+    return await db
+      .select({
+        id: memoryEntries.id,
+        profileId: memoryEntries.profileId,
+        type: memoryEntries.type,
+        content: memoryEntries.content,
+        importance: memoryEntries.importance,
+        retrievalCount: memoryEntries.retrievalCount,
+        successRate: memoryEntries.successRate,
+        lastUsed: memoryEntries.lastUsed,
+        clusterId: memoryEntries.clusterId,
+        keywords: memoryEntries.keywords,
+        relationships: memoryEntries.relationships,
+        qualityScore: memoryEntries.qualityScore,
+        temporalContext: memoryEntries.temporalContext,
+        source: memoryEntries.source,
+        confidence: memoryEntries.confidence,
+        sourceId: memoryEntries.sourceId,
+        supportCount: memoryEntries.supportCount,
+        firstSeenAt: memoryEntries.firstSeenAt,
+        lastSeenAt: memoryEntries.lastSeenAt,
+        contradictionGroupId: memoryEntries.contradictionGroupId,
+        canonicalKey: memoryEntries.canonicalKey,
+        status: memoryEntries.status,
+        isProtected: memoryEntries.isProtected,
+        parentFactId: memoryEntries.parentFactId,
+        isAtomicFact: memoryEntries.isAtomicFact,
+        storyContext: memoryEntries.storyContext,
+        embedding: memoryEntries.embedding,
+        embeddingModel: memoryEntries.embeddingModel,
+        embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
+        searchVector: memoryEntries.searchVector,
+        createdAt: memoryEntries.createdAt,
+        updatedAt: memoryEntries.updatedAt,
+        similarity: similarity.as('similarity')
+      })
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          gt(similarity, threshold),
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(similarity))
+      .limit(limit);
   }
 
   async searchMemoriesByKeywords(profileId: string, keywords: string[], limit = 20): Promise<MemoryEntry[]> {
@@ -2573,21 +2671,138 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  // Concept management
+  async createConcept(concept: InsertConcept): Promise<Concept> {
+    const [newConcept] = await db
+      .insert(concepts)
+      .values([concept as any])
+      .returning();
+    return newConcept;
+  }
+
+  async getConcept(id: string): Promise<Concept | undefined> {
+    const [concept] = await db.select().from(concepts).where(eq(concepts.id, id));
+    return concept || undefined;
+  }
+
+  async getProfileConcepts(profileId: string): Promise<Concept[]> {
+    return await db
+      .select()
+      .from(concepts)
+      .where(eq(concepts.profileId, profileId))
+      .orderBy(desc(concepts.createdAt));
+  }
+
+  async updateConcept(id: string, updates: Partial<Concept>): Promise<Concept> {
+    const updateData = { ...updates, updatedAt: sql`now()` };
+    const [updatedConcept] = await db
+      .update(concepts)
+      .set(updateData as any)
+      .where(eq(concepts.id, id))
+      .returning();
+    return updatedConcept;
+  }
+
+  async deleteConcept(id: string): Promise<void> {
+    await db.delete(concepts).where(eq(concepts.id, id));
+  }
+
+  // Item management
+  async createItem(item: InsertItem): Promise<Item> {
+    const [newItem] = await db
+      .insert(items)
+      .values([item as any])
+      .returning();
+    return newItem;
+  }
+
+  async getItem(id: string): Promise<Item | undefined> {
+    const [item] = await db.select().from(items).where(eq(items.id, id));
+    return item || undefined;
+  }
+
+  async getProfileItems(profileId: string): Promise<Item[]> {
+    return await db
+      .select()
+      .from(items)
+      .where(eq(items.profileId, profileId))
+      .orderBy(desc(items.createdAt));
+  }
+
+  async updateItem(id: string, updates: Partial<Item>): Promise<Item> {
+    const updateData = { ...updates, updatedAt: sql`now()` };
+    const [updatedItem] = await db
+      .update(items)
+      .set(updateData as any)
+      .where(eq(items.id, id))
+      .returning();
+    return updatedItem;
+  }
+
+  async deleteItem(id: string): Promise<void> {
+    await db.delete(items).where(eq(items.id, id));
+  }
+
+  // Misc Entity management
+  async createMiscEntity(misc: InsertMiscEntity): Promise<MiscEntity> {
+    const [newMisc] = await db
+      .insert(miscEntities)
+      .values([misc as any])
+      .returning();
+    return newMisc;
+  }
+
+  async getMiscEntity(id: string): Promise<MiscEntity | undefined> {
+    const [misc] = await db.select().from(miscEntities).where(eq(miscEntities.id, id));
+    return misc || undefined;
+  }
+
+  async getProfileMiscEntities(profileId: string): Promise<MiscEntity[]> {
+    return await db
+      .select()
+      .from(miscEntities)
+      .where(eq(miscEntities.profileId, profileId))
+      .orderBy(desc(miscEntities.createdAt));
+  }
+
+  async updateMiscEntity(id: string, updates: Partial<MiscEntity>): Promise<MiscEntity> {
+    const updateData = { ...updates, updatedAt: sql`now()` };
+    const [updatedMisc] = await db
+      .update(miscEntities)
+      .set(updateData as any)
+      .where(eq(miscEntities.id, id))
+      .returning();
+    return updatedMisc;
+  }
+
+  async deleteMiscEntity(id: string): Promise<void> {
+    await db.delete(miscEntities).where(eq(miscEntities.id, id));
+  }
+
   async getAllEntities(profileId: string): Promise<{
     people: Person[];
     places: Place[];
     events: Event[];
+    concepts: Concept[];
+    items: Item[];
+    misc: MiscEntity[];
   }> {
-    const [peopleList, placesList, eventsList] = await Promise.all([
+    const [peopleList, placesList, eventsList, conceptsList, itemsList, miscList] = await Promise.all([
       this.getProfilePeople(profileId),
       this.getProfilePlaces(profileId),
       this.getProfileEvents(profileId),
+      this.getProfileConcepts(profileId),
+      this.getProfileItems(profileId),
+      this.getProfileMiscEntities(profileId),
     ]);
 
     return {
       people: peopleList,
       places: placesList,
       events: eventsList,
+      concepts: conceptsList,
+      items: itemsList,
+      misc: miscList,
     };
   }
 
@@ -2596,6 +2811,9 @@ export class DatabaseStorage implements IStorage {
     personIds?: string[];
     placeIds?: string[];
     eventIds?: string[];
+    conceptIds?: string[];
+    itemIds?: string[];
+    miscIds?: string[];
   }): Promise<void> {
     // Create junction table entries for people
     if (entityLinks.personIds && entityLinks.personIds.length > 0) {
@@ -2641,12 +2859,60 @@ export class DatabaseStorage implements IStorage {
         }
       }
     }
+
+    // Create junction table entries for concepts
+    if (entityLinks.conceptIds && entityLinks.conceptIds.length > 0) {
+      for (const conceptId of entityLinks.conceptIds) {
+        const concept = await this.getConcept(conceptId);
+        if (concept) {
+          await db.insert(memoryConceptLinks).values({
+            memoryId,
+            conceptId
+          }).onConflictDoNothing();
+        } else {
+          console.warn(`⚠️ Concept ID ${conceptId} not found, skipping link`);
+        }
+      }
+    }
+
+    // Create junction table entries for items
+    if (entityLinks.itemIds && entityLinks.itemIds.length > 0) {
+      for (const itemId of entityLinks.itemIds) {
+        const item = await this.getItem(itemId);
+        if (item) {
+          await db.insert(memoryItemLinks).values({
+            memoryId,
+            itemId
+          }).onConflictDoNothing();
+        } else {
+          console.warn(`⚠️ Item ID ${itemId} not found, skipping link`);
+        }
+      }
+    }
+
+    // Create junction table entries for misc entities
+    if (entityLinks.miscIds && entityLinks.miscIds.length > 0) {
+      for (const miscId of entityLinks.miscIds) {
+        const misc = await this.getMiscEntity(miscId);
+        if (misc) {
+          await db.insert(memoryMiscLinks).values({
+            memoryId,
+            miscId
+          }).onConflictDoNothing();
+        } else {
+          console.warn(`⚠️ Misc Entity ID ${miscId} not found, skipping link`);
+        }
+      }
+    }
   }
 
   async getMemoryWithEntityLinks(profileId: string, limit = 50): Promise<Array<MemoryEntry & {
     people?: Person[];
     places?: Place[];
     events?: Event[];
+    concepts?: Concept[];
+    items?: Item[];
+    misc?: MiscEntity[];
   }>> {
     // First, get the memories
     const memories = await db
@@ -2663,7 +2929,7 @@ export class DatabaseStorage implements IStorage {
 
     // Then, for each memory, get the linked entities
     const enrichedMemories = await Promise.all(memories.map(async (memory) => {
-      const [peopleLinks, placeLinks, eventLinks] = await Promise.all([
+      const [peopleLinks, placeLinks, eventLinks, conceptLinks, itemLinks, miscLinks] = await Promise.all([
         // Get people linked to this memory
         db.select({ person: people })
           .from(memoryPeopleLinks)
@@ -2681,6 +2947,24 @@ export class DatabaseStorage implements IStorage {
           .from(memoryEventLinks)
           .innerJoin(events, eq(memoryEventLinks.eventId, events.id))
           .where(eq(memoryEventLinks.memoryId, memory.id)),
+
+        // Get concepts linked to this memory
+        db.select({ concept: concepts })
+          .from(memoryConceptLinks)
+          .innerJoin(concepts, eq(memoryConceptLinks.conceptId, concepts.id))
+          .where(eq(memoryConceptLinks.memoryId, memory.id)),
+
+        // Get items linked to this memory
+        db.select({ item: items })
+          .from(memoryItemLinks)
+          .innerJoin(items, eq(memoryItemLinks.itemId, items.id))
+          .where(eq(memoryItemLinks.memoryId, memory.id)),
+
+        // Get misc entities linked to this memory
+        db.select({ misc: miscEntities })
+          .from(memoryMiscLinks)
+          .innerJoin(miscEntities, eq(memoryMiscLinks.miscId, miscEntities.id))
+          .where(eq(memoryMiscLinks.memoryId, memory.id)),
       ]);
 
       return {
@@ -2688,6 +2972,9 @@ export class DatabaseStorage implements IStorage {
         people: peopleLinks.map(link => link.person),
         places: placeLinks.map(link => link.place),
         events: eventLinks.map(link => link.event),
+        concepts: conceptLinks.map(link => link.concept),
+        items: itemLinks.map(link => link.item),
+        misc: miscLinks.map(link => link.misc),
       };
     }));
 
@@ -2746,6 +3033,57 @@ export class DatabaseStorage implements IStorage {
     return results.map(row => row.memory);
   }
 
+  async getMemoriesForConcept(conceptId: string, profileId: string): Promise<MemoryEntry[]> {
+    const results = await db
+      .select({ memory: memoryEntries })
+      .from(memoryConceptLinks)
+      .innerJoin(memoryEntries, eq(memoryConceptLinks.memoryId, memoryEntries.id))
+      .where(
+        and(
+          eq(memoryConceptLinks.conceptId, conceptId),
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
+
+    return results.map(row => row.memory);
+  }
+
+  async getMemoriesForItem(itemId: string, profileId: string): Promise<MemoryEntry[]> {
+    const results = await db
+      .select({ memory: memoryEntries })
+      .from(memoryItemLinks)
+      .innerJoin(memoryEntries, eq(memoryItemLinks.memoryId, memoryEntries.id))
+      .where(
+        and(
+          eq(memoryItemLinks.itemId, itemId),
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
+
+    return results.map(row => row.memory);
+  }
+
+  async getMemoriesForMiscEntity(miscId: string, profileId: string): Promise<MemoryEntry[]> {
+    const results = await db
+      .select({ memory: memoryEntries })
+      .from(memoryMiscLinks)
+      .innerJoin(memoryEntries, eq(memoryMiscLinks.memoryId, memoryEntries.id))
+      .where(
+        and(
+          eq(memoryMiscLinks.miscId, miscId),
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE')
+        )
+      )
+      .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt));
+
+    return results.map(row => row.memory);
+  }
+
   /**
    * Get all memories from a specific source (e.g., podcast episode, document)
    * Useful for querying "What did we learn from Episode 68?" or "What's in this document?"
@@ -2771,6 +3109,77 @@ export class DatabaseStorage implements IStorage {
         desc(memoryEntries.confidence),
         desc(memoryEntries.createdAt)
       );
+  }
+
+  async searchEntities(profileId: string, query: string): Promise<{
+    people: Person[];
+    places: Place[];
+    events: Event[];
+    concepts: Concept[];
+    items: Item[];
+    misc: MiscEntity[];
+  }> {
+    const lowerQuery = `%${query.toLowerCase()}%`;
+
+    const [peopleList, placesList, eventsList, conceptsList, itemsList, miscList] = await Promise.all([
+      db.select().from(people).where(and(
+        eq(people.profileId, profileId),
+        or(
+          ilike(people.canonicalName, lowerQuery),
+          ilike(people.description, lowerQuery),
+          sql`EXISTS (SELECT 1 FROM jsonb_array_elements_text(${people.aliases}) as alias WHERE alias ILIKE ${lowerQuery})`
+        )
+      )).limit(5),
+      
+      db.select().from(places).where(and(
+        eq(places.profileId, profileId),
+        or(
+          ilike(places.canonicalName, lowerQuery),
+          ilike(places.description, lowerQuery)
+        )
+      )).limit(5),
+
+      db.select().from(events).where(and(
+        eq(events.profileId, profileId),
+        or(
+          ilike(events.canonicalName, lowerQuery),
+          ilike(events.description, lowerQuery)
+        )
+      )).limit(5),
+
+      db.select().from(concepts).where(and(
+        eq(concepts.profileId, profileId),
+        or(
+          ilike(concepts.canonicalName, lowerQuery),
+          ilike(concepts.description, lowerQuery)
+        )
+      )).limit(5),
+
+      db.select().from(items).where(and(
+        eq(items.profileId, profileId),
+        or(
+          ilike(items.canonicalName, lowerQuery),
+          ilike(items.description, lowerQuery)
+        )
+      )).limit(5),
+
+      db.select().from(miscEntities).where(and(
+        eq(miscEntities.profileId, profileId),
+        or(
+          ilike(miscEntities.canonicalName, lowerQuery),
+          ilike(miscEntities.description, lowerQuery)
+        )
+      )).limit(5),
+    ]);
+
+    return {
+      people: peopleList,
+      places: placesList,
+      events: eventsList,
+      concepts: conceptsList,
+      items: itemsList,
+      misc: miscList,
+    };
   }
 }
 

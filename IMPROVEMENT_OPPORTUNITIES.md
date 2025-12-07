@@ -48,6 +48,27 @@
 - ✅ Timeout increased: 15s → 60s
 - ✅ Automatic chunking for scans >500 groups
 - ✅ Smart chunk retrieval (auto-merges CHUNK records with ACTIVE scan)
+
+### 5. **Fast Emotion Tags for Streaming** ✅ COMPLETED (Dec 2)
+**Status:** DEPLOYED but DISABLED - Reverted to full AI enhancer for quality
+- ✅ Implemented `generateFastEmotionalArc` in `emotionTagGenerator.ts`
+- ✅ Bypasses AI call for STREAMING mode (saves 1-3s)
+- ✅ Uses pattern matching (caps, punctuation, length) to determine emotion
+- ✅ Maintains "Grumpy Mode" baseline even without AI
+- **NOTE:** User requested full AI enhancer for Streaming mode (Dec 2) to ensure high-quality voice tags.
+
+### 6. **Memory Pre-Warming** ✅ COMPLETED (Dec 2)
+**Status:** DEPLOYED - Context ready before first message
+- ✅ Implemented `ContextPrewarmer` service
+- ✅ Pre-loads training examples, podcast memories, and lore context
+- ✅ Eliminates "cold start" lag for first message
+- ✅ Added API endpoints for stats and manual refresh
+
+### 7. **Entity System Expansion** ✅ COMPLETED (Dec 2)
+**Status:** DEPLOYED - Broader lore categorization
+- ✅ Added `concepts`, `items`, `miscEntities` tables
+- ✅ Updated schema to support non-person/place/event entities
+- ✅ Ready for enhanced knowledge graph integration
 - ✅ Added 'CHUNK' status to schema type definitions
 - ✅ Transparent to user (chunks handled automatically)
 

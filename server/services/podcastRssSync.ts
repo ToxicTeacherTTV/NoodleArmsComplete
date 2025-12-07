@@ -189,7 +189,8 @@ export class PodcastRssSyncService {
     db: PostgresJsDatabase<any>,
     profileId: string,
     feedUrl: string,
-    processTranscripts: boolean = true
+    processTranscripts: boolean = true,
+    podcastName: string = 'Camping Them Softly'
   ): Promise<{
     newEpisodes: number;
     updatedEpisodes: number;
@@ -227,6 +228,7 @@ export class PodcastRssSyncService {
           const episodeData: any = {
             profileId,
             guid: rssEpisode.guid,
+            podcastName,
             title: rssEpisode.title,
             description: rssEpisode.description,
             episodeNumber,
@@ -329,15 +331,13 @@ export class PodcastRssSyncService {
           .where(eq(podcastEpisodes.id, episode.id));
 
         // Extract facts using existing podcast fact extractor
-        const result = await extractor.extractAndStoreFacts(
-          storage,
-          profileId,
+        const result = await extractor.extractFactsFromEpisode(
           episode.id,
           episode.episodeNumber || 0,
           episode.title,
           episode.transcript,
-          episode.guestNames || [],
-          episode.topics || []
+          profileId,
+          storage
         );
 
         // Update episode with results

@@ -144,43 +144,22 @@ class EmbeddingService {
       // Generate embedding for the query
       const queryEmbedding = await this.generateEmbedding(queryText);
       
-      // Get all memory entries with embeddings for this profile
-      const memories = await storage.getMemoryEntriesWithEmbeddings(profileId);
+      // Use DB-side vector search
+      const results = await storage.findSimilarMemories(
+        profileId, 
+        queryEmbedding.embedding, 
+        limit, 
+        similarityThreshold
+      );
       
-      if (!memories || memories.length === 0) {
-        console.log("No memories with embeddings found");
-        return [];
-      }
-      
-      // Calculate similarities
-      const similarities: SemanticSearchResult[] = [];
-      
-      for (const memory of memories) {
-        if (!memory.embedding) continue;
-        
-        try {
-          const memoryEmbedding = JSON.parse(memory.embedding as string);
-          const similarity = this.cosineSimilarity(queryEmbedding.embedding, memoryEmbedding);
-          
-          if (similarity >= similarityThreshold) {
-            similarities.push({
-              id: memory.id,
-              content: memory.content,
-              similarity,
-              type: memory.type,
-              importance: memory.importance || 1,
-              confidence: memory.confidence || 50
-            });
-          }
-        } catch (error) {
-          console.error(`Failed to parse embedding for memory ${memory.id}:`, error);
-        }
-      }
-      
-      // Sort by similarity score (descending) and limit results
-      return similarities
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, limit);
+      return results.map(r => ({
+        id: r.id,
+        content: r.content,
+        similarity: r.similarity,
+        type: r.type,
+        importance: r.importance || 1,
+        confidence: r.confidence || 50
+      }));
         
     } catch (error) {
       console.error("Semantic search error:", error);
@@ -216,7 +195,24 @@ class EmbeddingService {
         if (!content.embedding) continue;
         
         try {
-          const contentEmbedding = JSON.parse(content.embedding as string);
+          let contentEmbedding: number[];
+          if (Array.isArray(content.embedding)) {
+            contentEmbedding = content.embedding;
+          } else if (typeof content.embedding === 'string') {
+            try {
+              contentEmbedding = JSON.parse(content.embedding);
+            } catch (e) {
+              const cleaned = content.embedding.replace(/^\[|\]$/g, '');
+              contentEmbedding = cleaned.split(',').map(n => parseFloat(n.trim()));
+              if (contentEmbedding.some(isNaN)) {
+                 console.error(`[EmbeddingService] Failed to parse content embedding: ${content.embedding.substring(0, 50)}...`);
+                 continue;
+              }
+            }
+          } else {
+            continue;
+          }
+          
           const similarity = this.cosineSimilarity(queryEmbedding.embedding, contentEmbedding);
           
           if (similarity >= similarityThreshold) {
@@ -251,7 +247,7 @@ class EmbeddingService {
       const embeddingResult = await this.generateEmbedding(content);
       
       await storage.updateMemoryEmbedding(memoryId, {
-        embedding: JSON.stringify(embeddingResult.embedding),
+        embedding: embeddingResult.embedding,
         embeddingModel: embeddingResult.model,
         embeddingUpdatedAt: new Date()
       });
@@ -473,7 +469,24 @@ class EmbeddingService {
         if (!memory.embedding) continue;
         
         try {
-          const memoryEmbedding = JSON.parse(memory.embedding as string);
+          let memoryEmbedding: number[];
+          if (Array.isArray(memory.embedding)) {
+            memoryEmbedding = memory.embedding;
+          } else if (typeof memory.embedding === 'string') {
+            try {
+              memoryEmbedding = JSON.parse(memory.embedding);
+            } catch (e) {
+              const cleaned = memory.embedding.replace(/^\[|\]$/g, '');
+              memoryEmbedding = cleaned.split(',').map(n => parseFloat(n.trim()));
+              if (memoryEmbedding.some(isNaN)) {
+                 console.error(`[EmbeddingService] Failed to parse memory embedding in duplicates: ${memory.embedding.substring(0, 50)}...`);
+                 continue;
+              }
+            }
+          } else {
+            continue;
+          }
+
           const similarity = this.cosineSimilarity(newEmbedding.embedding, memoryEmbedding);
           
           if (similarity >= similarityThreshold) {
@@ -533,7 +546,24 @@ class EmbeddingService {
         scannedCount++;
         
         try {
-          const memoryEmbedding = JSON.parse(memory.embedding as string);
+          let memoryEmbedding: number[];
+          if (Array.isArray(memory.embedding)) {
+            memoryEmbedding = memory.embedding;
+          } else if (typeof memory.embedding === 'string') {
+            try {
+              memoryEmbedding = JSON.parse(memory.embedding);
+            } catch (e) {
+              const cleaned = memory.embedding.replace(/^\[|\]$/g, '');
+              memoryEmbedding = cleaned.split(',').map(n => parseFloat(n.trim()));
+              if (memoryEmbedding.some(isNaN)) {
+                 console.error(`[EmbeddingService] Failed to parse memory embedding in contradictions: ${memory.embedding.substring(0, 50)}...`);
+                 continue;
+              }
+            }
+          } else {
+            continue;
+          }
+
           const similarity = this.cosineSimilarity(newEmbedding.embedding, memoryEmbedding);
           
           if (similarity >= similarityThreshold) {
@@ -570,8 +600,8 @@ class EmbeddingService {
    * Used by the deep scan duplicate checker
    */
   findDuplicatesFromStoredEmbeddings(
-    sourceMemory: { id: string; content: string; embedding: string | null },
-    allMemories: Array<{ id: string; content: string; embedding: string | null }>,
+    sourceMemory: { id: string; content: string; embedding: string | number[] | null },
+    allMemories: Array<{ id: string; content: string; embedding: string | number[] | null }>,
     similarityThreshold: number = 0.90
   ): Array<{ id: string; content: string; similarity: number }> {
     const duplicates: Array<{ id: string; content: string; similarity: number }> = [];
@@ -582,7 +612,12 @@ class EmbeddingService {
     }
     
     try {
-      const sourceEmbedding = JSON.parse(sourceMemory.embedding);
+      let sourceEmbedding: number[];
+      if (Array.isArray(sourceMemory.embedding)) {
+        sourceEmbedding = sourceMemory.embedding;
+      } else {
+        sourceEmbedding = JSON.parse(sourceMemory.embedding as string);
+      }
       
       for (const targetMemory of allMemories) {
         // Skip self-comparison and memories without embeddings
@@ -591,7 +626,13 @@ class EmbeddingService {
         }
         
         try {
-          const targetEmbedding = JSON.parse(targetMemory.embedding);
+          let targetEmbedding: number[];
+          if (Array.isArray(targetMemory.embedding)) {
+            targetEmbedding = targetMemory.embedding;
+          } else {
+            targetEmbedding = JSON.parse(targetMemory.embedding as string);
+          }
+
           const similarity = this.cosineSimilarity(sourceEmbedding, targetEmbedding);
           
           if (similarity >= similarityThreshold) {
@@ -613,6 +654,39 @@ class EmbeddingService {
       console.error(`Failed to parse embedding for memory ${sourceMemory.id}:`, error);
       return [];
     }
+  }
+
+  /**
+   * 🚀 OPTIMIZED: Find duplicates using pre-parsed vector embeddings
+   * This avoids JSON.parse overhead in the inner loop
+   */
+  findDuplicatesFromVectors(
+    sourceId: string,
+    sourceVector: number[],
+    allMemories: Array<{ id: string; content: string; vector: number[] }>,
+    similarityThreshold: number = 0.90
+  ): Array<{ id: string; content: string; similarity: number }> {
+    const duplicates: Array<{ id: string; content: string; similarity: number }> = [];
+    
+    for (const targetMemory of allMemories) {
+      // Skip self-comparison
+      if (targetMemory.id === sourceId) {
+        continue;
+      }
+      
+      const similarity = this.cosineSimilarity(sourceVector, targetMemory.vector);
+      
+      if (similarity >= similarityThreshold) {
+        duplicates.push({
+          id: targetMemory.id,
+          content: targetMemory.content,
+          similarity
+        });
+      }
+    }
+    
+    // Sort by similarity (highest first) and limit to top 10
+    return duplicates.sort((a, b) => b.similarity - a.similarity).slice(0, 10);
   }
 
   /**

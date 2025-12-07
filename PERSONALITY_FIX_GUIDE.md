@@ -42,12 +42,25 @@ This removes the randomness that was making personality inconsistent.
 
 **Result:** More predictable and consistent personality responses
 
+### 3. Arc Raiders Squad & Sticky Context ✅ COMPLETED (Dec 7, 2025)
+
+**Problem:** Nicky would forget he was talking about Arc Raiders if the user didn't mention the game name in every message.
+**Solution:**
+- **Sticky Context:** Checks last 6 messages for "Arc Raiders" keywords.
+- **The Squad:** Defined specific family members for this game mode:
+  - **Cousin Vinny (Enforcer):** Refuses shields, dies first.
+  - **Uncle Paulie (Marksman):** Blind, blames lag.
+  - **Little Anthony:** Loot goblin, steals meds.
+- **Creative Freedom:** Explicitly allowed to "make shit up" and exaggerate.
+
 ---
 
 ## 📊 IMPLEMENTATION STATUS
 
 ### ✅ Completed Changes:
 - [x] Updated core identity with response variety guidelines
+- [x] Disabled Chaos Engine (0%)
+- [x] Implemented Arc Raiders "Sticky Context" and Squad definitions
 - [x] Added explicit "ANSWER THE QUESTION" rules
 - [x] Disabled chaos engine (set to 0%)
 - [x] Clarified when to use character traits naturally

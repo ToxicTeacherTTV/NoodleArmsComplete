@@ -4,7 +4,13 @@ import type {
   Profile as DbProfile, 
   MemoryEntry as DbMemoryEntry, 
   Document as DbDocument,
-  Conversation as DbConversation
+  Conversation as DbConversation,
+  Person as DbPerson,
+  Place as DbPlace,
+  Event as DbEvent,
+  Concept as DbConcept,
+  Item as DbItem,
+  MiscEntity as DbMiscEntity
 } from '@shared/schema';
 
 // Client-compatible types with Date -> string serialization
@@ -17,9 +23,46 @@ export type Profile = Omit<DbProfile, 'createdAt' | 'updatedAt'> & {
   updatedAt: string;
 };
 
+export type Person = Omit<DbPerson, 'createdAt' | 'updatedAt'> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Place = Omit<DbPlace, 'createdAt' | 'updatedAt'> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Event = Omit<DbEvent, 'createdAt' | 'updatedAt'> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Concept = Omit<DbConcept, 'createdAt' | 'updatedAt'> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Item = Omit<DbItem, 'createdAt' | 'updatedAt'> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MiscEntity = Omit<DbMiscEntity, 'createdAt' | 'updatedAt'> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type MemoryEntry = Omit<DbMemoryEntry, 'createdAt' | 'updatedAt'> & {
   createdAt: string;
   updatedAt?: string;
+  // Linked entities
+  people?: Person[];
+  places?: Place[];
+  events?: Event[];
+  concepts?: Concept[];
+  items?: Item[];
+  misc?: MiscEntity[];
 };
 
 export type Document = Omit<DbDocument, 'createdAt' | 'updatedAt'> & {

@@ -13,6 +13,9 @@ import EvolutionPanel from "./evolution-panel";
 import { Search, X, RefreshCw, Filter, Scan } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MemoryAnalytics } from "./memory-analytics";
+import { ProtectedFactsManager } from "./protected-facts-manager";
 
 interface MemoryPanelProps {
   profileId?: string;
@@ -263,6 +266,29 @@ export default function MemoryPanel({
     }
   };
 
+  const renderEntityBadges = (memory: MemoryEntry) => {
+    const entities = [
+      ...(memory.people || []).map(p => ({ type: 'Person', name: p.canonicalName, color: 'bg-blue-500/20 text-blue-300' })),
+      ...(memory.places || []).map(p => ({ type: 'Place', name: p.canonicalName, color: 'bg-green-500/20 text-green-300' })),
+      ...(memory.events || []).map(e => ({ type: 'Event', name: e.canonicalName, color: 'bg-yellow-500/20 text-yellow-300' })),
+      ...(memory.concepts || []).map(c => ({ type: 'Concept', name: c.canonicalName, color: 'bg-purple-500/20 text-purple-300' })),
+      ...(memory.items || []).map(i => ({ type: 'Item', name: i.canonicalName, color: 'bg-orange-500/20 text-orange-300' })),
+      ...(memory.misc || []).map(m => ({ type: 'Misc', name: m.canonicalName, color: 'bg-gray-500/20 text-gray-300' })),
+    ];
+
+    if (entities.length === 0) return null;
+
+    return (
+      <div className="flex flex-wrap gap-1 mt-2">
+        {entities.map((entity, idx) => (
+          <Badge key={idx} className={`text-xs ${entity.color} border-none`}>
+            {entity.type}: {entity.name}
+          </Badge>
+        ))}
+      </div>
+    );
+  };
+
   const activeFilterCount = 
     (sourceFilter !== "all" ? 1 : 0) +
     (categoryFilter !== "all" ? 1 : 0) +
@@ -270,8 +296,16 @@ export default function MemoryPanel({
 
   return (
     <div className="flex-1 p-4 space-y-4">
-      {/* Memory Stats */}
-      <Card className="glass-effect p-4 rounded-lg">
+      <Tabs defaultValue="browse" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsTrigger value="browse">Browse Memories</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="protected">Protected Facts</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="browse" className="space-y-4">
+          {/* Memory Stats */}
+          <Card className="glass-effect p-4 rounded-lg">
         <CardContent className="p-0">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-foreground">Memory Statistics</h3>
@@ -622,6 +656,7 @@ export default function MemoryPanel({
                         onChange={() => toggleMemorySelection(memory.id)}
                         className="h-4 w-4 cursor-pointer"
                         data-testid={`checkbox-memory-${memory.id}`}
+                        aria-label={`Select memory ${memory.id}`}
                       />
                       <div className={`text-xs font-medium ${getTypeColor(memory.type)}`}>
                         {memory.type.charAt(0) + memory.type.slice(1).toLowerCase()} Knowledge
@@ -641,6 +676,7 @@ export default function MemoryPanel({
                       ))}
                     </div>
                   )}
+                  {renderEntityBadges(memory)}
                   {memory.source && (
                     <div className="text-xs text-secondary bg-secondary/10 px-2 py-1 rounded mb-2">
                       <strong>Source:</strong> {memory.source}
@@ -658,6 +694,16 @@ export default function MemoryPanel({
           )}
         </div>
       </div>
+      </TabsContent>
+
+      <TabsContent value="analytics">
+        <MemoryAnalytics profileId={profileId} />
+      </TabsContent>
+
+      <TabsContent value="protected">
+        <ProtectedFactsManager />
+      </TabsContent>
+      </Tabs>
 
       {/* EVOLUTIONARY AI PANEL */}
       <EvolutionPanel profileId={profileId} />

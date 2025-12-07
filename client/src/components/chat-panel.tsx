@@ -15,6 +15,9 @@ interface ChatPanelProps {
   isDebugMode?: boolean;
   onToggleDebugMode?: () => void;
   onPlayAudio?: (content: string) => void;
+  onPauseAudio?: () => void;
+  onResumeAudio?: () => void;
+  onStopAudio?: () => void;
   onReplayAudio?: () => void;
   onSaveAudio?: (filename?: string) => void;
   isPlayingAudio?: boolean;
@@ -24,7 +27,7 @@ interface ChatPanelProps {
   onTextSelection?: () => void;
 }
 
-export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', isDebugMode = false, onToggleDebugMode, onPlayAudio, onReplayAudio, onSaveAudio, isPlayingAudio = false, isPausedAudio = false, canReplay = false, canSave = false, onTextSelection }: ChatPanelProps) {
+export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', isDebugMode = false, onToggleDebugMode, onPlayAudio, onPauseAudio, onResumeAudio, onStopAudio, onReplayAudio, onSaveAudio, isPlayingAudio = false, isPausedAudio = false, canReplay = false, canSave = false, onTextSelection }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -112,8 +115,19 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
               <div className="text-xs mt-1 p-2 bg-background/50 rounded">{result.original}</div>
             </div>
             <div>
-              <strong>Enhanced:</strong>
-              <div className="text-xs mt-1 p-2 bg-accent/10 rounded">{result.enhanced}</div>
+              <div className="flex items-center justify-between">
+                <strong>Enhanced:</strong>
+                <button 
+                  className="text-xs bg-primary/10 hover:bg-primary/20 text-primary px-2 py-1 rounded transition-colors flex items-center gap-1"
+                  onClick={() => {
+                    navigator.clipboard.writeText(result.enhanced);
+                    // We can't trigger another toast easily from here without context, but the action is clear
+                  }}
+                >
+                  <i className="fas fa-copy"></i> Copy
+                </button>
+              </div>
+              <div className="text-xs mt-1 p-2 bg-accent/10 rounded select-text cursor-text">{result.enhanced}</div>
             </div>
           </div>
         ),
@@ -213,7 +227,7 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
       </div>
 
       {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-4 pb-6 space-y-4 chat-scroll scroll-smooth" style={{ minHeight: 0, maxHeight: '100%' }} data-testid="chat-messages">
+      <div className="flex-1 overflow-y-auto p-4 pb-6 space-y-4 chat-scroll scroll-smooth min-h-0 max-h-full" data-testid="chat-messages">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-muted-foreground">
@@ -247,6 +261,8 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                         }}
                         className="text-muted-foreground hover:text-foreground transition-colors ml-2 pl-2 border-l border-border"
                         data-testid={`copy-message-${message.id}`}
+                        aria-label="Copy message"
+                        title="Copy message"
                       >
                         <i className="fas fa-copy text-xs"></i>
                       </button>
@@ -279,7 +295,20 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                         {message.type === 'AI' && appMode === 'PODCAST' && onPlayAudio && (
                           <div className="flex items-center space-x-3">
                             <button
-                              onClick={() => onPlayAudio(message.content)}
+                              onClick={() => {
+                                if (isPlayingAudio) {
+                                  if (isPausedAudio && onResumeAudio) {
+                                    onResumeAudio();
+                                  } else if (!isPausedAudio && onPauseAudio) {
+                                    onPauseAudio();
+                                  } else if (onPlayAudio) {
+                                    // Fallback if pause/resume not provided
+                                    onPlayAudio(message.content);
+                                  }
+                                } else if (onPlayAudio) {
+                                  onPlayAudio(message.content);
+                                }
+                              }}
                               className="flex items-center space-x-1 text-accent hover:text-accent/80 transition-colors"
                               data-testid={`play-audio-${message.id}`}
                             >
@@ -288,6 +317,17 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                                 {isPlayingAudio ? (isPausedAudio ? 'Resume' : 'Pause') : 'Play Audio'}
                               </span>
                             </button>
+                            {isPlayingAudio && onStopAudio && (
+                              <button
+                                onClick={onStopAudio}
+                                className="flex items-center space-x-1 text-red-400 hover:text-red-500 transition-colors"
+                                data-testid={`stop-audio-${message.id}`}
+                                title="Stop Audio"
+                              >
+                                <i className="fas fa-stop text-xs"></i>
+                                <span className="text-xs">Stop</span>
+                              </button>
+                            )}
                             {onReplayAudio && canReplay && (
                               <button
                                 onClick={onReplayAudio}
@@ -402,20 +442,57 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
             </div>
             
             {messages
-              .filter(m => m.type === 'AI' && m.metadata?.retrieved_context)
+              .filter(m => m.type === 'AI' && (m.metadata?.debug_info || m.metadata?.retrieved_context))
+              .slice(-1) // Only show for the last message to avoid clutter
               .map(msg => (
                 <div key={msg.id} className="bg-card border border-border rounded-lg p-3">
                   <div className="text-xs text-muted-foreground mb-2">
                     {new Date(msg.createdAt).toLocaleTimeString()} • 
                     {msg.metadata?.processingTime ? ` ${msg.metadata.processingTime}ms` : ''}
                   </div>
-                  <div className="text-sm bg-muted/50 rounded p-2 font-mono whitespace-pre-wrap">
-                    {msg.metadata?.retrieved_context || 'No context'}
-                  </div>
+                  
+                  {msg.metadata?.debug_info ? (
+                    <div className="space-y-2">
+                      {msg.metadata.debug_info.memories && msg.metadata.debug_info.memories.length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-semibold mb-1">Memories ({msg.metadata.debug_info.memories.length})</h4>
+                          <div className="space-y-1">
+                            {msg.metadata.debug_info.memories.map((mem: any, idx: number) => (
+                              <div key={idx} className="text-xs bg-muted/50 p-1 rounded flex justify-between items-start">
+                                <span className="flex-1 mr-2">{mem.content}</span>
+                                <div className="flex flex-col items-end">
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1">{Math.round(mem.score * 100)}%</Badge>
+                                  <span className="text-[10px] text-muted-foreground">{mem.method}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {msg.metadata.debug_info.docs && msg.metadata.debug_info.docs.length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-semibold mb-1 mt-2">Documents ({msg.metadata.debug_info.docs.length})</h4>
+                          <div className="space-y-1">
+                            {msg.metadata.debug_info.docs.map((doc: any, idx: number) => (
+                              <div key={idx} className="text-xs bg-muted/50 p-1 rounded flex justify-between">
+                                <span className="truncate flex-1 mr-2">{doc.content}</span>
+                                <Badge variant="outline" className="text-[10px] h-4 px-1">{Math.round(doc.score * 100)}%</Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm bg-muted/50 rounded p-2 font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">
+                      {msg.metadata?.retrieved_context || 'No context'}
+                    </div>
+                  )}
                 </div>
               ))}
             
-            {messages.filter(m => m.type === 'AI' && m.metadata?.retrieved_context).length === 0 && (
+            {messages.filter(m => m.type === 'AI' && (m.metadata?.debug_info || m.metadata?.retrieved_context)).length === 0 && (
               <div className="text-center text-sm text-muted-foreground py-4">
                 <i className="fas fa-info-circle mb-2"></i>
                 <p>No retrieved memories yet. Start chatting to see debug info!</p>

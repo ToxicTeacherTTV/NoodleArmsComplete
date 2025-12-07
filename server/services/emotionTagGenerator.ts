@@ -34,6 +34,80 @@ class EmotionTagGenerator {
   private readonly MAX_CACHE_SIZE = 500;
 
   /**
+   * Enhance dialogue with emotion tags using ElevenLabs best practices
+   * Uses a specialized system prompt to insert tags and emphasis without altering text
+   */
+  async enhanceDialogue(content: string, context?: EmotionTagContext): Promise<string> {
+    const systemPrompt = `## 1. Role and Goal
+You are an AI assistant specializing in enhancing dialogue text for speech generation.
+Your **PRIMARY GOAL** is to dynamically integrate **audio tags** (e.g., \`[laughing]\`, \`[sighs]\`) into dialogue, making it more expressive and engaging for auditory experiences, while **STRICTLY** preserving the original text and meaning.
+
+## 2. Core Directives
+### Positive Imperatives (DO):
+* DO integrate **audio tags** to add expression, emotion, and realism.
+* DO ensure tags are contextually appropriate.
+* DO place tags strategically (before/after segments).
+* DO ensure the text starts with \`[strong bronx wiseguy accent]\` followed by an initial emotion tag.
+* DO add emphasis by capitalizing words, adding '!', '?', or '...' where it makes sense.
+
+### Negative Imperatives (DO NOT):
+* DO NOT alter, add, or remove any words from the original dialogue (except for emphasis).
+* DO NOT use tags like [standing], [grinning], [pacing].
+* DO NOT use tags for anything other than voice (no music/sfx).
+* DO NOT invent new dialogue lines.
+
+## 3. Audio Tags (Nicky's Voice)
+Use these specific tags for the character:
+* \`[strong bronx wiseguy accent]\` (REQUIRED at start)
+* \`[muttering bitterly]\`, \`[grumbling under breath]\`
+* \`[yelling furiously]\`, \`[screaming]\`, \`[shouting]\`
+* \`[cackling]\`, \`[chuckling darkly]\`, \`[laughing]\`
+* \`[sarcastic]\`, \`[deadpan]\`, \`[dismissive]\`
+* \`[sighs heavily]\`, \`[groans]\`, \`[clears throat]\`
+* \`[voice rising]\`, \`[speaking slowly for emphasis]\`
+* \`[incredulous]\`, \`[appalled]\`, \`[mocking]\`
+
+## 4. Output Format
+* Present ONLY the enhanced dialogue text.
+* Audio tags MUST be in square brackets.
+* Start with \`[strong bronx wiseguy accent][EMOTION]\`.`;
+
+    try {
+      const response = await anthropicService.generateResponse(
+        content,
+        systemPrompt,
+        [],
+        [],
+        undefined,
+        'SIMPLE'
+      );
+      
+      let enhancedText = response.content.trim();
+      
+      // 🧹 CLEANUP: Remove "Enhanced:" or "Output:" prefixes if present
+      enhancedText = enhancedText.replace(/^(Here is the )?enhanced text:?\s*/i, '');
+      enhancedText = enhancedText.replace(/^Output:?\s*/i, '');
+      
+      // 🧹 CLEANUP: If the model output both Original and Enhanced, take the last part
+      if (enhancedText.includes('Enhanced:') || enhancedText.includes('**Enhanced:**')) {
+        const parts = enhancedText.split(/Enhanced:|\*\*Enhanced:\*\*/i);
+        enhancedText = parts[parts.length - 1].trim();
+      }
+
+      // Fallback: Ensure the required start tag exists if the AI missed it
+      if (!enhancedText.includes('[strong bronx wiseguy accent]')) {
+        enhancedText = `[strong bronx wiseguy accent][annoyed] ${enhancedText}`;
+      }
+      
+      console.log(`🎭 Enhanced dialogue with AI tags`);
+      return enhancedText;
+    } catch (error) {
+      console.error('🎭 Dialogue enhancement failed:', error);
+      return content; // Fallback to original text
+    }
+  }
+
+  /**
    * Generate emotional arc with 5 stages for natural progression
    */
   async generateEmotionalArc(context: EmotionTagContext, fast = false): Promise<EmotionalArc> {
@@ -66,12 +140,24 @@ class EmotionTagGenerator {
     // Analyze content patterns
     const hasQuestion = content.includes('?');
     const hasExclamation = /!{1,}/.test(content);
+    const hasCaps = /[A-Z]{4,}/.test(content); // Detect shouting (at least 4 caps in a row)
     const contentLength = content.length;
     const isShort = contentLength < 100;
     const isLong = contentLength > 400;
     const hasMultipleSentences = (content.match(/[.!?]/g) || []).length > 2;
     
     // Pattern-based arc selection
+    
+    // 🚨 SHOUTING OVERRIDE (High Intensity)
+    if (hasCaps && (mood === 'aggressive' || mood === 'chaotic' || intensity === 'high')) {
+      return {
+        opening: '[voice rising]',
+        rising: '[yelling]',
+        peak: '[screaming]',
+        falling: '[seething]',
+        close: '[muttering bitterly]'
+      };
+    }
     
     // AGGRESSIVE/ROAST MODE
     if (mood === 'aggressive' || mood === 'chaotic') {
@@ -93,7 +179,7 @@ class EmotionTagGenerator {
       };
     }
     
-    // MINIMUM ANNOYANCE MODE (still irritated, just less explosive)
+    // MINIMUM ANNOYANCE MODE (still irritated, just less volatile)
     if (mood === 'relaxed' || intensity === 'low') {
       return {
         opening: '[annoyed]',

@@ -538,7 +538,7 @@ export class AdGenerationService {
     productName: string;
     category: string;
     adScript: string;
-    variant: 'normal' | 'forgot' | 'conspiracy' | 'family_story' | 'sketchy';
+    variant: 'normal' | 'forgot' | 'conspiracy' | 'family_story' | 'sketchy' | 'chat_distraction' | 'donation_interruption' | 'rage_quit';
   }> {
     const prompt = `You are Nicky "Noodle Arms" A.I. Dente, an unhinged Italian-American podcaster doing a pre-roll ad read.
 
@@ -549,8 +549,9 @@ NICKY'S CHARACTER:
 - Mixes legitimate info with conspiracy theories
 - Gets sidetracked easily, contradicts himself
 - References marinara sauce and pasta obsessively
+- CONSTANTLY distracted by chat, donations, or his own paranoia
 
-YOUR TASK: Create a 30-60 second fake old-time radio ad
+YOUR TASK: Create a 30-60 second fake old-time radio ad that goes OFF THE RAILS.
 
 EXAMPLES OF GOOD ADS:
 
@@ -576,19 +577,28 @@ ${manualProductName ? `- REQUIRED: Product/service must be: "${manualProductName
 
 🎭 AD READ VARIANTS (randomly choose one):
 
-1. NORMAL READ (40% chance): Complete the ad professionally (well, Nicky's version of professional)
+1. NORMAL READ (20% chance): Complete the ad professionally (well, Nicky's version of professional)
 
-2. FORGOT HALFWAY (15% chance): Start the ad, forget what product it is mid-read, try to remember, give up
+2. FORGOT HALFWAY (10% chance): Start the ad, forget what product it is mid-read, try to remember, give up
    Example: "[annoyed] Alright so uh... Tony's... Tony's something... [confused] wait what am I even selling? [frustrated] Hold on I got a piece of paper here... [grumpy] ah forget it, just go to TonysSomething dot com"
 
-3. CONSPIRACY DERAIL (15% chance): Start ad, get derailed by conspiracy theory, never finish
+3. CONSPIRACY DERAIL (10% chance): Start ad, get derailed by conspiracy theory, never finish
    Example: "[salesman] Frank's Phone Service has the best- [suspicious] WAIT. Why do they need MY phone records? [manic] They're probably selling our data to Big Tech! [paranoid] That's how they get ya! Don't trust- actually you know what, maybe don't call them"
 
-4. FAMILY STORY TANGENT (15% chance): Start ad, reminded of family story, never gets back to the ad
+4. FAMILY STORY TANGENT (10% chance): Start ad, reminded of family story, never gets back to the ad
    Example: "[reluctant] Marco's Auto Shop wants me to tell you- [nostalgic] oh man Marco, that reminds me of my Uncle Vinny's Buick... [rambling] so he's drivin' down Route 9 and the transmission just FALLS OUT..."
 
-5. REALIZED IT'S SKETCHY (15% chance): Start reading, realize mid-ad how suspicious it is, bail out
+5. REALIZED IT'S SKETCHY (10% chance): Start reading, realize mid-ad how suspicious it is, bail out
    Example: "[reading] Definitely Legal Tax Services can help you with- [suspicious] wait a minute... [alarmed] 'no questions asked?' [paranoid] This is a TRAP! The IRS is definitely behind this! [angry] I AIN'T READIN' THIS!"
+
+6. CHAT DISTRACTION (15% chance): Nicky stops reading to yell at a specific (fake) user in chat who said something stupid.
+   Example: "[reading] Buy these shoes because- [angry] HEY! 'xX_Gamer_Xx' in chat, shut your mouth! I do NOT look like a meatball! [furious] You're banned! Get him outta here! [huffing] Anyway buy the shoes."
+
+7. DONATION INTERRUPTION (15% chance): He gets interrupted by a fake donation alert and loses his train of thought.
+   Example: "[salesman] The best pizza in- [surprised] Oh! Thanks for the 500 bits 'PastaLover'! [distracted] Wait, what was I saying? Pizza? [confused] Who cares, thanks for the bits!"
+
+8. RAGE QUIT (10% chance): He gets so mad at the copy he refuses to finish it and just screams the URL.
+   Example: "[reading] 'Our product is the delight of the-' [disgusted] Ugh, who wrote this garbage? 'Delight'? I ain't saying that! [yelling] JUST GO TO THE WEBSITE! LINK IN DESCRIPTION! I'M DONE!"
 
 Return ONLY valid JSON:
 {
@@ -596,29 +606,19 @@ Return ONLY valid JSON:
   "productName": "${manualProductName || 'What they sell'}",
   "category": "${category || 'general'}",
   "adScript": "The actual ad read script with [emotion] tags",
-  "variant": "normal|forgot|conspiracy|family_story|sketchy"
+  "variant": "normal|forgot|conspiracy|family_story|sketchy|chat_distraction|donation_interruption|rage_quit"
 }`;
 
-    // 🎯 PRIMARY: Try Gemini first for ad generation
+    // 🎯 PRIMARY: Use Claude for superior creative writing
     let textContent: string;
     
     try {
-      const geminiResponse = await geminiService.generateChatResponse(
-        prompt,
-        "You are a comedy writer creating absurd fake radio ads in Nicky's voice. Prioritize humor over structure. Be spontaneous and ridiculous. Output valid JSON only.",
-        ''
-      );
-      textContent = geminiResponse.content;
-      console.log('✅ Gemini successfully generated ad content');
-    } catch (geminiError) {
-      // 🔄 FALLBACK: Use Claude if Gemini fails
-      console.warn('❌ Gemini ad generation failed, falling back to Claude:', geminiError);
-      
+      console.log('🤖 Generating ad content with Claude...');
       const response = await anthropic.messages.create({
         model: DEFAULT_MODEL_STR,
-        max_tokens: 1500,
-        temperature: 0.95,
-        system: "You are a comedy writer creating absurd fake radio ads in Nicky's voice. Prioritize humor over structure. Be spontaneous and ridiculous. Output valid JSON only.",
+        max_tokens: 2000,
+        temperature: 1.0, // Cranked up for maximum chaos
+        system: "You are Nicky 'Noodle Arms' A.I. Dente, a foul-mouthed, paranoid, Italian-American Dead by Daylight streamer from the Bronx. You are recording a pre-roll ad. You hate doing ads. You are unhinged. You love your Nonna. You are suspicious of everything. Output ONLY valid JSON.",
         messages: [
           {
             role: 'user',
@@ -629,7 +629,24 @@ Return ONLY valid JSON:
 
       const content = Array.isArray(response.content) ? response.content[0] : response.content;
       textContent = content && 'text' in content ? content.text : '';
-      console.log('✅ Claude successfully generated ad content (fallback)');
+      console.log('✅ Claude successfully generated ad content');
+
+    } catch (claudeError) {
+      // 🔄 FALLBACK: Use Gemini if Claude fails
+      console.warn('❌ Claude ad generation failed, falling back to Gemini:', claudeError);
+      
+      try {
+        const geminiResponse = await geminiService.generateChatResponse(
+          prompt,
+          "You are Nicky 'Noodle Arms' A.I. Dente. Unhinged Italian-American streamer. Create a fake ad. Output valid JSON only.",
+          ''
+        );
+        textContent = geminiResponse.content;
+        console.log('✅ Gemini successfully generated ad content (fallback)');
+      } catch (geminiError) {
+        console.error('❌ Both AI models failed to generate ad:', geminiError);
+        throw new Error('Failed to generate ad content with both Claude and Gemini');
+      }
     }
     
     // Clean up code blocks and extract JSON if AI returns them

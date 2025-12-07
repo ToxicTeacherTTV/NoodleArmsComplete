@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import type { Document } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
@@ -34,6 +36,7 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
   const [trainingName, setTrainingName] = useState('');
   const [viewingDocument, setViewingDocument] = useState<Document | null>(null);
   const [documentContent, setDocumentContent] = useState<string>('');
+  const [extractionModel, setExtractionModel] = useState<string>('gemini-2.5-flash');
   const [duplicateWarning, setDuplicateWarning] = useState<{
     file: File;
     name?: string;
@@ -208,8 +211,8 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
   });
 
   const extractAsFactsMutation = useMutation({
-    mutationFn: async (documentId: string) => {
-      return await apiRequest('POST', `/api/documents/${documentId}/extract-facts`);
+    mutationFn: async ({ documentId, model }: { documentId: string, model: string }) => {
+      return await apiRequest('POST', `/api/documents/${documentId}/extract-facts`, { model });
     },
     onSuccess: (result: any) => {
       toast({
@@ -250,8 +253,8 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
   });
 
   const reprocessDocumentMutation = useMutation({
-    mutationFn: async (documentId: string) => {
-      return await apiRequest('POST', `/api/documents/${documentId}/reprocess`);
+    mutationFn: async ({ documentId, model }: { documentId: string, model: string }) => {
+      return await apiRequest('POST', `/api/documents/${documentId}/reprocess`, { model });
     },
     onSuccess: (result: any) => {
       toast({
@@ -637,6 +640,8 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
           className="hidden"
           accept=".pdf,.docx,.txt,.md"
           onChange={(e) => handleFileSelect(e.target.files)}
+          title="File Upload"
+          aria-label="File Upload"
         />
       </div>
 
@@ -847,7 +852,21 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
 
       {/* Processing Queue */}
       <div className="space-y-3">
-        <h3 className="text-sm font-medium text-foreground">Document Library</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-foreground">Document Library</h3>
+          <div className="w-56">
+            <Select value={extractionModel} onValueChange={setExtractionModel}>
+              <SelectTrigger className="h-8 text-xs border-purple-500/30 bg-purple-500/5">
+                <SelectValue placeholder="Select Extraction Model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Cheap)</SelectItem>
+                <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro (High Quality)</SelectItem>
+                <SelectItem value="claude-sonnet-4.5">Claude Sonnet 4.5 (Best Reasoning)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <div className="space-y-2 max-h-72 overflow-y-auto chat-scroll" data-testid="documents-list">
           {!documents || documents.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
@@ -943,13 +962,13 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                       <div className="text-xs text-muted-foreground mb-2">Choose how to process this content:</div>
                       <div className="flex gap-2 flex-wrap">
                         <Button
-                          onClick={() => extractAsFactsMutation.mutate(doc.id)}
-                          disabled={extractAsFactsMutation.isPending && extractAsFactsMutation.variables === doc.id}
+                          onClick={() => extractAsFactsMutation.mutate({ documentId: doc.id, model: extractionModel })}
+                          disabled={extractAsFactsMutation.isPending && extractAsFactsMutation.variables?.documentId === doc.id}
                           size="sm"
                           className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5"
                           data-testid={`button-extract-facts-${doc.id}`}
                         >
-                          {extractAsFactsMutation.isPending && extractAsFactsMutation.variables === doc.id ? (
+                          {extractAsFactsMutation.isPending && extractAsFactsMutation.variables?.documentId === doc.id ? (
                             <>
                               <i className="fas fa-spinner fa-spin mr-1"></i>
                               Extracting...
@@ -982,14 +1001,14 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                           )}
                         </Button>
                         <Button
-                          onClick={() => reprocessDocumentMutation.mutate(doc.id)}
-                          disabled={reprocessDocumentMutation.isPending && reprocessDocumentMutation.variables === doc.id}
+                          onClick={() => reprocessDocumentMutation.mutate({ documentId: doc.id, model: extractionModel })}
+                          disabled={reprocessDocumentMutation.isPending && reprocessDocumentMutation.variables?.documentId === doc.id}
                           variant="outline"
                           size="sm"
                           className="text-xs px-3 py-1.5 border-purple-600 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950"
                           data-testid={`button-reprocess-${doc.id}`}
                         >
-                          {reprocessDocumentMutation.isPending && reprocessDocumentMutation.variables === doc.id ? (
+                          {reprocessDocumentMutation.isPending && reprocessDocumentMutation.variables?.documentId === doc.id ? (
                             <>
                               <i className="fas fa-spinner fa-spin mr-1"></i>
                               Reprocessing...
@@ -1025,12 +1044,7 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                   
                   {doc.processingStatus === 'PROCESSING' && (
                     <div className="mt-2">
-                      <div className="w-full bg-muted rounded-full h-1.5">
-                        <div 
-                          className="bg-accent h-1.5 rounded-full transition-all duration-300" 
-                          style={{ width: `${doc.processingProgress || 0}%` }}
-                        ></div>
-                      </div>
+                      <Progress value={doc.processingProgress || 0} className="h-1.5" />
                       <div className="text-xs text-muted-foreground mt-1">
                         Extracting knowledge... {doc.processingProgress || 0}%
                       </div>

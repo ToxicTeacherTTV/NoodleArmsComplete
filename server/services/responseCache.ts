@@ -20,7 +20,7 @@ class ResponseCache {
    * Generate normalized cache key from message
    * Removes punctuation, extra spaces, lowercases for fuzzy matching
    */
-  getCacheKey(message: string, mode: string, profileId: string): string {
+  getCacheKey(message: string, mode: string, profileId: string, preset: string = 'default'): string {
     // Normalize the message
     const normalized = message
       .toLowerCase()
@@ -30,7 +30,7 @@ class ResponseCache {
       .replace(/^(hey|yo|sup|hi|hello|nicky)\s+/i, '') // Remove greetings
       .substring(0, 200); // Limit length for cache key
     
-    return `${mode}:${profileId}:${normalized}`;
+    return `${mode}:${profileId}:${preset}:${normalized}`;
   }
 
   /**

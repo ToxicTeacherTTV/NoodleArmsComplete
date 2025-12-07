@@ -2,100 +2,17 @@
 
 ## 🎯 Quick Wins (Implement Now - 2-4 hours)
 
-### 1. **Use Gemini Flash 2.0 for Streaming** ⚡ (Saves 2-4s)
-**Problem**: Gemini 2.5 Pro is high-quality but slow for streaming  
-**Solution**: Use Gemini Flash 2.0 - it's 10x faster, still good quality
-
-```typescript
-// server/services/gemini.ts
-const APPROVED_MODELS = {
-  PRIMARY: 'gemini-2.0-flash-exp',      // 🚀 10x faster for streaming
-  FALLBACK: 'gemini-2.5-pro',           // High quality for podcasts
-  LEGACY: 'gemini-1.5-flash'            // Backup
-};
-
-// In generateChatResponse()
-const model = mode === 'STREAMING' 
-  ? APPROVED_MODELS.PRIMARY     // Fast model for streaming
-  : APPROVED_MODELS.FALLBACK;   // Quality model for podcasts
-```
-
-**Impact**: 
-- **Before**: 4-8s AI generation
-- **After**: 1-2s AI generation  
-- **Savings**: 🎯 3-6 seconds
+### 1. **Use Gemini Flash 2.0 Thinking for Streaming** ❌ CANCELLED
+**Reason**: User decision to stick with current models (Dec 2, 2025).
+**Original Plan**: Use `gemini-2.0-flash-thinking-exp-01-21` for speed.
+**Status**: Skipped.
 
 ---
 
-### 2. **Response Caching for Common Questions** 💾 (Saves 5-15s)
-**Problem**: Answering "who is sal?" 100 times does the same work  
-**Solution**: Cache responses for frequently asked questions
-
-```typescript
-// server/services/responseCache.ts
-class ResponseCache {
-  private cache = new Map<string, {
-    response: string;
-    timestamp: number;
-    useCount: number;
-  }>();
-  
-  private readonly TTL = 1000 * 60 * 30; // 30 min for streaming, refresh periodically
-  
-  getCacheKey(message: string, mode: string, profileId: string): string {
-    // Normalize question
-    const normalized = message.toLowerCase()
-      .trim()
-      .replace(/[?.!,]/g, '')
-      .replace(/\s+/g, ' ');
-    
-    return `${mode}:${profileId}:${normalized}`;
-  }
-  
-  async get(key: string): Promise<string | null> {
-    const cached = this.cache.get(key);
-    if (!cached) return null;
-    
-    // Check expiration
-    if (Date.now() - cached.timestamp > this.TTL) {
-      this.cache.delete(key);
-      return null;
-    }
-    
-    cached.useCount++;
-    return cached.response;
-  }
-  
-  set(key: string, response: string): void {
-    this.cache.set(key, {
-      response,
-      timestamp: Date.now(),
-      useCount: 1
-    });
-    
-    // Limit cache size
-    if (this.cache.size > 1000) {
-      const oldest = Array.from(this.cache.entries())
-        .sort((a, b) => a[1].timestamp - b[1].timestamp)[0];
-      this.cache.delete(oldest[0]);
-    }
-  }
-}
-
-// In routes.ts
-const cacheKey = responseCache.getCacheKey(message, mode, activeProfile.id);
-const cached = await responseCache.get(cacheKey);
-
-if (cached && mode === 'STREAMING') {
-  // Use cached response for streaming (instant!)
-  return res.json({ content: cached, cached: true });
-}
-```
-
-**Impact**: 
-- Common questions answered **instantly** (0.1s vs 5-15s)
-- Reduces API costs by 30-50%
-- Better for FAQ-style streaming interactions
+### 2. **Response Caching Tuning** 💾 (Optimization)
+**Status**: ✅ IMPLEMENTED (needs tuning)
+**Problem**: Cache might be too aggressive or not aggressive enough.
+**Action**: Verify TTL (currently 30m) and cache keys. Ensure "Who is Sal?" hits the cache 100% of the time.
 
 ---
 
@@ -239,47 +156,29 @@ const memoryLimit = mode === 'STREAMING'
 
 ## 💪 Badass Features (Next Level)
 
-### 7. **Live Response Streaming** 🌊
-**Stream AI response tokens as they generate (like ChatGPT)**
+### 7. **Streaming TTS Pipeline** 🌊
+**True Streaming for Voice**
+
+**Problem**: Streaming text to the UI is useless if we wait for the full audio file.
+**Solution**: Pipeline Text Generation -> TTS. Send sentences to ElevenLabs as they complete.
 
 ```typescript
-// server/services/gemini.ts
-async *generateStreamingResponse(prompt: string, mode: string): AsyncGenerator<string> {
-  const model = mode === 'STREAMING' ? 'gemini-2.0-flash-exp' : 'gemini-2.5-pro';
-  
-  const stream = await this.ai.models.generateContentStream({
-    model,
-    contents: [{ parts: [{ text: prompt }] }]
-  });
-  
-  for await (const chunk of stream) {
-    if (chunk.text) {
-      yield chunk.text;
+// Concept
+async function streamResponse(textStream) {
+  let buffer = "";
+  for await (const chunk of textStream) {
+    buffer += chunk;
+    if (buffer.includes('.')) {
+      const sentence = extractSentence(buffer);
+      await playAudio(sentence); // Start playing while next sentence generates
     }
   }
 }
-
-// In routes.ts - SSE endpoint
-app.get('/api/chat/stream', async (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  
-  const stream = geminiService.generateStreamingResponse(prompt, 'STREAMING');
-  
-  for await (const chunk of stream) {
-    res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
-  }
-  
-  res.write('data: [DONE]\n\n');
-  res.end();
-});
 ```
 
 **Impact**: 
-- User sees response **immediately** (perceived 80% faster)
-- Better UX - text appears as it's generated
-- Can start TTS earlier (send complete sentences)
+- User hears response **immediately** (perceived 80% faster)
+- True conversational flow
 
 ---
 
