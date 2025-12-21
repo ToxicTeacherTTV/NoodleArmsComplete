@@ -96,6 +96,21 @@ export default function MessageComposer({
                     {/* Primary Actions */}
                     <div className="flex flex-wrap gap-2">
                         <Button
+                            type="button"
+                            size="lg"
+                            variant={isListening ? "destructive" : "default"}
+                            onClick={onToggleVoice}
+                            disabled={disabled}
+                            className={cn(
+                                "shadow-md",
+                                isListening && "animate-pulse"
+                            )}
+                        >
+                            <i className={`fas ${isListening ? "fa-stop" : "fa-microphone"} mr-2`} />
+                            {isListening ? "Stop" : "Speak"}
+                        </Button>
+
+                        <Button
                             type="submit"
                             size="lg"
                             className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md"
@@ -104,23 +119,6 @@ export default function MessageComposer({
                             <i className="fas fa-paper-plane mr-2" />
                             Send
                         </Button>
-
-                        {appMode === "STREAMING" && (
-                            <Button
-                                type="button"
-                                size="lg"
-                                variant={isListening ? "destructive" : "default"}
-                                onClick={onToggleVoice}
-                                disabled={disabled}
-                                className={cn(
-                                    "shadow-md",
-                                    isListening && "animate-pulse"
-                                )}
-                            >
-                                <i className={`fas ${isListening ? "fa-stop" : "fa-microphone"} mr-2`} />
-                                {isListening ? "Stop" : "Voice"}
-                            </Button>
-                        )}
 
                         {/* Options Menu */}
                         <DropdownMenu>
@@ -140,6 +138,10 @@ export default function MessageComposer({
                                     Clear Chat
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => onSendMessage("/diag")}>
+                                    <i className="fas fa-stethoscope mr-2 text-yellow-500" />
+                                    Run Diagnostics
+                                </DropdownMenuItem>
                                 <DropdownMenuItem disabled>
                                     <i className="fas fa-sliders mr-2 text-muted-foreground" />
                                     Voice Settings

@@ -238,11 +238,9 @@ export default function JazzDashboard() {
     setPendingTranscript(newPending);
   }, [transcript, interimTranscript, appMode]);
 
-  // Handle voice control (only in streaming mode) - MANUAL MODE
+  // Handle voice control (manual mode)
   const toggleListening = () => {
-    if (appMode !== 'STREAMING') {
-      return;
-    }
+    // Removed mode restriction to allow voice in PODCAST mode too
     
     if (isListening) {
       // STOP: Process the pending transcript and send message
@@ -607,15 +605,11 @@ export default function JazzDashboard() {
                             }
                           }}
                         />
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button type="submit" className="bg-accent px-4 text-accent-foreground hover:bg-accent/90" data-testid="button-send-message">
-                            <i className="fas fa-paper-plane mr-2" />
-                            Send Message
-                          </Button>
+                        <div className="flex gap-2">
                           <Button
                             type="button"
                             onClick={toggleListening}
-                            className={`px-4 transition-colors ${
+                            className={`flex-1 transition-colors ${
                               isListening
                                 ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
                                 : 'bg-primary text-primary-foreground hover:bg-primary/90'
@@ -623,16 +617,20 @@ export default function JazzDashboard() {
                             data-testid="button-toggle-listening"
                           >
                             <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'} mr-2`} />
-                            {isListening ? 'Stop Listening' : 'Start Listening'}
+                            {isListening ? 'Stop' : 'Speak'}
+                          </Button>
+                          <Button type="submit" className="flex-[2] bg-accent text-accent-foreground hover:bg-accent/90" data-testid="button-send-message">
+                            <i className="fas fa-paper-plane mr-2" />
+                            Send
                           </Button>
                           <Button
                             type="button"
                             variant="outline"
                             onClick={() => setMessages([])}
                             data-testid="button-clear-chat"
+                            className="px-3"
                           >
-                            <i className="fas fa-trash mr-2" />
-                            Clear Chat
+                            <i className="fas fa-trash" />
                           </Button>
                           <Button
                             type="button"
@@ -643,9 +641,9 @@ export default function JazzDashboard() {
                               }
                             }}
                             data-testid="button-store-conversation"
+                            className="px-3"
                           >
-                            <i className="fas fa-save mr-2" />
-                            Store to Memory
+                            <i className="fas fa-save" />
                           </Button>
                         </div>
                       </form>

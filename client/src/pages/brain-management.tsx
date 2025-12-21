@@ -338,10 +338,10 @@ export default function BrainManagement() {
 
   // Mutation for updating fact content and confidence
   const updateFactMutation = useMutation({
-    mutationFn: async ({ factId, content, confidence }: { factId: string; content: string; confidence: number }) => {
+    mutationFn: async ({ factId, content, confidence, importance }: { factId: string; content: string; confidence: number; importance?: number }) => {
       const response = await fetch(`/api/memory/entries/${factId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ content, confidence }),
+        body: JSON.stringify({ content, confidence, importance }),
         headers: { 'Content-Type': 'application/json' }
       });
       if (!response.ok) {
@@ -639,6 +639,7 @@ export default function BrainManagement() {
   const [editingFact, setEditingFact] = useState<MemoryFact | null>(null);
   const [editContent, setEditContent] = useState("");
   const [editConfidence, setEditConfidence] = useState(50);
+  const [editImportance, setEditImportance] = useState(1);
 
   // Preview cleaning dialog state
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
@@ -1302,6 +1303,7 @@ export default function BrainManagement() {
     setEditingFact(fact);
     setEditContent(fact.content);
     setEditConfidence(fact.confidence);
+    setEditImportance(fact.importance || 1);
   };
 
   // Function to save edited fact
@@ -1310,7 +1312,8 @@ export default function BrainManagement() {
       updateFactMutation.mutate({
         factId: editingFact.id,
         content: editContent,
-        confidence: editConfidence
+        confidence: editConfidence,
+        importance: editImportance
       });
     }
   };
@@ -1349,6 +1352,31 @@ export default function BrainManagement() {
     
     return hasUserMarkers && hasAIMarkers && isLong;
   };
+
+  // 🌊 NEW: Propagate Importance Mutation
+  const propagateImportanceMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/memory/propagate-importance');
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Importance Propagated!",
+        description: `Updated ${data.updatedCount} memories based on connections.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/high-confidence'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/medium-confidence'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/low-confidence'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Propagation Failed",
+        description: error.message || "Failed to propagate importance",
+        variant: "destructive",
+      });
+    },
+  });
 
   // ✂️ Single fact cleaning mutation
   const cleanSingleFactMutation = useMutation({
@@ -1808,6 +1836,20 @@ export default function BrainManagement() {
               <Scissors className="h-4 w-4 mr-2" />
             )}
             Clean Wall-of-Text
+          </Button>
+          <Button
+            onClick={() => propagateImportanceMutation.mutate()}
+            disabled={propagateImportanceMutation.isPending}
+            variant="outline"
+            size="sm"
+            title="Boost memories related to High Importance facts"
+          >
+            {propagateImportanceMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <i className="fas fa-water h-4 w-4 mr-2" />
+            )}
+            Propagate Importance
           </Button>
         </div>
       </div>
@@ -3729,6 +3771,26 @@ export default function BrainManagement() {
                 <span>0% (False)</span>
                 <span>50% (Uncertain)</span>
                 <span>100% (Absolutely True)</span>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <label htmlFor="edit-importance" className="text-sm font-medium">
+                Importance: {editImportance}
+              </label>
+              <Slider
+                id="edit-importance"
+                min={0}
+                max={100}
+                step={1}
+                value={[editImportance]}
+                onValueChange={(value) => setEditImportance(value[0])}
+                className="w-full"
+                data-testid="slider-edit-importance"
+              />
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>0 (Trivial)</span>
+                <span>50 (Very High)</span>
+                <span>100 (GOD MODE)</span>
               </div>
             </div>
           </div>

@@ -5,14 +5,14 @@
  * to optimize costs while maintaining quality.
  * 
  * COST COMPARISON (per 1M input tokens):
- * - gemini-2.5-pro:         $1.25 (premium quality, expensive)
- * - gemini-2.5-flash:       $0.075 (17x cheaper, good quality)
- * - gemini-2.0-flash-exp:   Free tier (experimental, may be unstable)
+ * - gemini-3-flash:         ~$0.10 (Primary for EVERYTHING)
+ * - gemini-3-pro-preview:   TBD (First Fallback)
+ * - gemini-2.5-pro:         $1.25 (Last Resort)
  * 
- * FLASH MODEL HISTORY:
- * Flash models were previously BANNED due to hallucination issues (269 false memories).
- * After investigation, Flash Thinking models show improved reliability.
- * This config allows controlled use with fallback safety.
+ * STRATEGY UPDATE (Dec 2025):
+ * Gemini 3 Flash is now the default for all operations.
+ * It outperforms previous Pro models at a fraction of the cost.
+ * Claude Sonnet 4.5 is removed from the active rotation.
  */
 
 export type ModelTier = 'experimental' | 'standard' | 'premium';
@@ -64,6 +64,15 @@ export const GEMINI_MODELS: Record<string, GeminiModelConfig> = {
     description: 'Premium Pro model - best quality, highest cost'
   },
   
+  // NEW: Gemini 3 Flash (beats 2.5 Pro, cheaper)
+  'gemini-3-flash': {
+    name: 'gemini-3-flash',
+    tier: 'standard',
+    costMultiplier: 1.3, // Slightly more than 2.5 Flash, but much less than Pro
+    isExperimental: false,
+    description: 'Newest Flash model - beats 2.5 Pro in quality and cost'
+  },
+  
   // NEW: Gemini 3 Pro Preview (newest, most intelligent)
   'gemini-3-pro-preview': {
     name: 'gemini-3-pro-preview',
@@ -97,7 +106,7 @@ export function getModelStrategy(
     // Special case for CHAT: Use higher quality model even in dev if requested
     if (purpose === 'chat') {
       return {
-        primary: process.env.GEMINI_DEV_CHAT_MODEL || 'gemini-3-pro-preview', // Upgrade dev chat to 3.0 Pro
+        primary: process.env.GEMINI_DEV_CHAT_MODEL || 'gemini-3-flash', // Upgrade dev chat to 3.0 Flash
         fallback: 'gemini-2.5-flash',
         ultimate: 'gemini-2.5-flash'
       };
@@ -106,42 +115,42 @@ export function getModelStrategy(
     return {
       primary: process.env.GEMINI_DEV_MODEL || 'gemini-2.5-flash',
       fallback: process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.5-flash',
-      ultimate: 'gemini-2.5-pro' // Last resort
+      ultimate: 'gemini-3-flash' // Last resort
     };
   }
   
   // Production: Strategy varies by purpose
   switch (purpose) {
     case 'chat':
-      // Chat: Gemini 3 Pro for best quality
+      // Chat: Gemini 3 Flash (Primary) -> 3 Pro (Fallback) -> 2.5 Pro (Last Resort)
       return {
-        primary: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3-pro-preview',
-        fallback: 'gemini-2.5-flash',
-        ultimate: 'gemini-2.5-flash' // Degraded mode
+        primary: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3-flash',
+        fallback: 'gemini-3-pro-preview',
+        ultimate: 'gemini-2.5-pro'
       };
       
     case 'extraction':
-      // Extraction: Accuracy matters, use standard Flash
+      // Extraction: Gemini 3 Flash (Primary) -> 3 Pro (Fallback) -> 2.5 Pro (Last Resort)
       return {
-        primary: process.env.GEMINI_EXTRACTION_MODEL || 'gemini-2.5-flash',
-        fallback: 'gemini-2.5-pro',
-        ultimate: undefined // Don't use experimental for critical extraction
+        primary: process.env.GEMINI_EXTRACTION_MODEL || 'gemini-3-flash',
+        fallback: 'gemini-3-pro-preview',
+        ultimate: 'gemini-2.5-pro'
       };
       
     case 'analysis':
-      // Analysis: Use Pro for critical analysis
+      // Analysis: Gemini 3 Flash (Primary) -> 3 Pro (Fallback) -> 2.5 Pro (Last Resort)
       return {
-        primary: process.env.GEMINI_ANALYSIS_MODEL || 'gemini-3-pro-preview',
-        fallback: 'gemini-2.5-pro',
-        ultimate: undefined
+        primary: process.env.GEMINI_ANALYSIS_MODEL || 'gemini-3-flash',
+        fallback: 'gemini-3-pro-preview',
+        ultimate: 'gemini-2.5-pro'
       };
       
     case 'generation':
-      // Content generation: Flash is usually fine
+      // Generation: Gemini 3 Flash (Primary) -> 3 Pro (Fallback) -> 2.5 Pro (Last Resort)
       return {
-        primary: process.env.GEMINI_DEFAULT_MODEL || 'gemini-2.5-flash',
-        fallback: 'gemini-2.5-pro',
-        ultimate: 'gemini-2.5-flash'
+        primary: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3-flash',
+        fallback: 'gemini-3-pro-preview',
+        ultimate: 'gemini-2.5-pro'
       };
   }
 }
@@ -193,10 +202,10 @@ export function getDefaultModel(): string {
   const isDev = process.env.NODE_ENV === 'development';
   
   if (isDev) {
-    return process.env.GEMINI_DEV_MODEL || 'gemini-2.5-flash';
+    return process.env.GEMINI_DEV_MODEL || 'gemini-3-flash';
   }
   
-  return process.env.GEMINI_DEFAULT_MODEL || 'gemini-2.5-flash';
+  return process.env.GEMINI_DEFAULT_MODEL || 'gemini-3-flash';
 }
 
 /**

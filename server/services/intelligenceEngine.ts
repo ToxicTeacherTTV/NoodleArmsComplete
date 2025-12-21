@@ -14,6 +14,7 @@ interface ClusterAnalysis {
   suggestedMerge: string;
   reasoning: string;
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  facts?: { id: string; content: string }[];
 }
 
 interface SourceReliability {
@@ -181,7 +182,7 @@ If no clusters found, return: []`;
     try {
       // 🎯 PRIMARY: Try Gemini first (free tier)
       const geminiResponse = await this.gemini.ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+        model: "gemini-3-flash",
         config: {
           responseMimeType: "application/json",
           temperature: 0.3
@@ -196,13 +197,18 @@ If no clusters found, return: []`;
 
       if (Array.isArray(analysis)) {
         for (const cluster of analysis) {
+          const clusterFacts = facts
+            .filter(f => cluster.factIds.includes(f.id))
+            .map(f => ({ id: f.id, content: f.content }));
+
           clusters.push({
             clusterId: `cluster_${Date.now()}_${Math.random().toString(36).slice(2)}`,
             factIds: cluster.factIds,
             consolidationScore: cluster.consolidationScore,
             suggestedMerge: cluster.suggestedMerge,
             reasoning: cluster.reasoning,
-            priority: cluster.priority || 'MEDIUM'
+            priority: cluster.priority || 'MEDIUM',
+            facts: clusterFacts
           });
         }
       }
@@ -212,8 +218,11 @@ If no clusters found, return: []`;
 
     } catch (geminiError) {
       console.error('❌ Gemini fact clustering failed:', geminiError);
-      console.log('🔄 Falling back to Claude for fact clustering...');
+      // 🚫 CLAUDE FALLBACK DISABLED (Dec 20, 2025)
+      // console.log('🔄 Falling back to Claude for fact clustering...');
+      return [];
       
+      /* 
       // 🔄 FALLBACK: Use Claude if Gemini fails (paid)
       try {
         const response = await this.anthropic.messages.create({
@@ -222,6 +231,12 @@ If no clusters found, return: []`;
           temperature: 0.3,
           messages: [{ role: 'user', content: prompt }]
         });
+        // ... (rest of claude logic)
+      } catch (claudeError) {
+        console.error('❌ Claude fallback also failed:', claudeError);
+        return [];
+      }
+      */
 
         const content = response.content.find(c => c.type === 'text')?.text || '';
         console.log(`📝 Claude raw response (first 200 chars): ${content.slice(0, 200)}...`);
@@ -230,13 +245,18 @@ If no clusters found, return: []`;
 
         if (Array.isArray(analysis)) {
           for (const cluster of analysis) {
+            const clusterFacts = facts
+              .filter(f => cluster.factIds.includes(f.id))
+              .map(f => ({ id: f.id, content: f.content }));
+
             clusters.push({
               clusterId: `cluster_${Date.now()}_${Math.random().toString(36).slice(2)}`,
               factIds: cluster.factIds,
               consolidationScore: cluster.consolidationScore,
               suggestedMerge: cluster.suggestedMerge,
               reasoning: cluster.reasoning,
-              priority: cluster.priority || 'MEDIUM'
+              priority: cluster.priority || 'MEDIUM',
+              facts: clusterFacts
             });
           }
         }
@@ -387,7 +407,7 @@ If no drift detected, return: []`;
     try {
       // 🎯 PRIMARY: Try Gemini first (free tier)
       const geminiResponse = await this.gemini.ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+        model: "gemini-3-flash",
         config: {
           responseMimeType: "application/json",
           temperature: 0.3
@@ -405,8 +425,11 @@ If no drift detected, return: []`;
 
     } catch (geminiError) {
       console.error('❌ Gemini personality drift analysis failed:', geminiError);
-      console.log('🔄 Falling back to Claude for personality drift analysis...');
-      
+      // 🚫 CLAUDE FALLBACK DISABLED (Dec 20, 2025)
+      // console.log('🔄 Falling back to Claude for personality drift analysis...');
+      return [];
+
+      /*
       // 🔄 FALLBACK: Use Claude if Gemini fails (paid)
       try {
         const response = await this.anthropic.messages.create({
@@ -417,6 +440,12 @@ If no drift detected, return: []`;
         });
 
         const content = response.content.find(c => c.type === 'text')?.text || '';
+        // ...
+      } catch (claudeError) {
+        console.error('❌ Claude fallback also failed:', claudeError);
+        return [];
+      }
+      */
         console.log(`📝 Claude drift raw response (first 200 chars): ${content.slice(0, 200)}...`);
         
         const drifts = this.extractJSON(content);

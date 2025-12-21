@@ -129,7 +129,7 @@ npm run audit:timelines  # Audit event timeline consistency
 ## 🧠 Core Features
 
 ### **1. Advanced Memory System**
-- **Storage:** 1,505+ unique memories with atomic UPSERT preventing duplicates
+- **Storage:** 4,136+ unique memories with atomic UPSERT preventing duplicates
 - **Types:** FACT, PREFERENCE, LORE, CONTEXT, STORY, ATOMIC
 - **Importance Scoring:** 0-999 (protected facts at 999)
 - **Hybrid Retrieval:** ✅ **Keyword + semantic search ACTIVE** (Gemini text-embedding-004)
@@ -266,8 +266,8 @@ NODE_ENV="production"                       # production | development
 - `profiles` - AI personality configurations
 - `conversations` - Conversation sessions with mode tracking
 - `messages` - Chat history with voice output flags
-- `memory_entries` - Knowledge base (1,505+ entries)
-  - Vector embedding columns (ready for population)
+- `memory_entries` - Knowledge base (4,136+ entries)
+  - Vector embedding columns (fully populated)
   - Canonical key for deduplication
   - Importance scoring (0-999)
 - `documents` - Uploaded files with processing stages
@@ -301,10 +301,9 @@ NODE_ENV="production"                       # production | development
 
 2. **Embedding Service Backfill**
    - ✅ Service implemented and active for new memories
-   - ⚠️ Existing 1,505 memories need bulk embedding generation
-   - **Workaround:** Manual endpoint available: `POST /api/memories/generate-embeddings`
-   - **Impact:** Older memories use keyword-only search until backfilled
-   - **Solution:** Run bulk backfill script (takes ~30 mins with rate limiting)
+   - ✅ Bulk backfill completed (Dec 8, 2025)
+   - **Status:** All 4,136 memories have embeddings and support semantic search
+   - **Impact:** Full semantic search capability across entire knowledge base
 
 3. **Memory Retrieval Tuning**
    - Recency bias may overshadow important older memories
@@ -343,12 +342,7 @@ NODE_ENV="production"                       # production | development
 ## 📈 Recommended Next Steps
 
 ### **Week 1: Optimize Performance & Cost**
-1. **Run embedding backfill** for existing 1,505 memories
-   - Endpoint: `POST /api/memories/generate-embeddings`
-   - Expected time: ~30 minutes with rate limiting
-   - Benefit: Full semantic search across all memories
-
-2. **Monitor Gemini rate limits** and evaluate paid tier
+1. **Monitor Gemini rate limits** and evaluate paid tier
    - Track fallback frequency to experimental models
    - Measure quality degradation during peak usage
    - Decision point: Upgrade if >20% of requests use experimental fallback

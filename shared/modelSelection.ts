@@ -11,6 +11,7 @@
 export type AIModel = 
   | 'claude-sonnet-4.5'
   | 'gemini-3-pro-preview'
+  | 'gemini-3-flash'
   | 'gemini-2.5-pro'
   | 'gemini-2.5-flash';
 
@@ -35,32 +36,32 @@ export interface ModelSelectionConfig {
 export const DEFAULT_MODEL_CONFIG: Record<AIOperation, ModelSelectionConfig> = {
   'chat': {
     operation: 'chat',
-    selectedModel: 'claude-sonnet-4.5',
+    selectedModel: 'gemini-3-flash',
     fallbackModel: 'gemini-3-pro-preview'
   },
   'document-processing': {
     operation: 'document-processing',
-    selectedModel: 'claude-sonnet-4.5',
-    fallbackModel: 'gemini-2.5-flash'
+    selectedModel: 'gemini-3-flash',
+    fallbackModel: 'gemini-3-pro-preview'
   },
   'podcast-training': {
     operation: 'podcast-training',
-    selectedModel: 'claude-sonnet-4.5',
-    fallbackModel: 'gemini-2.5-flash'
+    selectedModel: 'gemini-3-flash',
+    fallbackModel: 'gemini-3-pro-preview'
   },
   'memory-consolidation': {
     operation: 'memory-consolidation',
-    selectedModel: 'claude-sonnet-4.5',
-    fallbackModel: 'gemini-2.5-pro'
+    selectedModel: 'gemini-3-flash',
+    fallbackModel: 'gemini-3-pro-preview'
   },
   'fact-extraction': {
     operation: 'fact-extraction',
-    selectedModel: 'claude-sonnet-4.5',
-    fallbackModel: 'gemini-2.5-flash'
+    selectedModel: 'gemini-3-flash',
+    fallbackModel: 'gemini-3-pro-preview'
   },
   'style-analysis': {
     operation: 'style-analysis',
-    selectedModel: 'claude-sonnet-4.5',
+    selectedModel: 'gemini-3-flash',
     fallbackModel: 'gemini-3-pro-preview'
   }
 };
@@ -91,6 +92,14 @@ export const MODEL_METADATA: Record<AIModel, {
     quality: 'premium',
     costLevel: 'expensive',
     description: 'Google\'s newest, most intelligent model'
+  },
+  'gemini-3-flash': {
+    displayName: 'Gemini 3 Flash',
+    provider: 'google',
+    speed: 'fast',
+    quality: 'high',
+    costLevel: 'cheap',
+    description: 'Newest Flash model - beats 2.5 Pro in quality and cost'
   },
   'gemini-2.5-pro': {
     displayName: 'Gemini 2.5 Pro',

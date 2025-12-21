@@ -1,4 +1,5 @@
 import { memoryCaches } from './services/memoryCache';
+import { suggestionService } from './services/suggestionService.js';
 import { perfMetrics } from './services/performanceMetrics';
 import {
   profiles,
@@ -787,10 +788,10 @@ export class DatabaseStorage implements IStorage {
     }
 
     // AI-Assisted Flagging: DISABLED - Hitting rate limits during bulk extractions
-    // TODO: Re-enable with proper rate limiting/batching or make it opt-in
-    // if (upsertedEntry.content && upsertedEntry.profileId && (!upsertedEntry.supportCount || upsertedEntry.supportCount === 1)) {
-    //   this.flagMemoryContentBackground(upsertedEntry);
-    // }
+    // 🕵️ SHADOW TAGGING: Generate suggestions in background (Zero-Interference)
+    if (upsertedEntry.content && upsertedEntry.profileId) {
+      this.generateSuggestionsBackground(upsertedEntry);
+    }
 
     // 🔢 AUTO-GENERATE EMBEDDINGS: Create vector embeddings in background
     if (upsertedEntry.content && !upsertedEntry.embedding) {
@@ -802,37 +803,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   /**
-   * Background task to flag memory content using AI analysis
+   * Background task to generate suggestions for new memories (Shadow Mode)
    */
-  private async flagMemoryContentBackground(memory: MemoryEntry): Promise<void> {
+  private async generateSuggestionsBackground(memory: MemoryEntry): Promise<void> {
     try {
-      console.log(`🤖 Starting AI flagging analysis for memory: ${memory.id}`);
-
-      const analysis = await aiFlagger.analyzeContent(
+      await suggestionService.generateSuggestions(
+        memory.id,
         memory.content,
-        'MEMORY',
-        {
-          profileId: memory.profileId,
-          sourceId: memory.id
-        }
+        memory.profileId
       );
-
-      if (analysis.flags.length > 0) {
-        await aiFlagger.storeFlagsInDatabase(
-          db,
-          analysis.flags,
-          'MEMORY',
-          memory.id,
-          memory.profileId
-        );
-
-        console.log(`🏷️ Generated ${analysis.flags.length} flags for memory ${memory.id}: ${analysis.flags.map(f => f.flagType).join(', ')}`);
-      } else {
-        console.log(`✅ No flags needed for memory ${memory.id}`);
-      }
     } catch (error) {
-      // Don't throw - this is a background task and shouldn't fail memory creation
-      console.error(`❌ Error flagging memory ${memory.id}:`, error);
+      console.error(`❌ Error generating suggestions for memory ${memory.id}:`, error);
     }
   }
 
@@ -2093,8 +2074,18 @@ export class DatabaseStorage implements IStorage {
 
   async findSimilarMemories(profileId: string, queryVector: number[], limit = 5, threshold = 0.5): Promise<Array<MemoryEntry & { similarity: number }>> {
     // Calculate similarity score: 1 - (cosine distance)
-    // cosine distance returns 0 (identical) to 2 (opposite)
     const similarity = sql<number>`1 - (${memoryEntries.embedding} <=> ${JSON.stringify(queryVector)})`;
+    
+    // 🧠 HYBRID RANKING SCORE:
+    // 1. Base: Vector Similarity (0.0 - 1.0)
+    // 2. Boost: Importance (1-5) -> gives up to 25% boost
+    // 3. Penalty: Retrieval Count -> reduces score for overused facts
+    // Formula: Similarity * (1 + Importance/20) / (1 + RetrievalCount/50)
+    const rankingScore = sql<number>`
+      (1 - (${memoryEntries.embedding} <=> ${JSON.stringify(queryVector)})) 
+      * (1 + (${memoryEntries.importance}::float / 20.0))
+      / (1 + (${memoryEntries.retrievalCount}::float / 50.0))
+    `;
     
     // @ts-ignore - Drizzle type inference might struggle with the dynamic selection
     return await db
@@ -2141,7 +2132,7 @@ export class DatabaseStorage implements IStorage {
           eq(memoryEntries.status, 'ACTIVE')
         )
       )
-      .orderBy(desc(similarity))
+      .orderBy(desc(rankingScore)) // 🚀 Sort by Hybrid Score instead of raw similarity
       .limit(limit);
   }
 

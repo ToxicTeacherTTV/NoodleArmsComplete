@@ -34,25 +34,13 @@ export class AIOrchestrator {
         claudeOperation: () => Promise<T>,
         geminiOperation: () => Promise<T>
     ): Promise<T> {
-        // Map model selection to provider
-        const useGemini = selectedModel !== 'claude-sonnet-4.5';
-        
-        if (useGemini) {
-            console.log(`🎼 Orchestrator: Routing ${operation} to ${selectedModel}...`);
-            try {
-                return await geminiOperation();
-            } catch (geminiError) {
-                console.warn(`⚠️ Orchestrator: ${selectedModel} failed, trying Claude fallback:`, geminiError);
-                return await claudeOperation();
-            }
-        } else {
-            console.log(`🎼 Orchestrator: Routing ${operation} to Claude Sonnet 4.5...`);
-            try {
-                return await claudeOperation();
-            } catch (claudeError) {
-                console.warn('⚠️ Orchestrator: Claude failed, trying Gemini fallback:', claudeError);
-                return await geminiOperation();
-            }
+        // FORCE GEMINI FOR EVERYTHING
+        console.log(`🎼 Orchestrator: Routing ${operation} to Gemini (Primary)...`);
+        try {
+            return await geminiOperation();
+        } catch (geminiError) {
+            console.error(`❌ Orchestrator: Gemini failed for ${operation}.`, geminiError);
+            throw geminiError;
         }
     }
 
@@ -62,7 +50,7 @@ export class AIOrchestrator {
     async extractStoriesFromDocument(
         content: string,
         filename: string,
-        selectedModel: AIModel = 'gemini-3-pro-preview'
+        selectedModel: AIModel = 'gemini-3-flash'
     ): Promise<StoryExtractionResult[]> {
         return this.routeToModel(
             'story extraction',
@@ -78,7 +66,7 @@ export class AIOrchestrator {
     async extractAtomicFactsFromStory(
         storyContent: string,
         storyContext: string,
-        selectedModel: AIModel = 'gemini-3-pro-preview'
+        selectedModel: AIModel = 'gemini-3-flash'
     ): Promise<AtomicFactResult[]> {
         return this.routeToModel(
             'atomic fact extraction',
@@ -89,11 +77,22 @@ export class AIOrchestrator {
     }
 
     /**
+     * Distill raw text into a single atomic fact
+     */
+    async distillTextToFact(
+        text: string,
+        selectedModel: AIModel = 'gemini-3-flash'
+    ): Promise<{ fact: string }> {
+        // For now, only Gemini implements this specific distillation
+        return geminiService.distillTextToFact(text, selectedModel);
+    }
+
+    /**
      * Consolidate and optimize memories with user-selectable model
      */
     async consolidateAndOptimizeMemories(
         memories: MemoryEntry[] | any[],
-        selectedModel: AIModel = 'gemini-3-pro-preview'
+        selectedModel: AIModel = 'gemini-3-flash'
     ): Promise<OptimizedMemory[]> {
         return this.routeToModel(
             'memory consolidation',
@@ -118,7 +117,7 @@ export class AIOrchestrator {
         transcript: string,
         episodeNumber: number,
         episodeTitle: string,
-        selectedModel: AIModel = 'gemini-3-pro-preview'
+        selectedModel: AIModel = 'gemini-3-flash'
     ): Promise<PodcastFactResult[]> {
         return this.routeToModel(
             'podcast fact extraction',
@@ -132,12 +131,12 @@ export class AIOrchestrator {
      * Extract Discord member facts with fallback strategy
      */
     async extractDiscordMemberFacts(username: string, message: string, existingFacts: string[] = []): Promise<DiscordMemberFactResult[]> {
-        console.log('🎼 Orchestrator: Routing Discord member fact extraction to Claude Sonnet 4.5...');
+        console.log('🎼 Orchestrator: Routing Discord member fact extraction to Gemini 3 Flash...');
         try {
-            return await anthropicService.extractDiscordMemberFacts(username, message, existingFacts);
-        } catch (claudeError) {
-            console.warn('⚠️ Orchestrator: Claude extraction failed, using Gemini fallback:', claudeError);
             return await geminiService.extractDiscordMemberFacts(username, message, existingFacts);
+        } catch (error) {
+            console.warn('⚠️ Orchestrator: Gemini extraction failed:', error);
+            return [];
         }
     }
 
@@ -152,7 +151,8 @@ export class AIOrchestrator {
         mode?: string,
         limit: number = 15
     ): Promise<any[]> {
-        // Primary: Anthropic
+        // Note: This method in anthropicService is purely logic-based (keyword extraction + DB search)
+        // and does NOT call the Anthropic API. It is safe to use.
         try {
             return await anthropicService.retrieveContextualMemories(
                 userMessage,
@@ -173,16 +173,11 @@ export class AIOrchestrator {
      * Consolidate memories from recent conversation
      */
     async consolidateMemories(recentMessages: Message[]): Promise<ConsolidatedMemory[]> {
-        console.log('🎼 Orchestrator: Routing memory consolidation to Claude Sonnet 4.5...');
+        console.log('🎼 Orchestrator: Routing memory consolidation to Gemini 3 Flash...');
         try {
-            return await anthropicService.consolidateMemories(recentMessages);
-        } catch (claudeError) {
-            console.warn('⚠️ Orchestrator: Claude consolidation failed, using Gemini fallback:', claudeError);
-            // Note: anthropicService.consolidateMemories already has internal fallback to Gemini,
-            // but we add this layer for safety and architectural consistency.
-            // However, since we can't easily call the internal fallback, we might need to duplicate logic 
-            // or just rely on the service's internal error handling if it doesn't throw.
-            // If it throws, we return empty array.
+            return await geminiService.consolidateMemories(recentMessages);
+        } catch (error) {
+            console.warn('⚠️ Orchestrator: Gemini consolidation failed:', error);
             return [];
         }
     }
@@ -191,14 +186,12 @@ export class AIOrchestrator {
      * Extract personality patterns from training content
      */
     async extractPersonalityPatterns(trainingContent: string): Promise<string> {
-        console.log('🎼 Orchestrator: Routing personality pattern extraction to Claude Sonnet 4.5...');
+        console.log('🎼 Orchestrator: Routing personality pattern extraction to Gemini 3 Flash...');
         try {
-            return await anthropicService.extractPersonalityPatterns(trainingContent);
-        } catch (claudeError) {
-            console.warn('⚠️ Orchestrator: Claude pattern extraction failed, using Gemini fallback:', claudeError);
-            // anthropicService.extractPersonalityPatterns also has internal fallback.
-            // If it propagates error, we try to handle it or re-throw.
-            throw claudeError;
+            return await geminiService.extractPersonalityPatterns(trainingContent);
+        } catch (error) {
+            console.warn('⚠️ Orchestrator: Gemini pattern extraction failed:', error);
+            throw error;
         }
     }
 
@@ -253,7 +246,7 @@ export class AIOrchestrator {
         trainingExamples: any[] = [],
         selectedModel?: string
     ): Promise<any> {
-        const model = (selectedModel || 'gemini-3-pro-preview') as AIModel;
+        const model = (selectedModel || 'gemini-3-flash') as AIModel;
 
         // 🎭 UNHINGED FLAVOR PACKS (INTERNAL INSPIRATION)
         // Appended to core identity to give Nicky occasional stylistic flair
@@ -392,11 +385,10 @@ RULES FOR USING FLAVOR PACKS
         personalityPrompt?: string,
         trainingExamples: any[] = []
     ): Promise<any> {
-        // 🚀 ENHANCED: For PODCAST and STREAMING modes, we strictly enforce Claude
-        // This logic was previously in anthropic.ts, now centralized here
+        // 🚀 ENHANCED: For PODCAST and STREAMING modes, we strictly enforce Gemini
         if (mode === 'PODCAST' || mode === 'STREAMING') {
-            console.log(`🎙️ Orchestrator: Strictly using Claude Sonnet 4.5 for ${mode} mode (No Fallback)`);
-            return await anthropicService.generateResponse(
+            console.log(`🎙️ Orchestrator: Strictly using Gemini 3 Flash for ${mode} mode`);
+            return await geminiService.generateChatResponse(
                 userMessage,
                 coreIdentity,
                 relevantMemories,
@@ -411,9 +403,9 @@ RULES FOR USING FLAVOR PACKS
             );
         }
 
-        console.log('🎼 Orchestrator: Routing chat generation to Claude Sonnet 4.5...');
+        console.log('🎼 Orchestrator: Routing chat generation to Gemini 3 Flash...');
         try {
-            return await anthropicService.generateResponse(
+            return await geminiService.generateChatResponse(
                 userMessage,
                 coreIdentity,
                 relevantMemories,
@@ -426,24 +418,9 @@ RULES FOR USING FLAVOR PACKS
                 personalityPrompt,
                 trainingExamples
             );
-        } catch (claudeError) {
-            console.warn('⚠️ Orchestrator: Claude generation failed, using Gemini fallback:', claudeError);
-
-            // Adapt arguments for Gemini
-            // Gemini service signature: generateChatResponse(userMessage, coreIdentity, contextPrompt)
-
-            // We need to construct a context prompt from the rich arguments
-            let contextPrompt = "";
-            if (loreContext) contextPrompt += `\n\nLORE CONTEXT:\n${loreContext}`;
-            if (relevantMemories.length > 0) {
-                contextPrompt += `\n\nRELEVANT MEMORIES:\n${relevantMemories.map(m => `- ${m.content}`).join('\n')}`;
-            }
-
-            return await geminiService.generateChatResponse(
-                userMessage,
-                coreIdentity,
-                contextPrompt
-            );
+        } catch (error) {
+            console.warn('⚠️ Orchestrator: Gemini generation failed:', error);
+            throw error;
         }
     }
 }

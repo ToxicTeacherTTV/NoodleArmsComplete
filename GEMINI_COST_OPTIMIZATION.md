@@ -49,6 +49,18 @@
 - **October spike**: 20M tokens = **$25**
 - **Average day**: 5M tokens = **$6.25**
 
+### After (using Gemini 3 Flash Strategy)
+- **Primary Model**: `gemini-3-flash` (High intelligence, low cost)
+- **Cost**: Estimated ~$0.10 per 1M input tokens (vs $1.25 for 2.5 Pro)
+- **Savings**: **~92% reduction** while maintaining or exceeding 2.5 Pro quality
+- **Fallback**: `gemini-2.5-flash` for ultimate redundancy
+
+### Strategy Shift (December 2025)
+- **Gemini 3 Flash** is now the default for **EVERYTHING**.
+- **Gemini 3 Pro Preview** is the first fallback.
+- **Gemini 2.5 Pro** is the final "last resort" fallback.
+- **Claude Sonnet 4.5** is currently disabled to maximize cost efficiency.
+
 ### After (using gemini-2.5-flash as default)
 - **Cost**: $0.075 per 1M input tokens (17x cheaper!)
 - **Same usage**: 20M tokens = **$1.47** (saves $23.53)

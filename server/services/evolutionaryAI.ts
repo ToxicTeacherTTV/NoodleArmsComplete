@@ -12,24 +12,11 @@ class EvolutionaryAI {
   private ai: GoogleGenAI;
 
   constructor() {
-    this.ai = new GoogleGenAI({ 
-      apiKey: process.env.GEMINI_API_KEY || "" 
-    });
+    this.ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
     
     // 🚫 FLASH BAN ENFORCEMENT: Block Flash models at runtime
-    const originalGenerate = this.ai.models.generateContent.bind(this.ai.models);
-    this.ai.models.generateContent = ((config: any) => {
-      if (config.model && /flash/i.test(config.model)) {
-        const error = new Error(
-          `🚫 FLASH MODEL BLOCKED in EvolutionaryAI: "${config.model}" is permanently banned.\n` +
-          `Reason: Flash models hallucinate facts and corrupt memory.\n` +
-          `Only gemini-3-pro-preview is approved for use.`
-        );
-        console.error(error.message);
-        throw error;
-      }
-      return originalGenerate(config);
-    }) as typeof originalGenerate;
+    // Note: We can't easily override getGenerativeModel in the new SDK structure
+    // but we will enforce the model name in the method calls below.
   }
 
   // 1. RELATIONSHIP MAPPING - Build knowledge graphs
@@ -68,9 +55,11 @@ Return JSON array:
 Only include strong, meaningful relationships (strength >= 6).`;
 
     try {
-      const response = await this.ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+      const result = await this.ai.models.generateContent({
+        model: "gemini-3-flash",
+        contents: prompt,
         config: {
+          maxOutputTokens: 65536,
           responseMimeType: "application/json",
           responseSchema: {
             type: "array",
@@ -86,11 +75,10 @@ Only include strong, meaningful relationships (strength >= 6).`;
               required: ["sourceFactId", "targetFactId", "relationshipType", "strength", "confidence"]
             }
           }
-        },
-        contents: prompt,
+        }
       });
 
-      return JSON.parse(response.text || "[]");
+      return JSON.parse(result.text || "[]");
     } catch (error) {
       console.error('❌ Relationship discovery failed:', error);
       console.warn('⚠️ No relationships discovered due to AI error - knowledge graph will be incomplete');
@@ -142,9 +130,11 @@ Return JSON array of clusters:
 ]`;
 
     try {
-      const response = await this.ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+      const result = await this.ai.models.generateContent({
+        model: "gemini-3-flash",
+        contents: prompt,
         config: {
+          maxOutputTokens: 65536,
           responseMimeType: "application/json",
           responseSchema: {
             type: "array",
@@ -161,11 +151,10 @@ Return JSON array of clusters:
               required: ["id", "name", "description", "factIds", "importance", "concepts"]
             }
           }
-        },
-        contents: prompt,
+        }
       });
 
-      return JSON.parse(response.text || "[]").map((cluster: any) => ({
+      return JSON.parse(result.text || "[]").map((cluster: any) => ({
         ...cluster,
         lastUpdated: new Date()
       }));
@@ -220,9 +209,11 @@ Return JSON array:
 ]`;
 
     try {
-      const response = await this.ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+      const result = await this.ai.models.generateContent({
+        model: "gemini-3-flash",
+        contents: prompt,
         config: {
+          maxOutputTokens: 65536,
           responseMimeType: "application/json",
           responseSchema: {
             type: "array",
@@ -238,11 +229,10 @@ Return JSON array:
               required: ["category", "description", "priority", "suggestedQuestions", "relatedFactIds"]
             }
           }
-        },
-        contents: prompt,
+        }
       });
 
-      return JSON.parse(response.text || "[]");
+      return JSON.parse(result.text || "[]");
     } catch (error) {
       console.error('❌ Knowledge gap analysis failed:', error);
       console.warn('⚠️ Gap analysis unavailable due to AI error - missing insights into knowledge completeness');
@@ -299,8 +289,9 @@ Return optimized facts in JSON:
 
     try {
       const response = await this.ai.models.generateContent({
-        model: "gemini-3-pro-preview",
+        model: "gemini-3-flash",
         config: {
+          maxOutputTokens: 65536,
           responseMimeType: "application/json",
           responseSchema: {
             type: "array",
@@ -390,41 +381,42 @@ Return optimized facts in JSON:
   }> {
     console.log(`🧠 Starting evolutionary optimization of ${facts.length} facts...`);
     
-    // Step 1: Context-aware consolidation
-    console.log('🔄 Running context-aware consolidation...');
-    const consolidatedFacts = await this.contextAwareConsolidation(facts);
+    // Step 1: Context-aware consolidation (OPTIONAL / SEPARATE)
+    // ⚠️ CHANGE: We now run analysis on the ORIGINAL facts so we can update the DB directly.
+    // Consolidation is cool but destructive, so we'll skip it for the main loop for now.
+    console.log('🔄 Skipping consolidation to preserve DB integrity...');
+    const workingFacts = facts; 
     
     // Step 2: Discover relationships
     console.log('🕸️ Discovering knowledge relationships...');
-    const relationships = await this.discoverRelationships(consolidatedFacts);
+    const relationships = await this.discoverRelationships(workingFacts);
     
     // Step 3: Create intelligent clusters
     console.log('🎯 Creating intelligent clusters...');
-    const clusters = await this.createIntelligentClusters(consolidatedFacts);
+    const clusters = await this.createIntelligentClusters(workingFacts);
     
     // Step 4: Identify knowledge gaps
     console.log('🔍 Identifying knowledge gaps...');
-    const knowledgeGaps = await this.identifyKnowledgeGaps(consolidatedFacts, clusters);
+    const knowledgeGaps = await this.identifyKnowledgeGaps(workingFacts, clusters);
     
     // Step 5: Calculate evolution metrics
     const metrics: EvolutionMetrics = {
-      totalFacts: consolidatedFacts.length,
-      avgQualityScore: consolidatedFacts.reduce((sum, f) => sum + (f.qualityScore || 5), 0) / consolidatedFacts.length,
+      totalFacts: workingFacts.length,
+      avgQualityScore: workingFacts.reduce((sum, f) => sum + (f.qualityScore || 5), 0) / workingFacts.length,
       clusterCount: clusters.length,
       relationshipCount: relationships.length,
-      learningRate: Math.min(1, relationships.length / consolidatedFacts.length),
+      learningRate: Math.min(1, relationships.length / workingFacts.length),
       knowledgeCoverage: Math.min(1, clusters.length / 10) // Target 10 core knowledge areas
     };
     
     console.log(`✨ Evolution complete! 
-      Facts: ${facts.length} → ${consolidatedFacts.length}
-      Relationships: ${relationships.length}
-      Clusters: ${clusters.length}
-      Knowledge Gaps: ${knowledgeGaps.length}
-      Avg Quality: ${metrics.avgQualityScore.toFixed(1)}/10`);
+      Facts Analyzed: ${workingFacts.length}
+      Relationships Found: ${relationships.length}
+      Clusters Created: ${clusters.length}
+      Knowledge Gaps: ${knowledgeGaps.length}`);
     
     return {
-      optimizedFacts: consolidatedFacts,
+      optimizedFacts: workingFacts,
       relationships,
       clusters,
       knowledgeGaps,

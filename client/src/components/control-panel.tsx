@@ -57,25 +57,18 @@ export default function ControlPanel({
       <div className="space-y-3">
         <h3 className="text-sm font-medium text-foreground">Voice Controls</h3>
         
-        {appMode === 'STREAMING' ? (
-          <Button
-            onClick={onToggleListening}
-            className={`w-full py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200 ${
-              isListening
-                ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground neon-glow'
-                : 'bg-primary hover:bg-primary/90 text-primary-foreground neon-glow'
-            }`}
-            data-testid="button-toggle-listening"
-          >
-            <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'}`}></i>
-            <span>{isListening ? 'Stop Listening' : 'Start Listening'}</span>
-          </Button>
-        ) : (
-          <div className="w-full py-3 px-4 rounded-lg bg-muted/30 text-muted-foreground text-center text-sm">
-            <i className="fas fa-microphone-slash mr-2"></i>
-            Voice listening disabled in Podcast Mode
-          </div>
-        )}
+        <Button
+          onClick={onToggleListening}
+          className={`w-full py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200 ${
+            isListening
+              ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground neon-glow'
+              : 'bg-primary hover:bg-primary/90 text-primary-foreground neon-glow'
+          }`}
+          data-testid="button-toggle-listening"
+        >
+          <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'}`}></i>
+          <span>{isListening ? 'Stop Listening' : 'Start Listening'}</span>
+        </Button>
 
         <div className="flex items-center justify-between w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground py-2 px-4 rounded-lg transition-all duration-200">
           <div className="flex items-center space-x-2">
@@ -136,14 +129,29 @@ export default function ControlPanel({
             data-testid="textarea-message-input"
             readOnly={isListening} // Prevent typing while listening
           />
-          <Button 
-            type="submit" 
-            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200"
-            data-testid="button-send-message"
-          >
-            <i className="fas fa-paper-plane"></i>
-            <span>Send Message</span>
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              type="button"
+              onClick={onToggleListening}
+              className={`flex-1 py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200 ${
+                isListening
+                  ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground neon-glow'
+                  : 'bg-primary hover:bg-primary/90 text-primary-foreground'
+              }`}
+              title={isListening ? "Stop Recording" : "Start Recording"}
+            >
+              <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'}`}></i>
+              <span>{isListening ? 'Stop' : 'Speak'}</span>
+            </Button>
+            <Button 
+              type="submit" 
+              className="flex-[2] bg-accent hover:bg-accent/90 text-accent-foreground py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200"
+              data-testid="button-send-message"
+            >
+              <i className="fas fa-paper-plane"></i>
+              <span>Send</span>
+            </Button>
+          </div>
         </form>
       </div>
 

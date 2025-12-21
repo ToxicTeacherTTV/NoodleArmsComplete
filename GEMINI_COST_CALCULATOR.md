@@ -8,9 +8,12 @@ Based on your actual usage patterns and the NoodleArms codebase.
 
 | Model | Input Cost | Output Cost | Notes |
 |-------|-----------|-------------|-------|
-| **gemini-2.5-pro** | $1.25 | $5.00 | Premium quality |
-| **gemini-2.5-flash** | $0.075 | $0.30 | 17x cheaper input |
-| **gemini-2.0-flash-exp** | FREE | FREE | Experimental, may be unstable |
+| **gemini-3-flash** | ~$0.10* | ~$0.40* | *Estimated* - New Default |
+| **gemini-2.5-pro** | $1.25 | $5.00 | Legacy Premium |
+| **gemini-2.5-flash** | $0.075 | $0.30 | Ultra-cheap fallback |
+| **gemini-2.0-flash-exp** | FREE | FREE | Experimental |
+
+*\*Pricing for Gemini 3 Flash is estimated based on Flash tier positioning.*
 
 ---
 

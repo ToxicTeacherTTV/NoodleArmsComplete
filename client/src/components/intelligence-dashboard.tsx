@@ -24,10 +24,20 @@ import {
   Loader2,
   Wrench,
   Check,
-  Eye
+  Eye,
+  Edit
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 interface IntelligenceAnalysis {
   factClusters: FactCluster[];
@@ -52,6 +62,7 @@ interface FactCluster {
   consolidationScore: number;
   suggestedMerge: string;
   reasoning: string;
+  facts?: { id: string; content: string }[];
 }
 
 interface SourceReliability {
@@ -156,7 +167,27 @@ export function IntelligenceDashboard() {
   const [reconstructionResult, setReconstructionResult] = useState<any>(null);
   const [mergingClusterId, setMergingClusterId] = useState<string | null>(null);
   const [mergedClusters, setMergedClusters] = useState<Set<string>>(new Set());
+  const [reviewingCluster, setReviewingCluster] = useState<FactCluster | null>(null);
+  const [editedMergeContent, setEditedMergeContent] = useState("");
   const { toast } = useToast();
+
+  const handleReviewMerge = (cluster: FactCluster) => {
+    setReviewingCluster(cluster);
+    setEditedMergeContent(cluster.suggestedMerge);
+  };
+
+  const handleConfirmMerge = () => {
+    if (!reviewingCluster) return;
+    
+    bulkActionMutation.mutate({
+      action: 'merge_cluster',
+      memoryIds: reviewingCluster.factIds,
+      options: { mergedContent: editedMergeContent },
+      clusterId: reviewingCluster.clusterId
+    });
+    
+    setReviewingCluster(null);
+  };
 
   // Orphan facts repair mutation
   const repairOrphansMutation = useMutation({
@@ -193,6 +224,52 @@ export function IntelligenceDashboard() {
   const { data: summaryData, isLoading: summariesLoading } = useQuery<SummaryData>({
     queryKey: ['/api/intelligence/summaries'],
     refetchInterval: 60000, // Refresh every minute
+  });
+
+  // Fetch memory suggestions
+  const { data: suggestions, isLoading: suggestionsLoading } = useQuery<any[]>({
+    queryKey: ['/api/memory/suggestions'],
+    refetchInterval: 30000,
+  });
+
+  const approveSuggestionMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest('POST', `/api/memory/suggestions/${id}/approve`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Suggestion Approved",
+        description: "The memory has been updated.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/suggestions'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to approve suggestion",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rejectSuggestionMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest('POST', `/api/memory/suggestions/${id}/reject`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Suggestion Rejected",
+        description: "The suggestion has been discarded.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/suggestions'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reject suggestion",
+        variant: "destructive",
+      });
+    },
   });
 
   // Bulk operations mutation
@@ -565,7 +642,15 @@ export function IntelligenceDashboard() {
 
       {/* Detailed Analysis Tabs */}
       <Tabs defaultValue="summaries" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
+          <TabsTrigger value="suggestions" data-testid="tab-suggestions">
+            💡 Suggestions
+            {suggestions && suggestions.length > 0 && (
+              <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center">
+                {suggestions.length}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="summaries" data-testid="tab-summaries">
             📊 AI Summaries
           </TabsTrigger>
@@ -585,6 +670,99 @@ export function IntelligenceDashboard() {
             📚 Story Reconstruction
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="suggestions" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-yellow-500" />
+                Memory Suggestions
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {suggestionsLoading ? (
+                <div className="space-y-4">
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                </div>
+              ) : suggestions?.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+                  <p>No pending suggestions. All caught up!</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {suggestions?.map((suggestion) => (
+                    <Card key={suggestion.id} className="border-l-4 border-l-yellow-500">
+                      <CardContent className="pt-6">
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="space-y-2 flex-1">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">{suggestion.triggerType}</Badge>
+                              <span className="text-sm text-muted-foreground">
+                                Memory #{suggestion.memoryId.substring(0, 8)}...
+                              </span>
+                            </div>
+                            
+                            <div className="bg-muted/50 p-3 rounded-md text-sm italic">
+                              "{suggestion.memory?.content || "Content unavailable"}"
+                            </div>
+
+                            <div className="flex items-center gap-4 text-sm">
+                              {suggestion.suggestedAction === 'BOOST_IMPORTANCE' && (
+                                <div className="flex items-center gap-1">
+                                  <TrendingUp className="h-4 w-4 text-green-500" />
+                                  <span>Boost Importance: {suggestion.memory?.importance || 0} → {suggestion.suggestedValue.importance}</span>
+                                </div>
+                              )}
+                              {suggestion.suggestedAction === 'ADD_TAG' && (
+                                <div className="flex items-center gap-1">
+                                  <Target className="h-4 w-4 text-blue-500" />
+                                  <span>Add Tag: <Badge variant="secondary">{suggestion.suggestedValue.tag}</Badge></span>
+                                </div>
+                              )}
+                              {suggestion.suggestedAction === 'FLAG_FOR_TRAINING' && (
+                                <div className="flex items-center gap-1">
+                                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                                  <span>Flag for Training</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <p className="text-sm text-muted-foreground">
+                              Trigger: <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">{suggestion.triggerValue}</span>
+                            </p>
+                          </div>
+
+                          <div className="flex flex-col gap-2">
+                            <Button 
+                              size="sm" 
+                              onClick={() => approveSuggestionMutation.mutate(suggestion.id)}
+                              disabled={approveSuggestionMutation.isPending}
+                            >
+                              <Check className="h-4 w-4 mr-1" />
+                              Approve
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => rejectSuggestionMutation.mutate(suggestion.id)}
+                              disabled={rejectSuggestionMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="summaries" className="space-y-4">
           <Card>
@@ -764,14 +942,7 @@ export function IntelligenceDashboard() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        bulkActionMutation.mutate({
-                          action: 'merge_cluster',
-                          memoryIds: cluster.factIds,
-                          options: { mergedContent: cluster.suggestedMerge },
-                          clusterId: cluster.clusterId
-                        });
-                      }}
+                      onClick={() => handleReviewMerge(cluster)}
                       disabled={mergingClusterId === cluster.clusterId}
                       data-testid={`button-merge-cluster-${cluster.clusterId}`}
                       className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900 dark:hover:bg-blue-800 dark:text-blue-200"
@@ -783,8 +954,8 @@ export function IntelligenceDashboard() {
                         </>
                       ) : (
                         <>
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Auto Merge
+                          <Edit className="h-4 w-4 mr-2" />
+                          Review & Merge
                         </>
                       )}
                     </Button>
@@ -1085,6 +1256,59 @@ export function IntelligenceDashboard() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Merge Review Modal */}
+      <Dialog open={!!reviewingCluster} onOpenChange={(open) => !open && setReviewingCluster(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Review & Merge Facts</DialogTitle>
+            <DialogDescription>
+              Review the original facts and edit the suggested merged content before confirming.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-6 py-4">
+            <div className="space-y-2">
+              <h4 className="font-medium text-sm text-gray-500">Original Facts ({reviewingCluster?.factIds.length})</h4>
+              <div className="bg-slate-50 dark:bg-slate-900 rounded-md p-4 space-y-3 max-h-60 overflow-y-auto border">
+                {reviewingCluster?.facts?.map((fact, i) => (
+                  <div key={fact.id} className="text-sm border-b last:border-0 pb-2 last:pb-0 border-slate-200 dark:border-slate-700">
+                    <span className="font-mono text-xs text-slate-400 mr-2">#{i + 1}</span>
+                    {fact.content}
+                  </div>
+                )) || (
+                  <div className="text-sm text-gray-500 italic">
+                    Fact content not available. IDs: {reviewingCluster?.factIds.join(', ')}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-medium text-sm text-gray-500">Merged Content (Editable)</h4>
+              <Textarea
+                value={editedMergeContent}
+                onChange={(e) => setEditedMergeContent(e.target.value)}
+                className="min-h-[150px] font-medium"
+                placeholder="Enter the merged fact content..."
+              />
+              <p className="text-xs text-gray-500">
+                This will replace the {reviewingCluster?.factIds.length} original facts with a single new memory.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReviewingCluster(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmMerge} className="bg-blue-600 hover:bg-blue-700">
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Confirm Merge
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

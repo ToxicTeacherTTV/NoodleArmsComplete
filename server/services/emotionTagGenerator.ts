@@ -1,4 +1,4 @@
-import { anthropicService } from './anthropic.js';
+import { geminiService } from './gemini.js';
 
 interface EmotionTagContext {
   content: string;
@@ -73,12 +73,12 @@ Use these specific tags for the character:
 * Start with \`[strong bronx wiseguy accent][EMOTION]\`.`;
 
     try {
-      const response = await anthropicService.generateResponse(
+      const response = await geminiService.generateResponse(
         content,
         systemPrompt,
         [],
         [],
-        undefined,
+        "",
         'SIMPLE'
       );
       
@@ -263,12 +263,12 @@ Use these specific tags for the character:
   private async generateArcWithAI(context: EmotionTagContext): Promise<EmotionalArc> {
     const prompt = this.buildArcPrompt(context);
     
-    const response = await anthropicService.generateResponse(
+    const response = await geminiService.generateResponse(
       prompt,
       'You are a voice emotion arc generator. Create a natural 5-stage emotional progression. Return only valid JSON.',
       [],
       [],
-      undefined,
+      "",
       'SIMPLE'
     );
     
@@ -300,12 +300,12 @@ Use these specific tags for the character:
     const prompt = this.buildPrompt(context);
     
     // Use a small, fast model for quick tag generation
-    const response = await anthropicService.generateResponse(
+    const response = await geminiService.generateResponse(
       prompt, 
       'You are a voice emotion tag generator. Return only valid JSON.',
       [], // no relevant memories needed
       [], // no relevant docs needed
-      undefined, // no lore context
+      "", // no lore context
       'SIMPLE' // simple mode for quick generation
     );
     

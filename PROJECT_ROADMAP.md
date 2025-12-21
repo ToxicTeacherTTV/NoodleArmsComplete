@@ -1,12 +1,45 @@
 # Nicky AI - Project Roadmap & Improvements
 
-**Last Updated:** November 23, 2025
+**Last Updated:** December 8, 2025
 
 This document tracks suggested improvements and their implementation status.
 
 ---
 
-## 🎉 RECENT COMPLETIONS (November 23, 2025)
+## 🎉 RECENT COMPLETIONS (December 20, 2025)
+
+### Gemini 3 Flash Migration ✅ COMPLETED
+**Status:** DEPLOYED - Infrastructure cost & performance upgrade
+
+**Changes Made:**
+- ✅ Replaced `gemini-2.5-pro` with `gemini-3-flash` as the default "smart" model
+- ✅ Updated `geminiModels.ts` and `modelSelection.ts` to prioritize Flash 3
+- ✅ Updated documentation to reflect cost savings (~92%)
+- ✅ Optimized memory deduplication to use Flash 3 for faster merging
+
+**Files:** `server/config/geminiModels.ts`, `shared/modelSelection.ts`, `server/services/memoryDeduplicator.ts`
+
+### Diagnostic Chat Mode ✅ COMPLETED
+**Status:** DEPLOYED - System state analysis and testing tools
+
+**What was built:**
+- ✅ `DiagnosticService` for injecting system state (Personality, Chaos, Intensity) into chat context
+- ✅ `/diag` command support in chat
+- ✅ UI menu option "Run Diagnostics" in MessageComposer
+- ✅ Allows testing of reactions, recall, and personality without breaking character
+
+**Files:** `server/services/diagnosticService.ts`, `server/routes.ts`, `client/src/components/MessageComposer.tsx`
+
+### Arc Raiders Context Refinement ✅ COMPLETED
+**Status:** DEPLOYED - Improved context switching and humor
+
+**Changes Made:**
+- ✅ Implemented "Sticky Context" for Arc Raiders (remembers topic for 6 messages)
+- ✅ Fixed regex triggers to use word boundaries (preventing false positives)
+- ✅ Updated squad names to be funnier (Cousin Calzone, Tommy "The Squint" Tortellini)
+- ✅ Explicitly authorized "creative freedom" for inventing glitches and stories
+
+**Files:** `server/services/gemini.ts`, `server/services/anthropic.ts`
 
 ### Universal Model Selection System ✅ COMPLETED
 **Status:** DEPLOYED - Full model selection with cost/quality visualization
@@ -24,12 +57,24 @@ This document tracks suggested improvements and their implementation status.
 - ✅ localStorage-based preferences (per-operation)
 
 **Models Available:**
-- Claude Sonnet 4.5: $3/$15 per 1M (High quality, reliable)
-- Gemini 3 Pro Preview: Pricing TBD (Newest, experimental)
-- Gemini 2.5 Pro: $1.25/$5 per 1M (Balance of cost/quality)
-- Gemini 2.5 Flash: $0.30/$1.20 per 1M (Fast, economical)
+- Gemini 3 Flash: ~$0.10/$0.40 per 1M (Primary for EVERYTHING)
+- Gemini 3 Pro Preview: Pricing TBD (First Fallback)
+- Gemini 2.5 Pro: $1.25/$5 per 1M (Last Resort)
+- Gemini 2.5 Flash: $0.30/$1.20 per 1M (Economy)
+- Claude Sonnet 4.5: (Disabled/Optional)
 
 **Files:** `shared/modelSelection.ts`, `server/services/aiOrchestrator.ts`, `server/config/geminiModels.ts`, `client/src/components/model-selector.tsx`, `client/src/components/quick-model-toggle.tsx`, `client/src/components/document-processing-dialog.tsx`, `client/src/components/ai-model-settings.tsx`, `client/src/components/jazz-dashboard-v2.tsx`, `server/routes.ts`
+
+### Bulk Embedding Backfill ✅ COMPLETED
+**Status:** DEPLOYED - All memories have semantic embeddings
+
+**What was verified:**
+- ✅ Verified 4,136 total memories in database
+- ✅ Confirmed 0 memories missing embeddings
+- ✅ Automatic background embedding generation is working correctly for new memories
+- ✅ Semantic search is fully operational across the entire knowledge base
+
+**Files:** `server/services/embeddingService.ts`, `server/storage.ts`
 
 ### Personality Baseline Fix ✅ COMPLETED
 **Status:** DEPLOYED - Nicky never calm/relaxed anymore

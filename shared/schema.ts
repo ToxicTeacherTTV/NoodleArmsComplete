@@ -123,6 +123,7 @@ export const memoryEntries = pgTable("memory_entries", {
   lastUsed: timestamp("last_used"),
   clusterId: varchar("cluster_id"), // For intelligent clustering
   keywords: text("keywords").array(), // For better retrieval
+  tags: text("tags").array(), // Categorization tags (e.g. 'technical', 'dbd', 'family')
   relationships: text("relationships").array(), // IDs of related facts
   qualityScore: integer("quality_score").default(5), // 1-10 based on feedback
   temporalContext: text("temporal_context"), // When this fact was true/relevant
@@ -916,9 +917,13 @@ export const contentFlags = pgTable("content_flags", {
     // Content Importance Classification
     'permanent_fact' | 'high_importance' | 'medium_importance' | 'low_importance' | 'deletion_candidate' |
     // Meta-System Monitoring
-    'fourth_wall_break' | 'ooc_behavior' |
+    'fourth_wall_break' | 'ooc_behavior' | 'coaching_violation' | 'coaching_adherence' |
     // Additional Categories
-    'pasta_related' | 'dbd_gameplay' | 'family_mention' | 'romance_failure' | 'criminal_activity'
+    'pasta_related' | 'dbd_gameplay' | 'arc_raiders_gameplay' | 'family_mention' | 'romance_failure' | 'criminal_activity' |
+    // New Content & Upgrades
+    'podcast_topic' | 'listener_interaction' | 'streaming_moment' |
+    'fact_candidate' | 'distillation_required' |
+    'lore_contradiction' | 'extraction_event' | 'trial_outcome'
   >().notNull(),
   
   priority: text("priority").$type<'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'>().default('MEDIUM'),
@@ -1359,6 +1364,47 @@ export const insertListenerCitySchema = createInsertSchema(listenerCities).omit(
   createdAt: true,
   updatedAt: true,
 });
+
+// Memory Suggestions - For "Shadow Tagging" system
+export const memorySuggestions = pgTable("memory_suggestions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  memoryId: varchar("memory_id").references(() => memoryEntries.id, { onDelete: 'cascade' }).notNull(),
+  
+  // What triggered this suggestion
+  triggerType: text("trigger_type").$type<'REGEX' | 'AI' | 'MANUAL'>().notNull(),
+  triggerValue: text("trigger_value").notNull(), // e.g., "Uncle Paulie" or "mask_dropped"
+  
+  // The suggested change
+  suggestedAction: text("suggested_action").$type<'BOOST_IMPORTANCE' | 'ADD_TAG' | 'FLAG_FOR_TRAINING'>().notNull(),
+  suggestedValue: jsonb("suggested_value").notNull(), // e.g., { importance: 8 } or { tag: "family" }
+  
+  // Status
+  status: text("status").$type<'PENDING' | 'APPROVED' | 'REJECTED'>().default('PENDING'),
+  
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+export const memorySuggestionsRelations = relations(memorySuggestions, ({ one }) => ({
+  profile: one(profiles, {
+    fields: [memorySuggestions.profileId],
+    references: [profiles.id],
+  }),
+  memory: one(memoryEntries, {
+    fields: [memorySuggestions.memoryId],
+    references: [memoryEntries.id],
+  }),
+}));
+
+export const insertMemorySuggestionSchema = createInsertSchema(memorySuggestions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MemorySuggestion = typeof memorySuggestions.$inferSelect;
+export type InsertMemorySuggestion = z.infer<typeof insertMemorySuggestionSchema>;
 
 // Podcast system types
 export type PodcastEpisode = typeof podcastEpisodes.$inferSelect;

@@ -1,14 +1,27 @@
 # Nicky AI - Improvement Opportunities Analysis
 
 **Date**: 2025-11-04  
-**Last Updated**: 2025-11-23  
+**Last Updated**: 2025-12-08  
 **Context**: Analysis of current system capabilities and opportunities for enhancement
 
 ---
 
-## ✅ COMPLETED IMPROVEMENTS (Nov 23, 2025 Update)
+## ✅ COMPLETED IMPROVEMENTS (Dec 08, 2025 Update)
 
-### 1. **Universal Model Selection System** ✅ COMPLETED (Nov 23)
+### 1. **Diagnostic Chat Mode** ✅ COMPLETED (Dec 08)
+**Status:** DEPLOYED - System state analysis tools
+- ✅ `DiagnosticService` created to inject system state into context
+- ✅ `/diag` command support added
+- ✅ UI integration in MessageComposer
+- ✅ Enables testing of personality, intensity, and recall without breaking character
+
+### 2. **Arc Raiders Context Refinement** ✅ COMPLETED (Dec 08)
+**Status:** DEPLOYED - Improved context switching and humor
+- ✅ "Sticky Context" implemented for Arc Raiders (6-message memory)
+- ✅ Regex triggers fixed to use word boundaries
+- ✅ Squad names updated to be funnier (Cousin Calzone, etc.)
+
+### 3. **Universal Model Selection System** ✅ COMPLETED (Nov 23)
 **Status:** DEPLOYED - Full UI with cost/quality visualization
 - ✅ Type-safe model selection with TypeScript interfaces
 - ✅ localStorage-based preferences (per-operation granularity)
@@ -101,7 +114,7 @@
 - ✅ Hybrid search (keyword + semantic) active in production
 - ✅ Automatic background embedding generation for new memories
 - ✅ Batch processing with rate limit handling
-- ⚠️ Need to backfill existing 1,505 memories (~30 min process)
+- ✅ Backfill completed: All 4,136 memories have embeddings
 
 ### 2. **Increase Training Example Limit** ✅ COMPLETED
 **Status:** INCREASED from 10 to 50
@@ -469,10 +482,10 @@ const hybridResults = await embeddingService.hybridSearch(
 - ✅ "cooking" query finds recipes/pasta without exact keywords
 - ✅ "gaming" query finds DBD content naturally
 - ✅ Automatic embedding generation for new memories
+- ✅ Full coverage: 4,136/4,136 memories embedded
 
 **Remaining Work:**
-- ⚠️ Backfill existing 1,505 memories (endpoint ready: POST /api/memories/generate-embeddings)
-- ⚠️ Takes ~30 minutes with rate limiting
+- None (Backfill completed Dec 8, 2025)
 
 ---
 

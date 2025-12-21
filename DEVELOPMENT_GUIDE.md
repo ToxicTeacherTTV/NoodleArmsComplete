@@ -393,7 +393,8 @@ export async function callYourEndpoint(data: any) {
 }
 ```
 
-### 4. Run Embedding Backfill
+### 4. Run Embedding Backfill (If Needed)
+*Note: The production database was fully backfilled on Dec 8, 2025. This is only needed for fresh database setups.*
 
 ```bash
 # Option 1: Via API (recommended)

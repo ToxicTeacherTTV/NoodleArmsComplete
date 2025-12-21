@@ -1,6 +1,6 @@
 import { Client, GatewayIntentBits, Message, Events, TextChannel } from 'discord.js';
 import { storage } from '../storage';
-import { anthropicService } from './anthropic';
+import { geminiService } from './gemini';
 import type { DiscordServer, DiscordMember, DiscordTopicTrigger } from '@shared/schema';
 import { prometheusMetrics } from './prometheusMetrics.js';
 
@@ -1328,6 +1328,10 @@ DISCORD CHAT MODE - CRITICAL CONSTRAINTS:
         console.log('✅ Gemini Discord response generated successfully');
         return content;
       } catch (geminiError) {
+        // 🔄 FALLBACK: Claude disabled.
+        console.error('❌ Gemini Discord failed. Claude fallback disabled.', geminiError);
+        return null;
+        /*
         // 🔄 FALLBACK: Try Claude if Gemini fails
         console.error('❌ Gemini Discord failed, falling back to Claude:', geminiError);
         
@@ -1418,20 +1422,9 @@ DISCORD MODE: You are chatting on Discord. Your responses MUST be:
           return cleanContent;
         } catch (claudeError) {
           console.error('❌ Both Gemini and Claude failed for Discord:', claudeError);
-          
-          // Last resort: simple responses
-          const fallbackResponses = [
-            "What's good?",
-            "Sup?",
-            "Hey there!",
-            "Yo!",
-            "What's up?",
-            "Madonna mia...",
-            "Oof...",
-            "Bruh"
-          ];
-          return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+          return null;
         }
+        */
       }
     } catch (error) {
       // Outer catch for personality control loading errors
