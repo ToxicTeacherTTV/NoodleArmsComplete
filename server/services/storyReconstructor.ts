@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '@shared/schema';
-import { anthropicService } from './anthropic.js';
+import { geminiService } from './gemini.js';
 import { storage } from '../storage.js';
 
 // Content analysis types
@@ -42,11 +42,11 @@ interface ReconstructionResult {
 
 export class StoryReconstructor {
   private storage: any;
-  private anthropic: any;
+  private gemini: any;
 
   constructor() {
     this.storage = storage;
-    this.anthropic = anthropicService;
+    this.gemini = geminiService;
   }
 
   /**
@@ -433,12 +433,12 @@ Create a JSON response with:
 Order the events chronologically and provide context for how they connect. Keep it concise.`;
 
     try {
-      const response = await this.anthropic.generateResponse(
+      const response = await this.gemini.generateResponse(
         prompt,
         "You are a helpful AI assistant that analyzes facts and creates story outlines.",
         [], // relevantMemories
         [], // relevantDocs
-        undefined, // loreContext
+        "", // loreContext
         undefined // mode
       );
       

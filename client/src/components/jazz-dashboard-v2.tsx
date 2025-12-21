@@ -77,35 +77,38 @@ export default function JazzDashboard() {
             return response.json();
         },
         onSuccess: async (response, variables) => {
-            if (response?.content) {
-                const aiMessage: Message = {
-                    id: nanoid(),
-                    conversationId: currentConversationId,
-                    type: 'AI',
-                    content: response.content,
-                    createdAt: new Date().toISOString(),
-                    rating: null,
-                    metadata: { 
-                        processingTime: response.processingTime,
-                        retrieved_context: response.retrievedContext,
-                        debug_info: response.debugInfo
-                    },
-                };
-                setMessages(prev => [...prev, aiMessage]);
+            if (variables.conversationId === currentConversationId) {
+                if (response?.content) {
+                    const aiMessage: Message = {
+                        id: nanoid(),
+                        conversationId: variables.conversationId,
+                        type: 'AI',
+                        content: response.content,
+                        createdAt: new Date().toISOString(),
+                        rating: null,
+                        metadata: { 
+                            processingTime: response.processingTime,
+                            retrieved_context: response.retrievedContext,
+                            debug_info: response.debugInfo
+                        },
+                    };
+                    setMessages(prev => [...prev, aiMessage]);
 
-                if (appMode === 'STREAMING') {
-                    speakElevenLabs(response.content);
-                    setAiStatus('SPEAKING');
+                    if (appMode === 'STREAMING') {
+                        speakElevenLabs(response.content);
+                        setAiStatus('SPEAKING');
+                    }
                 }
+                
+                // Only set to IDLE if we didn't switch to SPEAKING
+                setAiStatus(prev => prev === 'SPEAKING' ? 'SPEAKING' : 'IDLE');
             }
+
             queryClient.invalidateQueries({ queryKey: ['/api/conversations/web'] });
             // Ensure we fetch the persisted messages to sync state
             await queryClient.invalidateQueries({ queryKey: ['/api/conversations', variables.conversationId, 'messages'] });
             // Refresh personality state to clear any temporary overrides
             queryClient.invalidateQueries({ queryKey: ['/api/personality/state'] });
-            
-            // Only set to IDLE if we didn't switch to SPEAKING
-            setAiStatus(prev => prev === 'SPEAKING' ? 'SPEAKING' : 'IDLE');
         },
         onError: () => setAiStatus('ERROR'),
     });
@@ -165,7 +168,7 @@ export default function JazzDashboard() {
 
     // Voice control
     const toggleListening = () => {
-        if (appMode !== 'STREAMING') return;
+        // Removed mode restriction to allow voice in PODCAST mode too
 
         if (isListening) {
             stopListening();
@@ -173,9 +176,10 @@ export default function JazzDashboard() {
             // Allow sending even if no conversation ID yet (will be created)
             if (finalText) {
                 handleSendMessage(finalText);
+            } else {
+                setAiStatus('IDLE');
             }
             resetTranscript();
-            setAiStatus('IDLE');
         } else {
             resetTranscript();
             startListening();
@@ -228,12 +232,14 @@ export default function JazzDashboard() {
     const handleSelectConversation = (conversationId: string) => {
         setCurrentConversationId(conversationId);
         setMessages([]);
+        setAiStatus('IDLE');
     };
 
     const handleNewChat = () => {
         // Don't create immediately, just clear state
         setCurrentConversationId("");
         setMessages([]);
+        setAiStatus('IDLE');
     };
 
     const getSessionDuration = () => {

@@ -310,7 +310,7 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
       const fullPrompt = `${systemPrompt}\n\n${prompt}`;
       
       const geminiResponse = await geminiService['ai'].models.generateContent({
-        model: 'gemini-2.5-pro', // 🚫 NEVER Flash - hallucinates during merging
+        model: 'gemini-3-flash', // 🚀 Upgraded to Gemini 3 Flash (beats 2.5 Pro)
         contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
         config: {
           maxOutputTokens: 3000, // Increased to account for Gemini's "thinking tokens"
@@ -342,6 +342,11 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
       return mergedContent.trim();
       
     } catch (geminiError) {
+      // � CLAUDE FALLBACK DISABLED (Dec 20, 2025)
+      console.error('❌ Gemini merge failed. Internal fallback should have handled this.', geminiError);
+      throw geminiError;
+      
+      /*
       // 🔄 FALLBACK: Use Claude if Gemini fails
       console.log('❌ Gemini merge failed, falling back to Claude:', geminiError);
       
@@ -358,6 +363,12 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
         });
 
         const textContent = response.content.find(c => c.type === 'text');
+        // ...
+      } catch (claudeError) {
+        console.error('❌ Claude fallback also failed:', claudeError);
+        throw claudeError;
+      }
+      */
         if (!textContent || textContent.type !== 'text') {
           throw new Error('No text content in response');
         }
@@ -660,21 +671,26 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
     
     console.log(`✅ Found ${duplicateGroups.length} duplicate groups using vector embeddings`);
     
-    // 🛡️ Process ONE GROUP AT A TIME with delays and connection refresh to avoid Neon timeouts
+    // 🛡️ Process groups until time limit is reached (55s) to avoid HTTP timeouts
     let mergedCount = 0;
     let successCount = 0;
     let errorCount = 0;
 
-    const MAX_GROUPS_PER_RUN = 5; // Reduced to 5 groups to stay well under timeout
-    const DELAY_BETWEEN_GROUPS = 500; // Increased delay to let connection pool refresh
-    const CONNECTION_REFRESH_INTERVAL = 2; // Refresh connection every N groups
+    const MAX_EXECUTION_TIME_MS = 55000; // 55 seconds max execution time
+    const startTime = Date.now();
+    const DELAY_BETWEEN_GROUPS = 10; // Minimal delay for maximum throughput
+    const CONNECTION_REFRESH_INTERVAL = 50; // Refresh connection every 50 groups
 
+    console.log(`📦 Found ${duplicateGroups.length} duplicate groups. Processing as many as possible in 55s...`);
     
-    const groupsToProcess = duplicateGroups.slice(0, MAX_GROUPS_PER_RUN);
-    console.log(`📦 Processing ${groupsToProcess.length} groups (of ${duplicateGroups.length} total)...`);
-    
-    for (let i = 0; i < groupsToProcess.length; i++) {
-      const group = groupsToProcess[i];
+    for (let i = 0; i < duplicateGroups.length; i++) {
+      // Check time limit
+      if (Date.now() - startTime > MAX_EXECUTION_TIME_MS) {
+        console.log(`⏱️ Time limit reached (${MAX_EXECUTION_TIME_MS}ms). Stopping auto-merge.`);
+        break;
+      }
+
+      const group = duplicateGroups[i];
       
       // Refresh connection every few groups to prevent stale connections
       if (i > 0 && i % CONNECTION_REFRESH_INTERVAL === 0) {
@@ -687,7 +703,7 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
       }
       
       try {
-        console.log(`🔄 [${i+1}/${groupsToProcess.length}] Merging: "${group.masterEntry.content.substring(0, 50)}..." (${group.duplicates.length} duplicates)`);
+        console.log(`🔄 [${i+1}/${duplicateGroups.length}] Merging: "${group.masterEntry.content.substring(0, 50)}..." (${group.duplicates.length} duplicates)`);
         
         // Execute merge with shorter timeout tolerance
         await this.executeMergeSafe(db, group);
@@ -714,7 +730,7 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
       }
       
       // Delay between groups to let the connection pool breathe
-      if (i < groupsToProcess.length - 1) {
+      if (i < duplicateGroups.length - 1) {
         await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_GROUPS));
       }
     }

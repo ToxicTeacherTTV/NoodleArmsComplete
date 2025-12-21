@@ -32,6 +32,15 @@ const SAFE_CATEGORIES = [
   'humor_tactic',
   'self_reference',
   'stream_commentary',
+  'arc_raiders_gameplay', // 🎮 NEW: Safe to approve Arc Raiders facts
+  // 🆕 New Categories from Rescan (Safe to Auto-Approve)
+  'podcast_topic',
+  'fact_candidate',
+  'streaming_moment',
+  'listener_interaction',
+  'extraction_event',
+  'trial_outcome',
+  'distillation_required'
 ] as const;
 
 // Categories that need manual review (no auto-approval)
@@ -69,7 +78,7 @@ export class FlagAutoApprovalService {
       ),
     });
 
-    const dailyLimit = 700;
+    const dailyLimit = 5000; // Increased from 700 for initial migration
     const currentCount = dailyStats?.approvalCount || 0;
     const remaining = dailyLimit - currentCount;
 
@@ -101,22 +110,11 @@ export class FlagAutoApprovalService {
     const categoryStats: Record<string, number> = {};
     let skipped = 0;
 
+    // 1. Identify flags to approve (in memory)
     for (const flag of pendingFlags) {
       const shouldApprove = this.shouldAutoApprove(flag);
       
       if (shouldApprove) {
-        // Auto-approve this flag
-        await db
-          .update(contentFlags)
-          .set({
-            reviewStatus: 'APPROVED',
-            reviewedBy: 'AUTO_APPROVAL_SYSTEM',
-            reviewNotes: `Auto-approved: ${flag.flagType} (confidence: ${flag.confidence || 0}%)`,
-            reviewedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(contentFlags.id, flag.id));
-
         approvedFlagIds.push(flag.id);
         categoryStats[flag.flagType] = (categoryStats[flag.flagType] || 0) + 1;
       } else {
@@ -129,32 +127,41 @@ export class FlagAutoApprovalService {
       }
     }
 
-    // Update or create daily stats
+    // 2. Bulk update approved flags (Single DB Query)
     if (approvedFlagIds.length > 0) {
+      await db
+        .update(contentFlags)
+        .set({
+          reviewStatus: 'APPROVED',
+          reviewedBy: 'AUTO_APPROVAL_SYSTEM',
+          reviewNotes: 'Auto-approved by system (Batch)',
+          reviewedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(inArray(contentFlags.id, approvedFlagIds));
+
+      // 3. Update stats
       await db.transaction(async (tx) => {
         let autoApprovalId: string;
 
-        if (dailyStats) {
-          const [updated] = await tx
-            .update(flagAutoApprovals)
-            .set({
-              approvalCount: currentCount + approvedFlagIds.length,
+        // Use upsert (onConflictDoUpdate) to handle race conditions safely
+        const [result] = await tx
+          .insert(flagAutoApprovals)
+          .values({
+            profileId,
+            approvalDate: today,
+            approvalCount: approvedFlagIds.length,
+          })
+          .onConflictDoUpdate({
+            target: [flagAutoApprovals.profileId, flagAutoApprovals.approvalDate],
+            set: {
+              approvalCount: sql`${flagAutoApprovals.approvalCount} + ${approvedFlagIds.length}`,
               updatedAt: new Date(),
-            })
-            .where(eq(flagAutoApprovals.id, dailyStats.id))
-            .returning({ id: flagAutoApprovals.id });
-          autoApprovalId = updated.id;
-        } else {
-          const [created] = await tx
-            .insert(flagAutoApprovals)
-            .values({
-              profileId,
-              approvalDate: today,
-              approvalCount: approvedFlagIds.length,
-            })
-            .returning({ id: flagAutoApprovals.id });
-          autoApprovalId = created.id;
-        }
+            },
+          })
+          .returning({ id: flagAutoApprovals.id });
+          
+        autoApprovalId = result.id;
 
         const linkValues = approvedFlagIds.map((flagId) => ({
           autoApprovalId,

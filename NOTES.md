@@ -16,7 +16,7 @@
 - **Solution:** Gemini `text-embedding-004` with hybrid keyword+semantic search
 - **Architecture:** Background embedding generation, batch processing with rate limiting
 - **Impact:** Query "family" now finds "crew", "SABAM", related concepts naturally
-- **Remaining:** Need to backfill existing 1,505 memories (~30 min process)
+- **Status:** Completed. All 4,136 memories have embeddings.
 
 #### Memory Deduplication Fix (Oct 13, 2025)
 - **Problem:** 39+ duplicate memories created despite canonical key system
@@ -90,7 +90,7 @@
 **Trade-off:**
 - ✅ No user-facing latency
 - ❌ Brief period where new memory uses keyword-only search
-- ❌ Need manual backfill for existing memories
+- ✅ Backfill completed (Dec 8, 2025)
 
 ### Lessons Learned
 
@@ -202,7 +202,7 @@ SERPAPI_API_KEY          # Web search
 
 ### Known Gotchas
 
-1. **Embedding Backfill:** Takes ~30 mins, respect rate limits
+1. **Embedding Backfill:** Completed. New memories are embedded automatically.
 2. **Canonical Keys:** Case-sensitive, whitespace-normalized
 3. **Memory Importance:** 999 = protected, never auto-delete
 4. **Chaos Engine:** Disabled by default (set to 0%)
@@ -230,10 +230,10 @@ This is a sophisticated AI-powered co-host application featuring Nicky "Noodle A
 - **Cost Impact:** 85-90% reduction vs Claude-only architecture
 
 **Advanced Memory Architecture:**
-- PostgreSQL database stores conversations, messages, documents, and memory entries (1,505+ unique)
+- PostgreSQL database stores conversations, messages, documents, and memory entries (4,136+ unique)
 - Memory categorization system (FACT, PREFERENCE, LORE, CONTEXT, STORY, ATOMIC types)
 - Keyword-based knowledge retrieval for contextual conversation enhancement
-- **Vector embedding support ready** - schema columns exist, awaiting population for semantic search
+- **Vector embedding support active** - all memories populated for semantic search
 - Atomic UPSERT prevents duplicates with canonical key system
 - Revolutionary lie taxonomy system that categorizes Nicky's contradictions as features, not bugs
 

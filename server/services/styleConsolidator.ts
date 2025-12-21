@@ -80,7 +80,7 @@ Format the output as a clear, organized list of personality traits and behaviors
       const fullPrompt = `${systemPrompt}\n\n${prompt}`;
       
       const geminiResponse = await geminiService['ai'].models.generateContent({
-        model: 'gemini-3-pro-preview', // 🚫 NEVER Flash - corrupts personality consolidation
+        model: 'gemini-3-flash', // 🚀 Upgraded to Gemini 3 Flash (beats 2.5 Pro)
         contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
         config: {
           maxOutputTokens: 2000,
@@ -93,6 +93,11 @@ Format the output as a clear, organized list of personality traits and behaviors
       return patterns.trim();
       
     } catch (geminiError) {
+      // � CLAUDE FALLBACK DISABLED (Dec 20, 2025)
+      console.error('❌ Gemini consolidation failed. Internal fallback should have handled this.', geminiError);
+      throw geminiError;
+
+      /*
       // 🔄 FALLBACK: Use Claude if Gemini fails
       console.log('❌ Gemini consolidation failed, falling back to Claude:', geminiError);
       
@@ -118,6 +123,9 @@ Format the output as a clear, organized list of personality traits and behaviors
         
       } catch (claudeError) {
         console.error('❌ Both Gemini and Claude failed:', claudeError);
+        throw new Error('Failed to consolidate patterns (both Gemini and Claude failed)');
+      }
+      */
         throw new Error('Failed to consolidate patterns (both Gemini and Claude failed)');
       }
     }

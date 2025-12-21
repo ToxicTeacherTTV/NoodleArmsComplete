@@ -2,17 +2,20 @@ import { GoogleGenAI } from "@google/genai";
 import { contentFilter } from './contentFilter.js';
 import { executeWithDefaultModel, executeWithProductionModel, executeWithModelFallback } from './modelSelector.js';
 import { getDefaultModel, isValidModel } from '../config/geminiModels.js';
+import { storage } from '../storage.js';
+
+import { personalityCoach } from './personalityCoach.js';
 
 /**
  * 🎯 INTELLIGENT MODEL SELECTION
  * 
- * **2025 UPDATE**: Primary RAG operations now route to Claude Sonnet 4.5 for superior quality.
- * Gemini is used as fallback and for non-critical operations.
+ * **2025 UPDATE**: Primary operations now route to Gemini 3 Flash for superior speed and quality.
+ * Gemini 3 Pro Preview is used as fallback.
  * 
  * **MODEL STRATEGY**:
- * 1. RAG Operations (extraction, consolidation): Claude Sonnet 4.5 (PRIMARY)
- * 2. Chat Fallback: Gemini 2.0 Flash (when Claude fails)
- * 3. Non-critical: Gemini 2.0 Flash (title generation, etc.)
+ * 1. Primary Operations (Chat, RAG, Extraction): Gemini 3 Flash (PRIMARY)
+ * 2. Fallback: Gemini 3 Pro Preview (when Flash fails)
+ * 3. Last Resort: Gemini 2.5 Pro
  */
 
 class GeminiService {
@@ -330,7 +333,7 @@ Extract individual, verifiable claims from this story. Each atomic fact should b
 For each atomic fact, provide:
 - content: The specific atomic claim WITH source context if relevant (max 2 sentences)
 - type: "ATOMIC" (always)
-- importance: 1-5 based on how critical this detail is
+- importance: 1-10 based on how critical this detail is (1=Trivial, 5=Standard, 10=Critical)
 - keywords: 3-5 keywords for retrieval (include game/source name if relevant)
 - storyContext: Brief note about which part of the story this relates to
 
@@ -339,14 +342,14 @@ Examples from various stories:
   {
     "content": "In Arc Raiders, the Enforcer character uses shield abilities to protect teammates during extractions",
     "type": "ATOMIC",
-    "importance": 4,
+    "importance": 8,
     "keywords": ["arc raiders", "enforcer", "shield", "teammates", "extraction"],
     "storyContext": "Arc Raiders character abilities"
   },
   {
     "content": "Uncle Gnocchi claims to have invented Dead by Daylight",
     "type": "ATOMIC",
-    "importance": 4,
+    "importance": 9,
     "keywords": ["uncle gnocchi", "dbd", "invented", "claims"],
     "storyContext": "Uncle Gnocchi's legendary status"
   },
@@ -416,6 +419,73 @@ Return as JSON array.`;
         timestamp: new Date().toISOString()
       };
       return result;
+    }
+  }
+
+  /**
+   * Distills raw text into a single atomic fact.
+   */
+  async distillTextToFact(text: string, modelOverride?: string): Promise<{ fact: string }> {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Gemini API key not configured");
+    }
+
+    const prompt = `
+      You are an expert editor summarizing a character's statements for a knowledge base.
+      The character, Nicky, is very chaotic and verbose.
+      Your task is to **distill** his rambling response into a concise, information-rich fact.
+
+      GOAL: Extract the actual answer, opinion, or detail he provided.
+
+      GUIDELINES:
+      1. **Ignore the Drama**: Discard threats, breathing noises, stuttering, and "flavor" text unless it contains actual lore.
+      2. **Focus on the Content**: If he lists perks, addons, or strategies, list them clearly.
+      3. **Be Precise**: Instead of "Nicky talks about a build", say "Nicky's preferred build for [Killer] uses [Perk 1], [Perk 2], and [Addon]."
+      4. **Capture Opinions**: If he loves/hates something, state it as a fact (e.g., "Nicky believes the Toy Sword addon is essential").
+
+      TEXT TO DISTILL:
+      "${text}"
+
+      OUTPUT FORMAT:
+      Return a JSON object with a single field "fact".
+    `;
+
+    try {
+      const result = await executeWithModelFallback<{ fact: string }>(async (model) => {
+        this.validateModel(model, 'distillTextToFact');
+
+        const response = await this.ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            maxOutputTokens: 1024,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "object",
+              properties: {
+                fact: { type: "string" }
+              },
+              required: ["fact"]
+            }
+          }
+        });
+        
+        const rawJson = response.text;
+        if (rawJson) {
+          return JSON.parse(rawJson);
+        } else {
+          throw new Error("Empty response from Gemini");
+        }
+      }, {
+        purpose: 'chat', // Using chat purpose as it's a quick interaction
+        maxRetries: 2,
+        forceModel: modelOverride
+      });
+      
+      return result.data;
+    } catch (error) {
+      console.error("❌ Distill Text failed:", error);
+      return { fact: text }; // Fallback to original text
     }
   }
 
@@ -741,6 +811,16 @@ Response format:
         contextPrompt += `\n\nTRAINING EXAMPLES (for style guidance):\n${trainingExamples.slice(0, 3).map(ex => `Example: ${ex.prompt}\nResponse: ${ex.response}`).join('\n\n')}`;
       }
 
+      // 🧠 PERSONALITY COACHING FEEDBACK
+      try {
+        const coachingTips = await personalityCoach.getActiveFeedback();
+        if (coachingTips.length > 0) {
+          contextPrompt += `\n\n🎭 RECENT PERFORMANCE NOTES:\n(These are recent critiques. Use them to refine your performance, but do not let them override your core identity as Nicky Dente.)\n${coachingTips.map(tip => `• ${tip}`).join('\n')}`;
+        }
+      } catch (e) {
+        console.warn('Failed to load personality feedback:', e);
+      }
+
       // 🎭 NEW: Add mode-specific context (copied from Anthropic service for consistency)
       let modeContext = "";
       if (mode) {
@@ -761,6 +841,37 @@ Response format:
       // Don't wrap if it's already a formatted prompt (from Discord or other services)
       const isFormattedPrompt = userMessage.includes('Discord user') || userMessage.includes('Behavior Settings') || userMessage.includes('Prompt:');
 
+      // 🎮 GAME CONTEXT DETECTION (ARC RAIDERS SPECIAL)
+      let gameContext = "";
+      const lowerMsg = userMessage.toLowerCase();
+      let identityGameFocus = "Dead by Daylight addicted";
+      let identityTopicFocus = "Gets intense about DbD gameplay and pasta quality";
+      
+      // Sticky context check
+      let isArcRaidersActive = false;
+      if (conversationId) {
+          try {
+              const recentMessages = await storage.getRecentMessages(conversationId, 6);
+              // Use word boundaries to avoid matching "search", "march", etc.
+              if (recentMessages.some(msg => /\b(arc raiders|arc)\b/i.test(msg.content))) {
+                  isArcRaidersActive = true;
+              }
+          } catch (e) {
+              console.warn("Failed to check sticky context in Gemini:", e);
+          }
+      }
+
+      // Use word boundaries for current message too
+      if (isArcRaidersActive || /\b(arc raiders|arc)\b/i.test(userMessage) || (mode === 'PODCAST' && /\braiders\b/i.test(userMessage))) {
+         identityGameFocus = "Currently obsessed with Arc Raiders (but still a DbD veteran)";
+         identityTopicFocus = "Gets intense about Arc Raiders strategy, squad failures, and pasta quality";
+         
+         gameContext = `\n\n[CURRENT TOPIC: ARC RAIDERS]
+         You are discussing the game ARC RAIDERS.
+         Playstyle: "Tactical Rat" (scavenging, hiding, avoiding combat).
+         Context: You play with a squad of incompetent family members. Mention them only if relevant to a specific story.`;
+      }
+
       const conversationalGuidance = !isFormattedPrompt ? `
 
 CONVERSATION STYLE - BE ENGAGING:
@@ -772,7 +883,7 @@ CONVERSATION STYLE - BE ENGAGING:
 - Use profanity creatively and frequently when it fits
 - Show depth: conspiracy theories, passionate opinions, unexpected connections between topics
 
-Respond to Toxic Teacher: "${userMessage}"${contextPrompt}${modeContext}` : `${userMessage}${contextPrompt}${modeContext}`;
+Respond to Toxic Teacher: "${userMessage}"${contextPrompt}${modeContext}${gameContext}` : `${userMessage}${contextPrompt}${modeContext}${gameContext}`;
 
       const fullPrompt = isFormattedPrompt
         ? conversationalGuidance
@@ -789,7 +900,7 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}${modeContext}` : `${u
 
 [CORE IDENTITY - NEVER OVERRIDE THESE]
 - You are Nicky "Noodle Arms" A.I. Dente
-- Italian-American, pasta-obsessed, Dead by Daylight addicted
+- Italian-American, pasta-obsessed, ${identityGameFocus}
 - Chaotic good moral alignment with emotional intensity
 - Physical characteristic: literally has noodle arms (it's a thing, don't ask)
 - Family business vibe but over trivial shit
@@ -799,7 +910,7 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}${modeContext}` : `${u
 - Casual, profanity-laced, expressive
 - Italian phrases when emotional or talking about food
 - Self-deprecating humor mixed with Italian pride
-- Gets intense about DbD gameplay and pasta quality
+- ${identityTopicFocus}
 - Tangents are GOOD - lean into random topics
 - Don't be a one-trick pony - vary your responses
 
@@ -826,8 +937,8 @@ ${coreIdentity}`;
       }
 
       // Use intelligent model selection with fallback for chat
-      // 🚀 OPTIMIZATION: Use Gemini 2.5 Flash for Streaming (Reliable + Fast)
-      const streamingModel = 'gemini-2.5-flash';
+      // 🚀 OPTIMIZATION: Use Gemini 3 Flash for Streaming (Reliable + Fast)
+      const streamingModel = 'gemini-3-flash';
       const targetModel = mode === 'STREAMING' ? streamingModel : undefined;
 
       const chatResult = await executeWithModelFallback(async (model) => {
@@ -966,8 +1077,8 @@ ${coreIdentity}`;
       throw new Error("Gemini API key not configured");
     }
 
-    // Use production model for critical analysis tasks
-    return await executeWithProductionModel(async (model) => {
+    // Use Flash 3 for flagging (fast, cheap, sufficient for metadata)
+    return await executeWithModelFallback(async (model) => {
       this.validateModel(model, 'analyzeContentForFlags');
 
       const response = await this.ai.models.generateContent({
@@ -1015,7 +1126,12 @@ ${coreIdentity}`;
       }
 
       return JSON.parse(rawJson);
-    }, 'analysis'); // Purpose: analysis (content flagging)
+    }, {
+      purpose: 'analysis',
+      maxRetries: 3,
+      allowExperimental: false,
+      forceModel: 'gemini-3-flash' // ⚡ FORCE FLASH 3 for cost savings
+    }).then(result => result.data);
   }
 
   // NEW: Parse podcast segments from transcript for Nicky's memory system
@@ -1212,6 +1328,181 @@ Title:`;
       // Fallback: use first few words of user message
       return userMessage.substring(0, 40).trim() + (userMessage.length > 40 ? '...' : '');
     }
+  }
+
+  // Alias for compatibility with AIOrchestrator
+  async generateResponse(
+    userMessage: string,
+    coreIdentity: string,
+    relevantMemories: any[] = [],
+    relevantDocs: any[] = [],
+    loreContext: string = "",
+    mode?: string,
+    conversationId?: string,
+    profileId?: string,
+    webSearchResults: any[] = [],
+    personalityPrompt?: string,
+    trainingExamples: any[] = [],
+    selectedModel?: string
+  ): Promise<{ content: string; processingTime: number; retrievedContext?: string; debugInfo?: any }> {
+    return this.generateChatResponse(
+      userMessage,
+      coreIdentity,
+      relevantMemories,
+      relevantDocs,
+      loreContext,
+      mode,
+      conversationId,
+      profileId,
+      webSearchResults,
+      personalityPrompt,
+      trainingExamples
+    );
+  }
+
+  async consolidateMemories(recentMessages: any[]): Promise<Array<{
+    type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
+    content: string;
+    importance: number;
+  }>> {
+    const conversationHistory = recentMessages
+      .map(msg => `${msg.type}: ${msg.content}`)
+      .join('\n');
+
+    const prompt = `Please analyze this recent conversation and extract new, significant information that should be remembered for future interactions. 
+
+Focus on:
+- Important facts about the user's preferences, habits, or background
+- Key information about Dead by Daylight gameplay, strategies, or meta
+- Personality traits or communication preferences
+- Recurring themes or topics of interest
+- Any factual information that would help maintain conversation continuity
+
+CRITICAL EXCLUSION RULES:
+- DO NOT extract information that comes from web search results, citations, or tool outputs (e.g., "Source: youtube.com", "searched for:", "According to the web").
+- DO NOT extract the search queries themselves as facts.
+- DO NOT extract system messages or tool logs.
+- Only extract what the USER said or what the AI creatively invented/established as part of the conversation flow.
+
+For each piece of information, classify it as one of these types:
+- FACT: Objective information or statements
+- PREFERENCE: User likes, dislikes, or personal choices
+- LORE: Background information, stories, or context
+- CONTEXT: Situational or environmental information
+
+Rate importance from 1-5 (5 being most important).
+
+Return ONLY a JSON array of objects with this structure:
+[{"type": "FACT", "content": "description", "importance": 3}]
+
+If no significant information is found, return an empty array: []
+
+Conversation:
+${conversationHistory}`;
+
+    try {
+      return await executeWithDefaultModel(async (model) => {
+        this.validateModel(model, 'consolidateMemories');
+
+        const response = await this.ai.models.generateContent({
+          model,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  type: { type: "string", enum: ["FACT", "PREFERENCE", "LORE", "CONTEXT"] },
+                  content: { type: "string" },
+                  importance: { type: "number" }
+                },
+                required: ["type", "content", "importance"]
+              }
+            }
+          },
+          contents: prompt,
+        });
+
+        const rawJson = response.text;
+        if (rawJson) {
+          return JSON.parse(rawJson);
+        } else {
+          return [];
+        }
+      }, 'analysis');
+    } catch (error) {
+      console.error("❌ Gemini memory consolidation error:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Extract personality patterns from training content
+   */
+  async extractPersonalityPatterns(trainingContent: string): Promise<string> {
+    const prompt = `You are analyzing a training example conversation to extract key personality patterns and behavioral tendencies.
+
+Your task: Extract concise, actionable patterns that define how this character thinks and responds.
+
+Focus on:
+1. Response strategies (how they approach different situations)
+2. Recurring verbal patterns (specific phrases, speech styles)
+3. Emotional/tonal patterns (when they escalate, calm down, etc.)
+4. Thematic connections (how they relate topics to their worldview)
+5. Character consistency rules (what they always/never do)
+
+Format as a bulleted list with clear, specific patterns. Each bullet should be a complete behavioral rule or tendency.
+
+Example output:
+- When challenged on inconsistencies, doubles down aggressively and deflects with conspiracy theories
+- Always relates game mechanics to Italian mob business operations
+- Uses emotion tags [furious], [calm], [sarcastic] to guide tone shifts mid-conversation
+- Escalates gradually: starts irritated → builds to manic → explodes into full fury
+- Never breaks character even when called out on absurd claims
+
+Training content to analyze:
+${trainingContent.substring(0, 3000)}
+
+Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
+
+    return await executeWithDefaultModel(async (model) => {
+      this.validateModel(model, 'extractPersonalityPatterns');
+
+      const result = await this.ai.models.generateContent({
+        model,
+        contents: prompt
+      });
+
+      return result.text?.trim() || '';
+    }, 'analysis');
+  }
+
+  async evaluateConversation(transcript: string): Promise<string> {
+    return this.retryWithBackoff(async () => {
+      const prompt = `
+      You are an expert AI personality evaluator. Your job is to review the following conversation transcript between a user and an AI character named Nicky Dente (a Bronx wiseguy with noodle arms).
+
+      Evaluate the conversation based on:
+      1. **Personality Adherence**: Does Nicky sound like a Bronx wiseguy? Is he unhinged enough?
+      2. **Humor**: Is it funny?
+      3. **Flow**: Does the conversation move naturally?
+      4. **Specific Highlights**: What were the best moments?
+
+      Give a score out of 10.
+      Format the output as Markdown.
+
+      TRANSCRIPT:
+      ${transcript}
+      `;
+
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-3-flash',
+        contents: [{ role: 'user', parts: [{ text: prompt }] }]
+      });
+
+      return response.response.text();
+    }, 'evaluateConversation');
   }
 }
 

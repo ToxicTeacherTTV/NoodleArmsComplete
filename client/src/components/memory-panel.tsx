@@ -14,6 +14,9 @@ import { Search, X, RefreshCw, Filter, Scan } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { MemoryAnalytics } from "./memory-analytics";
 import { ProtectedFactsManager } from "./protected-facts-manager";
 
@@ -161,6 +164,71 @@ export default function MemoryPanel({
       });
     },
   });
+
+  // Distill & Create Memory Logic
+  const [isDistillOpen, setIsDistillOpen] = useState(false);
+  const [distillText, setDistillText] = useState("");
+  const [distilledFact, setDistilledFact] = useState("");
+  const [isDistilling, setIsDistilling] = useState(false);
+
+  const distillMutation = useMutation({
+    mutationFn: async (text: string) => {
+      const response = await apiRequest('POST', '/api/memory/distill', { text });
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      setDistilledFact(data.fact);
+      setIsDistilling(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to distill text",
+        variant: "destructive",
+      });
+      setIsDistilling(false);
+    }
+  });
+
+  const createMemoryMutation = useMutation({
+    mutationFn: async (content: string) => {
+      return await apiRequest('POST', '/api/memory/entries', {
+        content,
+        type: 'FACT',
+        importance: 3,
+        source: 'manual_distillation',
+        confidence: 100
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
+      setIsDistillOpen(false);
+      setDistillText("");
+      setDistilledFact("");
+      toast({
+        title: "Memory Added",
+        description: "New fact has been stored successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to save memory",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleDistill = () => {
+    if (!distillText.trim()) return;
+    setIsDistilling(true);
+    distillMutation.mutate(distillText);
+  };
+
+  const handleSaveDistilled = () => {
+    if (!distilledFact.trim()) return;
+    createMemoryMutation.mutate(distilledFact);
+  };
 
   const toggleMemorySelection = (id: string) => {
     const newSet = new Set(selectedMemories);
@@ -367,6 +435,58 @@ export default function MemoryPanel({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              <Dialog open={isDistillOpen} onOpenChange={setIsDistillOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="secondary" className="ml-2">
+                    <i className="fas fa-magic mr-1"></i>
+                    Distill Fact
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Distill Fact from Text</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="raw-text">Raw Text (Nicky's Ramblings)</Label>
+                      <Textarea
+                        id="raw-text"
+                        placeholder="Paste the long text here..."
+                        value={distillText}
+                        onChange={(e) => setDistillText(e.target.value)}
+                        rows={5}
+                      />
+                    </div>
+                    <Button onClick={handleDistill} disabled={isDistilling || !distillText.trim()}>
+                      {isDistilling ? (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          Distilling...
+                        </>
+                      ) : (
+                        "Simplify & Extract"
+                      )}
+                    </Button>
+                    
+                    {distilledFact && (
+                      <div className="grid gap-2 mt-2">
+                        <Label htmlFor="distilled-fact">Distilled Fact</Label>
+                        <Textarea
+                          id="distilled-fact"
+                          value={distilledFact}
+                          onChange={(e) => setDistilledFact(e.target.value)}
+                          rows={3}
+                          className="bg-muted/50"
+                        />
+                        <Button onClick={handleSaveDistilled} disabled={createMemoryMutation.isPending}>
+                          Save to Memory
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">

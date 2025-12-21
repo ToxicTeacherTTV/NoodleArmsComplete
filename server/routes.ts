@@ -35,6 +35,7 @@ import { documentStageTracker } from "./services/documentStageTracker";
 import { documentDuplicateDetector } from "./services/documentDuplicateDetector";
 import { embeddingService } from "./services/embeddingService";
 import { eventTimelineAuditor } from "./services/eventTimelineAuditor";
+import { importancePropagator } from "./services/importancePropagator";
 
 type DuplicateScanGroupSummary = {
   masterId: string;
@@ -334,6 +335,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/conversations/:id/evaluate', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const messages = await storage.getConversationMessages(id);
+      
+      if (!messages || messages.length === 0) {
+        return res.status(404).json({ error: 'Conversation not found or empty' });
+      }
+
+      const transcript = messages.map(m => `[${m.type}]: ${m.content}`).join('\n');
+      const { geminiService } = await import('./services/gemini');
+      const evaluation = await geminiService.evaluateConversation(transcript);
+      
+      res.json({ evaluation });
+    } catch (error) {
+      console.error('Evaluation error:', error);
+      res.status(500).json({ error: 'Failed to evaluate conversation' });
+    }
+  });
+
+  app.post('/api/personality/feedback', async (req, res) => {
+    try {
+      const { content, conversationId } = req.body;
+      if (!content) {
+        return res.status(400).json({ error: 'Feedback content is required' });
+      }
+      
+      // 🧠 INTELLIGENT SUMMARIZATION
+      // Instead of saving the raw evaluation, we distill it into a single actionable coaching tip.
+      const { geminiService } = await import('./services/gemini');
+      const { personalityCoach } = await import('./services/personalityCoach');
+
+      let actionableTip = content;
+      try {
+        const summaryResponse = await geminiService['ai'].models.generateContent({
+          model: 'gemini-2.0-flash-exp',
+          contents: [{ role: 'user', parts: [{ text: `
+            Extract a single, concise coaching instruction (max 1 sentence) from this feedback for an AI character.
+            Focus on what the character should DO differently next time.
+            Start with a verb (e.g., "Be more...", "Stop...", "Mention...").
+            
+            FEEDBACK:
+            ${content}
+          ` }] }]
+        });
+        const summary = summaryResponse.response.text();
+        if (summary) {
+          actionableTip = summary.trim();
+        }
+      } catch (err) {
+        console.warn("Failed to summarize feedback, using raw content:", err);
+      }
+
+      const entry = await personalityCoach.addFeedback(actionableTip, conversationId);
+      
+      res.json(entry);
+    } catch (error) {
+      console.error('Feedback error:', error);
+      res.status(500).json({ error: 'Failed to save feedback' });
+    }
+  });
+
   app.get('/api/conversations/web', async (req, res) => {
     try {
       const activeProfile = await storage.getActiveProfile();
@@ -411,7 +474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { message, conversationId, mode, personalityControl, selectedModel } = req.body;
 
-      console.log(`🤖 Selected AI Model: ${selectedModel || 'default (gemini-3-pro-preview)'}`);
+      console.log(`🤖 Selected AI Model: ${selectedModel || 'default (gemini-3-flash)'}`);
 
       if (!message || !conversationId) {
         return res.status(400).json({ error: 'Message and conversation ID required' });
@@ -688,7 +751,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // 🎭 Generate personality control prompt and log debug state
-      const personalityPrompt = generatePersonalityPrompt(controls);
+      let personalityPrompt = generatePersonalityPrompt(controls);
+
+      // 🩺 DIAGNOSTIC MODE: Inject diagnostic instructions if requested
+      if (mode === 'diagnostic' || message.toLowerCase().startsWith('/diag')) {
+        const { diagnosticService } = await import('./services/diagnosticService');
+        personalityPrompt = await diagnosticService.generateDiagnosticPrompt(personalityPrompt);
+        console.log('🩺 Diagnostic mode active: injected system prompt');
+      }
 
       // Log debug state for transparency
       const { generateDebugState } = await import('./types/personalityControl');
@@ -1816,6 +1886,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Memory management routes
+  app.post('/api/memory/entries', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const entryData = insertMemoryEntrySchema.parse({
+        ...req.body,
+        profileId: activeProfile.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const newEntry = await storage.addMemoryEntry(entryData);
+      res.json(newEntry);
+    } catch (error) {
+      console.error('Failed to create memory entry:', error);
+      res.status(500).json({ error: 'Failed to create memory entry' });
+    }
+  });
+
   app.get('/api/memory/entries', async (req, res) => {
     try {
       const activeProfile = await storage.getActiveProfile();
@@ -2002,6 +2094,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Batch update type failed:', error);
       res.status(500).json({ error: 'Failed to batch update type' });
+    }
+  });
+
+  // 🌊 NEW: Propagate Importance
+  app.post('/api/memory/propagate-importance', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const dryRun = req.query.dryRun === 'true';
+      const result = await importancePropagator.propagateImportance(activeProfile.id, dryRun);
+
+      res.json({
+        success: true,
+        ...result
+      });
+    } catch (error) {
+      console.error('Importance propagation failed:', error);
+      res.status(500).json({ error: 'Failed to propagate importance' });
     }
   });
 
@@ -2194,6 +2307,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true, message: 'Pre-warmed cache refreshed', stats });
     } catch (error) {
       res.status(500).json({ error: 'Failed to refresh pre-warmed cache' });
+    }
+  });
+
+  app.post('/api/memory/distill', async (req, res) => {
+    try {
+      const { text } = req.body;
+      if (!text) {
+        return res.status(400).json({ error: 'Text is required' });
+      }
+
+      const result = await aiOrchestrator.distillTextToFact(text);
+      res.json(result);
+    } catch (error) {
+      console.error('Distillation failed:', error);
+      res.status(500).json({ error: 'Failed to distill text' });
     }
   });
 
@@ -2904,10 +3032,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Run the revolutionary optimization with reliable data only
       const result = await evolutionaryAI.evolutionaryOptimization(reliableMemories);
 
-      // Store the optimized facts back (in a real system, you'd want to backup first)
-      // For now, let's just return the results
+      // 💾 SAVE THE RESULTS TO DATABASE
+      console.log("💾 Saving Evolutionary Results to Database...");
+
+      // 1. Save Relationships
+      for (const rel of result.relationships) {
+        // Update Source Fact
+        const sourceFact = reliableMemories.find(m => m.id === rel.sourceFactId);
+        if (sourceFact) {
+          const currentRels = sourceFact.relationships || [];
+          if (!currentRels.includes(rel.targetFactId)) {
+            await db.update(memoryEntries)
+              .set({ 
+                relationships: [...currentRels, rel.targetFactId],
+                updatedAt: new Date()
+              })
+              .where(eq(memoryEntries.id, rel.sourceFactId));
+          }
+        }
+      }
+
+      // 2. Save Clusters
+      for (const cluster of result.clusters) {
+        for (const factId of cluster.factIds) {
+          await db.update(memoryEntries)
+            .set({ 
+              clusterId: cluster.name, // Using name as ID for readability for now
+              updatedAt: new Date()
+            })
+            .where(eq(memoryEntries.id, factId));
+        }
+      }
+
+      console.log("✅ Evolutionary Data Saved!");
+
       res.json({
-        message: 'Evolutionary optimization complete!',
+        message: 'Evolutionary optimization complete and SAVED!',
         ...result,
         summary: {
           originalFacts: reliableMemories.length,
@@ -3594,11 +3754,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      if (updates.importance !== undefined) {
+        const importance = Number(updates.importance);
+        if (isNaN(importance) || importance < 0 || importance > 100) {
+          return res.status(400).json({ error: 'Importance must be between 0 and 100' });
+        }
+      }
+
       // Use the more flexible updateMemoryEntry method for content + confidence updates
       const updatedEntry = await storage.updateMemoryEntry(id, updates);
 
       if (updates.confidence !== undefined) {
         console.log(`📊 Manual confidence update: Fact confidence set to ${updates.confidence}% by user`);
+      }
+
+      if (updates.importance !== undefined) {
+        console.log(`⭐ Manual importance update: Fact importance set to ${updates.importance} by user`);
       }
 
       if (updates.content !== undefined) {
@@ -6648,6 +6819,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Bulk operation error:', error);
       res.status(500).json({ error: 'Failed to perform bulk operation' });
+    }
+  });
+
+  // Get pending suggestions
+  app.get('/api/memory/suggestions', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) return res.status(400).json({ error: 'No active profile' });
+
+      const suggestions = await storage.db.query.memorySuggestions.findMany({
+        where: (table, { eq, and }) => and(
+          eq(table.profileId, activeProfile.id),
+          eq(table.status, 'PENDING')
+        ),
+        with: {
+          memory: true
+        },
+        orderBy: (table, { desc }) => [desc(table.createdAt)]
+      });
+
+      res.json(suggestions);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch suggestions' });
+    }
+  });
+
+  // Approve suggestion
+  app.post('/api/memory/suggestions/:id/approve', async (req, res) => {
+    try {
+      const { suggestionService } = await import('./services/suggestionService.js');
+      await suggestionService.approveSuggestion(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to approve suggestion' });
+    }
+  });
+
+  // Reject suggestion
+  app.post('/api/memory/suggestions/:id/reject', async (req, res) => {
+    try {
+      const { suggestionService } = await import('./services/suggestionService.js');
+      await suggestionService.rejectSuggestion(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to reject suggestion' });
     }
   });
 

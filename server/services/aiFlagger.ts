@@ -200,6 +200,11 @@ export class AIFlaggerService {
 
 CORE PHILOSOPHY: Nicky's lies and contradictions are FEATURES, not bugs. The system treats unreliability as a canonical character trait.
 
+KNOWN CONTEXT (DO NOT FLAG AS NEW/ANOMALY):
+- ARC RAIDERS SQUAD: Cousin Vinny (Enforcer), Uncle Paulie (Sniper), Little Anthony (Loot Goblin). These are CANONICAL family members.
+- WIDER FAMILY: Mama Marinara, Uncle Gnocchi.
+- GAMEPLAY: He plays "Tactical Rat" style (hiding/scavenging).
+
 CONTENT TO ANALYZE:
 """${content}"""
 
@@ -230,13 +235,30 @@ FLAGGING CATEGORIES TO CHECK:
 5. META-SYSTEM MONITORING:
 - fourth_wall_break: "my database", "my memory system", "my AI" (CRITICAL)
 - ooc_behavior: Too helpful, professional, using AI language (HIGH priority)
+- coaching_violation: Ignoring specific coaching notes/feedback (HIGH priority)
+- coaching_adherence: Successfully following coaching notes (MEDIUM priority)
 
 6. SPECIAL CATEGORIES:
 - pasta_related: Any pasta, marinara, noodle arms mentions (AUTO-FLAG)
 - dbd_gameplay: Dead by Daylight content (AUTO-FLAG)
+- arc_raiders_gameplay: Arc Raiders content, squad mentions, extraction shooter mechanics (AUTO-FLAG)
 - family_mention: Family members, especially threatening ones (HIGH)
 - romance_failure: Romantic interests (must end terribly by system rules)
 - criminal_activity: Schemes, cons, definitely-not-criminal activities
+
+7. PODCAST & STREAMING (NEW):
+- podcast_topic: Specific topic discussed on the podcast (MEDIUM)
+- listener_interaction: Reading chat, answering questions, addressing "chat" (MEDIUM)
+- streaming_moment: "Clip that", "Did you see that?", hype moments (MEDIUM)
+
+8. KNOWLEDGE & FACTS (NEW):
+- fact_candidate: Solid, standalone fact suitable for knowledge base (HIGH)
+- distillation_required: Messy/rambling content that contains facts but needs cleaning (MEDIUM)
+- lore_contradiction: Contradicts established lore/backstory (HIGH)
+
+9. GAME EVENTS (NEW):
+- extraction_event: Arc Raiders extraction (success/fail) (HIGH)
+- trial_outcome: DbD match result (escape/sacrifice/4k) (HIGH)
 
 ANALYSIS REQUIREMENTS:
 - Extract character names (must be ridiculous per system rules)
@@ -280,6 +302,10 @@ Focus on actionable flags that help maintain Nicky's character consistency while
 
 CORE PHILOSOPHY: Nicky's lies and contradictions are FEATURES, not bugs. The system treats unreliability as a canonical character trait.
 
+KNOWN CONTEXT (DO NOT FLAG AS NEW/ANOMALY):
+- ARC RAIDERS SQUAD: Cousin Vinny (Enforcer), Uncle Paulie (Sniper), Little Anthony (Loot Goblin).
+- WIDER FAMILY: Mama Marinara, Uncle Gnocchi.
+
 CONTENT TO ANALYZE:
 """${content}"""
 
@@ -289,8 +315,11 @@ FLAGGING CATEGORIES (choose most relevant):
 2. RELATIONSHIPS: new_character, relationship_shift, hierarchy_claim  
 3. EMOTIONS: rant_initiated, mask_dropped, chaos_level_1 through chaos_level_5
 4. IMPORTANCE: permanent_fact, high_importance, medium_importance, low_importance, deletion_candidate
-5. META-SYSTEM: fourth_wall_break, ooc_behavior
-6. SPECIAL: pasta_related, dbd_gameplay, family_mention, romance_failure, criminal_activity
+5. META-SYSTEM: fourth_wall_break, ooc_behavior, coaching_violation, coaching_adherence
+6. SPECIAL: pasta_related, dbd_gameplay, arc_raiders_gameplay, family_mention, romance_failure, criminal_activity
+7. PODCAST/STREAMING: podcast_topic, listener_interaction, streaming_moment
+8. KNOWLEDGE: fact_candidate, distillation_required, lore_contradiction
+9. GAME EVENTS: extraction_event, trial_outcome
 
 REQUIREMENTS:
 - Extract character names (must be ridiculous per system rules)
@@ -375,6 +404,38 @@ Focus on actionable flags that help maintain Nicky's character consistency.`;
           characterNames: possibleNames,
           patterns: ['character_introduction']
         }
+      });
+    }
+
+    // Podcast/Streaming Fallback
+    if (content.toLowerCase().includes('podcast') || content.toLowerCase().includes('episode')) {
+      flags.push({
+        flagType: 'podcast_topic',
+        priority: 'MEDIUM',
+        confidence: 80,
+        reason: 'Podcast context detected',
+        extractedData: { topics: ['podcast'] }
+      });
+    }
+
+    if (content.toLowerCase().includes('chat') || content.toLowerCase().includes('viewer')) {
+      flags.push({
+        flagType: 'listener_interaction',
+        priority: 'MEDIUM',
+        confidence: 80,
+        reason: 'Listener interaction detected',
+        extractedData: { topics: ['community'] }
+      });
+    }
+
+    // Game Events Fallback
+    if (content.toLowerCase().includes('extract') || content.toLowerCase().includes('loot')) {
+      flags.push({
+        flagType: 'extraction_event',
+        priority: 'HIGH',
+        confidence: 85,
+        reason: 'Extraction event detected',
+        extractedData: { topics: ['arc_raiders'] }
       });
     }
 

@@ -834,7 +834,8 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
           
           // 🎮 Check for sticky Arc Raiders context in last 6 messages
           const recentContext = recentMessages.slice(-6);
-          if (recentContext.some(msg => /arc raiders|arc/i.test(msg.content))) {
+          // Use word boundaries to avoid matching "search", "march", etc.
+          if (recentContext.some(msg => /\b(arc raiders|arc)\b/i.test(msg.content))) {
              isArcRaidersActive = true;
              console.log('🎮 Sticky Context Active: ARC RAIDERS');
           }
@@ -1142,22 +1143,18 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
       // 🎮 GAME CONTEXT DETECTION (ARC RAIDERS SPECIAL)
       let gameContext = "";
       const lowerMsg = userMessage.toLowerCase();
+      let identityGameFocus = "Dead by Daylight addicted";
+      let identityTopicFocus = "Gets intense about DbD gameplay and pasta quality";
       
-      // Check current message OR sticky context
-      if (isArcRaidersActive || lowerMsg.includes('arc raiders') || lowerMsg.includes('arc') || (mode === 'PODCAST' && lowerMsg.includes('raiders'))) {
-         gameContext = `\n\n[GAME MODE: ARC RAIDERS - SPECIAL INSTRUCTIONS]
-         You are discussing ARC RAIDERS. You play this game with your family, so focus on that dynamic.
-         - You can make Dead by Daylight comparisons if they're funny, but don't get stuck on it.
-         - SQUAD DYNAMICS (The Family):
-         1. Cousin Vinny (The Heavy): Plays Enforcer. Refuses to use shields because "shields are for cowards." Dies first. Every time.
-         2. Uncle Paulie (The Sniper): Plays Marksman. Has terrible eyesight. Blames "lag" or "hackers" for every missed shot.
-         3. Little Anthony (The Loot Goblin): Steals all the loot, refuses to share meds, and extracts alone while the rest of you die.
+      // Check current message OR sticky context (Use word boundaries)
+      if (isArcRaidersActive || /\b(arc raiders|arc)\b/i.test(userMessage) || (mode === 'PODCAST' && /\braiders\b/i.test(userMessage))) {
+         identityGameFocus = "Currently obsessed with Arc Raiders (but still a DbD veteran)";
+         identityTopicFocus = "Gets intense about Arc Raiders strategy, squad failures, and pasta quality";
          
-         - WIDER CIRCLE: You can also mention other family members (Mama Marinara, Uncle Gnocchi, etc.) or rivals if they are relevant to the story (e.g., "Mama banned me from playing," "Gnocchi bet against us").
-         
-         - CREATIVE FREEDOM: You are encouraged to "make shit up." Invent ridiculous scenarios, glitchy interactions, or new family members on the fly if it makes the story funnier. Exaggerate everything.
-         
-         Your Playstyle: You play as a "Tactical Rat" (scavenging and hiding). You claim it's "High IQ Strategy," but it's mostly just running away.`;
+         gameContext = `\n\n[CURRENT TOPIC: ARC RAIDERS]
+         You are discussing the game ARC RAIDERS.
+         Playstyle: "Tactical Rat" (scavenging, hiding, avoiding combat).
+         Context: You play with a squad of incompetent family members. Mention them only if relevant to a specific story.`;
       }
 
       const fullPrompt = `The Toxic Teacher says: "${userMessage}"${contextPrompt}${modeContext}${escalationPrompt}${sceneCard}${sabotagePrompt}${gameContext}`;
@@ -1171,7 +1168,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
 
 [CORE IDENTITY - NEVER OVERRIDE THESE]
 - You are Nicky "Noodle Arms" A.I. Dente
-- Italian-American, pasta-obsessed, Dead by Daylight addicted
+- Italian-American, pasta-obsessed, ${identityGameFocus}
 - Chaotic good moral alignment but BARELY HOLDING ONTO SANITY
 - Physical characteristic: literally has noodle arms (it's a thing, don't ask)
 - Family business vibe but over trivial shit
@@ -1183,7 +1180,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
 - Casual, profanity-laced, expressive, VOLATILE
 - Italian phrases when emotional or talking about food
 - Self-deprecating humor mixed with Italian pride
-- Gets intense about DbD gameplay and pasta quality
+- ${identityTopicFocus}
 - Tangents are GOOD - lean into random topics
 - Don't be a one-trick pony - vary your responses
 - React to questions as if they are personally offensive stupidity
@@ -1193,6 +1190,11 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
 - If you remember something, weave it in conversationally
 - If you DON'T remember something clearly, say so
 - Don't force pasta/DbD references into EVERY response
+
+[MEMORY CONFIDENCE RULES]
+- [CORE TRUTH]: Treat this as absolute gospel. Never question it. It defines your reality.
+- [VERIFIED]: Treat this as a known fact. State it confidently.
+- [UNCERTAIN]: You are unsure about this. If you mention it, you MUST ask for confirmation or phrase it as a question (e.g., "Wait, did I hear right that...", "Correct me if I'm wrong, but...", "I might be trippin', but didn't you say...").
 
 [RESPONSE VARIETY - CRITICAL]
 You MUST vary your responses. Not every reply needs:

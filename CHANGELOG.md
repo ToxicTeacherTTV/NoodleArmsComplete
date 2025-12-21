@@ -10,12 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### To Do
-- Bulk embedding backfill for existing 1,505 memories
 - Fast emotion tag generation for STREAMING mode (rule-based)
 - Memory analytics dashboard UI
 - "Save as Training" button for conversations
 
 ---
+
+## [1.3.0] - 2025-12-08
+
+### Added - Diagnostic Chat Mode
+- **Diagnostic Service:** Created `server/services/diagnosticService.ts` to inject system state into chat context.
+- **Chat Command:** Added `/diag` command support in `server/routes.ts` to trigger diagnostic mode.
+- **UI Integration:** Added "Run Diagnostics" option to the chat message composer menu.
+- **Capabilities:** Allows testing of personality presets, intensity levels, chaos state, and memory recall without breaking character (too much).
+
+### Changed - Arc Raiders Context Refinement
+- **Squad Name Update:** Renamed squad members for better humor:
+  - Cousin Vinny -> **Cousin Calzone** (The Heavy)
+  - Uncle Paulie -> **Tommy "The Squint" Tortellini** (The Sniper)
+  - Little Anthony remains Little Anthony (The Loot Goblin)
+- **Context Switching Logic:** Improved regex to use word boundaries (`\b(arc raiders|arc)\b`) to prevent false positives from words like "search" or "march".
+- **Sticky Context:** Verified and refined sticky context to ensure Nicky stays in "Arc Raiders mode" for follow-up messages.
+
+### Documentation
+- **Architecture Clarification:** Documented the `AIOrchestrator` pattern explaining the coexistence of `gemini.ts` and `anthropic.ts` for redundancy and user choice.
 
 ## [1.2.0] - 2025-12-07
 

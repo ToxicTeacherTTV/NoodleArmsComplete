@@ -24,8 +24,9 @@ The application is built as a modern full-stack web app:
 *   **Backend:** Express + TypeScript (The brain)
 *   **Database:** PostgreSQL (Neon) with Drizzle ORM (The memory)
 *   **AI Brains:**
-    *   **Primary:** Gemini 2.5 Flash/Pro (Cost-effective, fast)
-    *   **Premium:** Claude Sonnet 4.5 (High-quality fallback for complex tasks)
+    *   **Primary:** Gemini 3 Pro Preview (Default for Chat & Intelligence)
+    *   **Efficiency:** Gemini 2.5 Flash (Bulk tasks, Extraction)
+    *   **Premium Fallback:** Claude Sonnet 4.5 (High-quality fallback)
 *   **Voice:** ElevenLabs v3 (Text-to-Speech with emotion tags)
 
 ---

@@ -58,6 +58,8 @@ export default function ChatHistorySidebar({
   const [showArchived, setShowArchived] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
+  const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
+  const [evaluationResult, setEvaluationResult] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: conversations = [], isLoading } = useQuery<ConversationWithMeta[]>({
@@ -68,6 +70,24 @@ export default function ChatHistorySidebar({
       return res.json();
     },
     refetchInterval: false,
+  });
+
+  const evaluateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('POST', `/api/conversations/${id}/evaluate`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setEvaluationResult(data.evaluation);
+    },
+    onError: () => {
+      toast({
+        title: "Evaluation Failed",
+        description: "Could not evaluate conversation.",
+        variant: "destructive",
+      });
+      setEvaluatingId(null);
+    }
   });
 
   const archiveMutation = useMutation({
@@ -194,6 +214,34 @@ export default function ChatHistorySidebar({
   };
 
   const groupedConversations = groupByDate(conversations);
+
+  const feedbackMutation = useMutation({
+    mutationFn: async ({ content, conversationId }: { content: string; conversationId: string }) => {
+      return await apiRequest('POST', '/api/personality/feedback', { content, conversationId });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Feedback Applied",
+        description: "Nicky will remember this critique for future conversations.",
+      });
+      setEvaluatingId(null);
+      setEvaluationResult(null);
+    },
+  });
+
+  const handleApplyFeedback = () => {
+    if (!evaluationResult || !evaluatingId) return;
+    
+    // Simple heuristic: Extract the "Critique" or "Improvement" section if possible, 
+    // otherwise send the whole summary.
+    // For now, we'll send a summarized prompt.
+    const feedbackContent = `Review of conversation ${evaluatingId}: ${evaluationResult.substring(0, 500)}...`;
+    
+    feedbackMutation.mutate({ 
+      content: feedbackContent, 
+      conversationId: evaluatingId 
+    });
+  };
 
   return (
     <div
@@ -322,6 +370,16 @@ export default function ChatHistorySidebar({
                                   <DropdownMenuItem
                                     onClick={(e) => {
                                       e.stopPropagation();
+                                      setEvaluatingId(conv.id);
+                                      evaluateMutation.mutate(conv.id);
+                                    }}
+                                  >
+                                    <i className="fas fa-star mr-2"></i>
+                                    Evaluate
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       setRenamingId(conv.id);
                                       setNewTitle(conv.title || "");
                                     }}
@@ -367,6 +425,15 @@ export default function ChatHistorySidebar({
                         <ContextMenuContent>
                           <ContextMenuItem
                             onClick={() => {
+                              setEvaluatingId(conv.id);
+                              evaluateMutation.mutate(conv.id);
+                            }}
+                          >
+                            <i className="fas fa-star mr-2"></i>
+                            Evaluate
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onClick={() => {
                               setRenamingId(conv.id);
                               setNewTitle(conv.title || "");
                             }}
@@ -400,6 +467,56 @@ export default function ChatHistorySidebar({
           )}
         </div>
       </ScrollArea>
+
+      <Dialog open={!!evaluatingId} onOpenChange={(open) => {
+        if (!open) {
+          setEvaluatingId(null);
+          setEvaluationResult(null);
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Conversation Evaluation</DialogTitle>
+            <DialogDescription>
+              AI analysis of the conversation quality and personality adherence.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {evaluateMutation.isPending ? (
+              <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <p className="text-sm text-muted-foreground">Analyzing conversation...</p>
+              </div>
+            ) : evaluationResult ? (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <div className="whitespace-pre-wrap">{evaluationResult}</div>
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            {evaluationResult && (
+              <Button 
+                variant="secondary" 
+                onClick={handleApplyFeedback}
+                disabled={feedbackMutation.isPending}
+              >
+                {feedbackMutation.isPending ? (
+                  <i className="fas fa-spinner fa-spin mr-2"></i>
+                ) : (
+                  <i className="fas fa-graduation-cap mr-2"></i>
+                )}
+                Apply as Coaching Note
+              </Button>
+            )}
+            <Button onClick={() => {
+              setEvaluatingId(null);
+              setEvaluationResult(null);
+            }}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!renamingId} onOpenChange={(open) => !open && setRenamingId(null)}>
         <DialogContent>
