@@ -474,7 +474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { message, conversationId, mode, personalityControl, selectedModel } = req.body;
 
-      console.log(`🤖 Selected AI Model: ${selectedModel || 'default (gemini-3-flash)'}`);
+      console.log(`🤖 Selected AI Model: ${selectedModel || 'default (gemini-3-flash-preview)'}`);
 
       if (!message || !conversationId) {
         return res.status(400).json({ error: 'Message and conversation ID required' });

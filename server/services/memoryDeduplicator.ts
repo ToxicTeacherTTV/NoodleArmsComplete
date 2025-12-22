@@ -310,7 +310,7 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
       const fullPrompt = `${systemPrompt}\n\n${prompt}`;
       
       const geminiResponse = await geminiService['ai'].models.generateContent({
-        model: 'gemini-3-flash', // 🚀 Upgraded to Gemini 3 Flash (beats 2.5 Pro)
+        model: 'gemini-3-flash-preview', // 🚀 Upgraded to Gemini 3 Flash (beats 2.5 Pro)
         contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
         config: {
           maxOutputTokens: 3000, // Increased to account for Gemini's "thinking tokens"
