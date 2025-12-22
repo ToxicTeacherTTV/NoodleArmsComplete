@@ -10,7 +10,7 @@ async function testGenAI() {
   try {
     console.log("Sending request...");
     const result = await ai.models.generateContent({
-      model: "gemini-3-flash",
+      model: "gemini-3-flash-preview",
       contents: "Say hello",
       config: {
         responseMimeType: "text/plain"

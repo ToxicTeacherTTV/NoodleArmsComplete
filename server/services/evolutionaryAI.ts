@@ -56,7 +56,7 @@ Only include strong, meaningful relationships (strength >= 6).`;
 
     try {
       const result = await this.ai.models.generateContent({
-        model: "gemini-3-flash",
+        model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
           maxOutputTokens: 65536,
@@ -131,7 +131,7 @@ Return JSON array of clusters:
 
     try {
       const result = await this.ai.models.generateContent({
-        model: "gemini-3-flash",
+        model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
           maxOutputTokens: 65536,
@@ -210,7 +210,7 @@ Return JSON array:
 
     try {
       const result = await this.ai.models.generateContent({
-        model: "gemini-3-flash",
+        model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
           maxOutputTokens: 65536,
@@ -289,7 +289,7 @@ Return optimized facts in JSON:
 
     try {
       const response = await this.ai.models.generateContent({
-        model: "gemini-3-flash",
+        model: "gemini-3-flash-preview",
         config: {
           maxOutputTokens: 65536,
           responseMimeType: "application/json",

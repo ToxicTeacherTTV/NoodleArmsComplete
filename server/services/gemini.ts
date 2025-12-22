@@ -938,7 +938,7 @@ ${coreIdentity}`;
 
       // Use intelligent model selection with fallback for chat
       // 🚀 OPTIMIZATION: Use Gemini 3 Flash for Streaming (Reliable + Fast)
-      const streamingModel = 'gemini-3-flash';
+      const streamingModel = 'gemini-3-flash-preview';
       const targetModel = mode === 'STREAMING' ? streamingModel : undefined;
 
       const chatResult = await executeWithModelFallback(async (model) => {
@@ -1130,7 +1130,7 @@ ${coreIdentity}`;
       purpose: 'analysis',
       maxRetries: 3,
       allowExperimental: false,
-      forceModel: 'gemini-3-flash' // ⚡ FORCE FLASH 3 for cost savings
+      forceModel: 'gemini-3-flash-preview' // ⚡ FORCE FLASH 3 for cost savings
     }).then(result => result.data);
   }
 
@@ -1497,7 +1497,7 @@ Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
       `;
 
       const response = await this.ai.models.generateContent({
-        model: 'gemini-3-flash',
+        model: 'gemini-3-flash-preview',
         contents: [{ role: 'user', parts: [{ text: prompt }] }]
       });
 

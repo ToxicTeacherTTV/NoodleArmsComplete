@@ -50,7 +50,7 @@ export class AIOrchestrator {
     async extractStoriesFromDocument(
         content: string,
         filename: string,
-        selectedModel: AIModel = 'gemini-3-flash'
+        selectedModel: AIModel = 'gemini-3-flash-preview'
     ): Promise<StoryExtractionResult[]> {
         return this.routeToModel(
             'story extraction',
@@ -66,7 +66,7 @@ export class AIOrchestrator {
     async extractAtomicFactsFromStory(
         storyContent: string,
         storyContext: string,
-        selectedModel: AIModel = 'gemini-3-flash'
+        selectedModel: AIModel = 'gemini-3-flash-preview'
     ): Promise<AtomicFactResult[]> {
         return this.routeToModel(
             'atomic fact extraction',
@@ -81,7 +81,7 @@ export class AIOrchestrator {
      */
     async distillTextToFact(
         text: string,
-        selectedModel: AIModel = 'gemini-3-flash'
+        selectedModel: AIModel = 'gemini-3-flash-preview'
     ): Promise<{ fact: string }> {
         // For now, only Gemini implements this specific distillation
         return geminiService.distillTextToFact(text, selectedModel);
@@ -92,7 +92,7 @@ export class AIOrchestrator {
      */
     async consolidateAndOptimizeMemories(
         memories: MemoryEntry[] | any[],
-        selectedModel: AIModel = 'gemini-3-flash'
+        selectedModel: AIModel = 'gemini-3-flash-preview'
     ): Promise<OptimizedMemory[]> {
         return this.routeToModel(
             'memory consolidation',
@@ -117,7 +117,7 @@ export class AIOrchestrator {
         transcript: string,
         episodeNumber: number,
         episodeTitle: string,
-        selectedModel: AIModel = 'gemini-3-flash'
+        selectedModel: AIModel = 'gemini-3-flash-preview'
     ): Promise<PodcastFactResult[]> {
         return this.routeToModel(
             'podcast fact extraction',
@@ -246,7 +246,7 @@ export class AIOrchestrator {
         trainingExamples: any[] = [],
         selectedModel?: string
     ): Promise<any> {
-        const model = (selectedModel || 'gemini-3-flash') as AIModel;
+        const model = (selectedModel || 'gemini-3-flash-preview') as AIModel;
 
         // 🎭 UNHINGED FLAVOR PACKS (INTERNAL INSPIRATION)
         // Appended to core identity to give Nicky occasional stylistic flair

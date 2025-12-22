@@ -11,7 +11,7 @@
 export type AIModel = 
   | 'claude-sonnet-4.5'
   | 'gemini-3-pro-preview'
-  | 'gemini-3-flash'
+  | 'gemini-3-flash-preview'
   | 'gemini-2.5-pro'
   | 'gemini-2.5-flash';
 
@@ -36,32 +36,32 @@ export interface ModelSelectionConfig {
 export const DEFAULT_MODEL_CONFIG: Record<AIOperation, ModelSelectionConfig> = {
   'chat': {
     operation: 'chat',
-    selectedModel: 'gemini-3-flash',
+    selectedModel: 'gemini-3-flash-preview',
     fallbackModel: 'gemini-3-pro-preview'
   },
   'document-processing': {
     operation: 'document-processing',
-    selectedModel: 'gemini-3-flash',
+    selectedModel: 'gemini-3-flash-preview',
     fallbackModel: 'gemini-3-pro-preview'
   },
   'podcast-training': {
     operation: 'podcast-training',
-    selectedModel: 'gemini-3-flash',
+    selectedModel: 'gemini-3-flash-preview',
     fallbackModel: 'gemini-3-pro-preview'
   },
   'memory-consolidation': {
     operation: 'memory-consolidation',
-    selectedModel: 'gemini-3-flash',
+    selectedModel: 'gemini-3-flash-preview',
     fallbackModel: 'gemini-3-pro-preview'
   },
   'fact-extraction': {
     operation: 'fact-extraction',
-    selectedModel: 'gemini-3-flash',
+    selectedModel: 'gemini-3-flash-preview',
     fallbackModel: 'gemini-3-pro-preview'
   },
   'style-analysis': {
     operation: 'style-analysis',
-    selectedModel: 'gemini-3-flash',
+    selectedModel: 'gemini-3-flash-preview',
     fallbackModel: 'gemini-3-pro-preview'
   }
 };
@@ -93,8 +93,8 @@ export const MODEL_METADATA: Record<AIModel, {
     costLevel: 'expensive',
     description: 'Google\'s newest, most intelligent model'
   },
-  'gemini-3-flash': {
-    displayName: 'Gemini 3 Flash',
+  'gemini-3-flash-preview': {
+    displayName: 'Gemini 3 Flash (Preview)',
     provider: 'google',
     speed: 'fast',
     quality: 'high',

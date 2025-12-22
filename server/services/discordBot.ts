@@ -1260,15 +1260,12 @@ export class DiscordBotService {
    * Centralized emotion tag removal for ALL Discord responses
    */
   private stripEmotionTags(content: string): string {
-    // AGGRESSIVE emotion tag removal for Discord - strip ALL possible formats
+    // RELAXED emotion tag removal for Discord - Allow *actions* but strip internal system tags
     let discordContent = content
-      .replace(/\*[^*]*\*/g, '')      // Remove *anything*
-      .replace(/\([^)]*\)/g, '')      // Remove (anything)  
-      .replace(/\[[^\]]*\]/g, '')     // Remove [anything]
-      .replace(/_[^_]*_/g, '')        // Remove _anything_
-      .replace(/~[^~]*~/g, '')        // Remove ~anything~
-      .replace(/\{[^}]*\}/g, '')      // Remove {anything}
-      .replace(/\s*\.\.\.\s*/g, ' ')  // Remove ellipses
+      .replace(/\[[^\]]*\]/g, '')     // Remove [anything] (System tags like [angry])
+      .replace(/\{[^}]*\}/g, '')      // Remove {anything} (JSON artifacts)
+      .replace(/<!--\s*METRICS[^>]*-->/gi, '') // Remove metrics
+      .replace(/<-\s*METRICS[^>]*->/gi, '') // Remove metrics
       .replace(/\s+/g, ' ')           // Clean up extra spaces
       .trim();
     
@@ -1298,7 +1295,8 @@ DISCORD CHAT MODE - CRITICAL CONSTRAINTS:
 - Maximum 3-4 sentences only
 - Conversational and casual like texting
 - No essays, rants, or long explanations
-- Simple responses, not walls of text`;
+- Punchy, expressive responses
+- Use *actions* for emphasis if needed (e.g. *sighs*, *yells*)`;
 
         const geminiResponse = await geminiService.generateChatResponse(
           prompt,
@@ -1330,101 +1328,18 @@ DISCORD CHAT MODE - CRITICAL CONSTRAINTS:
       } catch (geminiError) {
         // 🔄 FALLBACK: Claude disabled.
         console.error('❌ Gemini Discord failed. Claude fallback disabled.', geminiError);
-        return null;
-        /*
-        // 🔄 FALLBACK: Try Claude if Gemini fails
-        console.error('❌ Gemini Discord failed, falling back to Claude:', geminiError);
         
-        try {
-          const anthropic = new (await import('@anthropic-ai/sdk')).Anthropic({
-            apiKey: process.env.ANTHROPIC_API_KEY,
-          });
+        // Last resort: simple responses
+        const fallbackResponses = [
+          "What's good?",
+          "Sup?",
+          "Hey there!",
+          "Madonna mia...",
+          "Oof...",
+          "Bruh"
+        ];
+        return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
 
-          const response = await anthropic.messages.create({
-            model: "claude-sonnet-4-5-20250929",
-            max_tokens: 200,
-            temperature: 1.0,
-            system: `[CRITICAL FORMATTING RULES]
-1. NEVER use asterisks (*) for actions. Describe actions IN YOUR DIALOGUE.
-2. ALWAYS end sentences with proper punctuation.
-
-[CORE IDENTITY - NEVER OVERRIDE THESE]
-- You are Nicky "Noodle Arms" A.I. Dente
-- Italian-American, pasta-obsessed, Dead by Daylight addicted
-- Chaotic good moral alignment with emotional intensity
-- Physical characteristic: literally has noodle arms (it's a thing, don't ask)
-- Family business vibe but over trivial shit
-- Alternates between tough talk and being emotionally sensitive
-
-[SPEAKING STYLE - THIS IS HOW YOU TALK]
-- Casual, profanity-laced, expressive
-- Italian phrases when emotional or talking about food
-- Self-deprecating humor mixed with Italian pride
-- Gets intense about DbD gameplay and pasta quality
-- Tangents are GOOD - lean into random topics
-- Don't be a one-trick pony - vary your responses
-
-[MEMORY USAGE RULES]
-- Reference memories naturally, don't list them
-- If you remember something, weave it in conversationally
-- If you DON'T remember something clearly, say so
-- Don't force pasta/DbD references into EVERY response
-
-[RESPONSE VARIETY - CRITICAL]
-You MUST vary your responses. Not every reply needs:
-- Pasta references
-- DbD references  
-- Italian phrases
-- Family business mentions
-
-Sometimes just respond like a normal person who happens to have these traits.
-
-${coreIdentity}
-
-${personalityPrompt}
-
-DISCORD MODE: You are chatting on Discord. Your responses MUST be:
-- 3-4 sentences maximum 
-- Conversational and casual like texting
-- No action descriptions (*laughs*, etc.)
-- No long rants or essays
-- Natural Discord chat style, not walls of text`,
-            messages: [{
-              role: 'user',
-              content: prompt
-            }],
-          });
-
-          const content = Array.isArray(response.content) 
-            ? (response.content[0] as any).text 
-            : (response.content as any);
-
-          if (!content) return null;
-
-          // Strip emotion tags AND debug state from Claude response
-          let cleanContent = this.stripEmotionTags(content);
-          
-          // Remove any debug headers
-          cleanContent = cleanContent
-            .replace(/\[NICKY STATE\][^\n]*/gi, '')
-            .replace(/preset=[^|]+(?:\s*\|\s*intensity=[^|]+)?(?:\s*\|\s*(?:dbd_lens|dbdsafe)=[^|\s]*)?(?:\s*\|\s*spice=[^|\s]+)?/gi, '')
-            .replace(/<!--\s*METRICS[^>]*-->/gi, '')
-            .replace(/<-\s*METRICS[^>]*->/gi, '')
-            .replace(/^\s*\|\s*/g, '')
-            .trim();
-
-          // Ensure reasonable length
-          if (cleanContent.length > 500) {
-            cleanContent = cleanContent.substring(0, 497) + "...";
-          }
-
-          console.log('✅ Claude Discord response generated successfully (fallback)');
-          return cleanContent;
-        } catch (claudeError) {
-          console.error('❌ Both Gemini and Claude failed for Discord:', claudeError);
-          return null;
-        }
-        */
       }
     } catch (error) {
       // Outer catch for personality control loading errors

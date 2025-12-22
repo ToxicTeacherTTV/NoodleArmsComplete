@@ -182,7 +182,7 @@ If no clusters found, return: []`;
     try {
       // 🎯 PRIMARY: Try Gemini first (free tier)
       const geminiResponse = await this.gemini.ai.models.generateContent({
-        model: "gemini-3-flash",
+        model: "gemini-3-flash-preview",
         config: {
           responseMimeType: "application/json",
           temperature: 0.3
@@ -219,55 +219,7 @@ If no clusters found, return: []`;
     } catch (geminiError) {
       console.error('❌ Gemini fact clustering failed:', geminiError);
       // 🚫 CLAUDE FALLBACK DISABLED (Dec 20, 2025)
-      // console.log('🔄 Falling back to Claude for fact clustering...');
       return [];
-      
-      /* 
-      // 🔄 FALLBACK: Use Claude if Gemini fails (paid)
-      try {
-        const response = await this.anthropic.messages.create({
-          model: 'claude-sonnet-4-5-20250929',
-          max_tokens: 3000,
-          temperature: 0.3,
-          messages: [{ role: 'user', content: prompt }]
-        });
-        // ... (rest of claude logic)
-      } catch (claudeError) {
-        console.error('❌ Claude fallback also failed:', claudeError);
-        return [];
-      }
-      */
-
-        const content = response.content.find(c => c.type === 'text')?.text || '';
-        console.log(`📝 Claude raw response (first 200 chars): ${content.slice(0, 200)}...`);
-        
-        const analysis = this.extractJSON(content);
-
-        if (Array.isArray(analysis)) {
-          for (const cluster of analysis) {
-            const clusterFacts = facts
-              .filter(f => cluster.factIds.includes(f.id))
-              .map(f => ({ id: f.id, content: f.content }));
-
-            clusters.push({
-              clusterId: `cluster_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-              factIds: cluster.factIds,
-              consolidationScore: cluster.consolidationScore,
-              suggestedMerge: cluster.suggestedMerge,
-              reasoning: cluster.reasoning,
-              priority: cluster.priority || 'MEDIUM',
-              facts: clusterFacts
-            });
-          }
-        }
-
-        console.log(`🎯 Claude found ${clusters.length} fact clusters from ${facts.length} candidate facts (fallback)`);
-        return clusters;
-        
-      } catch (claudeError) {
-        console.error('❌ Claude fact clustering also failed:', claudeError);
-        return [];
-      }
     }
   }
 
@@ -407,7 +359,7 @@ If no drift detected, return: []`;
     try {
       // 🎯 PRIMARY: Try Gemini first (free tier)
       const geminiResponse = await this.gemini.ai.models.generateContent({
-        model: "gemini-3-flash",
+        model: "gemini-3-flash-preview",
         config: {
           responseMimeType: "application/json",
           temperature: 0.3
@@ -426,37 +378,7 @@ If no drift detected, return: []`;
     } catch (geminiError) {
       console.error('❌ Gemini personality drift analysis failed:', geminiError);
       // 🚫 CLAUDE FALLBACK DISABLED (Dec 20, 2025)
-      // console.log('🔄 Falling back to Claude for personality drift analysis...');
       return [];
-
-      /*
-      // 🔄 FALLBACK: Use Claude if Gemini fails (paid)
-      try {
-        const response = await this.anthropic.messages.create({
-          model: 'claude-sonnet-4-5-20250929',
-          max_tokens: 2000,
-          temperature: 0.3,
-          messages: [{ role: 'user', content: prompt }]
-        });
-
-        const content = response.content.find(c => c.type === 'text')?.text || '';
-        // ...
-      } catch (claudeError) {
-        console.error('❌ Claude fallback also failed:', claudeError);
-        return [];
-      }
-      */
-        console.log(`📝 Claude drift raw response (first 200 chars): ${content.slice(0, 200)}...`);
-        
-        const drifts = this.extractJSON(content);
-
-        console.log(`🎯 Claude detected ${Array.isArray(drifts) ? drifts.length : 0} personality drifts from ${recentFacts.length} facts (fallback)`);
-        return Array.isArray(drifts) ? drifts : [];
-        
-      } catch (claudeError) {
-        console.error('❌ Claude personality drift analysis also failed:', claudeError);
-        return [];
-      }
     }
   }
 
