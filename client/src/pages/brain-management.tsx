@@ -655,7 +655,7 @@ export default function BrainManagement() {
   const [flagSearchTerm, setFlagSearchTerm] = useState<string>('');
   
   // Duplicates state
-  const [similarityThreshold, setSimilarityThreshold] = useState<number>(0.8);
+  const [similarityThreshold, setSimilarityThreshold] = useState<number>(0.85);
   const [duplicateGroups, setDuplicateGroups] = useState<any[]>([]);
   const [isLoadingDuplicates, setIsLoadingDuplicates] = useState(false);
   const [autoMergeInProgress, setAutoMergeInProgress] = useState(false);
