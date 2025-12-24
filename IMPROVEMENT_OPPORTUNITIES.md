@@ -1,14 +1,46 @@
 # Nicky AI - Improvement Opportunities Analysis
 
 **Date**: 2025-11-04  
-**Last Updated**: 2025-12-08  
+**Last Updated**: December 22, 2025
 **Context**: Analysis of current system capabilities and opportunities for enhancement
 
 ---
 
-## ✅ COMPLETED IMPROVEMENTS (Dec 08, 2025 Update)
+## 🚨 CRITICAL ARCHITECTURAL FIXES (From Dec 2025 Audit)
 
-### 1. **Diagnostic Chat Mode** ✅ COMPLETED (Dec 08)
+### 1. Streaming Mode Latency Optimization (Single-Pass Generation)
+**Status:** PLANNED
+- **Problem:** The separate `EmotionTagGenerator` layer adds 2-4s of latency, blocking the response.
+- **Solution:** For `STREAMING` mode, inject emotion instructions directly into the main System Prompt.
+- **Goal:** Skip the second API call entirely to achieve <1.5s latency.
+
+### 2. Memory Schema Versioning
+**Status:** PLANNED
+- **Problem:** The database schema is flat. Future upgrades (e.g., new embedding models) will require painful wipes.
+- **Solution:** Add `schema_version` column to `memoryEntries`.
+
+### 3. "Review Merge" UI for Deduplication
+**Status:** PLANNED
+- **Problem:** Auto-merging risks data loss.
+- **Solution:** Build a UI to let humans review and approve merges.
+
+---
+
+## ✅ COMPLETED IMPROVEMENTS (Dec 22, 2025 Update)
+
+### 1. Gemini 3 Flash Preview Migration ✅ COMPLETED (Dec 22)
+**Status:** DEPLOYED - Global Model Update
+- ✅ Replaced all instances of `gemini-3-flash` (invalid) and `gemini-2.5-flash` with `gemini-3-flash-preview`.
+- ✅ Updated `geminiModels.ts`, `modelSelection.ts`, and all service files.
+- ✅ Verified `test-genai-sdk.ts` works with the new model ID.
+
+### 2. Emotion System Consolidation ✅ COMPLETED (Dec 22)
+**Status:** DEPLOYED - Code Cleanup
+- ✅ Deleted redundant `EmotionEnhancer.ts`.
+- ✅ Migrated `quickEnhance` regex logic to `EmotionTagGenerator.ts`.
+- ✅ Updated `routes.ts` to use the single source of truth.
+
+### 3. Diagnostic Chat Mode ✅ COMPLETED (Dec 08)
 **Status:** DEPLOYED - System state analysis tools
 - ✅ `DiagnosticService` created to inject system state into context
 - ✅ `/diag` command support added

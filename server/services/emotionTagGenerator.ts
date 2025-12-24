@@ -564,6 +564,43 @@ Generate tags now:`;
   }
 
   /**
+   * Quick enhance - adds basic emotion tags based on simple pattern matching
+   * Faster but less sophisticated than full AI enhancement
+   * CRITICAL: Always uses [bronx][emotion] double-tag pattern ONLY at start
+   */
+  quickEnhance(text: string): string {
+    let enhanced = text;
+
+    // Add [strong bronx wiseguy accent] at the start if not present
+    if (!enhanced.trim().startsWith('[strong bronx wiseguy accent]')) {
+      enhanced = `[strong bronx wiseguy accent][grumpy] ${enhanced}`;
+    }
+
+    // Add grumpy tags to complaints (single tag)
+    enhanced = enhanced.replace(/\b(Listen|Look|Alright)\b/gi, (match) => `[grumpy] ${match}`);
+    
+    // Add exasperated tags to frustration (single tag)
+    enhanced = enhanced.replace(/\b(ridiculous|stupid|idiotic|seriously)\b/gi, (match) => `${match} [exasperated]`);
+    
+    // Add manic tags to excitement (single tag)
+    enhanced = enhanced.replace(/\b(amazing|incredible|unbelievable|holy)\b/gi, (match) => `[manic] ${match}`);
+    
+    // Add conspiratorial tags to questions (single tag)
+    enhanced = enhanced.replace(/(\?)/g, (match, offset, string) => {
+      if (string.substring(Math.max(0, offset - 20), offset).includes('think') || 
+          string.substring(Math.max(0, offset - 20), offset).includes('know')) {
+        return '? [conspiratorial]';
+      }
+      return match;
+    });
+    
+    // Add sighs to ellipses (non-verbal sounds don't need bronx tag)
+    enhanced = enhanced.replace(/\.\.\./g, '... [sighs]');
+    
+    return enhanced;
+  }
+
+  /**
    * Create cache key from context
    */
   private createCacheKey(context: EmotionTagContext): string {

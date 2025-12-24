@@ -936,6 +936,31 @@ ${coreIdentity}`;
         enhancedCoreIdentity += `\n\n${personalityPrompt}`;
       }
 
+      // 🚀 STREAMING OPTIMIZATION: Inject emotion instructions directly into system prompt
+      // This allows us to skip the separate EmotionTagGenerator step, saving ~1-2s latency
+      if (mode === 'STREAMING') {
+        enhancedCoreIdentity += `
+\n[STREAMING MODE - EMOTION INSTRUCTIONS]
+You are in LOW LATENCY STREAMING MODE. You must include audio tags DIRECTLY in your response.
+DO NOT wait for a second pass.
+
+REQUIRED FORMAT:
+Start your response with: [strong bronx wiseguy accent][EMOTION]
+Example: "[strong bronx wiseguy accent][grumpy] Listen to me..."
+
+USE THESE TAGS FREQUENTLY:
+- [grumpy], [annoyed], [furious], [exasperated]
+- [manic], [unhinged], [psycho], [losing it]
+- [laughing], [cackling], [sighs heavily], [groans]
+- [yelling], [screaming], [whispering], [muttering bitterly]
+
+RULES:
+1. ALWAYS start with [strong bronx wiseguy accent]
+2. Use tags like [yelling] or [sighs] naturally throughout the text
+3. Keep responses SHORT and PUNCHY (under 2 sentences usually)
+`;
+      }
+
       // Use intelligent model selection with fallback for chat
       // 🚀 OPTIMIZATION: Use Gemini 3 Flash for Streaming (Reliable + Fast)
       const streamingModel = 'gemini-3-flash-preview';

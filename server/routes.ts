@@ -22,7 +22,7 @@ import { ContentCollectionManager } from './services/ingestion/ContentCollection
 import { adGenerationService } from './services/AdGenerationService';
 import { podcastFactExtractor } from './services/podcastFactExtractor';
 import { entityExtraction } from './services/entityExtraction';
-import { emotionEnhancer } from './services/emotionEnhancer';
+import { emotionTagGenerator } from './services/emotionTagGenerator';
 import { contextPrewarmer } from './services/contextPrewarmer';
 import { contextPruner } from './services/contextPruner';
 import { insertAutomatedSourceSchema, insertPendingContentSchema, insertAdTemplateSchema, insertPrerollAdSchema } from '@shared/schema';
@@ -818,16 +818,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // UPDATE (Dec 2, 2025): User requested full enhancer for streaming too for better quality
           const useFastMode = false; 
 
-          // 🎭 AUTO-ENHANCE: Use the full EmotionEnhancer for PODCAST and STREAMING mode to get high-quality tags
+          // 🎭 AUTO-ENHANCE: Use the full EmotionTagGenerator for PODCAST and STREAMING mode to get high-quality tags
           // This replaces the simple "Emotional Arc" with the full "Enhance" logic the user likes
           if ((mode === 'PODCAST' || mode === 'STREAMING') && !useFastMode) {
-            console.log(`🎭 Auto-Enhancing response for ${mode} mode...`);
-            const { emotionEnhancer } = await import('./services/emotionEnhancer');
             
-            // Use the full enhancer which adds [strong bronx wiseguy accent][emotion] and internal tags
-            processedContent = await emotionEnhancer.enhanceText(processedContent, `Current Personality: ${controls.preset} (${controls.intensity} intensity)`);
-            
-            console.log(`🎭 Auto-Enhanced result: ${processedContent.substring(0, 100)}...`);
+            // 🚀 STREAMING LATENCY CHECK: If the AI already included the tags (via system prompt injection), SKIP this step!
+            if (mode === 'STREAMING' && processedContent.includes('[strong bronx wiseguy accent]')) {
+              console.log('⚡ STREAMING MODE: Tags detected in raw output. Skipping separate enhancement step for speed.');
+            } else {
+              console.log(`🎭 Auto-Enhancing response for ${mode} mode...`);
+              const { emotionTagGenerator } = await import('./services/emotionTagGenerator');
+              
+              // Use the full enhancer which adds [strong bronx wiseguy accent][emotion] and internal tags
+              processedContent = await emotionTagGenerator.enhanceDialogue(processedContent, {
+                content: processedContent,
+                personality: `Current Personality: ${controls.preset} (${controls.intensity} intensity)`,
+                contentType: 'chat'
+              });
+              
+              console.log(`🎭 Auto-Enhanced result: ${processedContent.substring(0, 100)}...`);
+            }
           } else {
             // Fallback to the lighter "Emotional Arc" if Enhance fails (or if fast mode was enabled)
             // Generate 5-stage emotional arc for natural progression
@@ -1021,11 +1031,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (mode === 'quick') {
         // Fast pattern-based enhancement
-        enhancedText = emotionEnhancer.quickEnhance(text);
+        enhancedText = emotionTagGenerator.quickEnhance(text);
         console.log('⚡ Quick emotion enhancement applied');
       } else {
         // Full AI-powered enhancement
-        enhancedText = await emotionEnhancer.enhanceText(text, characterContext);
+        enhancedText = await emotionTagGenerator.enhanceDialogue(text, {
+          content: text,
+          personality: characterContext,
+          contentType: 'chat'
+        });
         console.log('🎭 AI emotion enhancement applied');
       }
 
@@ -1064,7 +1078,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let enhancedContent: string;
 
       if (mode === 'quick') {
-        enhancedContent = emotionEnhancer.quickEnhance(message.content);
+        enhancedContent = emotionTagGenerator.quickEnhance(message.content);
         console.log(`⚡ Quick enhanced message at index ${messageIndex}`);
       } else {
         // Get personality context for better enhancement
@@ -1073,7 +1087,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           `Nicky "Noodle Arms" A.I. Dente - unhinged Italian-American podcaster from the Bronx` :
           undefined;
 
-        enhancedContent = await emotionEnhancer.enhanceText(message.content, characterContext);
+        enhancedContent = await emotionTagGenerator.enhanceDialogue(message.content, {
+          content: message.content,
+          personality: characterContext,
+          contentType: 'chat'
+        });
         console.log(`🎭 AI enhanced message at index ${messageIndex}`);
       }
 

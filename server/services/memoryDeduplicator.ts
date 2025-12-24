@@ -161,7 +161,7 @@ export class MemoryDeduplicator {
   async findDuplicateGroups(
     db: PostgresJsDatabase<any>,
     profileId: string,
-    similarityThreshold: number = 0.7
+    similarityThreshold: number = 0.85
   ): Promise<DuplicateGroup[]> {
     console.log(`🔍 Finding duplicate groups for profile ${profileId} with threshold ${similarityThreshold}`);
     
