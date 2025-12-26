@@ -56,9 +56,15 @@ export class ImportancePropagator {
         const currentImp = neighbor.importance || 0;
         const anchorImp = anchor.importance || 0;
         
+        // 🕒 NEW: Anchor Age Decay
+        // Older anchors have less "pull"
+        const anchorAgeDays = anchor.createdAt ? 
+          (Date.now() - new Date(anchor.createdAt).getTime()) / (1000 * 60 * 60 * 24) : 0;
+        const decayFactor = Math.max(0.5, 1.0 - (anchorAgeDays / 365)); // Lose up to 50% pull over a year
+        
         // Only boost if anchor is significantly higher
         if (anchorImp > currentImp) {
-          const boost = Math.round((anchorImp - currentImp) * similarity * 0.2); // 20% transfer rate
+          const boost = Math.round((anchorImp - currentImp) * similarity * 0.1 * decayFactor); // Reduced to 10% transfer rate + decay
           
           if (boost > 0) {
             const newImp = Math.min(75, currentImp + boost); // Cap propagated importance at 75 (below Anchor threshold)

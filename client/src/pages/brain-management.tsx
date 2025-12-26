@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield, Copy, Merge, Users, MapPin, Calendar, Plus, Trash2, Sparkles, Zap, Scan, Lightbulb, Package, Box } from "lucide-react";
@@ -153,6 +154,10 @@ export default function BrainManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
+  // 🧠 NEW: Psyche Profile State for Review
+  const [psycheToReview, setPsycheToReview] = useState<any>(null);
+  const [isPsycheDialogOpen, setIsPsycheDialogOpen] = useState(false);
+
   // Get active profile and other data needed for moved components
   const { data: activeProfile } = useQuery<Profile>({
     queryKey: ['/api/profiles/active'],
@@ -369,6 +374,26 @@ export default function BrainManagement() {
         variant: "destructive",
       });
     },
+  });
+
+  // 🚀 NEW: Quick update mutation for "bam bam bam" buttons
+  const quickUpdateMutation = useMutation({
+    mutationFn: async ({ id, importance, confidence }: { id: string; importance?: number; confidence?: number }) => {
+      const response = await fetch(`/api/memory/entries/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ importance, confidence }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!response.ok) throw new Error('Failed to update');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          (query.queryKey[0] as string).startsWith('/api/memory')
+      });
+    }
   });
 
   // Mutation for making a fact protected
@@ -1298,6 +1323,23 @@ export default function BrainManagement() {
     },
   });
 
+  const { data: auditProgress } = useQuery({
+    queryKey: ['/api/personality/audit/progress'],
+    refetchInterval: (query) => {
+      const data = query.state.data as any;
+      return data?.status === 'PROCESSING' ? 2000 : false;
+    },
+  });
+
+  const clearAuditMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest('POST', '/api/personality/audit/clear');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/personality/audit/progress'] });
+    }
+  });
+
   // Function to open edit dialog
   const openEditDialog = (fact: MemoryFact) => {
     setEditingFact(fact);
@@ -1373,6 +1415,51 @@ export default function BrainManagement() {
       toast({
         title: "Propagation Failed",
         description: error.message || "Failed to propagate importance",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // 🧠 NEW: Personality Audit Mutations
+  const generatePsycheMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/personality/psyche');
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      setPsycheToReview(data.psyche);
+      setIsPsycheDialogOpen(true);
+      toast({
+        title: "Psyche Profile Generated!",
+        description: "Please review and edit Nicky's core identity before starting the audit.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Psyche Generation Failed",
+        description: error.message || "Failed to generate psyche profile",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const personalityAuditMutation = useMutation({
+    mutationFn: async (psyche: any) => {
+      const response = await apiRequest('POST', '/api/personality/audit', { psyche });
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      setIsPsycheDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/personality/audit/progress'] });
+      toast({
+        title: "Audit Started!",
+        description: data.message,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Audit Failed",
+        description: error.message || "Failed to start personality audit",
         variant: "destructive",
       });
     },
@@ -1513,25 +1600,78 @@ export default function BrainManagement() {
               )}
             </Button>
           )}
-          <input
-            type="number"
-            min="0"
-            max="100"
-            defaultValue={fact.confidence || 50}
-            className="w-12 h-7 text-xs border rounded text-center"
-            data-testid={`input-confidence-${fact.id}`}
-            onBlur={(e) => {
-              const newConfidence = parseInt(e.target.value);
-              if (newConfidence >= 0 && newConfidence <= 100 && newConfidence !== fact.confidence) {
-                updateFactMutation.mutate({ factId: fact.id, content: fact.content, confidence: newConfidence });
-              }
-            }}
-            title="Manual confidence (0-100)"
-          />
-          <span className="text-xs text-muted-foreground">%</span>
+          {/* 🚀 QUICK ACTION BUTTONS (BAM BAM BAM) */}
+          <div className="flex flex-col gap-1 ml-2 border-l pl-2">
+            <div className="flex gap-1 items-center">
+              <span className="text-[8px] uppercase font-bold text-muted-foreground w-6">Imp:</span>
+              {[25, 50, 75, 85, 95, 100].map(val => (
+                <button
+                  key={val}
+                  onClick={() => quickUpdateMutation.mutate({ id: fact.id, importance: val })}
+                  disabled={quickUpdateMutation.isPending}
+                  className={`text-[9px] px-1 rounded border transition-colors ${
+                    fact.importance === val 
+                      ? 'bg-blue-500 text-white border-blue-600' 
+                      : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1 items-center">
+              <span className="text-[8px] uppercase font-bold text-muted-foreground w-6">Conf:</span>
+              {[25, 50, 75, 85, 95, 100].map(val => (
+                <button
+                  key={val}
+                  onClick={() => quickUpdateMutation.mutate({ id: fact.id, confidence: val })}
+                  disabled={quickUpdateMutation.isPending}
+                  className={`text-[9px] px-1 rounded border transition-colors ${
+                    fact.confidence === val 
+                      ? 'bg-green-500 text-white border-green-600' 
+                      : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
+          </div>
         </>
       ) : (
         <>
+          <div className="flex flex-col gap-2 mr-4 border-r pr-4">
+            <div className="flex gap-1 items-center">
+              <span className="text-[10px] uppercase font-bold text-muted-foreground w-10">Imp:</span>
+              {[25, 50, 75, 85, 95, 100].map(val => (
+                <Button
+                  key={val}
+                  size="sm"
+                  variant={fact.importance === val ? "default" : "outline"}
+                  className="h-6 px-2 text-[10px]"
+                  onClick={() => quickUpdateMutation.mutate({ id: fact.id, importance: val })}
+                  disabled={quickUpdateMutation.isPending}
+                >
+                  {val}
+                </Button>
+              ))}
+            </div>
+            <div className="flex gap-1 items-center">
+              <span className="text-[10px] uppercase font-bold text-muted-foreground w-10">Conf:</span>
+              {[25, 50, 75, 85, 95, 100].map(val => (
+                <Button
+                  key={val}
+                  size="sm"
+                  variant={fact.confidence === val ? "secondary" : "outline"}
+                  className="h-6 px-2 text-[10px]"
+                  onClick={() => quickUpdateMutation.mutate({ id: fact.id, confidence: val })}
+                  disabled={quickUpdateMutation.isPending}
+                >
+                  {val}
+                </Button>
+              ))}
+            </div>
+          </div>
           <Button
             size="sm"
             variant="outline"
@@ -1539,7 +1679,7 @@ export default function BrainManagement() {
             data-testid={`button-boost-${fact.id}`}
           >
             <ThumbsUp className="h-4 w-4 mr-1" />
-            EDIT CONFIDENCE
+            EDIT
           </Button>
           {!fact.isProtected && (
             <Button
@@ -1616,7 +1756,7 @@ export default function BrainManagement() {
     queryKey: ['/api/memory/contradictions'],
   });
 
-  const { data: allFacts = [] } = useQuery<MemoryFact[]>({
+  const { data: allFacts = [], isLoading: isLoadingAllFacts } = useQuery<MemoryFact[]>({
     queryKey: ['/api/memory/entries'],
   });
 
@@ -1851,8 +1991,118 @@ export default function BrainManagement() {
             )}
             Propagate Importance
           </Button>
+          <Button
+            onClick={() => generatePsycheMutation.mutate()}
+            disabled={generatePsycheMutation.isPending || personalityAuditMutation.isPending}
+            variant="outline"
+            size="sm"
+            className="border-purple-200 hover:bg-purple-50 text-purple-700"
+            title="Re-evaluate all memories based on Nicky's core psyche"
+          >
+            {generatePsycheMutation.isPending || personalityAuditMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Brain className="h-4 w-4 mr-2" />
+            )}
+            Personality Audit
+          </Button>
         </div>
       </div>
+
+      {auditProgress && auditProgress.status !== 'IDLE' && (
+        <Card className={`mb-6 border-l-4 ${auditProgress.status === 'PROCESSING' ? 'border-l-blue-500' : 'border-l-green-500'}`}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Brain className={`h-4 w-4 ${auditProgress.status === 'PROCESSING' ? 'text-blue-500 animate-pulse' : 'text-green-500'}`} />
+                Personality Audit {auditProgress.status === 'PROCESSING' ? 'in Progress' : 'Complete'}
+              </div>
+              <Badge variant={auditProgress.status === 'PROCESSING' ? 'outline' : 'default'} className={auditProgress.status === 'PROCESSING' ? 'text-blue-600 border-blue-200' : 'bg-green-100 text-green-700'}>
+                {auditProgress.status}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {auditProgress.status === 'PROCESSING' ? (
+                <>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Auditing batch {auditProgress.currentBatch} of {auditProgress.totalBatches}</span>
+                    <span>{Math.round((auditProgress.auditedCount / auditProgress.totalMemories) * 100)}%</span>
+                  </div>
+                  <Progress value={(auditProgress.auditedCount / auditProgress.totalMemories) * 100} className="h-2" />
+                  <p className="text-xs text-muted-foreground">
+                    Processed {auditProgress.auditedCount} / {auditProgress.totalMemories} memories. 
+                    Found {auditProgress.updateCount} personality misalignments so far.
+                  </p>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div className="bg-muted/50 p-2 rounded-lg">
+                      <div className="text-xl font-bold">{auditProgress.totalMemories}</div>
+                      <div className="text-[10px] uppercase text-muted-foreground">Audited</div>
+                    </div>
+                    <div className="bg-purple-50 p-2 rounded-lg">
+                      <div className="text-xl font-bold text-purple-700">{auditProgress.updateCount}</div>
+                      <div className="text-[10px] uppercase text-purple-600">Updated</div>
+                    </div>
+                    <div className="bg-blue-50 p-2 rounded-lg">
+                      <div className="text-xl font-bold text-blue-700">
+                        {auditProgress.startTime ? Math.round((new Date(auditProgress.endTime!).getTime() - new Date(auditProgress.startTime!).getTime()) / 1000 / 60) : '?'}m
+                      </div>
+                      <div className="text-[10px] uppercase text-blue-600">Duration</div>
+                    </div>
+                  </div>
+
+                  {auditProgress.significantChanges && auditProgress.significantChanges.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-xs font-semibold mb-2 flex items-center gap-1">
+                        <Zap className="h-3 w-3 text-yellow-500" />
+                        Significant Personality Re-alignments:
+                      </h4>
+                      <div className="space-y-2">
+                        {auditProgress.significantChanges.map((change: any, idx: number) => (
+                          <div key={idx} className="text-xs p-2 bg-muted/30 rounded border border-muted flex flex-col gap-1">
+                            <p className="italic text-muted-foreground">"{change.content}"</p>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px] h-4">
+                                Importance: {change.oldImportance} → {change.newImportance}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px] h-4">
+                                Confidence: {change.oldConfidence} → {change.newConfidence}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="flex-1 text-xs h-8"
+                      onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/memory/stats'] })}
+                    >
+                      Refresh Memory Stats
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1 text-xs h-8"
+                      onClick={() => clearAuditMutation.mutate()}
+                    >
+                      Dismiss Report
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <SystemOperationsSummary
         memoryStats={memoryStats}
@@ -1862,9 +2112,87 @@ export default function BrainManagement() {
         chaosState={chaosState}
         personalityState={personalityState}
         timelineHealth={timelineHealth}
-        onRequestTimelineRepair={() => timelineRepairMutation.mutate(undefined)}
-        timelineRepairPending={timelineRepairMutation.isPending}
+        onRepairTimeline={() => timelineRepairMutation.mutate()}
       />
+
+      {/* 🧠 NEW: Psyche Review Dialog */}
+      <Dialog open={isPsycheDialogOpen} onOpenChange={setIsPsycheDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-purple-600" />
+              Review Nicky's Psyche Profile
+            </DialogTitle>
+            <DialogDescription>
+              This profile will be used to re-evaluate the importance and confidence of all 3,300+ memories. 
+              Edit any section to better reflect Nicky's current state.
+            </DialogDescription>
+          </DialogHeader>
+
+          {psycheToReview && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Core Identity</label>
+                <Textarea 
+                  value={psycheToReview.coreIdentity} 
+                  onChange={(e) => setPsycheToReview({...psycheToReview, coreIdentity: e.target.value})}
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Key Relationships</label>
+                <Textarea 
+                  value={psycheToReview.keyRelationships} 
+                  onChange={(e) => setPsycheToReview({...psycheToReview, keyRelationships: e.target.value})}
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Worldview</label>
+                <Textarea 
+                  value={psycheToReview.worldview} 
+                  onChange={(e) => setPsycheToReview({...psycheToReview, worldview: e.target.value})}
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Emotional Triggers</label>
+                <Textarea 
+                  value={psycheToReview.emotionalTriggers} 
+                  onChange={(e) => setPsycheToReview({...psycheToReview, emotionalTriggers: e.target.value})}
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Recent Obsessions</label>
+                <Textarea 
+                  value={psycheToReview.recentObsessions} 
+                  onChange={(e) => setPsycheToReview({...psycheToReview, recentObsessions: e.target.value})}
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPsycheDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-purple-600 hover:bg-purple-700"
+              onClick={() => personalityAuditMutation.mutate(psycheToReview)}
+              disabled={personalityAuditMutation.isPending}
+            >
+              {personalityAuditMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Zap className="h-4 w-4 mr-2" />
+              )}
+              Confirm & Run Audit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Search Bar */}
       <div className="relative">
@@ -1922,7 +2250,7 @@ export default function BrainManagement() {
               📋 Dupes
             </TabsTrigger>
             <TabsTrigger value="all-facts" className="text-xs px-3 py-1.5">
-              🧠 All
+              🧠 All ({allFacts?.length || 0})
             </TabsTrigger>
             <TabsTrigger value="intelligence" className="text-xs px-3 py-1.5">
               🧠 Intel
@@ -3608,38 +3936,52 @@ export default function BrainManagement() {
           <TabsContent value="all-facts" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>All Facts Browser</CardTitle>
+                <CardTitle>All Facts Browser ({allFacts?.length || 0})</CardTitle>
                 <p className="text-sm text-gray-600 dark:text-gray-300">
                   Browse and manage all facts in Nicky's knowledge base.
                 </p>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-[600px]">
-                  <div className="space-y-3">
-                    {filteredFacts(allFacts)?.map((fact: MemoryFact) => (
-                      <div
-                        key={fact.id}
-                        className="border border-gray-200 dark:border-gray-700 rounded p-3 bg-white dark:bg-gray-800"
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center space-x-2">
-                            <Badge className={getConfidenceColor(fact.confidence)}>
-                              {fact.confidence ?? 0}%
-                            </Badge>
-                            <Badge variant="outline">{fact.status}</Badge>
-                          </div>
-                          <FactActions fact={fact} variant="compact" />
-                        </div>
-                        <p className="text-sm text-gray-900 dark:text-gray-100 mb-2 leading-relaxed">
-                          {fact.content}
-                        </p>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {fact.supportCount} sources • Importance: {fact.importance} • {fact.source}
-                        </div>
-                      </div>
+                {isLoadingAllFacts ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Skeleton key={i} className="h-24 w-full" />
                     ))}
                   </div>
-                </ScrollArea>
+                ) : (
+                  <ScrollArea className="h-[600px]">
+                    <div className="space-y-3">
+                      {filteredFacts(allFacts)?.length === 0 ? (
+                        <div className="text-center py-10 text-gray-500">
+                          No facts found matching your search.
+                        </div>
+                      ) : (
+                        filteredFacts(allFacts)?.map((fact: MemoryFact) => (
+                          <div
+                            key={fact.id}
+                            className="border border-gray-200 dark:border-gray-700 rounded p-3 bg-white dark:bg-gray-800"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <Badge className={getConfidenceColor(fact.confidence)}>
+                                  {fact.confidence ?? 0}%
+                                </Badge>
+                                <Badge variant="outline">{fact.status}</Badge>
+                              </div>
+                              <FactActions fact={fact} variant="compact" />
+                            </div>
+                            <p className="text-sm text-gray-900 dark:text-gray-100 mb-2 leading-relaxed">
+                              {fact.content}
+                            </p>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {fact.supportCount} sources • Importance: {fact.importance} • {fact.source}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </ScrollArea>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

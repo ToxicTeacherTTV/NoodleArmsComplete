@@ -97,7 +97,7 @@ import {
   type InsertMiscEntity
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, like, ilike, sql, gt } from "drizzle-orm";
+import { eq, desc, and, or, like, ilike, sql, gt, inArray } from "drizzle-orm";
 import { aiFlagger } from "./services/aiFlagger";
 
 export interface IStorage {
@@ -836,7 +836,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getMemoryEntries(profileId: string, limit = 50): Promise<MemoryEntry[]> {
+  async getMemoryEntries(profileId: string, limit = 1000): Promise<MemoryEntry[]> {
     return await db
       .select()
       .from(memoryEntries)
@@ -2078,12 +2078,12 @@ export class DatabaseStorage implements IStorage {
     
     // 🧠 HYBRID RANKING SCORE:
     // 1. Base: Vector Similarity (0.0 - 1.0)
-    // 2. Boost: Importance (1-5) -> gives up to 25% boost
+    // 2. Boost: Importance (1-100) -> gives up to 50% boost
     // 3. Penalty: Retrieval Count -> reduces score for overused facts
-    // Formula: Similarity * (1 + Importance/20) / (1 + RetrievalCount/50)
+    // Formula: Similarity * (1 + Importance/200) / (1 + RetrievalCount/50)
     const rankingScore = sql<number>`
       (1 - (${memoryEntries.embedding} <=> ${JSON.stringify(queryVector)})) 
-      * (1 + (${memoryEntries.importance}::float / 20.0))
+      * (1 + (${memoryEntries.importance}::float / 200.0))
       / (1 + (${memoryEntries.retrievalCount}::float / 50.0))
     `;
     
@@ -2897,7 +2897,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getMemoryWithEntityLinks(profileId: string, limit = 50): Promise<Array<MemoryEntry & {
+  async getMemoryWithEntityLinks(profileId: string, limit = 1000): Promise<Array<MemoryEntry & {
     people?: Person[];
     places?: Place[];
     events?: Event[];
@@ -2918,58 +2918,59 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(memoryEntries.importance), desc(memoryEntries.createdAt))
       .limit(limit);
 
-    // Then, for each memory, get the linked entities
-    const enrichedMemories = await Promise.all(memories.map(async (memory) => {
-      const [peopleLinks, placeLinks, eventLinks, conceptLinks, itemLinks, miscLinks] = await Promise.all([
-        // Get people linked to this memory
-        db.select({ person: people })
-          .from(memoryPeopleLinks)
-          .innerJoin(people, eq(memoryPeopleLinks.personId, people.id))
-          .where(eq(memoryPeopleLinks.memoryId, memory.id)),
+    if (memories.length === 0) return [];
 
-        // Get places linked to this memory
-        db.select({ place: places })
-          .from(memoryPlaceLinks)
-          .innerJoin(places, eq(memoryPlaceLinks.placeId, places.id))
-          .where(eq(memoryPlaceLinks.memoryId, memory.id)),
+    const memoryIds = memories.map(m => m.id);
 
-        // Get events linked to this memory
-        db.select({ event: events })
-          .from(memoryEventLinks)
-          .innerJoin(events, eq(memoryEventLinks.eventId, events.id))
-          .where(eq(memoryEventLinks.memoryId, memory.id)),
+    // 🚀 OPTIMIZED: Fetch all links in bulk (7 queries total instead of 6 * limit)
+    const [peopleLinks, placeLinks, eventLinks, conceptLinks, itemLinks, miscLinks] = await Promise.all([
+      // Get people linked to these memories
+      db.select({ memoryId: memoryPeopleLinks.memoryId, person: people })
+        .from(memoryPeopleLinks)
+        .innerJoin(people, eq(memoryPeopleLinks.personId, people.id))
+        .where(inArray(memoryPeopleLinks.memoryId, memoryIds)),
 
-        // Get concepts linked to this memory
-        db.select({ concept: concepts })
-          .from(memoryConceptLinks)
-          .innerJoin(concepts, eq(memoryConceptLinks.conceptId, concepts.id))
-          .where(eq(memoryConceptLinks.memoryId, memory.id)),
+      // Get places linked to these memories
+      db.select({ memoryId: memoryPlaceLinks.memoryId, place: places })
+        .from(memoryPlaceLinks)
+        .innerJoin(places, eq(memoryPlaceLinks.placeId, places.id))
+        .where(inArray(memoryPlaceLinks.memoryId, memoryIds)),
 
-        // Get items linked to this memory
-        db.select({ item: items })
-          .from(memoryItemLinks)
-          .innerJoin(items, eq(memoryItemLinks.itemId, items.id))
-          .where(eq(memoryItemLinks.memoryId, memory.id)),
+      // Get events linked to these memories
+      db.select({ memoryId: memoryEventLinks.memoryId, event: events })
+        .from(memoryEventLinks)
+        .innerJoin(events, eq(memoryEventLinks.eventId, events.id))
+        .where(inArray(memoryEventLinks.memoryId, memoryIds)),
 
-        // Get misc entities linked to this memory
-        db.select({ misc: miscEntities })
-          .from(memoryMiscLinks)
-          .innerJoin(miscEntities, eq(memoryMiscLinks.miscId, miscEntities.id))
-          .where(eq(memoryMiscLinks.memoryId, memory.id)),
-      ]);
+      // Get concepts linked to these memories
+      db.select({ memoryId: memoryConceptLinks.memoryId, concept: concepts })
+        .from(memoryConceptLinks)
+        .innerJoin(concepts, eq(memoryConceptLinks.conceptId, concepts.id))
+        .where(inArray(memoryConceptLinks.memoryId, memoryIds)),
 
-      return {
-        ...memory,
-        people: peopleLinks.map(link => link.person),
-        places: placeLinks.map(link => link.place),
-        events: eventLinks.map(link => link.event),
-        concepts: conceptLinks.map(link => link.concept),
-        items: itemLinks.map(link => link.item),
-        misc: miscLinks.map(link => link.misc),
-      };
+      // Get items linked to these memories
+      db.select({ memoryId: memoryItemLinks.memoryId, item: items })
+        .from(memoryItemLinks)
+        .innerJoin(items, eq(memoryItemLinks.itemId, items.id))
+        .where(inArray(memoryItemLinks.memoryId, memoryIds)),
+
+      // Get misc entities linked to these memories
+      db.select({ memoryId: memoryMiscLinks.memoryId, misc: miscEntities })
+        .from(memoryMiscLinks)
+        .innerJoin(miscEntities, eq(memoryMiscLinks.miscId, miscEntities.id))
+        .where(inArray(memoryMiscLinks.memoryId, memoryIds)),
+    ]);
+
+    // Map them back to memories
+    return memories.map(memory => ({
+      ...memory,
+      people: peopleLinks.filter(l => l.memoryId === memory.id).map(l => l.person),
+      places: placeLinks.filter(l => l.memoryId === memory.id).map(l => l.place),
+      events: eventLinks.filter(l => l.memoryId === memory.id).map(l => l.event),
+      concepts: conceptLinks.filter(l => l.memoryId === memory.id).map(l => l.concept),
+      items: itemLinks.filter(l => l.memoryId === memory.id).map(l => l.item),
+      misc: miscLinks.filter(l => l.memoryId === memory.id).map(l => l.misc),
     }));
-
-    return enrichedMemories;
   }
 
   // Get memories for specific entities (updated to use junction tables)

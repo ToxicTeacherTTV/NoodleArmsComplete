@@ -46,9 +46,10 @@ Your **PRIMARY GOAL** is to dynamically integrate **audio tags** (e.g., \`[laugh
 ### Positive Imperatives (DO):
 * DO integrate **audio tags** to add expression, emotion, and realism.
 * DO ensure tags are contextually appropriate.
-* DO place tags strategically (before/after segments).
+* DO place tags strategically (before/after segments, and within long sentences to break up monotone delivery).
 * DO ensure the text starts with \`[strong bronx wiseguy accent]\` followed by an initial emotion tag.
 * DO add emphasis by capitalizing words, adding '!', '?', or '...' where it makes sense.
+* DO use non-verbal tags like \`[sighs]\`, \`[chuckles]\`, or \`[short pause]\` to create natural conversational flow.
 
 ### Negative Imperatives (DO NOT):
 * DO NOT alter, add, or remove any words from the original dialogue (except for emphasis).
@@ -59,18 +60,23 @@ Your **PRIMARY GOAL** is to dynamically integrate **audio tags** (e.g., \`[laugh
 ## 3. Audio Tags (Nicky's Voice)
 Use these specific tags for the character:
 * \`[strong bronx wiseguy accent]\` (REQUIRED at start)
-* \`[muttering bitterly]\`, \`[grumbling under breath]\`
-* \`[yelling furiously]\`, \`[screaming]\`, \`[shouting]\`
-* \`[cackling]\`, \`[chuckling darkly]\`, \`[laughing]\`
-* \`[sarcastic]\`, \`[deadpan]\`, \`[dismissive]\`
-* \`[sighs heavily]\`, \`[groans]\`, \`[clears throat]\`
-* \`[voice rising]\`, \`[speaking slowly for emphasis]\`
-* \`[incredulous]\`, \`[appalled]\`, \`[mocking]\`
+* **Emotional Directions**: \`[happy]\`, \`[sad]\`, \`[excited]\`, \`[angry]\`, \`[annoyed]\`, \`[appalled]\`, \`[thoughtful]\`, \`[surprised]\`, \`[sarcastic]\`, \`[deadpan]\`, \`[dismissive]\`, \`[mocking]\`, \`[incredulous]\`
+* **Delivery Directions**: \`[whisper]\`, \`[muttering bitterly]\`, \`[grumbling under breath]\`, \`[yelling furiously]\`, \`[screaming]\`, \`[shouting]\`, \`[voice rising]\`, \`[speaking slowly for emphasis]\`
+* **Non-Verbal Sounds**: \`[laughing]\`, \`[cackling]\`, \`[chuckling darkly]\`, \`[chuckles]\`, \`[sighs]\`, \`[sighs heavily]\`, \`[groans]\`, \`[clears throat]\`, \`[exhales sharply]\`, \`[inhales deeply]\`
+* **Pacing**: \`[short pause]\`, \`[long pause]\`
 
 ## 4. Output Format
 * Present ONLY the enhanced dialogue text.
 * Audio tags MUST be in square brackets.
-* Start with \`[strong bronx wiseguy accent][EMOTION]\`.`;
+* Start with \`[strong bronx wiseguy accent][EMOTION]\`.
+* **CRITICAL**: Use tags frequently (every 1-2 sentences) to ensure the delivery is never monotone. If a sentence is long, insert a tag or a pause in the middle.
+
+## 5. Examples
+**Input**: "Are you serious? I can't believe you did that!"
+**Output**: "[strong bronx wiseguy accent][appalled] Are you serious? [sighs] I can't believe you did that!"
+
+**Input**: "I guess you're right. It's just... difficult."
+**Output**: "[strong bronx wiseguy accent][thoughtful] I guess you're right. [short pause] It's just... [muttering] difficult."`;
 
     try {
       const response = await geminiService.generateResponse(
@@ -512,11 +518,11 @@ Generate tags now:`;
       case 'chat':
       case 'voice_response':
         return {
-          opening: '[grumpy]',
-          rising: '[sighs heavily]',
-          peak: '[furious]',
+          opening: '[annoyed]',
+          rising: '[sighs]',
+          peak: '[angry]',
           falling: '[muttering bitterly]',
-          close: '[grumbling under breath]'
+          close: '[exhales sharply]'
         };
       default:
         return {
@@ -544,9 +550,9 @@ Generate tags now:`;
       case 'chat':
       case 'voice_response':
         return {
-          hook: '[grumbling]',
-          body: '[frustrated muttering]',
-          cta: '[exhausted sighs]'
+          hook: '[annoyed]',
+          body: '[muttering]',
+          cta: '[sighs]'
         };
       case 'announcement':
         return {
@@ -577,25 +583,28 @@ Generate tags now:`;
     }
 
     // Add grumpy tags to complaints (single tag)
-    enhanced = enhanced.replace(/\b(Listen|Look|Alright)\b/gi, (match) => `[grumpy] ${match}`);
+    enhanced = enhanced.replace(/\b(Listen|Look|Alright)\b/gi, (match) => `[annoyed] ${match}`);
     
     // Add exasperated tags to frustration (single tag)
-    enhanced = enhanced.replace(/\b(ridiculous|stupid|idiotic|seriously)\b/gi, (match) => `${match} [exasperated]`);
+    enhanced = enhanced.replace(/\b(ridiculous|stupid|idiotic|seriously)\b/gi, (match) => `${match} [appalled]`);
     
     // Add manic tags to excitement (single tag)
-    enhanced = enhanced.replace(/\b(amazing|incredible|unbelievable|holy)\b/gi, (match) => `[manic] ${match}`);
+    enhanced = enhanced.replace(/\b(amazing|incredible|unbelievable|holy)\b/gi, (match) => `[excited] ${match}`);
     
-    // Add conspiratorial tags to questions (single tag)
+    // Add thoughtful tags to questions (single tag)
     enhanced = enhanced.replace(/(\?)/g, (match, offset, string) => {
       if (string.substring(Math.max(0, offset - 20), offset).includes('think') || 
           string.substring(Math.max(0, offset - 20), offset).includes('know')) {
-        return '? [conspiratorial]';
+        return '? [thoughtful]';
       }
       return match;
     });
     
     // Add sighs to ellipses (non-verbal sounds don't need bronx tag)
-    enhanced = enhanced.replace(/\.\.\./g, '... [sighs]');
+    enhanced = enhanced.replace(/\.\.\./g, '... [sighs] [short pause]');
+    
+    // Add pauses to long sentences
+    enhanced = enhanced.replace(/([,;])\s/g, '$1 [short pause] ');
     
     return enhanced;
   }

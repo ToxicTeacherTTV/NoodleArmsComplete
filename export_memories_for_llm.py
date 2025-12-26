@@ -57,7 +57,7 @@ def export_to_txt():
                 
                 f.write(f"MEMORY #{i}\n")
                 f.write(f"Type: {m_type}\n")
-                f.write(f"Importance: {importance}/5\n")
+                f.write(f"Importance: {importance}/100\n")
                 f.write(f"Confidence: {float(confidence) if confidence else 0.0}\n")
                 f.write(f"Source: {source}\n")
                 f.write(f"Date: {created_at}\n")

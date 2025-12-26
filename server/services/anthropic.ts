@@ -644,12 +644,16 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
       relevance += 0.2;
     }
 
-    // Boost based on memory importance and confidence
-    if (memory.importance >= 4) {
-      relevance += 0.2;
+    // 🎯 IMPROVED: Linear importance and confidence boosting
+    // Instead of binary +0.2, we use a scale. 
+    // Importance 1-100 maps to 0.0-0.25 boost
+    if (memory.importance) {
+      relevance += (memory.importance / 100) * 0.25;
     }
-    if ((memory.confidence || 50) >= 80) {
-      relevance += 0.1;
+    
+    // Confidence 0-100 maps to 0.0-0.1 boost
+    if (memory.confidence) {
+      relevance += (memory.confidence / 100) * 0.1;
     }
 
     // Boost if memory contains multiple keywords
@@ -1793,7 +1797,7 @@ CRITICAL: When extracting facts, INCLUDE SOURCE CONTEXT in the content itself.
 For each story/narrative, provide:
 - content: The COMPLETE story/context WITH SOURCE CONTEXT (1-3 sentences max)
 - type: STORY (incidents/events), LORE (backstory), or CONTEXT (situational background)
-- importance: 1-5 (5 being most important for character understanding)
+- importance: 1-100 (100 being most important for character understanding)
 - keywords: 3-5 relevant keywords for retrieval (INCLUDE game/topic name if relevant)
 
 Return ONLY valid JSON array, no other text:
@@ -1801,7 +1805,7 @@ Return ONLY valid JSON array, no other text:
   {
     "content": "story here",
     "type": "LORE",
-    "importance": 4,
+    "importance": 80,
     "keywords": ["keyword1", "keyword2"]
   }
 ]`;
@@ -1857,7 +1861,7 @@ Extract individual, verifiable claims from this story. Each atomic fact should b
 For each atomic fact:
 - content: The specific atomic claim WITH source context (max 2 sentences)
 - type: "ATOMIC" (always)
-- importance: 1-5 based on how critical this detail is
+- importance: 1-100 based on how critical this detail is (1=Trivial, 50=Standard, 100=Critical)
 - keywords: 3-5 keywords for retrieval (include game/source name if relevant)
 - storyContext: Brief note about which part of the story this relates to
 
@@ -1866,7 +1870,7 @@ Return ONLY valid JSON array, no other text:
   {
     "content": "atomic fact here",
     "type": "ATOMIC",
-    "importance": 3,
+    "importance": 60,
     "keywords": ["keyword1", "keyword2"],
     "storyContext": "context snippet"
   }

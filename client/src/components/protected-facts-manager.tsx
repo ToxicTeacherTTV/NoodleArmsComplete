@@ -59,7 +59,7 @@ export function ProtectedFactsManager() {
   // Edit protected fact mutation
   const editFactMutation = useMutation({
     mutationFn: ({ factId, content }: { factId: string; content: string }) => 
-      apiRequest('PUT', `/api/memory/entries/${factId}`, {
+      apiRequest('PATCH', `/api/memory/entries/${factId}`, {
         content: content.trim(),
         importance: 5,
         keywords: content.toLowerCase().split(' ').filter(w => w.length > 3).slice(0, 4)
@@ -268,7 +268,11 @@ export function ProtectedFactsManager() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => deleteFactMutation.mutate(fact.id)}
+                        onClick={() => {
+                          if (confirm("Are you sure you want to remove this protected fact? This will remove a core personality trait.")) {
+                            deleteFactMutation.mutate(fact.id);
+                          }
+                        }}
                         disabled={deleteFactMutation.isPending}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         data-testid={`button-delete-fact-${fact.id}`}

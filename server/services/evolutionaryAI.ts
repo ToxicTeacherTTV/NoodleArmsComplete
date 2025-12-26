@@ -114,7 +114,7 @@ For each cluster:
 - name: Short, descriptive name
 - description: What this cluster represents
 - factIds: IDs of facts that belong here (from input)
-- importance: 1-10 based on how central this is to Nicky's character
+- importance: 1-100 based on how central this is to Nicky's character
 - concepts: Key concepts/keywords for this cluster
 
 Return JSON array of clusters:
@@ -124,7 +124,7 @@ Return JSON array of clusters:
     "name": "DBD Killer Expertise", 
     "description": "Knowledge about Dead by Daylight killers and strategies",
     "factIds": ["fact-id-1", "fact-id-2"],
-    "importance": 9,
+    "importance": 90,
     "concepts": ["ghostface", "stealth", "killer", "strategy"]
   }
 ]`;

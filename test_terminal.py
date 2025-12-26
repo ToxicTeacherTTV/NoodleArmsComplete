@@ -1,0 +1,4 @@
+print("start")
+import time
+time.sleep(2)
+print("end")

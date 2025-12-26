@@ -296,6 +296,7 @@ class DocumentProcessor {
         type: story.type,
         content: story.content,
         importance: story.importance,
+        confidence: this.calculateInitialConfidence(story.importance, filename),
         keywords: story.keywords,
         source: filename,
         sourceId: documentId,
@@ -323,6 +324,7 @@ class DocumentProcessor {
           type: atomicFact.type,
           content: atomicFact.content,
           importance: atomicFact.importance,
+          confidence: this.calculateInitialConfidence(atomicFact.importance, filename),
           keywords: atomicFact.keywords,
           source: filename,
           sourceId: documentId,
@@ -540,6 +542,7 @@ class DocumentProcessor {
           type: story.type,
           content: story.content,
           importance: story.importance,
+          confidence: this.calculateInitialConfidence(story.importance, filename),
           keywords: story.keywords,
           source: filename,
           sourceId: documentId,
@@ -595,6 +598,7 @@ class DocumentProcessor {
               type: 'ATOMIC',
               content: atomicFact.content,
               importance: atomicFact.importance,
+              confidence: this.calculateInitialConfidence(atomicFact.importance, filename),
               keywords: atomicFact.keywords,
               source: filename,
               sourceId: documentId,
@@ -617,41 +621,6 @@ class DocumentProcessor {
           console.error(`❌ Failed to extract atomic facts from story ${i + 1}:`, error);
           // Continue with other stories
         }
-      }
-
-      // Step 3: Extract atomic facts from stories (40% -> 95%)
-      console.log(`⚛️ Extracting atomic facts from stories...`);
-      totalAtomicFacts = 0;
-
-      for (let i = 0; i < stories.length; i++) {
-        const story = stories[i];
-        const storyContextSnippet = story.content.substring(0, 200);
-        const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(story.content, storyContextSnippet, (modelOverride || 'gemini-3-flash-preview') as AIModel);
-
-        for (const atomicFact of atomicFacts) {
-          const canonicalKey = this.generateCanonicalKey(atomicFact.content);
-          await storage.addMemoryEntry({
-            profileId,
-            type: atomicFact.type,
-            content: atomicFact.content,
-            importance: atomicFact.importance,
-            keywords: atomicFact.keywords,
-            source: filename,
-            sourceId: documentId,
-            canonicalKey,
-            isAtomicFact: true,
-            parentFactId: storyIds[i],
-            storyContext: storyContextSnippet,
-          });
-          totalAtomicFacts++;
-        }
-
-        // Update progress based on stories processed
-        const progress = 40 + Math.floor((i + 1) / stories.length * 55);
-        await storage.updateDocument(documentId, { processingProgress: Math.min(progress, 95) });
-
-        // Small delay between stories
-        await new Promise(resolve => setTimeout(resolve, 200));
       }
 
       console.log(`✅ Extracted ${totalAtomicFacts} atomic facts from ${stories.length} stories`);
@@ -936,16 +905,16 @@ class DocumentProcessor {
     entities: any,
     storyArc: string
   ): number {
-    let importance = 500; // Base
+    let importance = 50; // Base (1-100 scale)
 
     // Complete stories are more important
-    if (storyArc === 'complete') importance += 200;
-    if (storyArc === 'partial') importance += 100;
+    if (storyArc === 'complete') importance += 20;
+    if (storyArc === 'partial') importance += 10;
 
     // More entities = more important
-    importance += entities.people.length * 50;
-    importance += entities.places.length * 30;
-    importance += entities.events.length * 40;
+    importance += entities.people.length * 5;
+    importance += entities.places.length * 3;
+    importance += entities.events.length * 4;
 
     // Emotional content is important for Nicky
     const emotionalWords = [
@@ -955,10 +924,10 @@ class DocumentProcessor {
     const emotionCount = emotionalWords.filter(
       word => chunk.toLowerCase().includes(word)
     ).length;
-    importance += emotionCount * 75;
+    importance += emotionCount * 7;
 
-    // Cap at 999 (reserved for protected facts)
-    return Math.min(importance, 990);
+    // Cap at 95 (reserved for protected facts at 100)
+    return Math.min(importance, 95);
   }
 
   private connectRelatedStories(stories: ExtractedStory[]): ExtractedStory[] {
@@ -1010,22 +979,23 @@ class DocumentProcessor {
   private calculateInitialConfidence(importance: number, filename: string): number {
     let baseConfidence = 50; // Default medium confidence
 
-    // Boost confidence based on importance (1-5 scale from Gemini)
-    const importanceBoost = (importance - 1) * 10; // 0-40 point boost
+    // Boost confidence based on importance (1-100 scale)
+    // High importance facts from documents are usually more reliable
+    const importanceBoost = Math.floor(importance / 5); // 0-20 point boost
 
     // Boost confidence based on source type
     let sourceBoost = 0;
     const lowerFilename = filename.toLowerCase();
 
     if (lowerFilename.includes('official') || lowerFilename.includes('doc')) {
-      sourceBoost = 15; // Official documentation
+      sourceBoost = 20; // Official documentation
     } else if (lowerFilename.includes('note') || lowerFilename.includes('fact')) {
-      sourceBoost = 10; // Personal notes/facts
+      sourceBoost = 15; // Personal notes/facts
     } else if (lowerFilename.includes('chat') || lowerFilename.includes('log')) {
       sourceBoost = 5;  // Chat logs or conversation logs
     }
 
-    const confidence = Math.min(90, baseConfidence + importanceBoost + sourceBoost);
+    const confidence = Math.min(95, baseConfidence + importanceBoost + sourceBoost);
     return Math.max(30, confidence); // Minimum 30% confidence
   }
 }

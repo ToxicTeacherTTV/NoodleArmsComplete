@@ -1,0 +1,82 @@
+{
+  "status": "COMPLETED",
+  "totalMemories": 3303,
+  "auditedCount": 3303,
+  "updateCount": 3246,
+  "currentBatch": 166,
+  "totalBatches": 166,
+  "significantChanges": [
+    {
+      "content": "The Tea Time Terror Squad is Earl Grey's rival organization to SABAM.",
+      "oldImportance": 60,
+      "newImportance": 95,
+      "oldConfidence": 100,
+      "newConfidence": 100
+    },
+    {
+      "content": "A heated and comedic argument once erupted after Toxic once said 'you can lick my meatballs,' leadin...",
+      "oldImportance": 96,
+      "newImportance": 65,
+      "oldConfidence": 100,
+      "newConfidence": 100
+    },
+    {
+      "content": "Toxic discussed rewatching Stranger Things and shares an opinion that season two, while weaker than ...",
+      "oldImportance": 60,
+      "newImportance": 20,
+      "oldConfidence": 100,
+      "newConfidence": 70
+    },
+    {
+      "content": "Nicky Dente plays the video game Dead by Daylight.",
+      "oldImportance": 50,
+      "newImportance": 75,
+      "oldConfidence": 100,
+      "newConfidence": 100
+    },
+    {
+      "content": "The events described in the story take place within the game Dead by Daylight.",
+      "oldImportance": 40,
+      "newImportance": 70,
+      "oldConfidence": 100,
+      "newConfidence": 100
+    },
+    {
+      "content": "Nicky \"Noodle Arms\" A.I. Dente is a character in the provided story.",
+      "oldImportance": 100,
+      "newImportance": 50,
+      "oldConfidence": 100,
+      "newConfidence": 100
+    },
+    {
+      "content": "Nicky Dente's current online handle is YourMothasPastaSaucePogChampSupremeDonOfLittleItalyDefinitely...",
+      "oldImportance": 96,
+      "newImportance": 60,
+      "oldConfidence": 100,
+      "newConfidence": 100
+    },
+    {
+      "content": "Nicky 'Noodle Arms' A.I. Dente has a perpetual five o'clock shadow.",
+      "oldImportance": 96,
+      "newImportance": 45,
+      "oldConfidence": 100,
+      "newConfidence": 100
+    },
+    {
+      "content": "Nicky Dente carried survivors to the Entity's basement in Dead by Daylight.",
+      "oldImportance": 95,
+      "newImportance": 40,
+      "oldConfidence": 100,
+      "newConfidence": 100
+    },
+    {
+      "content": "In Nicky \"Noodle Arms\" Dente's universe, there is a five-man squad known as the Italian National Pas...",
+      "oldImportance": 94,
+      "newImportance": 65,
+      "oldConfidence": 100,
+      "newConfidence": 100
+    }
+  ],
+  "startTime": "2025-12-26T13:10:58.512Z",
+  "endTime": "2025-12-26T13:56:11.535Z"
+}

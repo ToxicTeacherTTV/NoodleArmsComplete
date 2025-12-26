@@ -36,6 +36,7 @@ import { documentDuplicateDetector } from "./services/documentDuplicateDetector"
 import { embeddingService } from "./services/embeddingService";
 import { eventTimelineAuditor } from "./services/eventTimelineAuditor";
 import { importancePropagator } from "./services/importancePropagator";
+import { personalityAuditor } from "./services/personalityAuditor";
 
 type DuplicateScanGroupSummary = {
   masterId: string;
@@ -2133,6 +2134,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Importance propagation failed:', error);
       res.status(500).json({ error: 'Failed to propagate importance' });
+    }
+  });
+
+  // 🧠 NEW: Personality Psyche Generation
+  app.post('/api/personality/psyche', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const psyche = await personalityAuditor.generatePsyche(activeProfile.id);
+      res.json({ success: true, psyche });
+    } catch (error) {
+      console.error('Psyche generation failed:', error);
+      res.status(500).json({ error: 'Failed to generate psyche profile' });
+    }
+  });
+
+  // ⚖️ NEW: Personality Audit
+  app.post('/api/personality/audit', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(400).json({ error: 'No active profile found' });
+      }
+
+      const { psyche } = req.body;
+      if (!psyche) {
+        return res.status(400).json({ error: 'Psyche profile is required for audit' });
+      }
+
+      // Run audit in background
+      personalityAuditor.auditMemories(activeProfile.id, psyche)
+        .then(result => console.log(`✅ Background audit complete: ${result.updates} updates`))
+        .catch(err => console.error(`❌ Background audit failed:`, err));
+
+      res.json({ 
+        success: true, 
+        message: 'Personality audit started in the background. This may take several minutes for large memory banks.' 
+      });
+    } catch (error) {
+      console.error('Personality audit failed:', error);
+      res.status(500).json({ error: 'Failed to start personality audit' });
+    }
+  });
+
+  // 📊 NEW: Get Personality Audit Progress
+  app.get('/api/personality/audit/progress', async (req, res) => {
+    try {
+      const progress = await personalityAuditor.getProgress();
+      res.json(progress);
+    } catch (error) {
+      console.error('Failed to fetch audit progress:', error);
+      res.status(500).json({ error: 'Failed to fetch audit progress' });
+    }
+  });
+
+  // 📊 NEW: Clear Personality Audit Progress
+  app.post('/api/personality/audit/clear', async (req, res) => {
+    try {
+      await personalityAuditor.clearProgress();
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to clear audit progress:', error);
+      res.status(500).json({ error: 'Failed to clear audit progress' });
     }
   });
 
