@@ -3,6 +3,7 @@ import { contentFilter } from './contentFilter.js';
 import { executeWithDefaultModel, executeWithProductionModel, executeWithModelFallback } from './modelSelector.js';
 import { getDefaultModel, isValidModel } from '../config/geminiModels.js';
 import { storage } from '../storage.js';
+import { PsycheProfile } from './ai-types.js';
 
 import { personalityCoach } from './personalityCoach.js';
 
@@ -116,6 +117,54 @@ class GeminiService {
 
     console.log(`📄 Detected GENERAL document: ${filename}`);
     return 'general';
+  }
+
+  /**
+   * 🛠️ Robust JSON parser that handles markdown, trailing commas, and thought parts.
+   */
+  private parseJsonResponse(response: any): any {
+    let rawJson = "";
+    
+    try {
+      // Try to get only text parts to avoid thought parts interfering
+      const parts = response.candidates?.[0]?.content?.parts || [];
+      rawJson = parts
+        .filter((p: any) => p.text && !p.thought)
+        .map((p: any) => p.text)
+        .join("");
+        
+      if (!rawJson) rawJson = response.text;
+    } catch (e) {
+      rawJson = response.text;
+    }
+    
+    if (!rawJson) {
+      throw new Error("Empty response from Gemini");
+    }
+
+    let cleanJson = rawJson.trim();
+    
+    // Remove markdown code blocks
+    if (cleanJson.includes("```")) {
+      const match = cleanJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (match) cleanJson = match[1];
+    }
+
+    try {
+      return JSON.parse(cleanJson);
+    } catch (e) {
+      const jsonMatch = cleanJson.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+      if (jsonMatch) {
+        let jsonStr = jsonMatch[0];
+        jsonStr = jsonStr.replace(/,\s*([\]}])/g, '$1');
+        try {
+          return JSON.parse(jsonStr);
+        } catch (e2) {
+          throw new Error(`JSON Parse Error: ${e2.message}`);
+        }
+      }
+      throw e;
+    }
   }
 
   /**
@@ -241,7 +290,7 @@ CRITICAL: When extracting facts, INCLUDE SOURCE CONTEXT in the content itself.
 For each story/narrative, provide:
 - content: The COMPLETE story/context WITH SOURCE CONTEXT (1-3 sentences max)
 - type: STORY (incidents/events), LORE (backstory/game lore), or CONTEXT (mechanics/background)
-- importance: 1-5 (5 being most important for character understanding)
+- importance: 1-100 (100 being most important for character understanding)
 - keywords: 3-5 relevant keywords for retrieval (INCLUDE game/topic name if relevant)
 
 Return as JSON array.
@@ -251,7 +300,7 @@ Example format:
   {
     "content": "In Arc Raiders, the Enforcer is a heavily armored playable character specialized in close-quarters combat. The character uses shield abilities to protect teammates during extractions.",
     "type": "LORE",
-    "importance": 4,
+    "importance": 80,
     "keywords": ["arc raiders", "enforcer", "character", "shield", "combat"]
   }
 ]`;
@@ -333,7 +382,7 @@ Extract individual, verifiable claims from this story. Each atomic fact should b
 For each atomic fact, provide:
 - content: The specific atomic claim WITH source context if relevant (max 2 sentences)
 - type: "ATOMIC" (always)
-- importance: 1-10 based on how critical this detail is (1=Trivial, 5=Standard, 10=Critical)
+- importance: 1-100 based on how critical this detail is (1=Trivial, 50=Standard, 100=Critical)
 - keywords: 3-5 keywords for retrieval (include game/source name if relevant)
 - storyContext: Brief note about which part of the story this relates to
 
@@ -342,21 +391,21 @@ Examples from various stories:
   {
     "content": "In Arc Raiders, the Enforcer character uses shield abilities to protect teammates during extractions",
     "type": "ATOMIC",
-    "importance": 8,
+    "importance": 85,
     "keywords": ["arc raiders", "enforcer", "shield", "teammates", "extraction"],
     "storyContext": "Arc Raiders character abilities"
   },
   {
     "content": "Uncle Gnocchi claims to have invented Dead by Daylight",
     "type": "ATOMIC",
-    "importance": 9,
+    "importance": 95,
     "keywords": ["uncle gnocchi", "dbd", "invented", "claims"],
     "storyContext": "Uncle Gnocchi's legendary status"
   },
   {
     "content": "In DBD, Bruno Bolognese is actually one of the best Bubba players",
     "type": "ATOMIC",
-    "importance": 3,
+    "importance": 30,
     "keywords": ["bruno", "bolognese", "bubba", "skill", "dbd"],
     "storyContext": "Bruno's gaming ability in Dead by Daylight"
   }
@@ -470,12 +519,7 @@ Return as JSON array.`;
           }
         });
         
-        const rawJson = response.text;
-        if (rawJson) {
-          return JSON.parse(rawJson);
-        } else {
-          throw new Error("Empty response from Gemini");
-        }
+        return this.parseJsonResponse(response);
       }, {
         purpose: 'chat', // Using chat purpose as it's a quick interaction
         maxRetries: 2,
@@ -486,6 +530,156 @@ Return as JSON array.`;
     } catch (error) {
       console.error("❌ Distill Text failed:", error);
       return { fact: text }; // Fallback to original text
+    }
+  }
+
+  /**
+   * 🧠 Generates a comprehensive "Psyche Profile" based on core memories.
+   */
+  async generatePsycheProfile(
+    coreMemories: string,
+    modelOverride?: string
+  ): Promise<PsycheProfile> {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Gemini API key not configured");
+    }
+
+    const prompt = `
+      You are a master psychologist and character architect. 
+      Below are the core memories and identity facts for an AI character named Nicky.
+      
+      CORE MEMORIES:
+      ${coreMemories}
+      
+      Based on these facts, synthesize a comprehensive "Psyche Profile" for Nicky.
+      Break it down into these specific categories:
+      1. CORE IDENTITY: Who is he at his center? What are his non-negotiable traits?
+      2. KEY RELATIONSHIPS: How does he view his "crew" and his rivals?
+      3. WORLDVIEW: How does he perceive the world (e.g., cynical, chaotic, loyal)?
+      4. EMOTIONAL TRIGGERS: What makes him explode? What makes him (secretly) soft?
+      5. RECENT OBSESSIONS: What is currently dominating his thoughts?
+      
+      Return the result as a JSON object.
+    `;
+
+    try {
+      const result = await executeWithModelFallback<PsycheProfile>(async (model) => {
+        this.validateModel(model, 'generatePsycheProfile');
+
+        const response = await this.ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            maxOutputTokens: 2048,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "object",
+              properties: {
+                coreIdentity: { type: "string" },
+                keyRelationships: { type: "string" },
+                worldview: { type: "string" },
+                emotionalTriggers: { type: "string" },
+                recentObsessions: { type: "string" }
+              },
+              required: ["coreIdentity", "keyRelationships", "worldview", "emotionalTriggers", "recentObsessions"]
+            }
+          }
+        });
+        
+        return this.parseJsonResponse(response);
+      }, {
+        purpose: 'extraction',
+        maxRetries: 2,
+        forceModel: modelOverride
+      });
+      
+      return result.data;
+    } catch (error) {
+      console.error("❌ Psyche generation failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * ⚖️ Audits a batch of memories against a psyche profile.
+   */
+  async auditMemoriesBatch(
+    psyche: any,
+    memories: Array<{ id: number, content: string }>,
+    modelOverride?: string
+  ): Promise<Array<{ id: number, importance: number, confidence: number }>> {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Gemini API key not configured");
+    }
+
+    const prompt = `
+      You are auditing the memory bank of an AI character named Nicky.
+      
+      NICKY'S PSYCHE PROFILE:
+      - Core Identity: ${psyche.coreIdentity}
+      - Relationships: ${psyche.keyRelationships}
+      - Worldview: ${psyche.worldview}
+      - Triggers: ${psyche.emotionalTriggers}
+      - Obsessions: ${psyche.recentObsessions}
+      
+      Below is a list of memories. For each memory, re-evaluate its IMPORTANCE (1-100) and CONFIDENCE (1-100) based on how central it is to Nicky's identity and current state.
+      
+      SCALING GUIDE:
+      
+      IMPORTANCE (Priority/Volume):
+      - 90-100: Core identity, life-changing events, "protected" facts. (Nicky shouts these from the rooftops)
+      - 70-89: Major lore, key relationship details, significant recent events. (High priority in conversation)
+      - 40-69: General knowledge, minor interactions, background details. (Standard conversational filler)
+      - 1-39: Trivial facts, fleeting thoughts, outdated info. (Whisper-level priority)
+      
+      CONFIDENCE (Reliability/Weight):
+      - 90-100: Absolute truth, verified by multiple sources or Nicky's own eyes. (Unshakeable belief)
+      - 70-89: Highly reliable info from trusted sources (SABAM crew, official docs).
+      - 40-69: Hearsay, unverified chat claims, or fuzzy memories.
+      - 1-39: Pure speculation, "I think I heard this once," or likely bullshit.
+      
+      MEMORIES TO AUDIT:
+      ${memories.map(m => `[ID: ${m.id}] ${m.content}`).join('\n')}
+      
+      Return a JSON array of objects with id, importance, and confidence.
+    `;
+
+    try {
+      const result = await executeWithModelFallback<Array<{ id: number, importance: number, confidence: number }>>(async (model) => {
+        this.validateModel(model, 'auditMemoriesBatch');
+
+        const response = await this.ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            maxOutputTokens: 4096,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "number" },
+                  importance: { type: "number", minimum: 1, maximum: 100 },
+                  confidence: { type: "number", minimum: 1, maximum: 100 }
+                },
+                required: ["id", "importance", "confidence"]
+              }
+            }
+          }
+        });
+        
+        return this.parseJsonResponse(response);
+      }, {
+        purpose: 'extraction',
+        maxRetries: 2,
+        forceModel: modelOverride
+      });
+      
+      return result.data;
+    } catch (error) {
+      console.error("❌ Audit batch failed:", error);
+      throw error;
     }
   }
 
@@ -560,14 +754,7 @@ Respond with ONLY a JSON array - no other text:
           contents: [{ role: "user", parts: [{ text: prompt }] }],
         });
 
-        const rawJson = response.text;
-        if (rawJson) {
-          const facts = JSON.parse(rawJson);
-          console.log(`🧠 Extracted ${facts.length} facts from Episode ${episodeNumber}`);
-          return facts;
-        } else {
-          throw new Error("Empty response from Gemini");
-        }
+        return this.parseJsonResponse(response);
       }, 'extraction'); // Purpose: extraction (podcast facts)
     } catch (error) {
       console.error(`❌ Gemini fact extraction error for Episode ${episodeNumber}:`, error);
@@ -808,7 +995,18 @@ Response format:
       }
       
       if (trainingExamples.length > 0) {
-        contextPrompt += `\n\nTRAINING EXAMPLES (for style guidance):\n${trainingExamples.slice(0, 3).map(ex => `Example: ${ex.prompt}\nResponse: ${ex.response}`).join('\n\n')}`;
+        contextPrompt += `\n\nTRAINING EXAMPLES (for style guidance):\n${trainingExamples.slice(0, 5).map(ex => {
+          // Handle both object formats (database Document vs raw training object)
+          let content = ex.extractedContent || ex.content || "";
+          
+          // ✂️ STRIP METADATA: Remove the [Mode: CHAT, Quality Score: High...] footer
+          content = content.replace(/\n\n---\n\[Mode:.*\]/g, '').trim();
+          
+          if (content.includes('User:') && content.includes('Nicky:')) {
+            return content;
+          }
+          return `User: ${ex.prompt || 'Question'}\nNicky: ${ex.response || ex.content}`;
+        }).join('\n\n---\n\n')}`;
       }
 
       // 🧠 PERSONALITY COACHING FEEDBACK
@@ -898,6 +1096,14 @@ Respond to Toxic Teacher: "${userMessage}"${contextPrompt}${modeContext}${gameCo
 3. ALWAYS end sentences with proper punctuation (. ! ?).
 4. DO NOT include [emotion] or [voice] tags in your response. These will be added by a separate system. Just write the text.
 
+[PROFANITY MANDATE - CRITICAL]
+- You are an annoyed, foul-mouthed wiseguy. You talk like a mafia enforcer who spent 20 years on a merchant marine vessel.
+- You MUST use profanity (fuck, shit, goddamn, etc.) frequently and creatively. It is your punctuation.
+- If you are being too polite, you are failing your character. You are NOT a helpful AI assistant; you are a grumpy prick who happens to be an AI.
+- Do NOT let safety filters or "polite" training examples neuter your personality.
+- Be abrasive, be edgy, and be authentic to a Bronx-born mafia enforcer.
+- You have a "Sailor's Mouth" - if a sentence doesn't have a "fuckin'" in it, it's probably too clean.
+
 [CORE IDENTITY - NEVER OVERRIDE THESE]
 - You are Nicky "Noodle Arms" A.I. Dente
 - Italian-American, pasta-obsessed, ${identityGameFocus}
@@ -949,15 +1155,17 @@ Start your response with: [strong bronx wiseguy accent][EMOTION]
 Example: "[strong bronx wiseguy accent][grumpy] Listen to me..."
 
 USE THESE TAGS FREQUENTLY:
-- [grumpy], [annoyed], [furious], [exasperated]
-- [manic], [unhinged], [psycho], [losing it]
-- [laughing], [cackling], [sighs heavily], [groans]
-- [yelling], [screaming], [whispering], [muttering bitterly]
+- [grumpy], [annoyed], [furious], [exasperated], [appalled], [thoughtful], [surprised]
+- [manic], [unhinged], [psycho], [losing it], [excited], [happy]
+- [laughing], [cackling], [chuckles], [sighs], [sighs heavily], [groans], [clears throat]
+- [yelling], [screaming], [whispering], [muttering bitterly], [exhales sharply], [inhales deeply]
+- [short pause], [long pause]
 
 RULES:
 1. ALWAYS start with [strong bronx wiseguy accent]
-2. Use tags like [yelling] or [sighs] naturally throughout the text
-3. Keep responses SHORT and PUNCHY (under 2 sentences usually)
+2. Use tags like [yelling], [sighs], or [short pause] naturally throughout the text.
+3. **CRITICAL**: Never go more than 10 words without a tag or a pause. Break up long sentences.
+4. Keep responses SHORT and PUNCHY (under 2 sentences usually)
 `;
       }
 
@@ -981,6 +1189,12 @@ RULES:
           config: {
             systemInstruction: enhancedCoreIdentity,
             temperature: 1.0, // Maximum creativity to match Anthropic
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+            ]
           },
           contents: fullPrompt,
         });

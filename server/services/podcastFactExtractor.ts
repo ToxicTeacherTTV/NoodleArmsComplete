@@ -39,7 +39,7 @@ Return a JSON object with a "facts" array. Each fact should have:
 - content: The fact statement (e.g., "Nicky thinks The Trapper is the worst killer in DBD")
 - type: One of ['OPINION', 'LORE', 'PREFERENCE', 'RELATIONSHIP', 'STORY']
 - keywords: Array of 3-5 search keywords
-- importance: 1-10 scale (10 = critical lore, 1 = trivial)
+- importance: 1-100 scale (100 = critical lore, 1 = trivial)
 
 JSON FORMAT:
 {
@@ -48,7 +48,7 @@ JSON FORMAT:
       "content": "Nicky hates playing against The Skull Merchant",
       "type": "PREFERENCE",
       "keywords": ["skull merchant", "dbd", "killer", "hate"],
-      "importance": 8
+      "importance": 85
     }
   ]
 }`;

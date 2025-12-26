@@ -195,7 +195,12 @@ export class QuerySignalExtractor {
   /**
    * Classify the type of question being asked
    */
-  private classifyQuestionType(queryLower: string): QuerySignals['questionType'] {
+  private classifyQuestionType(queryLower: string): QuerySignals['questionType'] | 'conversational' {
+    // Conversational / Greeting patterns
+    if (/^(hi|hello|hey|yo|howdy|sup|greetings|how's it going|how are you|what's up|whats up|how ya doin|how you doin)/.test(queryLower)) {
+      return 'conversational';
+    }
+
     if (/\b(what is|who is|when did|where is|how many|define|explain)\b/.test(queryLower)) {
       return 'factual';
     }
@@ -219,6 +224,12 @@ export class QuerySignalExtractor {
    * Determine if query is information-seeking
    */
   private isInformationSeekingQuery(queryLower: string): boolean {
+    // Skip common greetings and conversational filler
+    const greetings = ['how\'s it going', 'how are you', 'what\'s up', 'whats up', 'how ya doin', 'how you doin'];
+    if (greetings.some(g => queryLower.includes(g))) {
+      return false;
+    }
+
     const questionWords = ['what', 'who', 'when', 'where', 'why', 'how', 'which'];
     const seekingPhrases = ['tell me', 'explain', 'describe', 'show me', 'i want to know'];
     

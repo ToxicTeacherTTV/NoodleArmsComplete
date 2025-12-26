@@ -48,6 +48,14 @@ export interface DiscordMemberFactResult {
     category: string;
 }
 
+export interface PsycheProfile {
+    coreIdentity: string;
+    keyRelationships: string;
+    worldview: string;
+    emotionalTriggers: string;
+    recentObsessions: string;
+}
+
 export interface OptimizedMemory {
     type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
     content: string;

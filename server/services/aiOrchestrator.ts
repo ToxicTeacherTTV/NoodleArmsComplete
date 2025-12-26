@@ -7,7 +7,8 @@ import {
     PodcastFactResult,
     DiscordMemberFactResult,
     OptimizedMemory,
-    ConsolidatedMemory
+    ConsolidatedMemory,
+    PsycheProfile
 } from './ai-types.js';
 import { AIModel } from '@shared/modelSelection.js';
 
@@ -85,6 +86,27 @@ export class AIOrchestrator {
     ): Promise<{ fact: string }> {
         // For now, only Gemini implements this specific distillation
         return geminiService.distillTextToFact(text, selectedModel);
+    }
+
+    /**
+     * 🧠 Generate a psyche profile from core memories
+     */
+    async generatePsycheProfile(
+        coreMemories: string,
+        selectedModel: AIModel = 'gemini-3-flash-preview'
+    ): Promise<PsycheProfile> {
+        return geminiService.generatePsycheProfile(coreMemories, selectedModel);
+    }
+
+    /**
+     * ⚖️ Audit a batch of memories against a psyche profile
+     */
+    async auditMemoriesBatch(
+        psyche: any,
+        memories: Array<{ id: number, content: string }>,
+        selectedModel: AIModel = 'gemini-3-flash-preview'
+    ): Promise<Array<{ id: number, importance: number, confidence: number }>> {
+        return geminiService.auditMemoriesBatch(psyche, memories, selectedModel);
     }
 
     /**

@@ -13,7 +13,7 @@ Last Updated: November 23, 2025
 - **When:** Uploading large documents (>100KB)
 - **Impact:** Wastes tokens, blocks processing queue
 - **Notes:** Switched to Gemini 2.5 Flash (Nov 23). **Nov 28 Update:** Implemented parallel batch processing (3 chunks at a time) and reduced chunk size (100k -> 50k chars) to prevent timeouts. Added per-chunk error handling.
-- **Priority:** MONITORING - Fix deployed, need to verify with large upload.
+- **Priority:** ✅ FIXED - Parallel batching and reduced chunk size implemented. Monitoring for any edge cases.
 
 ---
 
@@ -26,7 +26,7 @@ Last Updated: November 23, 2025
 ## 💡 Nice-to-Haves
 
 ### Need option to review proposed dupe changes
-- need a way that when i click "edit and merge" when looking at memory deduplication, that it will first list the original and the dupe in the same box that i can edit as i see fit, then click approve, then it goes through. alternatively, if i do a "quick merge", i'd like to see the proposed merge along with all facts, and have the ability to edit the proposed AI merge.
+- **Status:** ✅ FIXED - Implemented in Intelligence Dashboard. Users can now review and edit proposed merges before they are finalized.
 
 ---
 

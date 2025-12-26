@@ -34,11 +34,15 @@ export default function MemoryPanel({
   const [searchTerm, setSearchTerm] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [importanceRange, setImportanceRange] = useState<[number, number]>([0, 5]);
+  const [importanceRange, setImportanceRange] = useState<[number, number]>([0, 100]);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedMemories, setSelectedMemories] = useState<Set<string>>(new Set());
   const [batchImportance, setBatchImportance] = useState<number>(3);
   const [batchType, setBatchType] = useState<string>('FACT');
+  const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState<string>("");
+  const [editingImportance, setEditingImportance] = useState<number>(1);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const { data: memoryEntries, isLoading } = useQuery({
     queryKey: ['/api/memory/entries', { limit: 10000 }],
@@ -160,6 +164,47 @@ export default function MemoryPanel({
       toast({
         title: "Error",
         description: "Failed to update type",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update single memory content mutation
+  const updateMemoryContentMutation = useMutation({
+    mutationFn: async ({ id, content, importance }: { id: string; content: string; importance: number }) => {
+      return await apiRequest('PATCH', `/api/memory/entries/${id}`, { content, importance });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
+      setEditingMemoryId(null);
+      setEditingContent("");
+      setEditingImportance(1);
+      toast({
+        title: "Memory Updated",
+        description: "The memory content and importance have been updated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update memory content",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Quick update mutation for importance/confidence
+  const quickUpdateMutation = useMutation({
+    mutationFn: async ({ id, importance, confidence }: { id: string; importance?: number; confidence?: number }) => {
+      return await apiRequest('PATCH', `/api/memory/entries/${id}`, { importance, confidence });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update memory",
         variant: "destructive",
       });
     },
@@ -360,7 +405,7 @@ export default function MemoryPanel({
   const activeFilterCount = 
     (sourceFilter !== "all" ? 1 : 0) +
     (categoryFilter !== "all" ? 1 : 0) +
-    (importanceRange[0] !== 0 || importanceRange[1] !== 5 ? 1 : 0);
+    (importanceRange[0] !== 0 || importanceRange[1] !== 100 ? 1 : 0);
 
   return (
     <div className="flex-1 p-4 space-y-4">
@@ -608,14 +653,14 @@ export default function MemoryPanel({
                 value={importanceRange}
                 onValueChange={(value) => setImportanceRange(value as [number, number])}
                 min={0}
-                max={5}
+                max={100}
                 step={1}
                 className="w-full"
                 data-testid="slider-importance-range"
               />
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Low (0)</span>
-                <span>High (5)</span>
+                <span>High (100)</span>
               </div>
             </div>
 
@@ -627,7 +672,7 @@ export default function MemoryPanel({
                 onClick={() => {
                   setSourceFilter("all");
                   setCategoryFilter("all");
-                  setImportanceRange([0, 5]);
+                  setImportanceRange([0, 100]);
                 }}
                 className="w-full"
                 data-testid="button-clear-filters"
@@ -783,10 +828,148 @@ export default function MemoryPanel({
                       </div>
                     </div>
                     <Badge variant="outline" className="text-xs">
-                      Importance: {memory.importance}/5
+                      Imp: {memory.importance} | Conf: {memory.confidence || 50}
                     </Badge>
+                    {editingMemoryId !== memory.id && (
+                      <div className="flex items-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 ml-1"
+                          onClick={() => {
+                            setEditingMemoryId(memory.id);
+                            setEditingContent(memory.content);                              setEditingImportance(memory.importance || 1);                          }}
+                          data-testid={`button-edit-memory-${memory.id}`}
+                        >
+                          <i className="fas fa-edit text-xs opacity-50 hover:opacity-100"></i>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 ml-1 text-destructive"
+                          onClick={() => {
+                            if (confirm("Delete this memory?")) {
+                              batchDeleteMutation.mutate([memory.id]);
+                            }
+                          }}
+                          data-testid={`button-delete-memory-${memory.id}`}
+                        >
+                          <i className="fas fa-trash text-xs opacity-50 hover:opacity-100"></i>
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <div className="text-sm text-foreground mb-2">{memory.content}</div>
+                  
+                  {editingMemoryId === memory.id ? (
+                    <div className="space-y-3 mt-2">
+                      <Textarea
+                        value={editingContent}
+                        onChange={(e) => setEditingContent(e.target.value)}
+                        className="text-sm min-h-[80px] bg-background"
+                        autoFocus
+                        data-testid={`textarea-edit-memory-${memory.id}`}
+                      />
+                      
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Importance</Label>
+                          <span className="text-xs font-mono font-bold text-primary">{editingImportance}</span>
+                        </div>
+                        <Slider
+                          value={[editingImportance]}
+                          min={1}
+                          max={100}
+                          step={1}
+                          onValueChange={(vals) => setEditingImportance(vals[0])}
+                          className="py-2"
+                        />
+                        <p className="text-[10px] text-muted-foreground italic">
+                          {editingImportance >= 80 ? "⚓ Anchor Memory (High Influence)" : 
+                           editingImportance >= 50 ? "Significant Memory" : 
+                           "Standard Memory"}
+                        </p>
+                      </div>
+
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingMemoryId(null);
+                            setEditingContent("");
+                            setEditingImportance(1);
+                          }}
+                          className="h-7 text-xs"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => updateMemoryContentMutation.mutate({ 
+                            id: memory.id, 
+                            content: editingContent,
+                            importance: editingImportance
+                          })}
+                          disabled={updateMemoryContentMutation.isPending || !editingContent.trim() || (editingContent === memory.content && editingImportance === memory.importance)}
+                          className="h-7 text-xs"
+                        >
+                          {updateMemoryContentMutation.isPending ? (
+                            <RefreshCw className="h-3 w-3 animate-spin mr-1" />
+                          ) : (
+                            <i className="fas fa-check mr-1"></i>
+                          )}
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-sm text-foreground mb-2">{memory.content}</div>
+                      
+                      {/* Quick Action Buttons */}
+                      <div className="flex flex-col gap-1.5 mt-2 mb-3 border-t border-border/30 pt-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] uppercase font-bold text-muted-foreground w-12">Imp:</span>
+                          <div className="flex gap-1">
+                            {[25, 50, 75, 85, 95, 100].map(val => (
+                              <button
+                                key={val}
+                                onClick={() => quickUpdateMutation.mutate({ id: memory.id, importance: val })}
+                                disabled={quickUpdateMutation.isPending}
+                                className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                                  memory.importance === val 
+                                    ? 'bg-primary text-primary-foreground border-primary' 
+                                    : 'bg-background/50 hover:bg-muted border-border/50'
+                                }`}
+                              >
+                                {val}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] uppercase font-bold text-muted-foreground w-12">Conf:</span>
+                          <div className="flex gap-1">
+                            {[25, 50, 75, 85, 95, 100].map(val => (
+                              <button
+                                key={val}
+                                onClick={() => quickUpdateMutation.mutate({ id: memory.id, confidence: val })}
+                                disabled={quickUpdateMutation.isPending}
+                                className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                                  (memory.confidence || 50) === val 
+                                    ? 'bg-accent text-accent-foreground border-accent' 
+                                    : 'bg-background/50 hover:bg-muted border-border/50'
+                                }`}
+                              >
+                                {val}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
                   {memory.keywords && memory.keywords.length > 0 && (
                     <div className="flex gap-1 mb-2 flex-wrap">
                       {memory.keywords.slice(0, 5).map((keyword, idx) => (

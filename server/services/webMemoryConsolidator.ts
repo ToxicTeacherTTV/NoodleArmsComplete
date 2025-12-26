@@ -149,12 +149,58 @@ class WebMemoryConsolidator {
       'dlc', 'ptb', 'dead by daylight', 'dbd'
     ];
 
+    // 🛑 AMBIGUITY & TRASH FILTERS
+    // 1. Nicky vs Nicki (Minaj) filter
+    if (queryLower.includes('nicky') && !queryLower.includes('nicki')) {
+      if (title.includes('minaj') || snippet.includes('minaj') || 
+          title.includes('rapper') || snippet.includes('rapper') ||
+          title.includes('nicki') || snippet.includes('nicki')) {
+        return {
+          shouldStore: false,
+          memoryType: 'GENERAL',
+          importance: 1,
+          reasoning: 'Ambiguous result (Nicki Minaj/Rapper) detected for "Nicky" query'
+        };
+      }
+    }
+
+    // 2. Generic "Nicky" results that aren't about the character
+    if (queryLower === 'nicky' || queryLower === 'who is nicky') {
+      const characterKeywords = ['noodle arms', 'dente', 'wiseguy', 'mafia', 'pasta', 'dbd', 'dead by daylight'];
+      const isAboutCharacter = characterKeywords.some(k => title.includes(k) || snippet.includes(k));
+      
+      if (!isAboutCharacter) {
+        return {
+          shouldStore: false,
+          memoryType: 'GENERAL',
+          importance: 1,
+          reasoning: 'Generic "Nicky" result without character-specific context'
+        };
+      }
+    }
+
+    // 3. Ad/Commercial filter
+    if (title.includes('shop') || title.includes('buy') || title.includes('price') || 
+        snippet.includes('free shipping') || snippet.includes('add to cart')) {
+      return {
+        shouldStore: false,
+        memoryType: 'GENERAL',
+        importance: 1,
+        reasoning: 'Commercial/Shopping result detected'
+      };
+    }
+
     // Check for factual content
-    if (factualKeywords.some(keyword => queryLower.includes(keyword) || title.includes(keyword))) {
+    // Only store if the RESULT title/snippet contains factual indicators, 
+    // or if the query was factual AND the result is highly relevant.
+    const resultHasFactualIndicators = factualKeywords.some(keyword => title.includes(keyword) || snippet.includes(keyword));
+    const queryIsFactual = factualKeywords.some(keyword => queryLower.includes(keyword));
+
+    if (resultHasFactualIndicators || (queryIsFactual && result.score > 80)) {
       return {
         shouldStore: true,
         memoryType: 'FACT',
-        importance: 4,
+        importance: 80,
         reasoning: 'Contains factual information'
       };
     }
@@ -164,7 +210,7 @@ class WebMemoryConsolidator {
       return {
         shouldStore: true,
         memoryType: 'CONTEXT',
-        importance: 3,
+        importance: 60,
         reasoning: 'Contains contextual or analytical information'
       };
     }
@@ -174,7 +220,7 @@ class WebMemoryConsolidator {
       return {
         shouldStore: true,
         memoryType: 'FACT',
-        importance: 2,
+        importance: 40,
         reasoning: 'Contains current/time-sensitive information'
       };
     }
@@ -186,7 +232,7 @@ class WebMemoryConsolidator {
       return {
         shouldStore: true,
         memoryType: 'FACT',
-        importance: 3,
+        importance: 70,
         reasoning: 'Contains Dead by Daylight game information'
       };
     }
@@ -197,7 +243,7 @@ class WebMemoryConsolidator {
       return {
         shouldStore: true,
         memoryType: 'FACT',
-        importance: 3,
+        importance: 65,
         reasoning: 'Reference or authoritative source'
       };
     }

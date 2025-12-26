@@ -71,7 +71,15 @@ class WebSearchService {
     const startTime = Date.now();
     
     // Extract optimized search keywords
-    const searchQuery = this.extractSearchKeywords(query);
+    let searchQuery = this.extractSearchKeywords(query);
+    
+    // 🛡️ AMBIGUITY PROTECTION: If query is just "Nicky", add character context to avoid Nicki Minaj results
+    const lowerSearch = searchQuery.toLowerCase();
+    if (lowerSearch === 'nicky' || lowerSearch === 'who is nicky' || lowerSearch === 'nicky ai') {
+      searchQuery = 'Nicky "Noodle Arms" A.I. Dente Dead by Daylight';
+      console.log(`🛡️ Ambiguity protection: Updated query to "${searchQuery}"`);
+    }
+
     console.log(`🔍 Web search query: "${query}" → optimized: "${searchQuery}"`);
 
     // Check cache first (use optimized query for cache key)
@@ -345,19 +353,27 @@ class WebSearchService {
     query: string,
     averageConfidence: number
   ): Promise<boolean> {
-    // Always search if no relevant memories found
-    if (existingMemories.length === 0) {
-      return true;
-    }
-
-    // Search if confidence is very low
-    if (averageConfidence < 60) {
-      return true;
-    }
-
     // Import and use the query signal extractor for intelligent analysis
     const { querySignalExtractor } = await import('./querySignalExtractor.js');
     const signals = querySignalExtractor.extractSignals(query);
+    
+    // 🛑 CRITICAL: Never search for simple greetings or conversational filler
+    if (signals.questionType === 'conversational' as any) {
+      console.log(`🚫 Skipping web search: Conversational query detected ("${query}")`);
+      return false;
+    }
+
+    // Always search if no relevant memories found AND it's information seeking
+    if (existingMemories.length === 0 && signals.isInformationSeeking) {
+      console.log(`🌐 Triggering search: No relevant memories found for information-seeking query`);
+      return true;
+    }
+
+    // Search if confidence is very low AND it's information seeking
+    if (averageConfidence < 60 && signals.isInformationSeeking) {
+      console.log(`🌐 Triggering search: Low confidence (${averageConfidence}%) for information-seeking query`);
+      return true;
+    }
     
     // Log decision rationale for tuning
     console.log(`🧠 Query analysis: freshness=${signals.freshnessPriority}% novelty=${signals.noveltyScore}% temporal=${signals.temporalScore}% domains=[${signals.volatileDomains.join(',')}] type=${signals.questionType}`);

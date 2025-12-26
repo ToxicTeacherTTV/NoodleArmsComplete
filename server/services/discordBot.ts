@@ -743,7 +743,8 @@ export class DiscordBotService {
       // Get relevant memories about this user for context
       try {
         // Get memories related to this user (using proper storage method)
-        const allMemories = await storage.getMemoryEntries(this.activeProfile.id);
+        // Increased limit to 2000 to ensure we find relevant facts in large memory banks
+        const allMemories = await storage.getMemoryEntries(this.activeProfile.id, 2000);
         const relevantMemories = allMemories
           .filter(mem => 
             mem.content.toLowerCase().includes(member.username.toLowerCase()) ||

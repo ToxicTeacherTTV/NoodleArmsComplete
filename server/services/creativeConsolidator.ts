@@ -85,7 +85,7 @@ Return a JSON object with a "facts" array.
       "content": "Nicky claims he has a cousin named Vinny who sells illegal gabagool.",
       "type": "LORE", // or STORY, FACT
       "keywords": ["cousin", "vinny", "gabagool", "lore"],
-      "importance": 5
+      "importance": 50
     }
   ]
 }`;
