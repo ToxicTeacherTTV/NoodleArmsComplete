@@ -51,15 +51,16 @@ export class ContextBuilder {
         message: string,
         conversationId?: string,
         personalityState?: any,
-        mode?: string
+        mode?: string,
+        prefetchedMessages?: Message[]
     ): Promise<{ keywords: string[], contextualQuery: string }> {
         const baseKeywords = this.extractKeywords(message);
         let enhancedKeywords = [...baseKeywords];
         let contextualQuery = message;
 
         try {
-            if (conversationId) {
-                const recentMessages = await storage.getRecentMessages(conversationId, 3);
+            if (conversationId || prefetchedMessages) {
+                const recentMessages = prefetchedMessages || await storage.getRecentMessages(conversationId!, 3);
                 if (recentMessages.length > 0) {
                     const conversationText = recentMessages.map(m => m.content).join(' ');
                     const conversationKeywords = this.extractKeywords(conversationText);
@@ -128,7 +129,8 @@ export class ContextBuilder {
         conversationId?: string,
         personalityState?: any,
         mode?: string,
-        limit: number = 15
+        limit: number = 15,
+        recentMessages: Message[] = []
     ): Promise<{
         canon: any[];
         rumors: any[];
@@ -139,7 +141,7 @@ export class ContextBuilder {
         try {
             const queryIntent = this.detectQueryIntent(userMessage);
             const chaosState = await this.chaosEngine.getCurrentState();
-            
+
             // 1. Fetch Lane-aware Memory Packs from DB
             const packs = await storage.getMemoryPacks(profileId, userMessage, chaosState.level, mode, queryIntent);
 
@@ -148,7 +150,8 @@ export class ContextBuilder {
                 userMessage,
                 conversationId,
                 personalityState,
-                mode
+                mode,
+                recentMessages
             );
 
             // 3. Hybrid Search (Semantic + Keyword) - ENFORCED CANON ONLY
@@ -159,7 +162,7 @@ export class ContextBuilder {
             // This allows Nicky to re-summon his own bullshit variants semantically
             let hybridRumors: any[] = [];
             const isTheaterZone = mode === 'PODCAST' || mode === 'STREAMING' || chaosState.level > 70 || (queryIntent && /tell_about|remind|opinion/i.test(queryIntent));
-            
+
             if (isTheaterZone) {
                 const rumorLimit = Math.floor(candidateLimit / 2);
                 const rumorHybrid = await embeddingServiceInstance.hybridSearch(contextualQuery, profileId, rumorLimit, 'RUMOR');
@@ -225,7 +228,7 @@ export class ContextBuilder {
             // 8. Merge Rumors (Pack + Hybrid)
             const allRumors = [...(packs.rumors || [])];
             const rumorHashes = new Set(allRumors.map(r => r.canonicalKey || r.content));
-            
+
             hybridRumors.forEach(r => {
                 const hash = r.canonicalKey || r.content;
                 if (!rumorHashes.has(hash)) {
@@ -272,7 +275,7 @@ export class ContextBuilder {
     ): number {
         let relevance = 0.5;
         if (conversationId && memory.metadata?.conversationId === conversationId) relevance += 0.5;
-        
+
         if (queryIntent) {
             if (queryIntent === 'tell_about' && (memory.type === 'LORE' || memory.type === 'STORY')) relevance += 0.4;
             if (queryIntent === 'opinion' && (memory.type === 'PREFERENCE' || memory.type === 'FACT')) relevance += 0.4;
@@ -314,7 +317,7 @@ export class ContextBuilder {
 
         const missingTopics: string[] = [];
         for (const topic of topics) {
-            const found = retrievedMemories.some(m => 
+            const found = retrievedMemories.some(m =>
                 m.content?.toLowerCase().includes(topic.toLowerCase()) ||
                 m.keywords?.some((k: string) => k.toLowerCase() === topic.toLowerCase())
             );
@@ -400,7 +403,7 @@ export class ContextBuilder {
         // 2. Recent Conversation History
         if (conversationId || profileId) {
             const messageLimit = mode === 'STREAMING' ? 8 : 12; // Reduced from 10/20 for speed
-            const recentMessages = conversationId 
+            const recentMessages = conversationId
                 ? await storage.getRecentMessages(conversationId, messageLimit)
                 : await storage.getRecentProfileMessages(profileId!, messageLimit);
 
@@ -409,12 +412,12 @@ export class ContextBuilder {
                 chronologicalMessages.forEach(msg => {
                     const role = msg.type === 'USER' ? 'USER' : 'NICKY';
                     let cleanContent = msg.content.replace(/\\[bronx[^\\]*\\]/g, '').trim();
-                    
+
                     // Truncate very long historical messages to save tokens
                     if (cleanContent.length > 600) {
                         cleanContent = cleanContent.substring(0, 600) + "... [TRUNCATED]";
                     }
-                    
+
                     recentHistory += `${role}: ${cleanContent}\n`;
                 });
             }
@@ -532,11 +535,11 @@ Topic Focus: ${identityTopicFocus}
 ${gameContext}
 `;
 
-        return { 
-            contextPrompt, 
-            recentHistory, 
-            isArcRaidersActive, 
-            saucePrompt, 
+        return {
+            contextPrompt,
+            recentHistory,
+            isArcRaidersActive,
+            saucePrompt,
             gameFocusPrompt,
             personalityPrompt
         };
@@ -558,8 +561,10 @@ ${gameContext}
     ): Promise<any> {
         const isStreaming = mode === 'STREAMING';
         const limit = 8;
+        // 1. Prefetch history once for everyone
+        const recentMessages: Message[] = conversationId ? await contextPruner.getRecentMessages(conversationId, storage, limit) : [];
 
-        // 1. Parallel Load
+        // 2. Parallel Load
         const [
             contextualMemoriesResult,
             podcastAwareMemories,
@@ -567,7 +572,7 @@ ${gameContext}
             loreContext,
             trainingExamples
         ] = await Promise.all([
-            this.retrieveContextualMemories(message, profileId, conversationId, controls, mode, limit),
+            this.retrieveContextualMemories(message, profileId, conversationId, controls, mode, limit, recentMessages),
             contextPrewarmer.getPodcastMemories(profileId, storage, mode || 'CHAT'),
             documentProcessor.searchDocuments(profileId, message),
             isStreaming ? Promise.resolve(undefined) : contextPrewarmer.getLoreContext(profileId, storage),
@@ -583,7 +588,6 @@ ${gameContext}
         const combinedMemories = [...searchBasedMemories, ...additionalMemories.slice(0, 10)];
 
         // 3. Pruning
-        const recentMessages = conversationId ? await contextPruner.getRecentMessages(conversationId, storage, 8) : [];
         const memoryPruning = contextPruner.pruneMemories(combinedMemories, recentMessages, 8);
         const docPruning = contextPruner.pruneDocuments(relevantDocs, recentMessages, 8);
 
@@ -596,10 +600,10 @@ ${gameContext}
         let webSearchResults: any[] = [];
         if (!isStreaming) {
             try {
-                const avgConfidence = combinedMemories.length > 0 
-                    ? combinedMemories.reduce((sum, m) => sum + (m.confidence || 50), 0) / combinedMemories.length 
+                const avgConfidence = combinedMemories.length > 0
+                    ? combinedMemories.reduce((sum, m) => sum + (m.confidence || 50), 0) / combinedMemories.length
                     : 0;
-                
+
                 const shouldSearch = await webSearchService.shouldTriggerSearch(combinedMemories, message, avgConfidence);
                 if (shouldSearch) {
                     const searchResponse = await webSearchService.search(message);

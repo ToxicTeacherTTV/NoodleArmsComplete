@@ -1,0 +1,20 @@
+{
+  "profiles": [
+    {
+      "id": "7aa20050-1fe6-42eb-8aad-65ca7ad6c689",
+      "name": "New Profile",
+      "isActive": false
+    },
+    {
+      "id": "3a3fe4fc-9187-4ca0-a21b-75077885e128",
+      "name": "Nicky \"Noodle Arms\" A.I. Dente",
+      "isActive": true
+    }
+  ],
+  "conversationStats": {
+    "profileId": "3a3fe4fc-9187-4ca0-a21b-75077885e128",
+    "total": 1793,
+    "archived": 5,
+    "active": 1788
+  }
+}

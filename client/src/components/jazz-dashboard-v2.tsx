@@ -41,6 +41,7 @@ export default function JazzDashboard() {
     const [selectedText, setSelectedText] = useState("");
     const [checkerPosition, setCheckerPosition] = useState({ x: 0, y: 0 });
     const [isDebugMode, setIsDebugMode] = useState(false);
+    const [memoryLearning, setMemoryLearning] = useState<boolean>(true);
     const [, setLocation] = useLocation();
 
     // Voice hooks
@@ -52,6 +53,18 @@ export default function JazzDashboard() {
         queryKey: ['/api/profiles/active'],
         refetchInterval: false,
     });
+
+    const { data: currentConversation } = useQuery<{ isPrivate: boolean } | null>({
+        queryKey: ['/api/conversations', currentConversationId],
+        enabled: !!currentConversationId,
+    });
+
+    // Update memory learning when current conversation changes
+    useEffect(() => {
+        if (currentConversation) {
+            setMemoryLearning(!currentConversation.isPrivate);
+        }
+    }, [currentConversation]);
 
     const { data: memoryStats } = useQuery<MemoryStats>({
         queryKey: ['/api/memory/stats'],
@@ -68,13 +81,14 @@ export default function JazzDashboard() {
         mutationFn: async (data: { conversationId: string; content: string }) => {
             // Get selected model from preferences
             const selectedModel = getModelPreference('chat');
-            
+
             const response = await apiRequest('POST', '/api/chat', {
                 conversationId: data.conversationId,
                 message: data.content,
                 profileId: activeProfile?.id,
                 mode: appMode,
                 selectedModel,
+                memoryLearning,
             });
             return response.json();
         },
@@ -89,7 +103,7 @@ export default function JazzDashboard() {
                         createdAt: new Date().toISOString(),
                         rating: null,
                         isPrivate: false,
-                        metadata: { 
+                        metadata: {
                             processingTime: response.processingTime,
                             retrieved_context: response.retrievedContext,
                             debug_info: response.debugInfo
@@ -102,7 +116,7 @@ export default function JazzDashboard() {
                         setAiStatus('SPEAKING');
                     }
                 }
-                
+
                 // Only set to IDLE if we didn't switch to SPEAKING
                 setAiStatus(prev => prev === 'SPEAKING' ? 'SPEAKING' : 'IDLE');
             }
@@ -120,19 +134,19 @@ export default function JazzDashboard() {
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const initialMessage = params.get('message');
-        
+
         if (initialMessage && activeProfile) {
             console.log("📥 Received initial message from query param:", initialMessage);
-            
+
             // Clear the param from URL without full reload
             window.history.replaceState({}, '', window.location.pathname);
-            
+
             const decodedMessage = decodeURIComponent(initialMessage);
-            
+
             // We need to wait for the conversation to be ready or create one
             const processInitialMessage = async () => {
                 let convId = currentConversationId;
-                
+
                 // If no conversation, create one
                 if (!convId) {
                     try {
@@ -149,7 +163,7 @@ export default function JazzDashboard() {
                         return;
                     }
                 }
-                
+
                 // Add user message to UI immediately
                 const userMsg: Message = {
                     id: nanoid(),
@@ -159,14 +173,15 @@ export default function JazzDashboard() {
                     createdAt: new Date().toISOString(),
                     rating: null,
                     isPrivate: false,
+                    metadata: {} as any,
                 };
                 setMessages(prev => [...prev, userMsg]);
-                
+
                 // Trigger AI
                 setAiStatus('THINKING');
                 sendMessageMutation.mutate({ conversationId: convId, content: decodedMessage });
             };
-            
+
             processInitialMessage();
         }
     }, [activeProfile, currentConversationId, appMode]);
@@ -195,6 +210,25 @@ export default function JazzDashboard() {
                 description: "Conversation stored in Nicky's memory.",
             });
             queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
+        },
+    });
+
+    const updatePrivacyMutation = useMutation({
+        mutationFn: async (isPrivate: boolean) => {
+            if (!currentConversationId) return;
+            return await apiRequest('PATCH', `/api/conversations/${currentConversationId}/privacy`, { isPrivate });
+        },
+        onSuccess: (_, isPrivate) => {
+            queryClient.invalidateQueries({ queryKey: ['/api/conversations', currentConversationId] });
+            // FORCE REFRESH of sidebar history so the privacy icon/status updates immediately
+            queryClient.invalidateQueries({ queryKey: ['/api/conversations/web'] });
+
+            toast({
+                title: isPrivate ? "🔒 Private Mode" : "🧠 Learning Mode",
+                description: isPrivate
+                    ? "Nicky will not remember this conversation."
+                    : "Nicky will learn from this conversation.",
+            });
         },
     });
 
@@ -277,7 +311,7 @@ export default function JazzDashboard() {
             createdAt: new Date().toISOString(),
             rating: null,
             isPrivate: false,
-            metadata: null,
+            metadata: {} as any,
         };
 
         setMessages(prev => [...prev, userMessage]);
@@ -294,11 +328,23 @@ export default function JazzDashboard() {
         setAiStatus('IDLE');
     };
 
+    const handleToggleLearning = () => {
+        const currentIsPrivate = !memoryLearning;
+        const targetIsPrivate = !currentIsPrivate; // If it was learning (true), it becomes private (isPrivate=true)
+
+        setMemoryLearning(!targetIsPrivate);
+
+        if (currentConversationId) {
+            updatePrivacyMutation.mutate(targetIsPrivate);
+        }
+    };
+
     const handleNewChat = () => {
         // Don't create immediately, just clear state
         setCurrentConversationId("");
         setMessages([]);
         setAiStatus('IDLE');
+        setMemoryLearning(true);
     };
 
     const getSessionDuration = () => {
@@ -337,8 +383,8 @@ export default function JazzDashboard() {
             </Sheet>
 
             {/* Profile & Notes Modals */}
-            <ProfileModal open={isProfileModalOpen} onOpenChange={setIsProfileModalOpen} />
-            <NotesModal open={isNotesModalOpen} onOpenChange={setIsNotesModalOpen} />
+            <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} />
+            <NotesModal isOpen={isNotesModalOpen} onClose={() => setIsNotesModalOpen(false)} />
 
             {/* Main Dashboard */}
             <div className="h-full flex flex-col gap-4">
@@ -348,7 +394,7 @@ export default function JazzDashboard() {
                     <div className="flex items-center gap-3">
                         {/* Quick Model Toggle */}
                         <QuickModelToggle compact={true} />
-                        
+
                         <StatusIndicator status={aiStatus} />
 
                         <ToggleGroup
@@ -379,86 +425,90 @@ export default function JazzDashboard() {
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-[280px_1fr] xl:grid-cols-[280px_1fr_320px] h-[calc(100vh-12rem)]">
-                        {/* Sidebar: Conversation History (Desktop) */}
-                        <Card className="hidden lg:flex flex-col min-h-0 overflow-hidden card-hover">
-                            <CardHeader className="border-b px-4 py-3">
-                                <CardTitle className="text-sm font-semibold flex items-center justify-between">
-                                    Conversations
-                                    <Badge variant="secondary">{messages.length}</Badge>
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="flex-1 p-0 overflow-hidden">
-                                <ChatHistorySidebar
-                                    currentConversationId={currentConversationId}
-                                    onSelectConversation={handleSelectConversation}
-                                    onNewChat={handleNewChat}
-                                    variant="embedded"
-                                    className="h-full"
+                    {/* Sidebar: Conversation History (Desktop) */}
+                    <Card className="hidden lg:flex flex-col min-h-0 overflow-hidden card-hover">
+                        <CardHeader className="border-b px-4 py-3">
+                            <CardTitle className="text-sm font-semibold flex items-center justify-between">
+                                Conversations
+                                <Badge variant="secondary">{messages.length}</Badge>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-1 p-0 overflow-hidden">
+                            <ChatHistorySidebar
+                                currentConversationId={currentConversationId}
+                                onSelectConversation={handleSelectConversation}
+                                onNewChat={handleNewChat}
+                                variant="embedded"
+                                className="h-full"
+                            />
+                        </CardContent>
+                    </Card>
+
+                    {/* Main Chat Area */}
+                    <div className="flex flex-col gap-4 min-h-0">
+                        {/* Chat Panel */}
+                        <Card className="flex-1 flex flex-col min-h-0 overflow-hidden shadow-jazz">
+                            <CardContent className="flex-1 p-0 flex flex-col min-h-0">
+                                <ChatPanel
+                                    messages={messages}
+                                    conversationId={currentConversationId}
+                                    sessionDuration={getSessionDuration()}
+                                    messageCount={messages.length}
+                                    appMode={appMode}
+                                    isDebugMode={isDebugMode}
+                                    onToggleDebugMode={() => setIsDebugMode(!isDebugMode)}
+                                    onPlayAudio={(content) => speakElevenLabs(content)}
+                                    onPauseAudio={pauseElevenLabs}
+                                    onResumeAudio={resumeElevenLabs}
+                                    onStopAudio={stopElevenLabs}
+                                    onReplayAudio={replayElevenLabs}
+                                    onSaveAudio={saveAudioElevenLabs}
+                                    isPlayingAudio={isSpeakingElevenLabs}
+                                    isPausedAudio={isPausedElevenLabs}
+                                    canReplay={canReplayElevenLabs}
+                                    canSave={canSaveElevenLabs}
+                                    onTextSelection={() => { }}
+                                    memoryLearning={memoryLearning}
+                                    onToggleLearning={handleToggleLearning}
                                 />
                             </CardContent>
                         </Card>
 
-                        {/* Main Chat Area */}
-                        <div className="flex flex-col gap-4 min-h-0">
-                            {/* Chat Panel */}
-                            <Card className="flex-1 flex flex-col min-h-0 overflow-hidden shadow-jazz">
-                                <CardContent className="flex-1 p-0 flex flex-col min-h-0">
-                                    <ChatPanel
-                                        messages={messages}
-                                        sessionDuration={getSessionDuration()}
-                                        messageCount={messages.length}
-                                        appMode={appMode}
-                                        isDebugMode={isDebugMode}
-                                        onToggleDebugMode={() => setIsDebugMode(!isDebugMode)}
-                                        onPlayAudio={(content) => speakElevenLabs(content)}
-                                        onPauseAudio={pauseElevenLabs}
-                                        onResumeAudio={resumeElevenLabs}
-                                        onStopAudio={stopElevenLabs}
-                                        onReplayAudio={replayElevenLabs}
-                                        onSaveAudio={saveAudioElevenLabs}
-                                        isPlayingAudio={isSpeakingElevenLabs}
-                                        isPausedAudio={isPausedElevenLabs}
-                                        canReplay={canReplayElevenLabs}
-                                        canSave={canSaveElevenLabs}
-                                        onTextSelection={() => { }}
-                                    />
-                                </CardContent>
-                            </Card>
-
-                            {/* Message Composer */}
-                            <MessageComposer
-                                onSendMessage={handleSendMessage}
-                                onClearChat={() => setMessages([])}
-                                onStoreMemory={() => consolidateMemoryMutation.mutate(currentConversationId)}
-                                onToggleVoice={toggleListening}
-                                isListening={isListening}
-                                isSpeaking={isSpeakingElevenLabs}
-                                appMode={appMode}
-                                sessionDuration={getSessionDuration()}
-                                messageCount={messages.length}
-                                memoryCount={memoryStats?.totalFacts ?? 0}
-                                documentCount={documentCount}
-                                disabled={aiStatus === 'PROCESSING'}
-                            />
-                        </div>
-
-                        {/* Right Sidebar: Quick Info (Desktop XL+) */}
-                        <Card className="hidden xl:flex flex-col min-h-0 overflow-hidden card-hover">
-                            <CardHeader className="border-b px-4 py-3">
-                                <CardTitle className="text-sm font-semibold">Command Center</CardTitle>
-                            </CardHeader>
-                            <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
-                                <PersonalitySurgePanel />
-                            </CardContent>
-                        </Card>
+                        {/* Message Composer */}
+                        <MessageComposer
+                            onSendMessage={handleSendMessage}
+                            onClearChat={() => setMessages([])}
+                            onStoreMemory={() => consolidateMemoryMutation.mutate(currentConversationId)}
+                            onToggleVoice={toggleListening}
+                            isListening={isListening}
+                            isSpeaking={isSpeakingElevenLabs}
+                            appMode={appMode}
+                            sessionDuration={getSessionDuration()}
+                            messageCount={messages.length}
+                            memoryCount={memoryStats?.totalFacts ?? 0}
+                            documentCount={documentCount}
+                            disabled={aiStatus === 'PROCESSING'}
+                        />
                     </div>
+
+                    {/* Right Sidebar: Quick Info (Desktop XL+) */}
+                    <Card className="hidden xl:flex flex-col min-h-0 overflow-hidden card-hover">
+                        <CardHeader className="border-b px-4 py-3">
+                            <CardTitle className="text-sm font-semibold">Command Center</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
+                            <PersonalitySurgePanel />
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
 
             {/* Memory Checker */}
             <MemoryChecker
                 selectedText={selectedText}
-                open={memoryCheckerOpen}
-                onOpenChange={setMemoryCheckerOpen}
+                profileId={activeProfile?.id}
+                isOpen={memoryCheckerOpen}
+                onClose={() => setMemoryCheckerOpen(false)}
                 position={checkerPosition}
             />
         </>

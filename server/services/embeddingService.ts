@@ -23,10 +23,10 @@ export class EmbeddingService {
   private ai: GoogleGenAI;
   private readonly EMBEDDING_MODEL = 'text-embedding-004'; // Latest Gemini embedding model
   private readonly BATCH_SIZE = 50; // Process embeddings in batches
-  
+
   constructor() {
-    this.ai = new GoogleGenAI({ 
-      apiKey: process.env.GEMINI_API_KEY || "" 
+    this.ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY || ""
     });
   }
 
@@ -44,7 +44,7 @@ export class EmbeddingService {
 
     try {
       console.log(`🔢 Generating embedding for text: "${text.substring(0, 50)}..."`);
-      
+
       const response = await this.ai.models.embedContent({
         model: this.EMBEDDING_MODEL,
         contents: {
@@ -52,12 +52,16 @@ export class EmbeddingService {
         },
       });
 
-      if (!response.embeddings || !response.embeddings[0]?.values) {
+      // Handle both singular and plural embedding formats for different SDK versions/responses
+      // @ts-ignore - response structure can vary between SDK versions
+      const values = response.embedding?.values || response.embeddings?.[0]?.values;
+
+      if (!values) {
         throw new Error("No embedding returned from Gemini");
       }
 
       return {
-        embedding: response.embeddings[0].values,
+        embedding: values,
         model: this.EMBEDDING_MODEL
       };
     } catch (error) {
@@ -71,25 +75,27 @@ export class EmbeddingService {
    */
   async generateBatchEmbeddings(texts: string[]): Promise<EmbeddingResult[]> {
     const results: EmbeddingResult[] = [];
-    
+
     // Process in batches to avoid rate limits
     for (let i = 0; i < texts.length; i += this.BATCH_SIZE) {
       const batch = texts.slice(i, i + this.BATCH_SIZE);
       console.log(`🔢 Processing embedding batch ${Math.floor(i / this.BATCH_SIZE) + 1}/${Math.ceil(texts.length / this.BATCH_SIZE)}`);
-      
+
       try {
         // Use individual embedContent calls in parallel for the batch
-        const promises = batch.map(text => 
+        const promises = batch.map(text =>
           this.ai.models.embedContent({
             model: this.EMBEDDING_MODEL,
             contents: { parts: [{ text }] }
           })
         );
-        
+
         const responses = await Promise.all(promises);
-        
+
         responses.forEach(resp => {
-          const values = resp.embeddings?.[0]?.values;
+          // @ts-ignore - handle both singular and plural formats
+          const values = resp.embedding?.values || resp.embeddings?.[0]?.values;
+
           if (values) {
             results.push({
               embedding: values,
@@ -124,24 +130,24 @@ export class EmbeddingService {
     if (vecA.length !== vecB.length) {
       throw new Error("Vectors must have the same dimension");
     }
-    
+
     let dotProduct = 0;
     let normA = 0;
     let normB = 0;
-    
+
     for (let i = 0; i < vecA.length; i++) {
       dotProduct += vecA[i] * vecB[i];
       normA += vecA[i] * vecA[i];
       normB += vecB[i] * vecB[i];
     }
-    
+
     normA = Math.sqrt(normA);
     normB = Math.sqrt(normB);
-    
+
     if (normA === 0 || normB === 0) {
       return 0; // Avoid division by zero
     }
-    
+
     return dotProduct / (normA * normB);
   }
 
@@ -149,8 +155,8 @@ export class EmbeddingService {
    * Search for semantically similar memory entries
    */
   async searchSimilarMemories(
-    queryText: string, 
-    profileId: string, 
+    queryText: string,
+    profileId: string,
     limit: number = 10,
     similarityThreshold: number = 0.5,
     lane?: 'CANON' | 'RUMOR'
@@ -158,16 +164,16 @@ export class EmbeddingService {
     try {
       // Generate embedding for the query
       const queryEmbedding = await this.generateEmbedding(queryText);
-      
+
       // Use DB-side vector search
       const results = await storage.findSimilarMemories(
-        profileId, 
-        queryEmbedding.embedding, 
-        limit, 
+        profileId,
+        queryEmbedding.embedding,
+        limit,
         similarityThreshold,
         lane
       );
-      
+
       return results.map(r => ({
         id: r.id,
         content: r.content,
@@ -176,7 +182,7 @@ export class EmbeddingService {
         importance: r.importance || 1,
         confidence: r.confidence || 50
       }));
-        
+
     } catch (error) {
       console.error("Semantic search error:", error);
       return [];
@@ -217,30 +223,30 @@ export class EmbeddingService {
    * Search for semantically similar content library entries
    */
   async searchSimilarContent(
-    queryText: string, 
-    profileId: string, 
+    queryText: string,
+    profileId: string,
     limit: number = 5,
     similarityThreshold: number = 0.6
   ): Promise<SemanticSearchResult[]> {
     try {
       // Generate embedding for the query
       const queryEmbedding = await this.generateEmbedding(queryText);
-      
+
       // Use DB-side vector search
       const results = await storage.findSimilarContent(
-        profileId, 
-        queryEmbedding.embedding, 
-        limit, 
+        profileId,
+        queryEmbedding.embedding,
+        limit,
         similarityThreshold
       );
-      
+
       return results.map(r => ({
         id: r.id,
         content: r.content,
         similarity: r.similarity,
         type: r.category || undefined
       }));
-        
+
     } catch (error) {
       console.error("Content semantic search error:", error);
       return [];
@@ -253,13 +259,13 @@ export class EmbeddingService {
   async embedMemoryEntry(memoryId: string, content: string): Promise<boolean> {
     try {
       const embeddingResult = await this.generateEmbedding(content);
-      
+
       await storage.updateMemoryEmbedding(memoryId, {
         embedding: embeddingResult.embedding,
         embeddingModel: embeddingResult.model,
         embeddingUpdatedAt: new Date()
       });
-      
+
       console.log(`✅ Generated embedding for memory ${memoryId}`);
       return true;
     } catch (error) {
@@ -274,13 +280,13 @@ export class EmbeddingService {
   async embedContentEntry(contentId: string, content: string): Promise<boolean> {
     try {
       const embeddingResult = await this.generateEmbedding(content);
-      
+
       await storage.updateContentLibraryEmbedding(contentId, {
         embedding: embeddingResult.embedding,
         embeddingModel: embeddingResult.model,
         embeddingUpdatedAt: new Date()
       });
-      
+
       console.log(`✅ Generated embedding for content ${contentId}`);
       return true;
     } catch (error) {
@@ -295,13 +301,13 @@ export class EmbeddingService {
   async embedDocument(documentId: string, content: string): Promise<boolean> {
     try {
       const embeddingResult = await this.generateEmbedding(content);
-      
+
       await storage.updateDocument(documentId, {
         embedding: embeddingResult.embedding,
         embeddingModel: embeddingResult.model,
         embeddingUpdatedAt: new Date()
       });
-      
+
       console.log(`✅ Generated embedding for document ${documentId}`);
       return true;
     } catch (error) {
@@ -313,41 +319,41 @@ export class EmbeddingService {
   /**
    * Batch process embeddings for existing memory entries (for migration)
    */
-  async generateEmbeddingsForAllMemories(profileId: string): Promise<{processed: number, successful: number}> {
+  async generateEmbeddingsForAllMemories(profileId: string): Promise<{ processed: number, successful: number }> {
     try {
       console.log("🚀 Starting batch embedding generation for all memories...");
-      
+
       // Get all memory entries without embeddings
       const memories = await storage.getMemoryEntriesWithoutEmbeddings(profileId);
       console.log(`📊 Found ${memories.length} memory entries without embeddings`);
-      
+
       if (memories.length === 0) {
         return { processed: 0, successful: 0 };
       }
-      
+
       let successful = 0;
-      
+
       // Process in smaller batches to manage API rate limits
       for (let i = 0; i < memories.length; i += 10) {
         const batch = memories.slice(i, i + 10);
         console.log(`🔄 Processing memory batch ${Math.floor(i / 10) + 1}/${Math.ceil(memories.length / 10)}`);
-        
-        const promises = batch.map(memory => 
+
+        const promises = batch.map(memory =>
           this.embedMemoryEntry(memory.id, memory.content)
         );
-        
+
         const results = await Promise.allSettled(promises);
         successful += results.filter(r => r.status === 'fulfilled' && r.value).length;
-        
+
         // Add delay between batches
         if (i + 10 < memories.length) {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
-      
+
       console.log(`✅ Embedding generation complete: ${successful}/${memories.length} successful`);
       return { processed: memories.length, successful };
-      
+
     } catch (error) {
       console.error("Batch embedding generation error:", error);
       throw error;
@@ -357,41 +363,41 @@ export class EmbeddingService {
   /**
    * Batch process embeddings for existing content library entries
    */
-  async generateEmbeddingsForAllContent(profileId: string): Promise<{processed: number, successful: number}> {
+  async generateEmbeddingsForAllContent(profileId: string): Promise<{ processed: number, successful: number }> {
     try {
       console.log("🚀 Starting batch embedding generation for content library...");
-      
+
       // Get all content entries without embeddings
       const contentEntries = await storage.getContentLibraryWithoutEmbeddings(profileId);
       console.log(`📊 Found ${contentEntries.length} content entries without embeddings`);
-      
+
       if (contentEntries.length === 0) {
         return { processed: 0, successful: 0 };
       }
-      
+
       let successful = 0;
-      
+
       // Process in smaller batches to manage API rate limits
       for (let i = 0; i < contentEntries.length; i += 5) {
         const batch = contentEntries.slice(i, i + 5);
         console.log(`🔄 Processing content batch ${Math.floor(i / 5) + 1}/${Math.ceil(contentEntries.length / 5)}`);
-        
-        const promises = batch.map(content => 
+
+        const promises = batch.map(content =>
           this.embedContentEntry(content.id, content.content)
         );
-        
+
         const results = await Promise.allSettled(promises);
         successful += results.filter(r => r.status === 'fulfilled' && r.value).length;
-        
+
         // Add delay between batches  
         if (i + 5 < contentEntries.length) {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
-      
+
       console.log(`✅ Content embedding generation complete: ${successful}/${contentEntries.length} successful`);
       return { processed: contentEntries.length, successful };
-      
+
     } catch (error) {
       console.error("Batch content embedding generation error:", error);
       throw error;
@@ -415,14 +421,14 @@ export class EmbeddingService {
     try {
       // Get semantic results
       const semanticResults = await this.searchSimilarMemories(queryText, profileId, limit, 0.5, lane);
-      
+
       // Get keyword results (existing system)
       const keywords = this.extractKeywords(queryText);
       const keywordResults = await storage.searchMemoriesByKeywords(profileId, keywords, limit, lane);
-      
+
       // Combine and deduplicate results
       const combinedMap = new Map<string, SemanticSearchResult>();
-      
+
       // Add semantic results (weighted higher)
       semanticResults.forEach(result => {
         combinedMap.set(result.id, {
@@ -430,7 +436,7 @@ export class EmbeddingService {
           similarity: result.similarity * 1.2 // Boost semantic matches
         });
       });
-      
+
       // Add keyword results (if not already present)
       keywordResults.forEach(result => {
         if (!combinedMap.has(result.id)) {
@@ -444,7 +450,7 @@ export class EmbeddingService {
           });
         }
       });
-      
+
       // Sort combined results by similarity + importance + confidence
       const combined = Array.from(combinedMap.values())
         .sort((a, b) => {
@@ -453,13 +459,13 @@ export class EmbeddingService {
           return scoreB - scoreA;
         })
         .slice(0, limit);
-      
+
       return {
         semantic: semanticResults,
         keyword: keywordResults,
         combined
       };
-      
+
     } catch (error) {
       console.error("Hybrid search error:", error);
       return {
@@ -484,7 +490,7 @@ export class EmbeddingService {
     try {
       // Generate embedding for new memory
       const newEmbedding = await this.generateEmbedding(newMemoryContent);
-      
+
       // Use DB-side vector search for duplicates
       const results = await storage.findSimilarMemories(
         profileId,
@@ -492,13 +498,13 @@ export class EmbeddingService {
         scanLimit,
         similarityThreshold
       );
-      
+
       return results.map(r => ({
         id: r.id,
         content: r.content,
         similarity: r.similarity
       }));
-      
+
     } catch (error) {
       console.error("Vector duplicate detection error:", error);
       return [];
@@ -519,7 +525,7 @@ export class EmbeddingService {
     try {
       // Generate embedding for new memory
       const newEmbedding = await this.generateEmbedding(newMemoryContent);
-      
+
       // Use DB-side vector search for related memories
       const results = await storage.findSimilarMemories(
         profileId,
@@ -527,14 +533,14 @@ export class EmbeddingService {
         limit,
         similarityThreshold
       );
-      
+
       return results.map(r => ({
         id: r.id,
         content: r.content,
         similarity: r.similarity,
         memory: r // Include full memory object for contradiction checks
       }));
-      
+
     } catch (error) {
       console.error("Vector related memory search error:", error);
       return [];
@@ -552,12 +558,12 @@ export class EmbeddingService {
     similarityThreshold: number = 0.90
   ): Array<{ id: string; content: string; similarity: number }> {
     const duplicates: Array<{ id: string; content: string; similarity: number }> = [];
-    
+
     // Skip if source has no embedding
     if (!sourceMemory.embedding) {
       return [];
     }
-    
+
     try {
       let sourceEmbedding: number[];
       if (Array.isArray(sourceMemory.embedding)) {
@@ -565,13 +571,13 @@ export class EmbeddingService {
       } else {
         sourceEmbedding = JSON.parse(sourceMemory.embedding as string);
       }
-      
+
       for (const targetMemory of allMemories) {
         // Skip self-comparison and memories without embeddings
         if (targetMemory.id === sourceMemory.id || !targetMemory.embedding) {
           continue;
         }
-        
+
         try {
           let targetEmbedding: number[];
           if (Array.isArray(targetMemory.embedding)) {
@@ -581,7 +587,7 @@ export class EmbeddingService {
           }
 
           const similarity = this.cosineSimilarity(sourceEmbedding, targetEmbedding);
-          
+
           if (similarity >= similarityThreshold) {
             duplicates.push({
               id: targetMemory.id,
@@ -593,10 +599,10 @@ export class EmbeddingService {
           console.error(`Failed to parse embedding for memory ${targetMemory.id}:`, error);
         }
       }
-      
+
       // Sort by similarity (highest first) and limit to top 10
       return duplicates.sort((a, b) => b.similarity - a.similarity).slice(0, 10);
-      
+
     } catch (error) {
       console.error(`Failed to parse embedding for memory ${sourceMemory.id}:`, error);
       return [];
@@ -614,15 +620,15 @@ export class EmbeddingService {
     similarityThreshold: number = 0.90
   ): Array<{ id: string; content: string; similarity: number }> {
     const duplicates: Array<{ id: string; content: string; similarity: number }> = [];
-    
+
     for (const targetMemory of allMemories) {
       // Skip self-comparison
       if (targetMemory.id === sourceId) {
         continue;
       }
-      
+
       const similarity = this.cosineSimilarity(sourceVector, targetMemory.vector);
-      
+
       if (similarity >= similarityThreshold) {
         duplicates.push({
           id: targetMemory.id,
@@ -631,7 +637,7 @@ export class EmbeddingService {
         });
       }
     }
-    
+
     // Sort by similarity (highest first) and limit to top 10
     return duplicates.sort((a, b) => b.similarity - a.similarity).slice(0, 10);
   }
@@ -641,7 +647,7 @@ export class EmbeddingService {
    */
   private extractKeywords(message: string): string[] {
     const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them']);
-    
+
     return message
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, '')
@@ -650,7 +656,7 @@ export class EmbeddingService {
         const isNumber = /^\d+$/.test(word);
         const isLongEnough = word.length > 2;
         const isNotStopWord = !stopWords.has(word);
-        
+
         return (isNumber || isLongEnough) && isNotStopWord;
       })
       .slice(0, 8);

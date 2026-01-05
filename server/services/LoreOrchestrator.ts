@@ -4,10 +4,10 @@ import { MemoryAnalyzer } from './memoryAnalyzer.js';
 import { IntelligenceEngine } from './intelligenceEngine.js';
 import { geminiService } from './gemini.js';
 import ChaosEngine from './chaosEngine.js';
-import { 
-  loreCharacters, 
-  loreLocations, 
-  loreEvents, 
+import {
+  loreCharacters,
+  loreLocations,
+  loreEvents,
   memoryEntries,
   type MemoryEntry,
   type LoreCharacter,
@@ -50,8 +50,8 @@ export class LoreOrchestrator {
    * Extracts facts and entities from raw text and integrates them into the lore.
    */
   async processNewContent(
-    content: string, 
-    profileId: string, 
+    content: string,
+    profileId: string,
     source: string,
     type: 'CONVERSATION' | 'DOCUMENT' | 'WEB' = 'CONVERSATION',
     conversationId?: string
@@ -71,7 +71,7 @@ export class LoreOrchestrator {
 
     // 1. Extract Atomic Facts
     const { fact, importance } = await geminiService.distillTextToFact(content);
-    
+
     // 1b. Save Fact to Memory
     if (fact && fact.length > 10) {
       let podcastEpisodeId = undefined;
@@ -93,7 +93,7 @@ export class LoreOrchestrator {
       });
       console.log(`🏛️ LoreOrchestrator: Saved distilled fact: ${fact} (Importance: ${importance}, Source: ${podcastEpisodeId ? 'Podcast' : 'Conversation'})`);
     }
-    
+
     // 2. Analyze for Entities & Relationships
     const analysis = await MemoryAnalyzer.analyzeMemoryBatch([{ content, type }], profileId);
 
@@ -111,7 +111,7 @@ export class LoreOrchestrator {
 
     // 4. Check for Contradictions
     const contradictions = await this.intelligence.runFullIntelligenceAnalysis(storage.db, profileId);
-    
+
     return {
       newFacts: 1,
       updatedEntities,
@@ -308,7 +308,12 @@ export class LoreOrchestrator {
 
     try {
       const result = await geminiService.generateResponse(prompt, "You are a Lore Auditor.", [], [], "", 'SIMPLE');
-      const analysis = JSON.parse(result.content);
+
+      const cleanJson = (text: string) => {
+        return text.replace(/```json\n?|\n?```/g, '').replace(/```/g, '').trim();
+      };
+
+      const analysis = JSON.parse(cleanJson(result.content));
 
       if (analysis.shouldPromote) {
         console.log(`🏛️ LoreOrchestrator: Promoting hallucination to lore: ${analysis.name}`);
@@ -317,9 +322,11 @@ export class LoreOrchestrator {
         if (analysis.entityType === 'event') await this.integrateEvent(analysis, profileId);
       }
     } catch (e) {
-      console.warn("Lore promotion check failed:", e);
+      console.warn("Lore promotion check failed. Raw content:", result?.content);
+      console.warn("Error:", e);
     }
   }
+
 
   /**
    * 🎲 GENERATE BACKGROUND LORE

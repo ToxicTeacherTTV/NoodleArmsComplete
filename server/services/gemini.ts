@@ -186,13 +186,13 @@ class GeminiService {
    */
   private parseJsonResponse(response: any): any {
     let rawJson = this.safeExtractText(response);
-    
+
     if (!rawJson) {
       throw new Error("Empty response from Gemini");
     }
 
     let cleanJson = rawJson.trim();
-    
+
     // Remove markdown code blocks
     if (cleanJson.includes("```")) {
       const match = cleanJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -584,14 +584,14 @@ Return as JSON array.`;
             }
           }
         });
-        
+
         return this.parseJsonResponse(response);
       }, {
         purpose: 'chat', // Using chat purpose as it's a quick interaction
         maxRetries: 2,
         forceModel: modelOverride
       });
-      
+
       return result.data;
     } catch (error) {
       console.error("❌ Distill Text failed:", error);
@@ -651,14 +651,14 @@ Return as JSON array.`;
             }
           }
         });
-        
+
         return this.parseJsonResponse(response);
       }, {
         purpose: 'extraction',
         maxRetries: 2,
         forceModel: modelOverride
       });
-      
+
       return result.data;
     } catch (error) {
       console.error("❌ Psyche generation failed:", error);
@@ -734,14 +734,14 @@ Return as JSON array.`;
             }
           }
         });
-        
+
         return this.parseJsonResponse(response);
       }, {
         purpose: 'extraction',
         maxRetries: 2,
         forceModel: modelOverride
       });
-      
+
       return result.data;
     } catch (error) {
       console.error("❌ Audit batch failed:", error);
@@ -1052,7 +1052,7 @@ Response format:
 
 
   // Chat response generation method (Refactored to use ContextBuilder)
-  
+
   async generateChatResponse(
     userMessage: string,
     coreIdentity: string,
@@ -1065,7 +1065,7 @@ Response format:
     const startTime = Date.now();
     try {
       const modelName = selectedModel || 'gemini-3-flash-preview';
-      
+
       const systemPrompt = `
 ${coreIdentity}
 
@@ -1077,6 +1077,7 @@ ${coreIdentity}
 - NO STAGE DIRECTIONS (e.g., no *leans back*).
 - Use phonetic spelling as defined in your core identity (da, dat, dis, etc.).
 - If Sauce is high, be extremely aggressive and unhinged.
+- RESPONSE MUST BE UNDER 2200 CHARACTERS. Be concise but keep the flavor.
 `;
 
       const userPrompt = `
@@ -1101,17 +1102,21 @@ ${userMessage}
           config: {
             temperature: 0.8,
             topP: 0.95,
-            maxOutputTokens: 1024,
+            maxOutputTokens: 4096,
           }
         });
-        
+
         const content = this.safeExtractText(response);
+
+        const generationTime = Date.now() - startTime;
+        console.log(`🧠 AI Generation Complete: ${generationTime}ms | Output Length: ${content.length} chars`);
+
         return {
           content,
           model: model
         };
-      }, { 
-        purpose: 'chat', 
+      }, {
+        purpose: 'chat',
         forceModel: modelName,
         allowExperimental: true
       });

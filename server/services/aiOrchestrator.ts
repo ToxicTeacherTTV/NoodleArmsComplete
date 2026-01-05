@@ -30,7 +30,7 @@ import { getDefaultModel } from '../config/geminiModels.js';
  * - Per-operation model preferences
  */
 export class AIOrchestrator {
-    
+
     /**
      * Route AI operation to the selected model with fallback
      */
@@ -41,7 +41,7 @@ export class AIOrchestrator {
         geminiOperation: () => Promise<T>
     ): Promise<T> {
         const isClaude = selectedModel.startsWith('claude');
-        
+
         if (isClaude) {
             console.log(`🎼 Orchestrator: Routing ${operation} to Claude (${selectedModel})...`);
             try {
@@ -297,11 +297,11 @@ export class AIOrchestrator {
         profileId: string
     ): Promise<string> {
         const lowerMessage = userMessage.toLowerCase();
-        
+
         // 1. Detect explicit segment triggers
         const segmentTriggers = [
-            'where the fuck are the viewers from', 
-            'where are the viewers from', 
+            'where the fuck are the viewers from',
+            'where are the viewers from',
             'pick a city',
             'next city',
             'another city'
@@ -311,7 +311,7 @@ export class AIOrchestrator {
         // 2. Detect city mentions with inquiry context
         // Look for capitalized words after prepositions or trigger words
         let cityMatch = userMessage.match(/(?:about|in|to|of|at|from|story|happened|been to|with|for|is|was)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
-        
+
         let cityToUse = cityMatch ? cityMatch[1] : "";
 
         // 3. If no capitalized match, try a more aggressive search for known cities in the DB
@@ -363,15 +363,15 @@ export class AIOrchestrator {
                         turnCount: 1,
                         isCompleted: false
                     };
-                    
+
                     // Mark as covered in DB if it exists
                     await storage.markCityAsCovered(profileId, cityToUse.split(',')[0].trim());
                 }
-            } 
+            }
             // CONTINUING
             else if (state && !state.isCompleted) {
                 state.turnCount++;
-                
+
                 // We let Nicky decide when to end it, but we track turns for context
                 if (state.turnCount >= 5) {
                     state.isCompleted = true; // Soft cap to prevent infinite loops
@@ -409,8 +409,8 @@ CRITICAL GUIDANCE:
     /**
      * Generate chat response with fallback strategy
      */
-    
-    
+
+
     async generateResponse(
         userMessage: string,
         coreIdentity: string,
@@ -425,10 +425,10 @@ CRITICAL GUIDANCE:
         const model = (selectedModel || getDefaultModel()) as AIModel;
 
         // 1. Build Context via ContextBuilder
-        const { 
-            contextPrompt, 
-            recentHistory, 
-            saucePrompt, 
+        const {
+            contextPrompt,
+            recentHistory,
+            saucePrompt,
             gameFocusPrompt,
             personalityPrompt
         } = await contextBuilder.buildChatContext(
@@ -494,9 +494,13 @@ ${behavioralConstraints}
                 userMessage,
                 enhancedCoreIdentity,
                 context.recentMessages,
-                model
+                model,
+                contextPrompt,
+                recentHistory,
+                saucePrompt,
+                cityStoryPrompt
             );
-            
+
             return {
                 ...response,
                 content: finalContent,
@@ -517,7 +521,11 @@ ${behavioralConstraints}
         userMessage: string,
         coreIdentity: string,
         recentMessages: Message[],
-        model: AIModel
+        model: AIModel,
+        contextPrompt: string = "",
+        recentHistory: string = "",
+        saucePrompt: string = "",
+        cityStoryPrompt: string = ""
     ): Promise<{ content: string; wasRegenerated: boolean }> {
         try {
             const recentAIResponses = recentMessages
@@ -546,7 +554,7 @@ ${behavioralConstraints}
 
             if (needsRegeneration) {
                 console.warn(`🔄 Orchestrator: Detected repetitive patterns, regenerating response...`);
-                
+
                 const { facet: altFacet } = await varietyController.selectPersonaFacet(conversationId, userMessage);
                 const altVarietyPrompt = varietyController.generateVarietyPrompt(altFacet, await varietyController.getSessionVariety(conversationId));
 
@@ -567,19 +575,19 @@ REGENERATION RULES:
                     () => anthropicService.generateChatResponse(
                         userMessage,
                         `${coreIdentity}\n\n${altVarietyPrompt}\n\n${antiRepetitionPrompt}`,
-                        "", // No context for regen to keep it focused
-                        "", // No history for regen
-                        "",
-                        "",
+                        contextPrompt,
+                        recentHistory,
+                        saucePrompt,
+                        cityStoryPrompt,
                         model
                     ),
                     () => geminiService.generateChatResponse(
                         userMessage,
                         `${coreIdentity}\n\n${altVarietyPrompt}\n\n${antiRepetitionPrompt}`,
-                        "",
-                        "",
-                        "",
-                        "",
+                        contextPrompt,
+                        recentHistory,
+                        saucePrompt,
+                        cityStoryPrompt,
                         model
                     )
                 );

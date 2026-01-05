@@ -395,7 +395,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
     if (memory.importance) {
       relevance += (memory.importance / 100) * 0.25;
     }
-    
+
     // Confidence 0-100 maps to 0.0-0.1 boost
     if (memory.confidence) {
       relevance += (memory.confidence / 100) * 0.1;
@@ -459,7 +459,7 @@ Be specific and actionable. Extract the ESSENCE of the style, not just list exam
 
 
 
-  
+
   async generateChatResponse(
     userMessage: string,
     coreIdentity: string,
@@ -480,11 +480,14 @@ ${cityStoryPrompt}
 
 [RECENT CONVERSATION]
 ${recentHistory}
+
+[SYSTEM NOTICE]
+RESPONSE MUST BE UNDER 2200 CHARACTERS. Be concise to avoid cutoff.
 `;
 
     const response = await anthropic.messages.create({
       model: modelName,
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
     });
