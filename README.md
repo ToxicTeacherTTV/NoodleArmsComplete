@@ -407,11 +407,11 @@ NODE_ENV="production"                       # production | development
 ## 📚 Documentation
 
 ### **Core Documentation**
-- **`PROJECT_ROADMAP.md`** - Detailed roadmap, completed features, implementation notes
-- **`NOTES.md`** - Development context, architectural decisions
-- **`LISTENER_CITIES_README.md`** - Listener cities feature guide
-- **`GEMINI_COST_OPTIMIZATION.md`** - Model selection strategies, cost analysis
-- **`PERSONALITY_FIX_GUIDE.md`** - Personality tuning recommendations
+- **[MASTER_ARCHITECTURE.md](./MASTER_ARCHITECTURE.md)** - The "Bible" of the project. How everything works.
+- **[PROJECT_ROADMAP.md](./PROJECT_ROADMAP.md)** - Feature status, recent completions, and future plans.
+- **[GEMINI_COST_OPTIMIZATION.md](./GEMINI_COST_OPTIMIZATION.md)** - Deep dive into the Gemini 3 Flash strategy and pricing.
+- **[NOTES.md](./NOTES.md)** - Developer diary, implementation details, and debugging tips.
+- **[LISTENER_CITIES_README.md](./LISTENER_CITIES_README.md)** - Guide for the "Where the fuck are the viewers from" feature.
 
 ### **Database & Schema**
 - **`shared/schema.ts`** - Complete Drizzle ORM schema (15 tables)

@@ -1,6 +1,6 @@
 # Nicky AI - Master Architecture & System Overview
 
-**Last Updated:** December 28, 2025
+**Last Updated:** January 4, 2026
 
 This document serves as the "Master Guide" to the Nicky AI application, explaining how the entire system works, from the high-level concept to the deep technical implementation.
 
@@ -14,6 +14,7 @@ This document serves as the "Master Guide" to the Nicky AI application, explaini
 - **Voice Integration:** He speaks with a custom ElevenLabs voice, complete with emotional inflections (yelling, whispering, sighing).
 - **Context Awareness:** He knows if he's in "Streaming Mode" (fast, punchy) or "Podcast Mode" (deep, storytelling).
 - **Persistence:** He remembers his current mood, mode, and conversation variety even if the server restarts.
+- **Privacy Controls:** User can toggle "Memory Learning" on/off or use `[PRIVATE]` tags to keep secrets.
 
 ---
 
@@ -25,8 +26,9 @@ The application is built as a modern full-stack web app:
 *   **Backend:** Express + TypeScript (The brain)
 *   **Database:** PostgreSQL (Neon) with Drizzle ORM (The memory)
 *   **AI Brains:**
-    *   **Primary:** Gemini 3 Flash (Default for Chat, RAG, Extraction, & Analysis)
-    *   **Fallback:** Gemini 3 Pro (When Flash fails)
+    *   **Primary:** Gemini 3 Flash (Default for ALL operations: Chat, RAG, Extraction).
+    *   **Fallback:** Gemini 3 Pro (High-quality backup).
+    *   *See [GEMINI_COST_OPTIMIZATION.md](./GEMINI_COST_OPTIMIZATION.md) for full pricing strategy.*
 *   **Voice:** ElevenLabs v3 (Text-to-Speech with emotion tags)
 
 ---
