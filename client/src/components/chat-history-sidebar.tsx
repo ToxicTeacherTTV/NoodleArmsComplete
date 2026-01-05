@@ -62,15 +62,21 @@ export default function ChatHistorySidebar({
   const [evaluationResult, setEvaluationResult] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const { data: conversations = [], isLoading } = useQuery<ConversationWithMeta[]>({
+  const { data: conversations, isLoading, error } = useQuery<ConversationWithMeta[]>({
     queryKey: ['/api/conversations/web', showArchived],
     queryFn: async () => {
-      const res = await fetch(`/api/conversations/web?archived=${showArchived}`);
-      if (!res.ok) throw new Error('Failed to fetch conversations');
-      return res.json();
+      try {
+        const res = await apiRequest('GET', `/api/conversations/web?archived=${showArchived}`);
+        return await res.json();
+      } catch (err) {
+        console.error('Failed to fetch conversations:', err);
+        throw err;
+      }
     },
     refetchInterval: false,
   });
+
+  const conversationList = conversations || [];
 
   const evaluateMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -126,7 +132,7 @@ export default function ChatHistorySidebar({
         body: JSON.stringify({ format }),
       });
       if (!res.ok) throw new Error('Export failed');
-      
+
       if (format === 'json') {
         const data = await res.json();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -161,8 +167,8 @@ export default function ChatHistorySidebar({
     }
     // Fall back to first message preview
     if (conv.firstMessage) {
-      return conv.firstMessage.length > 40 
-        ? conv.firstMessage.substring(0, 40) + "..." 
+      return conv.firstMessage.length > 40
+        ? conv.firstMessage.substring(0, 40) + "..."
         : conv.firstMessage;
     }
     // Last resort: message count
@@ -213,7 +219,7 @@ export default function ChatHistorySidebar({
     return groups;
   };
 
-  const groupedConversations = groupByDate(conversations);
+  const groupedConversations = groupByDate(conversationList);
 
   const feedbackMutation = useMutation({
     mutationFn: async ({ content, conversationId }: { content: string; conversationId: string }) => {
@@ -231,15 +237,15 @@ export default function ChatHistorySidebar({
 
   const handleApplyFeedback = () => {
     if (!evaluationResult || !evaluatingId) return;
-    
+
     // Simple heuristic: Extract the "Critique" or "Improvement" section if possible, 
     // otherwise send the whole summary.
     // For now, we'll send a summarized prompt.
     const feedbackContent = `Review of conversation ${evaluatingId}: ${evaluationResult.substring(0, 500)}...`;
-    
-    feedbackMutation.mutate({ 
-      content: feedbackContent, 
-      conversationId: evaluatingId 
+
+    feedbackMutation.mutate({
+      content: feedbackContent,
+      conversationId: evaluatingId
     });
   };
 
@@ -292,14 +298,27 @@ export default function ChatHistorySidebar({
                 </div>
               </div>
             </div>
-          ) : conversations.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8 px-4">
-              <i className="fas fa-comments text-3xl mb-3 opacity-50"></i>
-              <p className="text-sm">No conversations yet</p>
-              <p className="text-xs mt-1">Start chatting to see history</p>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center h-full py-12 px-4 text-center">
+              <i className="fas fa-exclamation-circle text-2xl text-red-500 mb-2 opacity-50"></i>
+              <p className="text-muted-foreground text-sm font-medium">Failed to load history</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-2 text-xs"
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/conversations/web'] })}
+              >
+                Try Again
+              </Button>
+            </div>
+          ) : conversationList.length === 0 ? (
+            <div className="text-center text-muted-foreground py-12 px-4 bg-muted/5 rounded-lg border border-dashed border-border/60 mx-2">
+              <i className="fas fa-comments text-3xl mb-3 opacity-20"></i>
+              <p className="text-sm font-medium">No {showArchived ? 'archived' : 'active'} conversations</p>
+              <p className="text-xs mt-1 opacity-70">Start chatting to see history</p>
             </div>
           ) : (
-            Object.entries(groupedConversations).map(([group, convs]) => 
+            Object.entries(groupedConversations).map(([group, convs]) =>
               convs.length > 0 && (
                 <div key={group} className="mb-4">
                   <h3 className="text-xs font-semibold text-muted-foreground px-2 mb-2">
@@ -312,11 +331,10 @@ export default function ChatHistorySidebar({
                           <div className="group relative">
                             <button
                               onClick={() => onSelectConversation(conv.id)}
-                              className={`w-full text-left px-3 py-2 pr-9 rounded-lg transition-colors ${
-                                conv.id === currentConversationId
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'hover:bg-muted text-foreground'
-                              }`}
+                              className={`w-full text-left px-3 py-2 pr-9 rounded-lg transition-colors ${conv.id === currentConversationId
+                                ? 'bg-primary text-primary-foreground'
+                                : 'hover:bg-muted text-foreground'
+                                }`}
                               data-testid={`conversation-${conv.id}`}
                             >
                               <div className="flex items-start justify-between gap-2">
@@ -324,39 +342,35 @@ export default function ChatHistorySidebar({
                                   <p className="text-sm font-medium truncate">
                                     {generateTitle(conv)}
                                   </p>
-                                  <p className={`text-xs mt-1 ${
-                                    conv.id === currentConversationId 
-                                      ? 'text-primary-foreground/70' 
-                                      : 'text-muted-foreground'
-                                  }`}>
+                                  <p className={`text-xs mt-1 ${conv.id === currentConversationId
+                                    ? 'text-primary-foreground/70'
+                                    : 'text-muted-foreground'
+                                    }`}>
                                     {getRelativeTime(conv.createdAt)}
                                   </p>
                                 </div>
                                 {conv.messageCount > 0 && (
-                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                    conv.id === currentConversationId
-                                      ? 'bg-primary-foreground/20 text-primary-foreground'
-                                      : 'bg-muted text-muted-foreground'
-                                  }`}>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${conv.id === currentConversationId
+                                    ? 'bg-primary-foreground/20 text-primary-foreground'
+                                    : 'bg-muted text-muted-foreground'
+                                    }`}>
                                     {conv.messageCount}
                                   </span>
                                 )}
                               </div>
                             </button>
-                            
-                            <div className={`absolute right-1 top-1/2 -translate-y-1/2 ${
-                              conv.id === currentConversationId ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                            } transition-opacity`}>
+
+                            <div className={`absolute right-1 top-1/2 -translate-y-1/2 ${conv.id === currentConversationId ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                              } transition-opacity`}>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className={`h-7 w-7 p-0 ${
-                                      conv.id === currentConversationId
-                                        ? 'text-primary-foreground hover:bg-primary-foreground/20'
-                                        : 'text-muted-foreground hover:bg-muted'
-                                    }`}
+                                    className={`h-7 w-7 p-0 ${conv.id === currentConversationId
+                                      ? 'text-primary-foreground hover:bg-primary-foreground/20'
+                                      : 'text-muted-foreground hover:bg-muted'
+                                      }`}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                     }}
@@ -495,8 +509,8 @@ export default function ChatHistorySidebar({
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             {evaluationResult && (
-              <Button 
-                variant="secondary" 
+              <Button
+                variant="secondary"
                 onClick={handleApplyFeedback}
                 disabled={feedbackMutation.isPending}
               >
@@ -552,7 +566,7 @@ export default function ChatHistorySidebar({
             <Button variant="outline" onClick={() => setRenamingId(null)}>
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={() => {
                 if (renamingId && newTitle.trim()) {
                   renameMutation.mutate({ id: renamingId, title: newTitle.trim() });

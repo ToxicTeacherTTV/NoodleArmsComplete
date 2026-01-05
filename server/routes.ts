@@ -309,10 +309,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(conversation);
     } catch (error) {
       console.error('Conversation creation error:', error);
-      res.status(400).json({ 
+      res.status(400).json({
         error: 'Invalid conversation data',
         details: error instanceof z.ZodError ? error.errors : undefined
       });
+    }
+  });
+
+
+  app.get('/api/conversations/web', async (req, res) => {
+    try {
+      const activeProfile = await storage.getActiveProfile();
+      if (!activeProfile) {
+        return res.status(404).json({ error: 'No active profile' });
+      }
+      const showArchived = req.query.archived === 'true';
+      const conversations = await storage.listWebConversations(activeProfile.id, showArchived);
+      res.json(conversations);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch conversations' });
     }
   });
 
@@ -359,7 +374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const messages = await storage.getConversationMessages(id);
-      
+
       if (!messages || messages.length === 0) {
         return res.status(404).json({ error: 'Conversation not found or empty' });
       }
@@ -367,7 +382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const transcript = messages.map(m => `[${m.type}]: ${m.content}`).join('\n');
       const { geminiService } = await import('./services/gemini.js');
       const evaluation = await geminiService.evaluateConversation(transcript);
-      
+
       res.json({ evaluation });
     } catch (error) {
       console.error('Evaluation error:', error);
@@ -381,7 +396,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!content) {
         return res.status(400).json({ error: 'Feedback content is required' });
       }
-      
+
       // 🧠 INTELLIGENT SUMMARIZATION
       // Instead of saving the raw evaluation, we distill it into a single actionable coaching tip.
       const { geminiService } = await import('./services/gemini.js');
@@ -393,14 +408,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         actionableTip = await executeWithDefaultModel(async (model) => {
           const summaryResponse = await geminiService['ai'].models.generateContent({
             model,
-            contents: [{ role: 'user', parts: [{ text: `
+            contents: [{
+              role: 'user', parts: [{
+                text: `
               Extract a single, concise coaching instruction (max 1 sentence) from this feedback for an AI character.
               Focus on what the character should DO differently next time.
               Start with a verb (e.g., "Be more...", "Stop...", "Mention...").
               
               FEEDBACK:
               ${content}
-            ` }] }]
+            ` }]
+            }]
           });
           return summaryResponse.text?.trim() || content;
         }, 'generation');
@@ -409,7 +427,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const entry = await personalityCoach.addFeedback(actionableTip, conversationId);
-      
+
       res.json(entry);
     } catch (error) {
       console.error('Feedback error:', error);
@@ -417,19 +435,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/conversations/web', async (req, res) => {
-    try {
-      const activeProfile = await storage.getActiveProfile();
-      if (!activeProfile) {
-        return res.status(404).json({ error: 'No active profile' });
-      }
-      const showArchived = req.query.archived === 'true';
-      const conversations = await storage.listWebConversations(activeProfile.id, showArchived);
-      res.json(conversations);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch conversations' });
-    }
-  });
+
 
   app.patch('/api/conversations/:id/archive', async (req, res) => {
     try {
@@ -458,11 +464,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { title } = req.body;
-      
+
       if (!title || typeof title !== 'string' || title.trim().length === 0) {
         return res.status(400).json({ error: 'Title is required' });
       }
-      
+
       const updated = await storage.updateConversationTitle(id, title.trim());
       res.json(updated);
     } catch (error) {
@@ -519,7 +525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 🔒 PRIVACY CHECK: Check if this conversation or message is "Off the Record"
       const conversation = await storage.getConversation(conversationId);
       const isPrivateTrigger = /\[PRIVATE\]|\[OFF THE RECORD\]/i.test(message);
-      
+
       // Memory learning from request (UI toggle) overrides conversation default if provided
       const isPrivateConversation = (memoryLearning === false) || conversation?.isPrivate || isPrivateTrigger;
 
@@ -607,13 +613,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`⚡ CACHE HIT: Instant response (${perfTimers.total}ms) - saved ~5-10s`);
 
           // 💾 SAVE AI RESPONSE (even on cache hit, we need it in history!)
-      await storage.addMessage({
-        conversationId,
-        type: 'AI' as const,
-        content: cachedResponse,
-        isPrivate: isPrivateConversation,
-        metadata: { cached: true, processingTime: perfTimers.total } as any
-      });
+          await storage.addMessage({
+            conversationId,
+            type: 'AI' as const,
+            content: cachedResponse,
+            isPrivate: isPrivateConversation,
+            metadata: { cached: true, processingTime: perfTimers.total } as any
+          });
 
           return res.json({
             content: cachedResponse,
@@ -628,7 +634,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       //  GATHER ALL CONTEXT (Parallel Loading, Pruning, Web Search)
       console.log(` Starting centralized context gathering for: "${message}"`);
       const contextStart = Date.now();
-      
+
       const context = await aiOrchestrator.gatherAllContext(
         message,
         activeProfile.id,
@@ -681,42 +687,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // 🚀 OPTIMIZATION: Use fast pattern-based arc for STREAMING (no AI call)
           // UPDATE (Dec 2, 2025): User requested full enhancer for streaming too for better quality
-          const useFastMode = false; 
+          const useFastMode = false;
 
           // 🎭 AUTO-ENHANCE: Use the full EmotionTagGenerator for PODCAST and STREAMING mode to get high-quality tags
           // This replaces the simple "Emotional Arc" with the full "Enhance" logic the user likes
           if ((mode === 'PODCAST' || mode === 'STREAMING') && !useFastMode) {
-            
+
             // 🚀 STREAMING & PODCAST LATENCY CHECK: If the AI already included the tags (via system prompt injection), SKIP this step!
             // We check for the full double-tag pattern [strong bronx wiseguy accent][emotion]
             const hasFullTags = /^\[strong bronx wiseguy accent\]\[[\w\s]+\]/i.test(processedContent.trim());
-            
+
             if ((mode === 'STREAMING' || mode === 'PODCAST') && hasFullTags) {
               console.log(`⚡ ${mode} MODE: Full tags detected in raw output. Skipping separate enhancement step for speed.`);
             } else {
               console.log(`🎭 Auto-Enhancing response for ${mode} mode (Full tags missing)...`);
               const { emotionTagGenerator } = await import('./services/emotionTagGenerator.js');
-              
+
               // Use the full enhancer which adds [strong bronx wiseguy accent][emotion] and internal tags
               processedContent = await emotionTagGenerator.enhanceDialogue(processedContent, {
                 content: processedContent,
                 personality: `Current Personality: ${controls.preset} (${controls.intensity} intensity)`,
                 contentType: 'chat'
               });
-              
+
               console.log(`🎭 Auto-Enhanced result: ${processedContent.substring(0, 100)}...`);
             }
           } else {
             // Fallback to the lighter "Emotional Arc" if Enhance fails (or if fast mode was enabled)
             // Generate 5-stage emotional arc for natural progression
             const emotionalArc = await emotionTagGenerator.generateEmotionalArc({
-                content: processedContent,
-                personality: activeProfile.name,
-                contentType: 'voice_response',
-                mood: controls.preset === 'Chill Nicky' ? 'grumpy' :
+              content: processedContent,
+              personality: activeProfile.name,
+              contentType: 'voice_response',
+              mood: controls.preset === 'Chill Nicky' ? 'grumpy' :
                 controls.preset === 'Roast Mode' ? 'aggressive' :
-                    controls.preset === 'Unhinged' ? 'chaotic' : 'balanced',
-                intensity: controls.intensity === 'low' ? 'low' :
+                  controls.preset === 'Unhinged' ? 'chaotic' : 'balanced',
+              intensity: controls.intensity === 'low' ? 'low' :
                 controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
             }, useFastMode);
 
@@ -726,18 +732,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             // Check if AI already added proper [strong bronx wiseguy accent][emotion] double-tag pattern
             const hasBronxEmotionPattern = /^\[strong bronx wiseguy accent\]\[[\w\s]+\]/i.test(processedContent.trim());
-            
+
             // Only apply emotional arc if proper double-tag pattern is missing
             if (!hasBronxEmotionPattern) {
-                // Strip existing malformed tags (including lone [bronx] without emotion)
-                let cleanedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
+              // Strip existing malformed tags (including lone [bronx] without emotion)
+              let cleanedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
 
-                // Apply emotional arc with natural progression
-                const taggedContent = elevenlabsService.applyEmotionalArc(cleanedContent, emotionalArc);
-                processedContent = taggedContent;
-                console.log(`🎭 Applied emotional arc (proper [strong bronx wiseguy accent][emotion] pattern was missing)`);
+              // Apply emotional arc with natural progression
+              const taggedContent = elevenlabsService.applyEmotionalArc(cleanedContent, emotionalArc);
+              processedContent = taggedContent;
+              console.log(`🎭 Applied emotional arc (proper [strong bronx wiseguy accent][emotion] pattern was missing)`);
             } else {
-                console.log(`🎭 AI already added proper [strong bronx wiseguy accent][emotion] pattern - keeping it as-is`);
+              console.log(`🎭 AI already added proper [strong bronx wiseguy accent][emotion] pattern - keeping it as-is`);
             }
           }
 
@@ -773,7 +779,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? ` (🚀 OPTIMIZED: -${Math.round((perfTimers.memoryRetrieval + perfTimers.contextLoading + perfTimers.emotionTags) * 0.4)}ms estimated savings)`
         : '';
       console.log(`⚡ Performance: Memory=${perfTimers.memoryRetrieval}ms | Context=${perfTimers.contextLoading}ms | AI=${perfTimers.aiGeneration}ms | Emotions=${perfTimers.emotionTags}ms | TOTAL=${perfTimers.total}ms${savings}`);
-      
+
       if (context?.stats) {
         console.log(`✂️  Context Pruning: ${context.stats.memoriesCount} memories, ${context.stats.docsCount} docs kept | ~${context.stats.tokensSaved} tokens saved`);
       }
@@ -799,28 +805,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // 🏛️ LORE ORCHESTRATION: Process the turn for new lore and hallucinations
-      // Run in background to avoid blocking the response
-      if (!isPrivateConversation) {
-        (async () => {
-          try {
-            const { loreOrchestrator } = await import('./services/LoreOrchestrator.js');
-            // Process user message for facts
-            await loreOrchestrator.processNewContent(
-              message, 
-              activeProfile.id, 
-              `Conversation: ${conversationId}`,
-              'CONVERSATION',
-              conversationId
-            );
-            // Check if Nicky's response contains new lore to promote
-            await loreOrchestrator.checkHallucination(response.content, activeProfile.id);
-          } catch (loreError) {
-            console.error('🏛️ LoreOrchestrator background task failed:', loreError);
-          }
-        })();
-      } else {
-        console.log(`🔒 Skipping Lore Orchestration for private conversation/message.`);
-      }
+      // ENABLED FOR PRIVATE MODE (Per user request: "Same shit as learning mode")
+      (async () => {
+        try {
+          const { loreOrchestrator } = await import('./services/LoreOrchestrator.js');
+          // Process user message for facts
+          await loreOrchestrator.processNewContent(
+            message,
+            activeProfile.id,
+            `Conversation: ${conversationId}`,
+            'CONVERSATION',
+            conversationId
+          );
+          // Check if Nicky's response contains new lore to promote
+          await loreOrchestrator.checkHallucination(response.content, activeProfile.id);
+        } catch (loreError) {
+          console.error('🏛️ LoreOrchestrator background task failed:', loreError);
+        }
+      })();
 
       // � TOPIC DECAY: Naturally cool down topics after each turn to prevent obsession
       try {
@@ -832,45 +834,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // �📚 NEW: Auto-save high-quality messages as training examples
       // 📚 AUTO-TRAINING: Save high-quality messages as training examples (Style Guides)
-      if (!isPrivateConversation) {
-        (async () => {
-          try {
-            const { messageTrainingCollector } = await import('./services/messageTrainingCollector.js');
+      // 📚 AUTO-TRAINING: Save high-quality messages as training examples (Style Guides)
+      // ENABLED FOR PRIVATE MODE (Per user request: "Same shit as learning mode")
+      (async () => {
+        try {
+          const { messageTrainingCollector } = await import('./services/messageTrainingCollector.js');
 
-            // Evaluate in background (don't block response)
-            // Small delay to ensure DB consistency
-            setTimeout(async () => {
-              try {
-                const quality = await messageTrainingCollector.evaluateMessageQuality(savedMessage, {
-                  userMessage: message,
-                  conversationLength: messageCount + 1,
-                  hasPositiveRating: false // Will be updated if user rates
-                });
+          // Evaluate in background (don't block response)
+          // Small delay to ensure DB consistency
+          setTimeout(async () => {
+            try {
+              const quality = await messageTrainingCollector.evaluateMessageQuality(savedMessage, {
+                userMessage: message,
+                conversationLength: messageCount + 1,
+                hasPositiveRating: false // Will be updated if user rates
+              });
 
-                if (quality.isQuality) {
-                  await messageTrainingCollector.saveMessageAsTraining(
-                    storage,
-                    savedMessage,
-                    activeProfile.id,
-                    {
-                      userMessage: message,
-                      conversationId,
-                      mode
-                    }
-                  );
-                  console.log(`📚 Auto-saved message as training (score: ${quality.score})`);
-                }
-              } catch (error) {
-                console.warn('⚠️ Failed to auto-save message as training:', error);
+              if (quality.isQuality) {
+                await messageTrainingCollector.saveMessageAsTraining(
+                  storage,
+                  savedMessage,
+                  activeProfile.id,
+                  {
+                    userMessage: message,
+                    conversationId,
+                    mode
+                  }
+                );
+                console.log(`📚 Auto-saved message as training (score: ${quality.score})`);
               }
-            }, 500);
-          } catch (error) {
-            console.warn('⚠️ Message training collector import failed:', error);
-          }
-        })();
-      } else {
-        console.log(`🔒 Skipping Style Guide extraction for private conversation/message.`);
-      }
+            } catch (error) {
+              console.warn('⚠️ Failed to auto-save message as training:', error);
+            }
+          }, 500);
+        } catch (error) {
+          console.warn('⚠️ Message training collector import failed:', error);
+        }
+      })();
 
       // 🌐 ENHANCED: Post-response memory consolidation for web search results
       if (webSearchUsed && webSearchResults.length > 0) {
@@ -910,7 +910,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       chaosEngine.onResponseGenerated();
 
       // 📝 Generate conversation title after first exchange
-      if (messageCount === 2) { // First exchange complete (1 user + 1 AI)
+      if (messageCount === 1) { // First exchange complete (1 user msg just added + AI responding now)
         try {
           const title = await aiOrchestrator.generateConversationTitle(message, response.content);
           await storage.updateConversationTitle(conversationId, title);
@@ -1054,7 +1054,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Flip both message and conversation to public
           await storage.updateMessagePrivacy(id, false);
           await storage.updateConversationPrivacy(message.conversationId, false);
-          
+
           // 🧠 LORE PROMOTION: Since this was private, lore extraction was skipped.
           // Now that it's public, we should process it for lore.
           try {
@@ -1231,7 +1231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             const embedding = await embeddingService.generateEmbedding(doc.extractedContent);
             await storage.updateDocument(document.id, {
-              embedding: JSON.stringify(embedding.embedding),
+              embedding: embedding.embedding,
               embeddingModel: embedding.model,
               embeddingUpdatedAt: new Date()
             });
@@ -1893,7 +1893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get all entries for search functionality
       const limit = parseInt(req.query.limit as string) || 10000; // Large limit for search
-      
+
       // Use getMemoryWithEntityLinks to include linked entities
       const entries = await storage.getMemoryWithEntityLinks(activeProfile.id, limit);
       res.json(entries);
@@ -2128,9 +2128,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .then(result => console.log(`✅ Background audit complete: ${result.updates} updates`))
         .catch(err => console.error(`❌ Background audit failed:`, err));
 
-      res.json({ 
-        success: true, 
-        message: 'Personality audit started in the background. This may take several minutes for large memory banks.' 
+      res.json({
+        success: true,
+        message: 'Personality audit started in the background. This may take several minutes for large memory banks.'
       });
     } catch (error) {
       console.error('Personality audit failed:', error);
@@ -3085,7 +3085,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const currentRels = sourceFact.relationships || [];
           if (!currentRels.includes(rel.targetFactId)) {
             await db.update(memoryEntries)
-              .set({ 
+              .set({
                 relationships: [...currentRels, rel.targetFactId],
                 updatedAt: new Date()
               })
@@ -3098,7 +3098,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const cluster of result.clusters) {
         for (const factId of cluster.factIds) {
           await db.update(memoryEntries)
-            .set({ 
+            .set({
               clusterId: cluster.name, // Using name as ID for readability for now
               updatedAt: new Date()
             })

@@ -1,13 +1,4 @@
-/**
- * Context Pruning Service
- * Removes redundant information from memory context that's already in recent conversation
- * Reduces token usage and saves 1-2s by sending less data to AI
- */
-
-interface Message {
-  content: string;
-  type: 'USER' | 'ASSISTANT';
-}
+import { Message } from '@shared/schema';
 
 interface Memory {
   id: string;
@@ -24,13 +15,13 @@ class ContextPruner {
    */
   private extractKeywords(text: string): Set<string> {
     const keywords = new Set<string>();
-    
+
     // Lowercase for case-insensitive matching
     const normalized = text.toLowerCase();
-    
+
     // Extract words (3+ chars, alphanumeric)
     const words = normalized.match(/\b[a-z0-9]{3,}\b/g) || [];
-    
+
     // Filter out common stop words
     const stopWords = new Set([
       'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'her', 'was', 'one',
@@ -40,13 +31,13 @@ class ContextPruner {
       'know', 'take', 'into', 'year', 'some', 'them', 'than', 'then', 'these', 'would', 'there',
       'about', 'think', 'really', 'little', 'could', 'should', 'pretty', 'actually'
     ]);
-    
+
     for (const word of words) {
       if (!stopWords.has(word)) {
         keywords.add(word);
       }
     }
-    
+
     return keywords;
   }
 
@@ -56,10 +47,10 @@ class ContextPruner {
    */
   private calculateSimilarity(set1: Set<string>, set2: Set<string>): number {
     if (set1.size === 0 || set2.size === 0) return 0;
-    
+
     const intersection = new Set(Array.from(set1).filter(x => set2.has(x)));
     const union = new Set([...Array.from(set1), ...Array.from(set2)]);
-    
+
     return Math.round((intersection.size / union.size) * 100);
   }
 
@@ -70,9 +61,9 @@ class ContextPruner {
   private isRedundant(memory: any, recentKeywords: Set<string>): boolean {
     const memoryText = memory.summary || memory.content;
     const memoryKeywords = this.extractKeywords(memoryText);
-    
+
     const similarity = this.calculateSimilarity(memoryKeywords, recentKeywords);
-    
+
     // Redundant if >50% overlap
     return similarity > 50;
   }
@@ -114,11 +105,11 @@ class ContextPruner {
     for (const memory of memories) {
       if (this.isRedundant(memory, recentKeywords)) {
         removed.push(memory);
-        
+
         // Rough estimate: ~1 token per 4 characters
         const memoryText = memory.summary || memory.content;
         estimatedTokensSaved += Math.round(memoryText.length / 4);
-        
+
         console.log(`   🗑️  PRUNED: "${memoryText.substring(0, 60)}..." (redundant with recent conversation)`);
       } else {
         pruned.push(memory);
@@ -202,10 +193,7 @@ class ContextPruner {
   async getRecentMessages(conversationId: string, storage: any, limit: number = 8): Promise<Message[]> {
     try {
       const messages = await storage.getRecentMessages(conversationId, limit);
-      return messages.map((m: any) => ({
-        content: m.content,
-        type: m.type
-      }));
+      return messages;
     } catch (error) {
       console.warn('⚠️ Failed to fetch recent messages for pruning:', error);
       return [];

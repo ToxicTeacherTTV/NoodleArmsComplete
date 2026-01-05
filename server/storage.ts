@@ -147,7 +147,7 @@ export interface IStorage {
   getConversationsByContentType(profileId: string, contentType: 'PODCAST' | 'STREAMING' | 'DISCORD' | 'GENERAL', limit?: number): Promise<Conversation[]>;
   searchConversationsByTopics(profileId: string, topics: string[], limit?: number): Promise<Conversation[]>;
   getCompletedStories(profileId: string): Promise<{ conversationId: string; stories: string[] }[]>;
-  listWebConversations(profileId: string, showArchived?: boolean): Promise<Conversation[]>;
+  listWebConversations(profileId: string, showArchived?: boolean): Promise<any[]>;
 
   // Document management
   createDocument(document: InsertDocument): Promise<Document>;
@@ -555,7 +555,7 @@ export class DatabaseStorage implements IStorage {
           eq(listenerCities.isCovered, false)
         )
       );
-    
+
     if (uncovered.length === 0) return undefined;
     return uncovered[Math.floor(Math.random() * uncovered.length)];
   }
@@ -725,8 +725,9 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
-  async listWebConversations(profileId: string, showArchived = false): Promise<Conversation[]> {
-    return await db
+  async listWebConversations(profileId: string, showArchived = false): Promise<any[]> {
+    // 1. Fetch conversations
+    const convs = await db
       .select()
       .from(conversations)
       .where(and(
@@ -734,6 +735,32 @@ export class DatabaseStorage implements IStorage {
         eq(conversations.isArchived, showArchived)
       ))
       .orderBy(desc(conversations.createdAt));
+
+    if (convs.length === 0) return [];
+
+    const convIds = convs.map(c => c.id);
+
+    // 2. Fetch message counts safely
+    const counts = await db
+      .select({
+        conversationId: messages.conversationId,
+        count: sql<number>`count(*)`
+      })
+      .from(messages)
+      .where(inArray(messages.conversationId, convIds))
+      .groupBy(messages.conversationId);
+
+    const countMap = new Map(counts.map(c => [c.conversationId, Number(c.count)]));
+
+    // 3. Fetch first message previews (optional but nice for title generation)
+    // Using a window function approach logic would be ideal but complex in Drizzle without raw SQL.
+    // For now, we'll return the count which fixes the main "metadata" gap.
+
+    return convs.map(c => ({
+      ...c,
+      messageCount: countMap.get(c.id) || 0,
+      firstMessage: undefined // UI handles missing preview gracefully
+    }));
   }
 
   async searchConversationsByTopics(profileId: string, topics: string[], limit = 50): Promise<Conversation[]> {
@@ -834,21 +861,23 @@ export class DatabaseStorage implements IStorage {
 
   async findSimilarTrainingExamples(profileId: string, queryVector: number[], limit = 5, threshold = 0.5): Promise<Array<Document & { similarity: number }>> {
     const vectorLiteral = `[${queryVector.join(",")}]`;
-
     const query = `
-      SELECT *, 1 - (embedding::vector <=> $4::vector) as similarity 
+      SELECT id, profile_id, name, filename, content_type, document_type, size, chunks, extracted_content, 
+             processing_status, processing_progress, processing_metadata, content_hash, embedding, 
+             embedding_model, embedding_updated_at, retrieval_count, created_at, updated_at,
+             1 - (embedding <=> '${vectorLiteral}'::vector) as similarity 
       FROM documents 
       WHERE profile_id = $1 
       AND document_type = 'TRAINING_EXAMPLE' 
       AND processing_status = 'COMPLETED' 
       AND embedding IS NOT NULL 
-      AND 1 - (embedding::vector <=> $4::vector) > $2
+      AND 1 - (embedding <=> '${vectorLiteral}'::vector) > $2
       ORDER BY similarity DESC 
       LIMIT $3
     `;
-    
-    const result = await pool.query(query, [profileId, threshold, limit, vectorLiteral]);
-    
+
+    const result = await pool.query(query, [profileId, threshold, limit]);
+
     return result.rows.map((row: any) => ({
       id: row.id,
       profileId: row.profile_id,
@@ -1250,10 +1279,10 @@ export class DatabaseStorage implements IStorage {
    * Fetches structured packs of memories (Canon, Rumors, Disputed) based on context.
    */
   async getMemoryPacks(
-    profileId: string, 
-    query: string, 
-    chaosLevel: number, 
-    mode?: string, 
+    profileId: string,
+    query: string,
+    chaosLevel: number,
+    mode?: string,
     queryIntent?: string
   ): Promise<{
     canon: MemoryEntry[];
@@ -1266,10 +1295,10 @@ export class DatabaseStorage implements IStorage {
     // We use searchMemoryEntries which handles full-text search and ranking
     // GROUNDING RULE: Canon must be derived only from lane=CANON results
     const searchResults = await this.searchMemoryEntries(profileId, query, 'CANON');
-    
+
     // STRICT LANE FILTERING: Only CANON memories with high confidence
-    const canon = searchResults.filter(m => 
-      m.lane === 'CANON' && 
+    const canon = searchResults.filter(m =>
+      m.lane === 'CANON' &&
       (m.confidence || 0) >= 60
     );
 
@@ -1331,7 +1360,7 @@ export class DatabaseStorage implements IStorage {
     // 4. Determine Rumor/Spice Level
     let rumorLimit = 0;
     const isTheaterZone = mode === 'PODCAST' || mode === 'STREAMING' || chaosLevel > 70 || (queryIntent && /story|lore|rant|tell me|what happened/i.test(queryIntent));
-    
+
     if (isTheaterZone) {
       rumorLimit = mode === 'PODCAST' ? 3 : 2;
     } else if (chaosLevel > 50) {
@@ -2577,7 +2606,7 @@ export class DatabaseStorage implements IStorage {
             like(podcastEpisodes.transcript, `%${query}%`)
           )
         )
-           )
+      )
       .orderBy(desc(podcastEpisodes.episodeNumber));
 
     // Search segments by title, description, transcript, or key quotes
@@ -2784,29 +2813,28 @@ export class DatabaseStorage implements IStorage {
 
   async findSimilarMemories(profileId: string, queryVector: number[], limit = 5, threshold = 0.5, lane?: 'CANON' | 'RUMOR'): Promise<Array<MemoryEntry & { similarity: number }>> {
     const vectorLiteral = `[${queryVector.join(",")}]`;
+    const params: any[] = [profileId, threshold];
 
-    const params: any[] = [profileId, threshold, vectorLiteral];
-    
     let query = `
       SELECT *, 
-      (1 - (embedding::vector <=> $3::vector)) as similarity,
-      ((1 - (embedding::vector <=> $3::vector)) * (1 + (importance::float / 200.0)) / (1 + (retrieval_count::float / 50.0))) as ranking_score
+      (1 - (embedding <=> '${vectorLiteral}'::vector)) as similarity,
+      ((1 - (embedding <=> '${vectorLiteral}'::vector)) * (1 + (importance::float / 200.0)) / (1 + (retrieval_count::float / 50.0))) as ranking_score
       FROM memory_entries 
       WHERE profile_id = $1 
       AND status = 'ACTIVE'
-      AND (1 - (embedding::vector <=> $3::vector)) > $2
+      AND (1 - (embedding <=> '${vectorLiteral}'::vector)) > $2
     `;
-    
+
     if (lane) {
-      query += ` AND lane = $4`;
+      query += ` AND lane = $3`;
       params.push(lane);
     }
-    
+
     query += ` ORDER BY ranking_score DESC LIMIT $${params.length + 1}`;
     params.push(limit);
 
     const result = await pool.query(query, params);
-    
+
     return result.rows.map(row => ({
       id: row.id,
       profileId: row.profile_id,
@@ -2955,19 +2983,18 @@ export class DatabaseStorage implements IStorage {
 
   async findSimilarContent(profileId: string, queryVector: number[], limit = 5, threshold = 0.5): Promise<Array<ContentLibraryEntry & { similarity: number }>> {
     const vectorLiteral = `[${queryVector.join(",")}]`;
-    
     const query = `
-      SELECT *, 1 - (embedding::vector <=> $4::vector) as similarity 
+      SELECT *, 1 - (embedding <=> '${vectorLiteral}'::vector) as similarity 
       FROM content_library 
       WHERE profile_id = $1 
       AND embedding IS NOT NULL 
-      AND 1 - (embedding::vector <=> $4::vector) > $2
+      AND 1 - (embedding <=> '${vectorLiteral}'::vector) > $2
       ORDER BY similarity DESC 
       LIMIT $3
     `;
-    
-    const result = await pool.query(query, [profileId, threshold, limit, vectorLiteral]);
-    
+
+    const result = await pool.query(query, [profileId, threshold, limit]);
+
     return result.rows.map((row: any) => ({
       id: row.id,
       profileId: row.profile_id,
@@ -3885,7 +3912,7 @@ export class DatabaseStorage implements IStorage {
           sql`EXISTS (SELECT 1 FROM jsonb_array_elements_text(${people.aliases}) as alias WHERE alias ILIKE ${lowerQuery})`
         )
       )).limit(5),
-      
+
       db.select().from(places).where(and(
         eq(places.profileId, profileId),
         or(
