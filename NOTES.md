@@ -301,6 +301,34 @@ console.log("This is just documentation");
 ```
 -->
 
+## Maintenance & Tuning
+
+### 🎛️ Chaos Engine Control
+
+**Current Status:** DISABLED (0%) by default.
+
+**To Re-Enable Chaos (30-50% recommended):**
+```sql
+UPDATE chaos_state SET level = 40 WHERE is_global = true;
+```
+
+**Levels:**
+- **0-20%**: Minimal chaos, consistent.
+- **30-50%**: Moderate variation.
+- **60-80%**: High chaos.
+- **80-100%**: FULL_PSYCHO mode.
+
+### 🧠 Memory Retrieval Limits
+
+**Location:** `server/services/anthropic.ts` (retrieveContextualMemories)
+
+**To reduce context bloat:**
+1. Find `limit: number = 15` in `retrieveContextualMemories`.
+2. Change to:
+   - `10` (standard)
+   - `5` (focused/minimal)
+3. Restart server.
+
 ## Voice & Character Development
 <!-- Add character notes and voice development ideas -->
 

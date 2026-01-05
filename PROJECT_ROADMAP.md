@@ -6,7 +6,16 @@ This document tracks suggested improvements and their implementation status.
 
 ---
 
-## 🎉 RECENT COMPLETIONS (January 3, 2026)
+## 🎉 RECENT COMPLETIONS (January 4, 2026)
+
+### Stability & Truncation Fixes (v1.6.1) ✅ COMPLETED
+**Status:** DEPLOYED - 4096 tokens, Character Limits, Auto-Renaming
+
+**What was fixed:**
+- ✅ **Response Truncation:** Increased token limit to **4096** (from 1024) for both Gemini and Anthropic.
+- ✅ **Character Limit:** Enforced **2200 char limit** via system prompt to keep responses concise.
+- ✅ **Auto-Renaming:** Fixed off-by-one error preventing "New Chat" from renaming automatically.
+- ✅ **Lore Crashes:** Patched JSON parsing error in `LoreOrchestrator`.
 
 ### Personality Hardening & "Show, Don't Tell" ✅ COMPLETED
 **Status:** DEPLOYED - Character integrity enforcement
@@ -658,7 +667,39 @@ const hybridResults = await embeddingService.hybridSearch(
 - Add "Content Review Queue" UI to approve/reject before memory creation
 - Remove generic YouTube/Steam scraping (too broad)
 
-**Files to check:** Look for content collection service
+### 2. Flagging System
+**Status:** INVESTIGATE - Legacy feature?
+**Source:** `SHIT_TO_FIX_LATER.md`
+- What does it do? Is it worth keeping?
+- **Action:** Audit `aiFlagger.ts` and deciding if we need a content review flow.
+
+## 🚀 FUTURE OPTIMIZATIONS (From Next-Level Plan)
+
+### 1. Streaming TTS Pipeline
+**Concept:** Stream text phrases to ElevenLabs as they complete, rather than waiting for full generation.
+**Impact:** 80% faster perceived response time.
+
+### 2. Stream Energy Detection
+**Concept:** Adapt personality intensity based on chat velocity and sentiment.
+**Logic:** High message rate + caps lock = High Intensity / Hype Mode.
+
+### 3. Hot-Path Optimization ("Rapid Fire Mode")
+**Concept:** Detect rapid-fire inputs (<10s gaps) and switch to "Ultra-Light" mode.
+**Changes:** Reduce context window, skip lore updates, limit to 3 memories for instant replies.
+
+### 4. Frontend Optimizations
+- **Optimistic UI:** Show user messages immediately before server ack.
+- **Lazy Loading:** Defer loading of heavy panels (Personality, Discord).
+
+### 5. Podcast Transcript Auto-Conversion
+**Concept:** Automatically convert podcast transcripts into `TRAINING_EXAMPLE` documents.
+**Impact:** Rapidly expands training data with authentic Nicky voice/style without manual effort.
+**Status:** READY TO IMPLEMENT (Logic defined in old improvement doc).
+
+### 6. Streaming API & Chunked TTS
+**Concept:** Use Gemini's streaming API for token-by-token generation + ElevenLabs chunked playback.
+**Impact:** Reduce perceived latency by 2-4 seconds.
+**Status:** PLANNED (Phase 2 of Streaming Optimization).
 
 ### 2. Personality Preset Usage
 **Status:** EVALUATE - Are all 11 presets being used?
