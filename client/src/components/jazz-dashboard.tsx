@@ -139,6 +139,7 @@ export default function JazzDashboard() {
         message: data.content,
         profileId: activeProfile?.id,
         mode: appMode,
+        memoryLearning: streamSettings.memoryLearning,
       });
       return response.json();
     },
@@ -151,6 +152,7 @@ export default function JazzDashboard() {
           content: response.content,
           createdAt: new Date().toISOString(),
           rating: null,
+          isPrivate: false,
           metadata: {
             processingTime: response.processingTime,
             retrieved_context: response.retrieved_context,
@@ -182,8 +184,11 @@ export default function JazzDashboard() {
 
   const createConversationMutation = useMutation<ConversationResponse, Error>({
     mutationFn: async () => {
+      if (!activeProfile?.id) {
+        throw new Error('No active profile found');
+      }
       const response = await apiRequest('POST', '/api/conversations', {
-        profileId: activeProfile?.id,
+        profileId: activeProfile.id,
         title: `Session ${new Date().toLocaleTimeString()}`,
       });
       return response.json();
@@ -206,6 +211,44 @@ export default function JazzDashboard() {
       });
       queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
     },
+  });
+
+  const updatePrivacyMutation = useMutation({
+    mutationFn: async (isPrivate: boolean) => {
+      await apiRequest('PATCH', `/api/conversations/${currentConversationId}/privacy`, { isPrivate });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations', currentConversationId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations/web'] });
+    }
+  });
+
+  const saveToMemoryMutation = useMutation({
+    mutationFn: async ({ messageId, content }: { messageId: string; content: string }) => {
+      await apiRequest('POST', '/api/memory/entries', {
+        profileId: activeProfile?.id,
+        content,
+        source: `Message: ${messageId}`,
+        type: 'FACT',
+        importance: 3,
+        confidence: 1.0,
+        metadata: { messageId, conversationId: currentConversationId }
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Saved to Memory",
+        description: "This interaction has been added to Nicky's long-term memory.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/memory/stats'] });
+    }
+  });
+
+  // Fetch current conversation details
+  const { data: currentConversation } = useQuery<ConversationResponse>({
+    queryKey: ['/api/conversations', currentConversationId],
+    enabled: !!currentConversationId,
+    refetchInterval: false,
   });
 
   // Fetch messages when conversation changes
@@ -269,6 +312,7 @@ export default function JazzDashboard() {
               type: 'USER',
               content: finalText,
               rating: null,
+              isPrivate: false,
               metadata: { voice: true },
               createdAt: new Date().toISOString(),
             };
@@ -340,6 +384,31 @@ export default function JazzDashboard() {
   };
 
   const documentCount = Array.isArray(documents) ? documents.length : 0;
+
+  const handleToggleLearning = () => {
+    const currentLearning = currentConversation ? !currentConversation.isPrivate : streamSettings.memoryLearning;
+    const newIsPrivate = currentLearning; // If learning was true, new isPrivate is true
+    
+    if (currentConversationId) {
+      updatePrivacyMutation.mutate(newIsPrivate);
+    }
+    
+    setStreamSettings(prev => ({
+      ...prev,
+      memoryLearning: !newIsPrivate
+    }));
+
+    toast({
+      title: newIsPrivate ? "🔒 Private Mode" : "🧠 Learning Mode",
+      description: newIsPrivate 
+        ? "Nicky will not remember this conversation." 
+        : "Nicky will learn from this conversation.",
+    });
+  };
+
+  const handleSaveToMemory = (messageId: string, content: string) => {
+    saveToMemoryMutation.mutate({ messageId, content });
+  };
 
   return (
     <>
@@ -484,6 +553,7 @@ export default function JazzDashboard() {
                     <CardContent className="flex-1 p-0">
                       <ChatPanel
                         messages={messages}
+                        conversationId={currentConversationId}
                         sessionDuration={getSessionDuration()}
                         messageCount={messages.length}
                         appMode={appMode}
@@ -532,6 +602,9 @@ export default function JazzDashboard() {
                         canReplay={appMode === 'PODCAST' ? canReplayElevenLabs : canReplay}
                         canSave={appMode === 'PODCAST' ? canSaveElevenLabs : false}
                         onTextSelection={handleTextSelection}
+                        memoryLearning={currentConversation ? !currentConversation.isPrivate : streamSettings.memoryLearning}
+                        onToggleLearning={handleToggleLearning}
+                        onSaveToMemory={handleSaveToMemory}
                       />
                     </CardContent>
                   </Card>
@@ -577,6 +650,7 @@ export default function JazzDashboard() {
                             content: trimmed,
                             createdAt: new Date().toISOString(),
                             rating: null,
+                            isPrivate: false,
                             metadata: null,
                           };
 
@@ -641,9 +715,11 @@ export default function JazzDashboard() {
                               }
                             }}
                             data-testid="button-store-conversation"
-                            className="px-3"
+                            className="px-3 flex items-center gap-2"
+                            title="Save this conversation to Nicky's long-term memory"
                           >
-                            <i className="fas fa-save" />
+                            <i className="fas fa-brain text-accent" />
+                            <span className="hidden sm:inline">Save to Memory</span>
                           </Button>
                         </div>
                       </form>
@@ -690,6 +766,7 @@ export default function JazzDashboard() {
                                       content: message.trim(),
                                       createdAt: new Date().toISOString(),
                                       rating: null,
+                                      isPrivate: false,
                                       metadata: null,
                                     };
                                     setMessages(prev => [...prev, userMessage]);
@@ -775,6 +852,7 @@ export default function JazzDashboard() {
                                   content: message.trim(),
                                   createdAt: new Date().toISOString(),
                                   rating: null,
+                                  isPrivate: false,
                                   metadata: null,
                                 };
                                 setMessages(prev => [...prev, userMessage]);

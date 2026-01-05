@@ -102,12 +102,12 @@ export const MODEL_METADATA: Record<AIModel, {
     description: 'Newest Flash model - beats 2.5 Pro in quality and cost'
   },
   'gemini-2.5-pro': {
-    displayName: 'Gemini 2.5 Pro',
+    displayName: 'Gemini 2.5 Pro (Legacy)',
     provider: 'google',
     speed: 'fast',
     quality: 'high',
     costLevel: 'moderate',
-    description: 'Best balance of quality and cost'
+    description: 'Legacy model - replaced by Gemini 3'
   },
   'gemini-2.5-flash': {
     displayName: 'Gemini 2.5 Flash',

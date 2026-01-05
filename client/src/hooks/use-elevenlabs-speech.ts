@@ -22,6 +22,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
   const onEndCallbackRef = useRef<(() => void) | undefined>();
   const speechQueue = useRef<Array<{ text: string; emotionProfile?: string }>>([]);
   const isProcessingRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const lastSpokenTextRef = useRef<string>('');
   const lastEmotionProfileRef = useRef<string | undefined>();
   const canReplayRef = useRef(false);
@@ -30,6 +31,18 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
   const canSaveRef = useRef(false);
 
   const isSupported = typeof window !== 'undefined' && typeof Audio !== 'undefined';
+
+  // Cleanup function for audio
+  const cleanupAudio = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.onended = null;
+      audioRef.current.onpause = null;
+      audioRef.current.onplay = null;
+      audioRef.current.onerror = null;
+      audioRef.current = null;
+    }
+  }, []);
 
   // Process speech queue
   const processQueue = useCallback(async () => {
@@ -48,6 +61,12 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     isProcessingRef.current = true;
     setIsSpeaking(true);
 
+    // Create new abort controller for this request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       const requestBody: { text: string; emotionProfile?: string } = {
         text: speechItem.text
@@ -57,13 +76,29 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
         requestBody.emotionProfile = speechItem.emotionProfile;
       }
       
-      const response = await apiRequest('POST', '/api/speech/synthesize', requestBody);
+      const response = await fetch('/api/speech/synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+        signal: abortControllerRef.current.signal
+      });
 
       if (!response.ok) {
         throw new Error('Failed to synthesize speech');
       }
 
+      // Check if we should still be processing (e.g. if stop was called)
+      if (!isProcessingRef.current) {
+        return;
+      }
+
       const audioBlob = await response.blob();
+      
+      // Check again after blob processing
+      if (!isProcessingRef.current) {
+        return;
+      }
+
       const audioUrl = URL.createObjectURL(audioBlob);
       
       // Store blob and URL for saving
@@ -74,6 +109,9 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
       lastAudioUrlRef.current = audioUrl;
       canSaveRef.current = true;
       
+      // Stop any currently playing audio before starting new one
+      cleanupAudio();
+
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
 
@@ -82,7 +120,6 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
         setIsPaused(false);
         isProcessingRef.current = false;
         audioRef.current = null;
-        // Don't revoke URL immediately - keep it for saving
         
         if (onEndCallbackRef.current) {
           onEndCallbackRef.current();
@@ -107,7 +144,6 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
         setIsPaused(false);
         isProcessingRef.current = false;
         audioRef.current = null;
-        // Don't revoke URL on error - keep it for saving
         
         if (onEndCallbackRef.current) {
           onEndCallbackRef.current();
@@ -119,7 +155,12 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
       };
 
       await audio.play();
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('ElevenLabs synthesis aborted');
+        return;
+      }
+
       console.error('ElevenLabs synthesis error:', error);
       setIsSpeaking(false);
       setIsPaused(false);
@@ -132,8 +173,10 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
 
       // Process next item in queue
       setTimeout(processQueue, 100);
+    } finally {
+      abortControllerRef.current = null;
     }
-  }, [isSupported]);
+  }, [isSupported, cleanupAudio]);
 
   const speak = useCallback((text: string, emotionProfile?: string, onEnd?: () => void) => {
     if (!isSupported || !text.trim()) return;
@@ -179,23 +222,21 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
   const stop = useCallback(() => {
     if (!isSupported) return;
 
-    if (audioRef.current) {
-      // Prevent event handlers from firing
-      audioRef.current.onended = null;
-      audioRef.current.onpause = null;
-      audioRef.current.onplay = null;
-      audioRef.current.onerror = null;
-      
-      audioRef.current.pause();
-      audioRef.current = null;
+    // Abort any pending synthesis request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
+
+    // Stop and cleanup current audio
+    cleanupAudio();
     
     speechQueue.current = [];
     setIsSpeaking(false);
     setIsPaused(false);
     isProcessingRef.current = false;
     onEndCallbackRef.current = undefined;
-  }, [isSupported]);
+  }, [isSupported, cleanupAudio]);
 
   const pause = useCallback(() => {
     if (!isSupported || !audioRef.current || !isSpeaking) return;

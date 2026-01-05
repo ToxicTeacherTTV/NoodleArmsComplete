@@ -1,20 +1,20 @@
 # Emotion Enhancement System
 
 ## Overview
-ElevenLabs-style emotion enhancement system that adds audio tags to text responses for more expressive TTS output. Based on ElevenLabs' official enhance prompt guidelines.
+ElevenLabs-style emotion enhancement system that adds audio tags to text responses for more expressive TTS output. This system is the primary way Nicky expresses his state, as he is strictly forbidden from using physical stage directions (e.g., *leans in*).
 
 ## Features
 
 ### 🎭 AI Enhancement Mode (Default)
-- Uses AI (Gemini primary, Claude fallback) to intelligently add emotion tags
-- Strategically places tags before or after dialogue segments
-- Preserves original text exactly - only adds tags
-- Considers Nicky's personality and context
+- Uses **Gemini 3 Flash** to intelligently add emotion tags.
+- Strategically places tags before or after dialogue segments.
+- Preserves original text exactly - only adds tags.
+- **Personality Hardening:** Ensures no asterisks or physical narration are added during enhancement.
 
 ### ⚡ Quick Enhancement Mode
-- Fast pattern-based enhancement
-- No API calls required
-- Basic emotion tag insertion based on keywords
+- Fast pattern-based enhancement for low-latency streaming.
+- No API calls required.
+- Basic emotion tag insertion based on keywords.
 
 ## Supported Emotion Tags
 
@@ -25,18 +25,25 @@ ElevenLabs-style emotion enhancement system that adds audio tags to text respons
 - `[deadpan]`, `[sarcastic]`, `[reluctant]`
 - `[warm]`, `[genuine]`, `[nostalgic]`
 
-### Non-verbal Sounds
+### Non-verbal Sounds (The "Show, Don't Tell" Toolkit)
 - `[laughing]`, `[chuckles]`, `[scoffs]`
 - `[sighs]`, `[groans]`, `[exhales]`
 - `[clears throat]`, `[coughs]`
 - `[muttering]`, `[whispering]`
 - `[short pause]`, `[long pause]`
+- `[screaming]`, `[yelling]`
 
 ### Italian-American Flavor
 - `[bronx]` - Bronx accent emphasis
 - `[italian pride]` - Proud Italian moment
 - `[aggressive]` - Jersey aggression
 - `[rambling]` - Going off on tangent
+
+## 🚫 Forbidden Content (Personality Hardening)
+The Emotion Enhancer is programmed to strip or prevent the following:
+- **No Asterisks:** `*leans in*` or `*shaking head*` are strictly forbidden.
+- **No Physical Narration:** Nicky must not describe his current physical state in text (e.g., "I'm rubbing my temples").
+- **No Soft Emotions:** Avoid `[happy]` or `[thoughtful]`. Nicky is either seething, manic, or screaming.
 
 ## API Endpoints
 

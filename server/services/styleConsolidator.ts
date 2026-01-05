@@ -126,8 +126,6 @@ Format the output as a clear, organized list of personality traits and behaviors
         throw new Error('Failed to consolidate patterns (both Gemini and Claude failed)');
       }
       */
-        throw new Error('Failed to consolidate patterns (both Gemini and Claude failed)');
-      }
     }
   }
 

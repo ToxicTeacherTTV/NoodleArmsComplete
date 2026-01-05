@@ -124,7 +124,7 @@ Focus on authentic Italian-American culture and Dead by Daylight streaming conte
 
     try {
       const result = await generateLoreContent(analysisPrompt);
-      return JSON.parse(result);
+      return result;
     } catch (error) {
       console.error('❌ Failed to analyze memory batch:', error);
       console.warn('⚠️ Memory analysis failed - knowledge graph will be incomplete for this batch');
@@ -220,6 +220,29 @@ Focus on authentic Italian-American culture and Dead by Daylight streaming conte
       };
 
       await storage.db.insert(loreCharacters).values(characterData).onConflictDoNothing();
+
+      // Sync with Entity Disambiguation System (people table)
+      try {
+        const { people } = await import('../../shared/schema.js');
+        const { and, eq } = await import('drizzle-orm');
+        const existingPerson = await storage.db.select().from(people)
+          .where(and(
+            eq(people.profileId, profileId),
+            eq(people.canonicalName, char.name)
+          )).limit(1);
+
+        if (!existingPerson.length) {
+          await storage.db.insert(people).values({
+            profileId,
+            canonicalName: char.name,
+            description: char.description,
+            relationship: char.context,
+            aliases: []
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to sync character with people table:", e);
+      }
     }
 
     // Store locations  
@@ -236,6 +259,28 @@ Focus on authentic Italian-American culture and Dead by Daylight streaming conte
       };
 
       await storage.db.insert(loreLocations).values(locationData).onConflictDoNothing();
+
+      // Sync with places table
+      try {
+        const { places } = await import('../../shared/schema.js');
+        const { and, eq } = await import('drizzle-orm');
+        const existingPlace = await storage.db.select().from(places)
+          .where(and(
+            eq(places.profileId, profileId),
+            eq(places.canonicalName, loc.name)
+          )).limit(1);
+
+        if (!existingPlace.length) {
+          await storage.db.insert(places).values({
+            profileId,
+            canonicalName: loc.name,
+            description: loc.description,
+            locationType: loc.category
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to sync location with places table:", e);
+      }
     }
 
     // Store historical events
@@ -248,12 +293,32 @@ Focus on authentic Italian-American culture and Dead by Daylight streaming conte
         timeframe: 'from memories',
         significance: event.significance,
         participants: event.relatedEntities,
-        location: event.relatedEntities.find(e => data.locations.some(l => l.name === e)) || null,
-        consequences: `Impact: ${event.context}`,
         mentionCount: 0
       };
 
       await storage.db.insert(loreHistoricalEvents).values(eventData).onConflictDoNothing();
+
+      // Sync with events table
+      try {
+        const { events } = await import('../../shared/schema.js');
+        const { and, eq } = await import('drizzle-orm');
+        const existingEvent = await storage.db.select().from(events)
+          .where(and(
+            eq(events.profileId, profileId),
+            eq(events.canonicalName, event.name)
+          )).limit(1);
+
+        if (!existingEvent.length) {
+          await storage.db.insert(events).values({
+            profileId,
+            canonicalName: event.name,
+            description: event.description,
+            isCanonical: true
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to sync event with events table:", e);
+      }
     }
 
     // Store relationships

@@ -26,8 +26,10 @@ export function QuickModelToggle({ className, compact = false }: QuickModelToggl
         return <Brain className="h-4 w-4" />;
       case 'gemini-3-pro-preview':
         return <Sparkles className="h-4 w-4" />;
-      case 'gemini-2.5-pro':
+      case 'gemini-3-flash-preview':
         return <Zap className="h-4 w-4" />;
+      case 'gemini-2.5-pro':
+        return <Zap className="h-4 w-4 opacity-50" />;
       case 'gemini-2.5-flash':
         return <Rabbit className="h-4 w-4" />;
     }
@@ -38,9 +40,11 @@ export function QuickModelToggle({ className, compact = false }: QuickModelToggl
       case 'claude-sonnet-4.5':
         return 'Claude 4.5';
       case 'gemini-3-pro-preview':
-        return 'Gemini 3';
+        return 'Gemini 3 Pro';
+      case 'gemini-3-flash-preview':
+        return 'Gemini 3 Flash';
       case 'gemini-2.5-pro':
-        return 'Gemini 2.5 Pro';
+        return 'Gemini 2.5 (Legacy)';
       case 'gemini-2.5-flash':
         return 'Gemini Flash';
     }

@@ -10,6 +10,7 @@ import {
   memoryEntries,
   contentLibrary,
   chaosState,
+  personalityState,
   loreEvents,
   loreCharacters,
   discordServers,
@@ -23,6 +24,17 @@ import {
   podcastEpisodes,
   podcastSegments,
   topicEscalation,
+  loreLocations,
+  loreHistoricalEvents,
+  loreRelationships,
+  listenerCities,
+  contentFlags,
+  contentFlagRelations,
+  flagAutoApprovals,
+  flagAutoApprovalFlagLinks,
+  memorySuggestions,
+  duplicateScanResults,
+  varietyState,
   // NEW: Entity tables
   entitySystemConfig,
   people,
@@ -96,7 +108,7 @@ import {
   type MiscEntity,
   type InsertMiscEntity
 } from "@shared/schema";
-import { db } from "./db";
+import { db, pool } from "./db.js";
 import { eq, desc, and, or, like, ilike, sql, gt, inArray } from "drizzle-orm";
 import { aiFlagger } from "./services/aiFlagger";
 
@@ -117,7 +129,11 @@ export interface IStorage {
   getMessage(id: string): Promise<Message | undefined>;
   addMessage(message: InsertMessage): Promise<Message>;
   updateMessageRating(messageId: string, rating: number): Promise<void>;
+  updateMessagePrivacy(messageId: string, isPrivate: boolean): Promise<void>;
+  updateConversationPrivacy(conversationId: string, isPrivate: boolean): Promise<void>;
+  updateMessageMetadata(messageId: string, metadata: any): Promise<void>;
   getRecentMessages(conversationId: string, limit: number): Promise<Message[]>;
+  getRecentProfileMessages(profileId: string, limit: number): Promise<Message[]>;
 
   // Enhanced memory persistence methods
   updateConversationContent(id: string, updates: {
@@ -131,13 +147,14 @@ export interface IStorage {
   getConversationsByContentType(profileId: string, contentType: 'PODCAST' | 'STREAMING' | 'DISCORD' | 'GENERAL', limit?: number): Promise<Conversation[]>;
   searchConversationsByTopics(profileId: string, topics: string[], limit?: number): Promise<Conversation[]>;
   getCompletedStories(profileId: string): Promise<{ conversationId: string; stories: string[] }[]>;
-  listWebConversations(profileId: string): Promise<Conversation[]>;
+  listWebConversations(profileId: string, showArchived?: boolean): Promise<Conversation[]>;
 
   // Document management
   createDocument(document: InsertDocument): Promise<Document>;
   getDocument(id: string): Promise<Document | undefined>;
   getProfileDocuments(profileId: string): Promise<Document[]>;
   getTrainingExamples(profileId: string): Promise<Document[]>;
+  findSimilarTrainingExamples(profileId: string, queryVector: number[], limit?: number, threshold?: number): Promise<Array<Document & { similarity: number }>>;
   updateDocument(id: string, updates: Partial<Document>): Promise<Document>;
   deleteDocument(id: string): Promise<void>;
   incrementDocumentRetrieval(id: string): Promise<void>;
@@ -152,20 +169,26 @@ export interface IStorage {
   // Memory management
   addMemoryEntry(entry: InsertMemoryEntry): Promise<MemoryEntry>;
   getMemoryEntries(profileId: string, limit?: number): Promise<MemoryEntry[]>;
-  searchMemoryEntries(profileId: string, query: string): Promise<MemoryEntry[]>;
+  searchMemoryEntries(profileId: string, query: string, lane?: 'CANON' | 'RUMOR'): Promise<MemoryEntry[]>;
   getMemoryEntriesBySource(profileId: string, source: string, sourceId?: string): Promise<MemoryEntry[]>;
   deleteMemoryEntry(id: string): Promise<void>;
   clearProfileMemories(profileId: string): Promise<void>;
   incrementMemoryRetrieval(id: string): Promise<void>;
   getMemoryStats(profileId: string): Promise<{ totalFacts: number; conversations: number }>;
+  getMemoryPacks(profileId: string, query: string, chaosLevel: number, mode?: string, queryIntent?: string): Promise<{
+    canon: any[];
+    rumors: any[];
+    disputed: any[];
+  }>;
+  searchEnrichedMemoryEntries(profileId: string, query: string): Promise<Array<MemoryEntry & { parentStory?: MemoryEntry }>>;
 
   // Embedding support for memory entries
-  findSimilarMemories(profileId: string, queryVector: number[], limit?: number, threshold?: number): Promise<Array<MemoryEntry & { similarity: number }>>;
+  findSimilarMemories(profileId: string, queryVector: number[], limit?: number, threshold?: number, lane?: 'CANON' | 'RUMOR'): Promise<Array<MemoryEntry & { similarity: number }>>;
   getMemoryEntriesWithEmbeddings(profileId: string): Promise<MemoryEntry[]>;
   getRecentMemoriesWithEmbeddings(profileId: string, limit: number): Promise<MemoryEntry[]>;
   getMemoryEntriesWithoutEmbeddings(profileId: string): Promise<MemoryEntry[]>;
   updateMemoryEmbedding(id: string, embedding: { embedding: number[], embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void>;
-  searchMemoriesByKeywords(profileId: string, keywords: string[], limit?: number): Promise<MemoryEntry[]>;
+  searchMemoriesByKeywords(profileId: string, keywords: string[], limit?: number, lane?: 'CANON' | 'RUMOR'): Promise<MemoryEntry[]>;
 
   // Query memories by source (e.g., podcast episode, document)
   getMemoriesBySource(profileId: string, sourceId: string, source?: string): Promise<MemoryEntry[]>;
@@ -193,6 +216,14 @@ export interface IStorage {
   // Chaos State management
   getChaosState(): Promise<ChaosState | undefined>;
   createOrUpdateChaosState(state: InsertChaosState): Promise<ChaosState>;
+
+  // Personality State management
+  getPersonalityState(profileId: string): Promise<any | undefined>;
+  updatePersonalityState(profileId: string, state: any): Promise<void>;
+
+  // Variety State management
+  getVarietyState(conversationId: string): Promise<any | undefined>;
+  updateVarietyState(conversationId: string, state: any): Promise<void>;
 
   // Discord management methods
   getDiscordServer(serverId: string): Promise<DiscordServer | undefined>;
@@ -259,6 +290,11 @@ export interface IStorage {
   deleteContentLibraryEntry(id: string): Promise<void>;
   searchContentLibrary(profileId: string, query: string): Promise<ContentLibraryEntry[]>;
   updateContentLibraryAccess(id: string): Promise<void>;
+  getContentLibraryWithEmbeddings(profileId: string): Promise<ContentLibraryEntry[]>;
+  getContentLibraryWithoutEmbeddings(profileId: string): Promise<ContentLibraryEntry[]>;
+  updateContentLibraryEmbedding(id: string, embedding: { embedding: number[], embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void>;
+  getContentLibraryEntries(profileId: string): Promise<ContentLibraryEntry[]>;
+  findSimilarContent(profileId: string, queryVector: number[], limit?: number, threshold?: number): Promise<Array<ContentLibraryEntry & { similarity: number }>>;
 
   // NEW: Entity System Management (Phase 1)
   // Feature flag management
@@ -339,6 +375,14 @@ export interface IStorage {
   getMemoriesForConcept(conceptId: string, profileId: string): Promise<MemoryEntry[]>;
   getMemoriesForItem(itemId: string, profileId: string): Promise<MemoryEntry[]>;
   getMemoriesForMiscEntity(miscId: string, profileId: string): Promise<MemoryEntry[]>;
+  searchEntities(profileId: string, query: string): Promise<{
+    people: Person[];
+    places: Place[];
+    events: Event[];
+    concepts: Concept[];
+    items: Item[];
+    misc: MiscEntity[];
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -373,6 +417,87 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProfile(id: string): Promise<void> {
+    // Fetch IDs for cascading deletions
+    const conversationRecords = await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.profileId, id));
+    const conversationIds = conversationRecords.map(r => r.id);
+
+    const episodeRecords = await db.select({ id: podcastEpisodes.id }).from(podcastEpisodes).where(eq(podcastEpisodes.profileId, id));
+    const episodeIds = episodeRecords.map(r => r.id);
+
+    const sourceRecords = await db.select({ id: automatedSources.id }).from(automatedSources).where(eq(automatedSources.profileId, id));
+    const sourceIds = sourceRecords.map(r => r.id);
+
+    const memoryRecords = await db.select({ id: memoryEntries.id }).from(memoryEntries).where(eq(memoryEntries.profileId, id));
+    const memoryIds = memoryRecords.map(r => r.id);
+
+    const flagRecords = await db.select({ id: contentFlags.id }).from(contentFlags).where(eq(contentFlags.profileId, id));
+    const flagIds = flagRecords.map(r => r.id);
+
+    // 1. Delete child records
+    if (conversationIds.length > 0) {
+      await db.delete(messages).where(inArray(messages.conversationId, conversationIds));
+    }
+    if (episodeIds.length > 0) {
+      await db.delete(podcastSegments).where(inArray(podcastSegments.episodeId, episodeIds));
+    }
+    if (sourceIds.length > 0) {
+      await db.delete(pendingContent).where(inArray(pendingContent.sourceId, sourceIds));
+    }
+    if (memoryIds.length > 0) {
+      await Promise.all([
+        db.delete(memoryPeopleLinks).where(inArray(memoryPeopleLinks.memoryId, memoryIds)),
+        db.delete(memoryPlaceLinks).where(inArray(memoryPlaceLinks.memoryId, memoryIds)),
+        db.delete(memoryEventLinks).where(inArray(memoryEventLinks.memoryId, memoryIds)),
+        db.delete(memoryConceptLinks).where(inArray(memoryConceptLinks.memoryId, memoryIds)),
+        db.delete(memoryItemLinks).where(inArray(memoryItemLinks.memoryId, memoryIds)),
+        db.delete(memoryMiscLinks).where(inArray(memoryMiscLinks.memoryId, memoryIds)),
+        db.delete(memorySuggestions).where(inArray(memorySuggestions.memoryId, memoryIds))
+      ]);
+    }
+    if (flagIds.length > 0) {
+      await db.delete(contentFlagRelations).where(
+        or(
+          inArray(contentFlagRelations.flagId, flagIds),
+          inArray(contentFlagRelations.relatedFlagId, flagIds)
+        )
+      );
+      await db.delete(flagAutoApprovalFlagLinks).where(inArray(flagAutoApprovalFlagLinks.flagId, flagIds));
+    }
+
+    // 2. Delete all other records directly referencing profileId
+    await Promise.all([
+      db.delete(conversations).where(eq(conversations.profileId, id)),
+      db.delete(documents).where(eq(documents.profileId, id)),
+      db.delete(consolidatedPersonalities).where(eq(consolidatedPersonalities.profileId, id)),
+      db.delete(memoryEntries).where(eq(memoryEntries.profileId, id)),
+      db.delete(people).where(eq(people.profileId, id)),
+      db.delete(places).where(eq(places.profileId, id)),
+      db.delete(events).where(eq(events.profileId, id)),
+      db.delete(concepts).where(eq(concepts.profileId, id)),
+      db.delete(items).where(eq(items.profileId, id)),
+      db.delete(miscEntities).where(eq(miscEntities.profileId, id)),
+      db.delete(duplicateScanResults).where(eq(duplicateScanResults.profileId, id)),
+      db.delete(contentLibrary).where(eq(contentLibrary.profileId, id)),
+      db.delete(loreEvents).where(eq(loreEvents.profileId, id)),
+      db.delete(loreCharacters).where(eq(loreCharacters.profileId, id)),
+      db.delete(loreLocations).where(eq(loreLocations.profileId, id)),
+      db.delete(loreHistoricalEvents).where(eq(loreHistoricalEvents.profileId, id)),
+      db.delete(loreRelationships).where(eq(loreRelationships.profileId, id)),
+      db.delete(topicEscalation).where(eq(topicEscalation.profileId, id)),
+      db.delete(podcastEpisodes).where(eq(podcastEpisodes.profileId, id)),
+      db.delete(listenerCities).where(eq(listenerCities.profileId, id)),
+      db.delete(contentFlags).where(eq(contentFlags.profileId, id)),
+      db.delete(flagAutoApprovals).where(eq(flagAutoApprovals.profileId, id)),
+      db.delete(personalityState).where(eq(personalityState.profileId, id)),
+      db.delete(discordConversations).where(eq(discordConversations.profileId, id)),
+      db.delete(discordTopicTriggers).where(eq(discordTopicTriggers.profileId, id)),
+      db.delete(discordMembers).where(eq(discordMembers.profileId, id)),
+      db.delete(discordServers).where(eq(discordServers.profileId, id)),
+      db.delete(automatedSources).where(eq(automatedSources.profileId, id)),
+      db.delete(prerollAds).where(eq(prerollAds.profileId, id))
+    ]);
+
+    // 3. Finally delete the profile itself
     await db.delete(profiles).where(eq(profiles.id, id));
   }
 
@@ -411,6 +536,55 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async updateConversationMetadata(id: string, metadata: any): Promise<Conversation> {
+    const [updated] = await db
+      .update(conversations)
+      .set({ metadata })
+      .where(eq(conversations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getRandomUncoveredCity(profileId: string): Promise<any | undefined> {
+    const uncovered = await db
+      .select()
+      .from(listenerCities)
+      .where(
+        and(
+          eq(listenerCities.profileId, profileId),
+          eq(listenerCities.isCovered, false)
+        )
+      );
+    
+    if (uncovered.length === 0) return undefined;
+    return uncovered[Math.floor(Math.random() * uncovered.length)];
+  }
+
+  async markCityAsCovered(profileId: string, cityName: string): Promise<void> {
+    await db
+      .update(listenerCities)
+      .set({ isCovered: true, coveredDate: new Date() })
+      .where(
+        and(
+          eq(listenerCities.profileId, profileId),
+          ilike(listenerCities.city, cityName)
+        )
+      );
+  }
+
+  async findCityByName(profileId: string, cityName: string): Promise<any | undefined> {
+    const [city] = await db
+      .select()
+      .from(listenerCities)
+      .where(
+        and(
+          eq(listenerCities.profileId, profileId),
+          ilike(listenerCities.city, cityName)
+        )
+      );
+    return city;
+  }
+
   async getConversationMessages(conversationId: string): Promise<Message[]> {
     return await db
       .select()
@@ -436,9 +610,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateMessageRating(messageId: string, rating: number): Promise<void> {
+    const updates: any = { rating };
+    if (rating === 2) {
+      updates.isPrivate = false;
+    }
     await db
       .update(messages)
-      .set({ rating })
+      .set(updates)
+      .where(eq(messages.id, messageId));
+  }
+
+  async updateMessagePrivacy(messageId: string, isPrivate: boolean): Promise<void> {
+    await db
+      .update(messages)
+      .set({ isPrivate })
+      .where(eq(messages.id, messageId));
+  }
+
+  async updateConversationPrivacy(conversationId: string, isPrivate: boolean): Promise<void> {
+    await db
+      .update(conversations)
+      .set({ isPrivate })
+      .where(eq(conversations.id, conversationId));
+  }
+
+  async updateMessageMetadata(messageId: string, metadata: any): Promise<void> {
+    await db
+      .update(messages)
+      .set({ metadata })
       .where(eq(messages.id, messageId));
   }
 
@@ -447,6 +646,31 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(messages)
       .where(eq(messages.conversationId, conversationId))
+      .orderBy(desc(messages.createdAt))
+      .limit(limit);
+  }
+
+  async getRecentProfileMessages(profileId: string, limit: number): Promise<Message[]> {
+    return await db
+      .select({
+        id: messages.id,
+        conversationId: messages.conversationId,
+        type: messages.type,
+        content: messages.content,
+        rating: messages.rating,
+        isPrivate: messages.isPrivate,
+        metadata: messages.metadata,
+        createdAt: messages.createdAt
+      })
+      .from(messages)
+      .innerJoin(conversations, eq(messages.conversationId, conversations.id))
+      .where(
+        and(
+          eq(conversations.profileId, profileId),
+          eq(messages.isPrivate, false),
+          eq(conversations.isPrivate, false)
+        )
+      )
       .orderBy(desc(messages.createdAt))
       .limit(limit);
   }
@@ -481,7 +705,8 @@ export class DatabaseStorage implements IStorage {
       .from(conversations)
       .where(and(
         eq(conversations.profileId, profileId),
-        eq(conversations.contentType, 'PODCAST')
+        eq(conversations.contentType, 'PODCAST'),
+        eq(conversations.isPrivate, false)
       ))
       .orderBy(desc(conversations.createdAt))
       .limit(limit);
@@ -493,19 +718,20 @@ export class DatabaseStorage implements IStorage {
       .from(conversations)
       .where(and(
         eq(conversations.profileId, profileId),
-        eq(conversations.contentType, contentType)
+        eq(conversations.contentType, contentType),
+        eq(conversations.isPrivate, false)
       ))
       .orderBy(desc(conversations.createdAt))
       .limit(limit);
   }
 
-  async listWebConversations(profileId: string): Promise<Conversation[]> {
+  async listWebConversations(profileId: string, showArchived = false): Promise<Conversation[]> {
     return await db
       .select()
       .from(conversations)
       .where(and(
         eq(conversations.profileId, profileId),
-        eq(conversations.isArchived, false)
+        eq(conversations.isArchived, showArchived)
       ))
       .orderBy(desc(conversations.createdAt));
   }
@@ -517,6 +743,7 @@ export class DatabaseStorage implements IStorage {
       .from(conversations)
       .where(and(
         eq(conversations.profileId, profileId),
+        eq(conversations.isPrivate, false),
         // Check if topicTags overlaps with provided topics
         sql`${conversations.topicTags} && ${topics}::text[]`
       ))
@@ -605,6 +832,47 @@ export class DatabaseStorage implements IStorage {
     return [...recent, ...sampledOlder];
   }
 
+  async findSimilarTrainingExamples(profileId: string, queryVector: number[], limit = 5, threshold = 0.5): Promise<Array<Document & { similarity: number }>> {
+    const vectorLiteral = `[${queryVector.join(",")}]`;
+
+    const query = `
+      SELECT *, 1 - (embedding::vector <=> $4::vector) as similarity 
+      FROM documents 
+      WHERE profile_id = $1 
+      AND document_type = 'TRAINING_EXAMPLE' 
+      AND processing_status = 'COMPLETED' 
+      AND embedding IS NOT NULL 
+      AND 1 - (embedding::vector <=> $4::vector) > $2
+      ORDER BY similarity DESC 
+      LIMIT $3
+    `;
+    
+    const result = await pool.query(query, [profileId, threshold, limit, vectorLiteral]);
+    
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      profileId: row.profile_id,
+      name: row.name,
+      filename: row.filename,
+      contentType: row.content_type,
+      documentType: row.document_type,
+      size: row.size,
+      chunks: row.chunks,
+      extractedContent: row.extracted_content,
+      processingStatus: row.processing_status,
+      processingProgress: row.processing_progress,
+      processingMetadata: row.processing_metadata,
+      contentHash: row.content_hash,
+      embedding: row.embedding,
+      embeddingModel: row.embedding_model,
+      embeddingUpdatedAt: row.embedding_updated_at,
+      retrievalCount: row.retrieval_count,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      similarity: parseFloat(row.similarity)
+    }));
+  }
+
   async createConsolidatedPersonality(consolidation: InsertConsolidatedPersonality): Promise<ConsolidatedPersonality> {
     const [result] = await db.insert(consolidatedPersonalities).values([consolidation as any]).returning();
     return result;
@@ -671,6 +939,13 @@ export class DatabaseStorage implements IStorage {
     // CRITICAL FIX: Ensure canonicalKey is always present
     let finalEntry = { ...entry };
 
+    // Enforce confidence limits based on lane
+    if (finalEntry.lane === 'RUMOR') {
+      finalEntry.confidence = Math.min(finalEntry.confidence || 25, 40);
+    } else {
+      finalEntry.confidence = Math.min(finalEntry.confidence || 50, 100);
+    }
+
     if (!finalEntry.canonicalKey && finalEntry.content) {
       const { generateCanonicalKey } = await import('./utils/canonical.js');
       finalEntry.canonicalKey = generateCanonicalKey(finalEntry.content);
@@ -678,9 +953,10 @@ export class DatabaseStorage implements IStorage {
 
     // 🌟 NEW: Vector-based duplicate detection (BEFORE insert)
     // This catches semantic duplicates that text-based canonicalKey misses
-    if (finalEntry.content && finalEntry.profileId) {
+    // 🎭 THEATER ZONE: Skip vector-blocking for RUMORS to allow multiple lie variants
+    if (finalEntry.content && finalEntry.profileId && finalEntry.lane !== 'RUMOR') {
       try {
-        const { memoryDeduplicator } = await import('./services/memoryDeduplicator.js');
+        const { memoryDeduplicator } = await import('./services/memoryDeduplicator.js') as any;
         const duplicateCheck = await memoryDeduplicator.handleDuplicateDetection(
           finalEntry.profileId,
           finalEntry.content
@@ -690,7 +966,48 @@ export class DatabaseStorage implements IStorage {
           // Near-exact duplicate (95%+) - don't create, just update existing
           console.log(`🚫 ${duplicateCheck.reason} - skipping creation`);
           const existingId = duplicateCheck.duplicates[0].id;
-          const existing = await db.select().from(memoryEntries).where(eq(memoryEntries.id, existingId)).limit(1);
+          const existing = await db
+            .select({
+              id: memoryEntries.id,
+              profileId: memoryEntries.profileId,
+              type: memoryEntries.type,
+              content: memoryEntries.content,
+              importance: memoryEntries.importance,
+              retrievalCount: memoryEntries.retrievalCount,
+              successRate: memoryEntries.successRate,
+              lastUsed: memoryEntries.lastUsed,
+              clusterId: memoryEntries.clusterId,
+              keywords: memoryEntries.keywords,
+              tags: memoryEntries.tags,
+              relationships: memoryEntries.relationships,
+              qualityScore: memoryEntries.qualityScore,
+              temporalContext: memoryEntries.temporalContext,
+              source: memoryEntries.source,
+              confidence: memoryEntries.confidence,
+              sourceId: memoryEntries.sourceId,
+              supportCount: memoryEntries.supportCount,
+              firstSeenAt: memoryEntries.firstSeenAt,
+              lastSeenAt: memoryEntries.lastSeenAt,
+              contradictionGroupId: memoryEntries.contradictionGroupId,
+              canonicalKey: memoryEntries.canonicalKey,
+              status: memoryEntries.status,
+              isProtected: memoryEntries.isProtected,
+              lane: memoryEntries.lane,
+              origin: memoryEntries.origin,
+              truthDomain: memoryEntries.truthDomain,
+              parentFactId: memoryEntries.parentFactId,
+              isAtomicFact: memoryEntries.isAtomicFact,
+              storyContext: memoryEntries.storyContext,
+              embedding: memoryEntries.embedding,
+              embeddingModel: memoryEntries.embeddingModel,
+              embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
+              createdAt: memoryEntries.createdAt,
+              updatedAt: memoryEntries.updatedAt,
+              searchVector: memoryEntries.searchVector
+            })
+            .from(memoryEntries)
+            .where(eq(memoryEntries.id, existingId))
+            .limit(1);
           if (existing.length > 0) {
             // Update confidence and support count on existing memory
             const [updated] = await db
@@ -726,11 +1043,13 @@ export class DatabaseStorage implements IStorage {
       .insert(memoryEntries)
       .values([finalEntry as any])
       .onConflictDoUpdate({
-        target: [memoryEntries.profileId, memoryEntries.canonicalKey],
+        target: [memoryEntries.profileId, memoryEntries.canonicalKey, memoryEntries.lane],
         set: {
           // === Counter updates ===
-          // Increment confidence (max 100)
-          confidence: sql`LEAST(100, COALESCE(${memoryEntries.confidence}, 50) + 10)`,
+          // Increment confidence (max 100 for CANON, max 40 for RUMOR)
+          confidence: finalEntry.lane === 'RUMOR'
+            ? sql`LEAST(40, COALESCE(${memoryEntries.confidence}, 25) + 5)`
+            : sql`LEAST(100, COALESCE(${memoryEntries.confidence}, 50) + 10)`,
           // Increment support count
           supportCount: sql`COALESCE(${memoryEntries.supportCount}, 1) + 1`,
 
@@ -740,8 +1059,11 @@ export class DatabaseStorage implements IStorage {
           importance: sql`GREATEST(COALESCE(${memoryEntries.importance}, 0), COALESCE(EXCLUDED.importance, 0))`,
           source: sql`COALESCE(EXCLUDED.source, ${memoryEntries.source})`,
           sourceId: sql`COALESCE(EXCLUDED.source_id, ${memoryEntries.sourceId})`,
+          origin: sql`COALESCE(EXCLUDED.origin, ${memoryEntries.origin})`,
           status: sql`COALESCE(EXCLUDED.status, ${memoryEntries.status})`,
           isProtected: sql`COALESCE(EXCLUDED.is_protected, ${memoryEntries.isProtected})`,
+          lane: sql`COALESCE(EXCLUDED.lane, ${memoryEntries.lane})`,
+          truthDomain: sql`COALESCE(EXCLUDED.truth_domain, ${memoryEntries.truthDomain})`,
 
           // === Quality & clustering metadata ===
           qualityScore: sql`COALESCE(EXCLUDED.quality_score, ${memoryEntries.qualityScore})`,
@@ -855,10 +1177,22 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
-  async searchMemoryEntries(profileId: string, query: string): Promise<MemoryEntry[]> {
+  async searchMemoryEntries(profileId: string, query: string, lane?: 'CANON' | 'RUMOR'): Promise<MemoryEntry[]> {
     if (!query || query.trim().length === 0) return [];
 
+    // Build where clause
+    const whereConditions = [
+      eq(memoryEntries.profileId, profileId),
+      eq(memoryEntries.status, 'ACTIVE'),
+      sql`${memoryEntries.searchVector} @@ plainto_tsquery('english', ${query})`
+    ];
+
+    if (lane) {
+      whereConditions.push(eq(memoryEntries.lane, lane));
+    }
+
     // Use PostgreSQL full-text search with ranking
+    // @ts-ignore - Drizzle type inference might struggle with the dynamic selection
     return await db
       .select({
         id: memoryEntries.id,
@@ -871,6 +1205,7 @@ export class DatabaseStorage implements IStorage {
         lastUsed: memoryEntries.lastUsed,
         clusterId: memoryEntries.clusterId,
         keywords: memoryEntries.keywords,
+        tags: memoryEntries.tags,
         relationships: memoryEntries.relationships,
         qualityScore: memoryEntries.qualityScore,
         temporalContext: memoryEntries.temporalContext,
@@ -884,6 +1219,9 @@ export class DatabaseStorage implements IStorage {
         canonicalKey: memoryEntries.canonicalKey,
         status: memoryEntries.status,
         isProtected: memoryEntries.isProtected,
+        lane: memoryEntries.lane,
+        origin: memoryEntries.origin,
+        truthDomain: memoryEntries.truthDomain,
         parentFactId: memoryEntries.parentFactId,
         isAtomicFact: memoryEntries.isAtomicFact,
         storyContext: memoryEntries.storyContext,
@@ -897,13 +1235,7 @@ export class DatabaseStorage implements IStorage {
         relevance: sql`ts_rank(${memoryEntries.searchVector}, plainto_tsquery('english', ${query}))`.as('relevance')
       })
       .from(memoryEntries)
-      .where(
-        and(
-          eq(memoryEntries.profileId, profileId),
-          eq(memoryEntries.status, 'ACTIVE'),
-          sql`${memoryEntries.searchVector} @@ plainto_tsquery('english', ${query})`
-        )
-      )
+      .where(and(...whereConditions))
       .orderBy(
         sql`ts_rank(${memoryEntries.searchVector}, plainto_tsquery('english', ${query})) DESC`,
         desc(memoryEntries.confidence),
@@ -911,6 +1243,116 @@ export class DatabaseStorage implements IStorage {
         desc(memoryEntries.supportCount)
       )
       .limit(50); // Limit results for performance
+  }
+
+  /**
+   * 🎭 MEMORY PACK RETRIEVAL: The "Theater Zone" Engine.
+   * Fetches structured packs of memories (Canon, Rumors, Disputed) based on context.
+   */
+  async getMemoryPacks(
+    profileId: string, 
+    query: string, 
+    chaosLevel: number, 
+    mode?: string, 
+    queryIntent?: string
+  ): Promise<{
+    canon: MemoryEntry[];
+    rumors: MemoryEntry[];
+    disputed: MemoryEntry[];
+  }> {
+    console.log(`🎭 Fetching Memory Packs for query: "${query}" (Mode: ${mode}, Chaos: ${chaosLevel})`);
+
+    // 1. Fetch Canon Pack (Reliable facts)
+    // We use searchMemoryEntries which handles full-text search and ranking
+    // GROUNDING RULE: Canon must be derived only from lane=CANON results
+    const searchResults = await this.searchMemoryEntries(profileId, query, 'CANON');
+    
+    // STRICT LANE FILTERING: Only CANON memories with high confidence
+    const canon = searchResults.filter(m => 
+      m.lane === 'CANON' && 
+      (m.confidence || 0) >= 60
+    );
+
+    // 2. Fetch Rumor Pack (Spice/Embellishments)
+    // We fetch RUMOR lane specifically
+    const rumorResults = await db
+      .select({
+        id: memoryEntries.id,
+        profileId: memoryEntries.profileId,
+        type: memoryEntries.type,
+        content: memoryEntries.content,
+        importance: memoryEntries.importance,
+        retrievalCount: memoryEntries.retrievalCount,
+        successRate: memoryEntries.successRate,
+        lastUsed: memoryEntries.lastUsed,
+        clusterId: memoryEntries.clusterId,
+        keywords: memoryEntries.keywords,
+        tags: memoryEntries.tags,
+        relationships: memoryEntries.relationships,
+        qualityScore: memoryEntries.qualityScore,
+        temporalContext: memoryEntries.temporalContext,
+        source: memoryEntries.source,
+        confidence: memoryEntries.confidence,
+        sourceId: memoryEntries.sourceId,
+        supportCount: memoryEntries.supportCount,
+        firstSeenAt: memoryEntries.firstSeenAt,
+        lastSeenAt: memoryEntries.lastSeenAt,
+        contradictionGroupId: memoryEntries.contradictionGroupId,
+        canonicalKey: memoryEntries.canonicalKey,
+        status: memoryEntries.status,
+        isProtected: memoryEntries.isProtected,
+        lane: memoryEntries.lane,
+        origin: memoryEntries.origin,
+        truthDomain: memoryEntries.truthDomain,
+        parentFactId: memoryEntries.parentFactId,
+        isAtomicFact: memoryEntries.isAtomicFact,
+        storyContext: memoryEntries.storyContext,
+        embedding: memoryEntries.embedding,
+        embeddingModel: memoryEntries.embeddingModel,
+        embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
+        createdAt: memoryEntries.createdAt,
+        updatedAt: memoryEntries.updatedAt,
+        searchVector: memoryEntries.searchVector
+      })
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE'),
+          eq(memoryEntries.lane, 'RUMOR')
+        )
+      )
+      .orderBy(desc(memoryEntries.createdAt))
+      .limit(10);
+
+    // 3. Fetch Disputed Pack (Contradictions)
+    const disputed = searchResults.filter(m => m.status === 'AMBIGUOUS');
+
+    // 4. Determine Rumor/Spice Level
+    let rumorLimit = 0;
+    const isTheaterZone = mode === 'PODCAST' || mode === 'STREAMING' || chaosLevel > 70 || (queryIntent && /story|lore|rant|tell me|what happened/i.test(queryIntent));
+    
+    if (isTheaterZone) {
+      rumorLimit = mode === 'PODCAST' ? 3 : 2;
+    } else if (chaosLevel > 50) {
+      rumorLimit = 1;
+    }
+
+    const rumors = rumorResults
+      .sort(() => 0.5 - Math.random())
+      .slice(0, rumorLimit);
+
+    return { canon, rumors, disputed };
+  }
+
+  /**
+   * 🎭 ENRICHED MEMORY RETRIEVAL: Implements the "Spice Pack" logic.
+   * Fetches a mix of reliable "Canon" memories and performative "Rumor" memories.
+   * (Maintained for backward compatibility, now uses getMemoryPacks internally)
+   */
+  async getEnrichedMemories(profileId: string, query: string, chaosLevel: number, mode?: string): Promise<MemoryEntry[]> {
+    const packs = await this.getMemoryPacks(profileId, query, chaosLevel, mode);
+    return [...packs.canon, ...packs.rumors];
   }
 
   async getMemoryEntriesBySource(profileId: string, source: string, sourceId?: string): Promise<MemoryEntry[]> {
@@ -939,6 +1381,21 @@ export class DatabaseStorage implements IStorage {
     await db.delete(memoryEntries).where(eq(memoryEntries.profileId, profileId));
   }
 
+  async getMemoryEntriesByLane(profileId: string, lane: 'CANON' | 'RUMOR', limit = 10): Promise<MemoryEntry[]> {
+    return await db
+      .select()
+      .from(memoryEntries)
+      .where(
+        and(
+          eq(memoryEntries.profileId, profileId),
+          eq(memoryEntries.status, 'ACTIVE'),
+          eq(memoryEntries.lane, lane)
+        )
+      )
+      .orderBy(desc(memoryEntries.createdAt))
+      .limit(limit);
+  }
+
   async incrementMemoryRetrieval(id: string): Promise<void> {
     await db
       .update(memoryEntries)
@@ -964,7 +1421,44 @@ export class DatabaseStorage implements IStorage {
   // Confidence tracking methods implementation
   async findMemoryByCanonicalKey(profileId: string, canonicalKey: string): Promise<MemoryEntry | undefined> {
     const [memory] = await db
-      .select()
+      .select({
+        id: memoryEntries.id,
+        profileId: memoryEntries.profileId,
+        type: memoryEntries.type,
+        content: memoryEntries.content,
+        importance: memoryEntries.importance,
+        retrievalCount: memoryEntries.retrievalCount,
+        successRate: memoryEntries.successRate,
+        lastUsed: memoryEntries.lastUsed,
+        clusterId: memoryEntries.clusterId,
+        keywords: memoryEntries.keywords,
+        tags: memoryEntries.tags,
+        relationships: memoryEntries.relationships,
+        qualityScore: memoryEntries.qualityScore,
+        temporalContext: memoryEntries.temporalContext,
+        source: memoryEntries.source,
+        confidence: memoryEntries.confidence,
+        sourceId: memoryEntries.sourceId,
+        supportCount: memoryEntries.supportCount,
+        firstSeenAt: memoryEntries.firstSeenAt,
+        lastSeenAt: memoryEntries.lastSeenAt,
+        contradictionGroupId: memoryEntries.contradictionGroupId,
+        canonicalKey: memoryEntries.canonicalKey,
+        status: memoryEntries.status,
+        isProtected: memoryEntries.isProtected,
+        lane: memoryEntries.lane,
+        origin: memoryEntries.origin,
+        truthDomain: memoryEntries.truthDomain,
+        parentFactId: memoryEntries.parentFactId,
+        isAtomicFact: memoryEntries.isAtomicFact,
+        storyContext: memoryEntries.storyContext,
+        embedding: memoryEntries.embedding,
+        embeddingModel: memoryEntries.embeddingModel,
+        embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
+        createdAt: memoryEntries.createdAt,
+        updatedAt: memoryEntries.updatedAt,
+        searchVector: memoryEntries.searchVector
+      })
       .from(memoryEntries)
       .where(
         and(
@@ -1020,7 +1514,44 @@ export class DatabaseStorage implements IStorage {
 
   async getHighConfidenceMemories(profileId: string, minConfidence: number, limit = 50): Promise<MemoryEntry[]> {
     return await db
-      .select()
+      .select({
+        id: memoryEntries.id,
+        profileId: memoryEntries.profileId,
+        type: memoryEntries.type,
+        content: memoryEntries.content,
+        importance: memoryEntries.importance,
+        retrievalCount: memoryEntries.retrievalCount,
+        successRate: memoryEntries.successRate,
+        lastUsed: memoryEntries.lastUsed,
+        clusterId: memoryEntries.clusterId,
+        keywords: memoryEntries.keywords,
+        tags: memoryEntries.tags,
+        relationships: memoryEntries.relationships,
+        qualityScore: memoryEntries.qualityScore,
+        temporalContext: memoryEntries.temporalContext,
+        source: memoryEntries.source,
+        confidence: memoryEntries.confidence,
+        sourceId: memoryEntries.sourceId,
+        supportCount: memoryEntries.supportCount,
+        firstSeenAt: memoryEntries.firstSeenAt,
+        lastSeenAt: memoryEntries.lastSeenAt,
+        contradictionGroupId: memoryEntries.contradictionGroupId,
+        canonicalKey: memoryEntries.canonicalKey,
+        status: memoryEntries.status,
+        isProtected: memoryEntries.isProtected,
+        lane: memoryEntries.lane,
+        origin: memoryEntries.origin,
+        truthDomain: memoryEntries.truthDomain,
+        parentFactId: memoryEntries.parentFactId,
+        isAtomicFact: memoryEntries.isAtomicFact,
+        storyContext: memoryEntries.storyContext,
+        embedding: memoryEntries.embedding,
+        embeddingModel: memoryEntries.embeddingModel,
+        embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
+        createdAt: memoryEntries.createdAt,
+        updatedAt: memoryEntries.updatedAt,
+        searchVector: memoryEntries.searchVector
+      })
       .from(memoryEntries)
       .where(
         and(
@@ -1036,7 +1567,44 @@ export class DatabaseStorage implements IStorage {
   // 🔧 NEW: Confidence range method for medium confidence facts
   async getMemoriesByConfidenceRange(profileId: string, minConfidence: number, maxConfidence: number, limit = 50): Promise<MemoryEntry[]> {
     return await db
-      .select()
+      .select({
+        id: memoryEntries.id,
+        profileId: memoryEntries.profileId,
+        type: memoryEntries.type,
+        content: memoryEntries.content,
+        importance: memoryEntries.importance,
+        retrievalCount: memoryEntries.retrievalCount,
+        successRate: memoryEntries.successRate,
+        lastUsed: memoryEntries.lastUsed,
+        clusterId: memoryEntries.clusterId,
+        keywords: memoryEntries.keywords,
+        tags: memoryEntries.tags,
+        relationships: memoryEntries.relationships,
+        qualityScore: memoryEntries.qualityScore,
+        temporalContext: memoryEntries.temporalContext,
+        source: memoryEntries.source,
+        confidence: memoryEntries.confidence,
+        sourceId: memoryEntries.sourceId,
+        supportCount: memoryEntries.supportCount,
+        firstSeenAt: memoryEntries.firstSeenAt,
+        lastSeenAt: memoryEntries.lastSeenAt,
+        contradictionGroupId: memoryEntries.contradictionGroupId,
+        canonicalKey: memoryEntries.canonicalKey,
+        status: memoryEntries.status,
+        isProtected: memoryEntries.isProtected,
+        lane: memoryEntries.lane,
+        origin: memoryEntries.origin,
+        truthDomain: memoryEntries.truthDomain,
+        parentFactId: memoryEntries.parentFactId,
+        isAtomicFact: memoryEntries.isAtomicFact,
+        storyContext: memoryEntries.storyContext,
+        embedding: memoryEntries.embedding,
+        embeddingModel: memoryEntries.embeddingModel,
+        embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
+        createdAt: memoryEntries.createdAt,
+        updatedAt: memoryEntries.updatedAt,
+        searchVector: memoryEntries.searchVector
+      })
       .from(memoryEntries)
       .where(
         and(
@@ -1164,7 +1732,44 @@ export class DatabaseStorage implements IStorage {
 
     // Get only high-confidence, ACTIVE facts for AI response generation
     const memories = await db
-      .select()
+      .select({
+        id: memoryEntries.id,
+        profileId: memoryEntries.profileId,
+        type: memoryEntries.type,
+        content: memoryEntries.content,
+        importance: memoryEntries.importance,
+        retrievalCount: memoryEntries.retrievalCount,
+        successRate: memoryEntries.successRate,
+        lastUsed: memoryEntries.lastUsed,
+        clusterId: memoryEntries.clusterId,
+        keywords: memoryEntries.keywords,
+        tags: memoryEntries.tags,
+        relationships: memoryEntries.relationships,
+        qualityScore: memoryEntries.qualityScore,
+        temporalContext: memoryEntries.temporalContext,
+        source: memoryEntries.source,
+        confidence: memoryEntries.confidence,
+        sourceId: memoryEntries.sourceId,
+        supportCount: memoryEntries.supportCount,
+        firstSeenAt: memoryEntries.firstSeenAt,
+        lastSeenAt: memoryEntries.lastSeenAt,
+        contradictionGroupId: memoryEntries.contradictionGroupId,
+        canonicalKey: memoryEntries.canonicalKey,
+        status: memoryEntries.status,
+        isProtected: memoryEntries.isProtected,
+        lane: memoryEntries.lane,
+        origin: memoryEntries.origin,
+        truthDomain: memoryEntries.truthDomain,
+        parentFactId: memoryEntries.parentFactId,
+        isAtomicFact: memoryEntries.isAtomicFact,
+        storyContext: memoryEntries.storyContext,
+        embedding: memoryEntries.embedding,
+        embeddingModel: memoryEntries.embeddingModel,
+        embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
+        createdAt: memoryEntries.createdAt,
+        updatedAt: memoryEntries.updatedAt,
+        searchVector: memoryEntries.searchVector
+      })
       .from(memoryEntries)
       .where(
         and(
@@ -1257,7 +1862,44 @@ export class DatabaseStorage implements IStorage {
     );
 
     const memories = await db
-      .select()
+      .select({
+        id: memoryEntries.id,
+        profileId: memoryEntries.profileId,
+        type: memoryEntries.type,
+        content: memoryEntries.content,
+        importance: memoryEntries.importance,
+        retrievalCount: memoryEntries.retrievalCount,
+        successRate: memoryEntries.successRate,
+        lastUsed: memoryEntries.lastUsed,
+        clusterId: memoryEntries.clusterId,
+        keywords: memoryEntries.keywords,
+        tags: memoryEntries.tags,
+        relationships: memoryEntries.relationships,
+        qualityScore: memoryEntries.qualityScore,
+        temporalContext: memoryEntries.temporalContext,
+        source: memoryEntries.source,
+        confidence: memoryEntries.confidence,
+        sourceId: memoryEntries.sourceId,
+        supportCount: memoryEntries.supportCount,
+        firstSeenAt: memoryEntries.firstSeenAt,
+        lastSeenAt: memoryEntries.lastSeenAt,
+        contradictionGroupId: memoryEntries.contradictionGroupId,
+        canonicalKey: memoryEntries.canonicalKey,
+        status: memoryEntries.status,
+        isProtected: memoryEntries.isProtected,
+        lane: memoryEntries.lane,
+        origin: memoryEntries.origin,
+        truthDomain: memoryEntries.truthDomain,
+        parentFactId: memoryEntries.parentFactId,
+        isAtomicFact: memoryEntries.isAtomicFact,
+        storyContext: memoryEntries.storyContext,
+        embedding: memoryEntries.embedding,
+        embeddingModel: memoryEntries.embeddingModel,
+        embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
+        createdAt: memoryEntries.createdAt,
+        updatedAt: memoryEntries.updatedAt,
+        searchVector: memoryEntries.searchVector
+      })
       .from(memoryEntries)
       .where(
         and(
@@ -1272,10 +1914,11 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(
-        desc(memoryEntries.confidence), // Prioritize high confidence first
-        desc(memoryEntries.importance), // Then by importance
-        desc(memoryEntries.supportCount), // Then by support count
-        desc(memoryEntries.retrievalCount) // Finally by usage frequency
+        // 🏛️ LORE WEIGHTING MODEL: Relevance = (Importance * 0.3) + (SuccessRate * 0.4) + (SupportCount * 0.3) + PodcastBoost
+        // We prioritize 'podcast_episode' source because it contains the user's solo commentary/ground truth.
+        desc(sql`(${memoryEntries.importance} * 0.3) + (${memoryEntries.successRate} * 0.4) + (${memoryEntries.supportCount} * 0.3) + (CASE WHEN ${memoryEntries.source} = 'podcast_episode' THEN 25 ELSE 0 END)`),
+        desc(memoryEntries.confidence), // Tie-breaker 1
+        desc(memoryEntries.retrievalCount) // Tie-breaker 2
       );
 
     // 🚀 OPTIMIZED: Batch fetch parent stories to avoid N+1 queries
@@ -1444,6 +2087,73 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Discord management methods implementation
+  async getPersonalityState(profileId: string): Promise<any | undefined> {
+    const [state] = await db
+      .select()
+      .from(personalityState)
+      .where(eq(personalityState.profileId, profileId))
+      .limit(1);
+    return state || undefined;
+  }
+
+  async updatePersonalityState(profileId: string, state: any): Promise<void> {
+    const [existing] = await db
+      .select()
+      .from(personalityState)
+      .where(eq(personalityState.profileId, profileId))
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(personalityState)
+        .set({
+          basePersonality: state.basePersonality,
+          source: state.source,
+          lastUpdated: sql`now()`
+        })
+        .where(eq(personalityState.id, existing.id));
+    } else {
+      await db.insert(personalityState).values({
+        profileId,
+        basePersonality: state.basePersonality,
+        source: state.source,
+        isGlobal: true
+      } as any);
+    }
+  }
+
+  async getVarietyState(conversationId: string): Promise<any | undefined> {
+    const [state] = await db
+      .select()
+      .from(varietyState)
+      .where(eq(varietyState.conversationId, conversationId))
+      .limit(1);
+    return state?.state || undefined;
+  }
+
+  async updateVarietyState(conversationId: string, state: any): Promise<void> {
+    const [existing] = await db
+      .select()
+      .from(varietyState)
+      .where(eq(varietyState.conversationId, conversationId))
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(varietyState)
+        .set({
+          state: state,
+          lastUpdated: sql`now()`
+        })
+        .where(eq(varietyState.id, existing.id));
+    } else {
+      await db.insert(varietyState).values({
+        conversationId,
+        state: state
+      } as any);
+    }
+  }
+
   async getDiscordServer(serverId: string): Promise<DiscordServer | undefined> {
     const [server] = await db
       .select()
@@ -2072,21 +2782,89 @@ export class DatabaseStorage implements IStorage {
       .where(eq(memoryEntries.id, id));
   }
 
-  async findSimilarMemories(profileId: string, queryVector: number[], limit = 5, threshold = 0.5): Promise<Array<MemoryEntry & { similarity: number }>> {
-    // Calculate similarity score: 1 - (cosine distance)
-    const similarity = sql<number>`1 - (${memoryEntries.embedding} <=> ${JSON.stringify(queryVector)})`;
+  async findSimilarMemories(profileId: string, queryVector: number[], limit = 5, threshold = 0.5, lane?: 'CANON' | 'RUMOR'): Promise<Array<MemoryEntry & { similarity: number }>> {
+    const vectorLiteral = `[${queryVector.join(",")}]`;
+
+    const params: any[] = [profileId, threshold, vectorLiteral];
     
-    // 🧠 HYBRID RANKING SCORE:
-    // 1. Base: Vector Similarity (0.0 - 1.0)
-    // 2. Boost: Importance (1-100) -> gives up to 50% boost
-    // 3. Penalty: Retrieval Count -> reduces score for overused facts
-    // Formula: Similarity * (1 + Importance/200) / (1 + RetrievalCount/50)
-    const rankingScore = sql<number>`
-      (1 - (${memoryEntries.embedding} <=> ${JSON.stringify(queryVector)})) 
-      * (1 + (${memoryEntries.importance}::float / 200.0))
-      / (1 + (${memoryEntries.retrievalCount}::float / 50.0))
+    let query = `
+      SELECT *, 
+      (1 - (embedding::vector <=> $3::vector)) as similarity,
+      ((1 - (embedding::vector <=> $3::vector)) * (1 + (importance::float / 200.0)) / (1 + (retrieval_count::float / 50.0))) as ranking_score
+      FROM memory_entries 
+      WHERE profile_id = $1 
+      AND status = 'ACTIVE'
+      AND (1 - (embedding::vector <=> $3::vector)) > $2
     `;
     
+    if (lane) {
+      query += ` AND lane = $4`;
+      params.push(lane);
+    }
+    
+    query += ` ORDER BY ranking_score DESC LIMIT $${params.length + 1}`;
+    params.push(limit);
+
+    const result = await pool.query(query, params);
+    
+    return result.rows.map(row => ({
+      id: row.id,
+      profileId: row.profile_id,
+      type: row.type,
+      content: row.content,
+      importance: row.importance,
+      retrievalCount: row.retrieval_count,
+      successRate: row.success_rate,
+      lastUsed: row.last_used,
+      clusterId: row.cluster_id,
+      keywords: row.keywords,
+      tags: row.tags,
+      relationships: row.relationships,
+      qualityScore: row.quality_score,
+      temporalContext: row.temporal_context,
+      source: row.source,
+      confidence: row.confidence,
+      sourceId: row.source_id,
+      supportCount: row.support_count,
+      firstSeenAt: row.first_seen_at,
+      lastSeenAt: row.last_seen_at,
+      contradictionGroupId: row.contradiction_group_id,
+      canonicalKey: row.canonical_key,
+      status: row.status,
+      isProtected: row.is_protected,
+      lane: row.lane,
+      origin: row.origin,
+      truthDomain: row.truth_domain,
+      parentFactId: row.parent_fact_id,
+      isAtomicFact: row.is_atomic_fact,
+      storyContext: row.story_context,
+      embedding: row.embedding,
+      embeddingModel: row.embedding_model,
+      embeddingUpdatedAt: row.embedding_updated_at,
+      searchVector: row.search_vector,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      similarity: Number(row.similarity)
+    }));
+  }
+
+  async searchMemoriesByKeywords(profileId: string, keywords: string[], limit = 20, lane?: 'CANON' | 'RUMOR'): Promise<MemoryEntry[]> {
+    if (keywords.length === 0) return [];
+
+    // Combine keywords into a single search query for PostgreSQL full-text search
+    const searchQuery = keywords.join(' | '); // OR search for any keyword
+
+    // Build where clause
+    const whereConditions = [
+      eq(memoryEntries.profileId, profileId),
+      eq(memoryEntries.status, 'ACTIVE'),
+      sql`${memoryEntries.searchVector} @@ to_tsquery('english', ${searchQuery})`
+    ];
+
+    if (lane) {
+      whereConditions.push(eq(memoryEntries.lane, lane));
+    }
+
     // @ts-ignore - Drizzle type inference might struggle with the dynamic selection
     return await db
       .select({
@@ -2100,6 +2878,7 @@ export class DatabaseStorage implements IStorage {
         lastUsed: memoryEntries.lastUsed,
         clusterId: memoryEntries.clusterId,
         keywords: memoryEntries.keywords,
+        tags: memoryEntries.tags,
         relationships: memoryEntries.relationships,
         qualityScore: memoryEntries.qualityScore,
         temporalContext: memoryEntries.temporalContext,
@@ -2113,60 +2892,9 @@ export class DatabaseStorage implements IStorage {
         canonicalKey: memoryEntries.canonicalKey,
         status: memoryEntries.status,
         isProtected: memoryEntries.isProtected,
-        parentFactId: memoryEntries.parentFactId,
-        isAtomicFact: memoryEntries.isAtomicFact,
-        storyContext: memoryEntries.storyContext,
-        embedding: memoryEntries.embedding,
-        embeddingModel: memoryEntries.embeddingModel,
-        embeddingUpdatedAt: memoryEntries.embeddingUpdatedAt,
-        searchVector: memoryEntries.searchVector,
-        createdAt: memoryEntries.createdAt,
-        updatedAt: memoryEntries.updatedAt,
-        similarity: similarity.as('similarity')
-      })
-      .from(memoryEntries)
-      .where(
-        and(
-          eq(memoryEntries.profileId, profileId),
-          gt(similarity, threshold),
-          eq(memoryEntries.status, 'ACTIVE')
-        )
-      )
-      .orderBy(desc(rankingScore)) // 🚀 Sort by Hybrid Score instead of raw similarity
-      .limit(limit);
-  }
-
-  async searchMemoriesByKeywords(profileId: string, keywords: string[], limit = 20): Promise<MemoryEntry[]> {
-    if (keywords.length === 0) return [];
-
-    // Combine keywords into a single search query for PostgreSQL full-text search
-    const searchQuery = keywords.join(' | '); // OR search for any keyword
-
-    return await db
-      .select({
-        id: memoryEntries.id,
-        profileId: memoryEntries.profileId,
-        type: memoryEntries.type,
-        content: memoryEntries.content,
-        importance: memoryEntries.importance,
-        retrievalCount: memoryEntries.retrievalCount,
-        successRate: memoryEntries.successRate,
-        lastUsed: memoryEntries.lastUsed,
-        clusterId: memoryEntries.clusterId,
-        keywords: memoryEntries.keywords,
-        relationships: memoryEntries.relationships,
-        qualityScore: memoryEntries.qualityScore,
-        temporalContext: memoryEntries.temporalContext,
-        source: memoryEntries.source,
-        confidence: memoryEntries.confidence,
-        sourceId: memoryEntries.sourceId,
-        supportCount: memoryEntries.supportCount,
-        firstSeenAt: memoryEntries.firstSeenAt,
-        lastSeenAt: memoryEntries.lastSeenAt,
-        contradictionGroupId: memoryEntries.contradictionGroupId,
-        canonicalKey: memoryEntries.canonicalKey,
-        status: memoryEntries.status,
-        isProtected: memoryEntries.isProtected,
+        lane: memoryEntries.lane,
+        origin: memoryEntries.origin,
+        truthDomain: memoryEntries.truthDomain,
         parentFactId: memoryEntries.parentFactId,
         isAtomicFact: memoryEntries.isAtomicFact,
         storyContext: memoryEntries.storyContext,
@@ -2179,13 +2907,7 @@ export class DatabaseStorage implements IStorage {
         relevance: sql<number>`ts_rank(${memoryEntries.searchVector}, to_tsquery('english', ${searchQuery}))`.as('relevance')
       })
       .from(memoryEntries)
-      .where(
-        and(
-          eq(memoryEntries.profileId, profileId),
-          eq(memoryEntries.status, 'ACTIVE'),
-          sql`${memoryEntries.searchVector} @@ to_tsquery('english', ${searchQuery})`
-        )
-      )
+      .where(and(...whereConditions))
       .orderBy(
         sql`ts_rank(${memoryEntries.searchVector}, to_tsquery('english', ${searchQuery})) DESC`,
         desc(memoryEntries.importance),
@@ -2220,7 +2942,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(contentLibrary.updatedAt));
   }
 
-  async updateContentLibraryEmbedding(id: string, embedding: { embedding: string, embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void> {
+  async updateContentLibraryEmbedding(id: string, embedding: { embedding: number[], embeddingModel: string, embeddingUpdatedAt: Date }): Promise<void> {
     await db
       .update(contentLibrary)
       .set({
@@ -2229,6 +2951,47 @@ export class DatabaseStorage implements IStorage {
         embeddingUpdatedAt: embedding.embeddingUpdatedAt
       })
       .where(eq(contentLibrary.id, id));
+  }
+
+  async findSimilarContent(profileId: string, queryVector: number[], limit = 5, threshold = 0.5): Promise<Array<ContentLibraryEntry & { similarity: number }>> {
+    const vectorLiteral = `[${queryVector.join(",")}]`;
+    
+    const query = `
+      SELECT *, 1 - (embedding::vector <=> $4::vector) as similarity 
+      FROM content_library 
+      WHERE profile_id = $1 
+      AND embedding IS NOT NULL 
+      AND 1 - (embedding::vector <=> $4::vector) > $2
+      ORDER BY similarity DESC 
+      LIMIT $3
+    `;
+    
+    const result = await pool.query(query, [profileId, threshold, limit, vectorLiteral]);
+    
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      profileId: row.profile_id,
+      title: row.title,
+      content: row.content,
+      category: row.category,
+      source: row.source,
+      sourceId: row.source_id,
+      tags: row.tags,
+      difficulty: row.difficulty,
+      mood: row.mood,
+      length: row.length,
+      rating: row.rating,
+      notes: row.notes,
+      isFavorite: row.is_favorite,
+      lastAccessed: row.last_accessed,
+      accessCount: row.access_count,
+      embedding: row.embedding,
+      embeddingModel: row.embedding_model,
+      embeddingUpdatedAt: row.embedding_updated_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      similarity: row.similarity
+    }));
   }
 
   async getContentLibraryEntries(profileId: string): Promise<ContentLibraryEntry[]> {

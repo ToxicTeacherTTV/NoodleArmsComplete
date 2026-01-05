@@ -1,7 +1,7 @@
 # 📘 Nicky AI: The Complete Blueprint & Strategy Guide
 
-**Version:** 1.0  
-**Date:** December 20, 2025  
+**Version:** 1.1  
+**Date:** December 28, 2025  
 **Status:** Living Document  
 
 ---
@@ -15,6 +15,7 @@ Unlike standard LLM wrappers, Nicky is built on a **multi-agent cognitive archit
 2.  **Long-Term Memory:** He remembers facts, stories, and user details across sessions using a hybrid vector/keyword database.
 3.  **Emotional Voice Synthesis:** He speaks with a custom ElevenLabs voice that dynamically changes emotion (yelling, whispering, sighing) based on the context of his own words.
 4.  **Cost-Effective Intelligence:** He utilizes a streamlined AI strategy, using **Gemini 3 Flash** as the primary brain for all operations, ensuring maximum performance at minimum cost.
+5.  **State Persistence:** He maintains his mood, mode, and conversation variety (catchphrases, facets) across server restarts using dedicated persistence tables.
 
 ---
 
@@ -44,29 +45,33 @@ Most AI companions are boring, agreeable, and static. Nicky is designed to be **
 *   **Vector Store:** `pgvector` extension on Postgres (Semantic memory search).
 *   **AI Brains:**
     *   **Primary Intelligence:** **Gemini 3 Flash** (Google) - High speed, low cost, high IQ. Handles Chat, Logic, Extraction, and Analysis.
-    *   **Fallback:** **Gemini 3 Pro Preview** - Used if Flash fails.
-    *   **Legacy:** Gemini 2.5 Pro (Last resort).
-    *   *(Note: Claude Sonnet 4.5 has been deprecated to reduce complexity)*
+    *   **Fallback:** **Gemini 3 Pro** - Used if Flash fails.
 *   **Voice:** ElevenLabs v3 (Turbo model with custom voice clone).
 
 ### B. The "Brain" (Cognitive Architecture)
 Nicky's "mind" is composed of several distinct modules that work together:
 
 1.  **The Orchestrator (`aiOrchestrator.ts`)**
-    *   The traffic cop. It decides which AI model to use for a given task based on cost, complexity, and user preference.
-    *   *Example:* "Is this a simple chat? Use Gemini 3 Flash. Is this a complex memory merge? Also use Gemini 3 Flash (it's that good)."
+    *   The traffic cop. It coordinates between the **ContextBuilder** (The Brain) and the **Model Providers** (The Mouth).
+    *   **Vibe-Based Storytelling:** Manages the state machine for city stories, detecting city mentions and injecting narrative archetypes.
 
-2.  **The Memory System (`memoryDeduplicator.ts`, `storage.ts`)**
+2.  **The Context Engine (`contextBuilder.ts`)**
+    *   **Centralized RAG:** All retrieval logic is centralized here. It fetches memories, docs, and lore in parallel.
+    *   **Brain/Mouth Pattern:** Decouples context gathering from generation, making the system provider-agnostic.
+    *   **Memory Lanes:** Implements the **CANON** vs **RUMOR** logic, allowing Nicky to be an "Unreliable Narrator."
+
+3.  **The Memory System (`memoryDeduplicator.ts`, `storage.ts`)**
     *   **Ingestion:** Converts user text into "Memories" (atomic facts).
     *   **Retrieval:** Uses **Hybrid Search** (Keywords + Vector Embeddings) to find relevant info.
     *   **Consolidation:** A background process that wakes up every few minutes to find duplicate memories and merge them into a single, stronger memory.
 
-3.  **The Personality Engine (`personalityProfile.ts`, `emotionEnhancer.ts`)**
+4.  **The Personality Engine (`personalityProfile.ts`, `emotionEnhancer.ts`)**
     *   **Core Identity:** A massive system prompt defining who Nicky is.
+    *   **Personality Hardening:** Strictly enforces "Show, Don't Tell" rules (no stage directions, no asterisks).
     *   **Mood System:** Tracks his current emotional state (Grumpy, Furious, Manic).
     *   **Emotion Enhancer:** A post-processing step that reads Nicky's generated text and inserts "stage directions" for the voice engine (e.g., `[sighs]`, `[yelling]`).
 
-4.  **The Voice Module (`elevenlabs.ts`)**
+5.  **The Voice Module (`elevenlabs.ts`)**
     *   Takes the tagged text and converts it to audio.
     *   Understands tags like `[strong bronx wiseguy accent]` to modulate delivery.
 
@@ -85,8 +90,8 @@ Nicky's "mind" is composed of several distinct modules that work together:
         *   *Context:* "User just asked about their dog."
         *   *Memory:* "You know the dog is named Barky."
         *   *Instruction:* "Answer the user, but be annoyed that they tested you."
-4.  **Generation (Gemini 3 Flash):**
-    *   AI generates: "Of course I remember Barky! What do I look like, a goldfish?"
+4.  **Generation (Gemini 3 Flash - Single Pass):**
+    *   AI generates the full response in a single pass, including personality facets and narrative flow.
 5.  **Enhancement (Emotion Engine):**
     *   AI rewrites: `[strong bronx wiseguy accent][annoyed] Of course I remember Barky! [yelling] What do I look like, a goldfish?`
 6.  **Synthesis (ElevenLabs):**

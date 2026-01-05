@@ -127,7 +127,7 @@ Return ONLY valid JSON.`;
       const response = await geminiService.generateChatResponse(
         prompt,
         'You are a technical parser that extracts structured information from game patch notes.',
-        ''
+        []
       );
       
       // Parse JSON from response content

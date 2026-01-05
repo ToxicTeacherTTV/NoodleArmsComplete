@@ -17,18 +17,18 @@ async function backfillCanonicalKeys() {
     sql`SELECT id, content FROM memory_entries WHERE canonical_key IS NULL OR canonical_key = ''`
   );
 
-  if (rows.length === 0) {
+  if (rows.rows.length === 0) {
     console.log('✅ All memory entries already have canonical keys.');
     return;
   }
 
-  for (const row of rows) {
+  for (const row of rows.rows) {
     const fallback = row.content && row.content.trim().length > 0 ? row.content : row.id;
     const canonicalKey = generateCanonicalKey(fallback);
     await db.execute(sql`UPDATE memory_entries SET canonical_key = ${canonicalKey} WHERE id = ${row.id}`);
   }
 
-  console.log(`🔧 Backfilled canonical keys for ${rows.length} memory entries.`);
+  console.log(`🔧 Backfilled canonical keys for ${rows.rows.length} memory entries.`);
 }
 
 async function backfillLegacyEntityColumns() {
@@ -41,12 +41,12 @@ async function backfillLegacyEntityColumns() {
     sql`SELECT id, person_id, place_id, event_id FROM memory_entries WHERE person_id IS NOT NULL OR place_id IS NOT NULL OR event_id IS NOT NULL`
   );
 
-  if (rows.length === 0) {
+  if (rows.rows.length === 0) {
     console.log('✅ No legacy entity columns found to migrate.');
     return;
   }
 
-  for (const row of rows) {
+  for (const row of rows.rows) {
     if (row.person_id) {
       await db
         .insert(memoryPeopleLinks)
@@ -67,7 +67,7 @@ async function backfillLegacyEntityColumns() {
     }
   }
 
-  console.log(`🔗 Migrated legacy entity references for ${rows.length} memories into junction tables.`);
+  console.log(`🔗 Migrated legacy entity references for ${rows.rows.length} memories into junction tables.`);
 }
 
 async function backfillContentFlagRelations() {
@@ -75,13 +75,13 @@ async function backfillContentFlagRelations() {
     sql`SELECT id, related_flags FROM content_flags WHERE related_flags IS NOT NULL AND array_length(related_flags, 1) > 0`
   );
 
-  if (rows.length === 0) {
+  if (rows.rows.length === 0) {
     console.log('✅ No legacy content flag relations found.');
     return;
   }
 
   let inserted = 0;
-  for (const row of rows) {
+  for (const row of rows.rows) {
     const related = row.related_flags ?? [];
     for (const relatedId of related) {
       if (!relatedId || relatedId.trim().length === 0) continue;
@@ -101,13 +101,13 @@ async function backfillAutoApprovalLinks() {
     sql`SELECT id, flag_ids FROM flag_auto_approvals WHERE flag_ids IS NOT NULL AND array_length(flag_ids, 1) > 0`
   );
 
-  if (rows.length === 0) {
+  if (rows.rows.length === 0) {
     console.log('✅ No legacy auto-approval flag links found.');
     return;
   }
 
   let inserted = 0;
-  for (const row of rows) {
+  for (const row of rows.rows) {
     const ids = row.flag_ids ?? [];
     for (const flagId of ids) {
       if (!flagId || flagId.trim().length === 0) continue;
@@ -132,12 +132,12 @@ async function backfillDocumentHashes() {
     sql`SELECT id, extracted_content, chunks, name FROM documents WHERE content_hash IS NULL`
   );
 
-  if (rows.length === 0) {
+  if (rows.rows.length === 0) {
     console.log('✅ All documents already have content hashes.');
     return;
   }
 
-  for (const row of rows) {
+  for (const row of rows.rows) {
     let basis = row.extracted_content ?? '';
     if (!basis && Array.isArray(row.chunks) && row.chunks.length > 0) {
       basis = row.chunks.join('\n');
@@ -153,7 +153,7 @@ async function backfillDocumentHashes() {
     await db.update(documents).set({ contentHash: hash }).where(eq(documents.id, row.id));
   }
 
-  console.log(`📄 Backfilled content hashes for ${rows.length} documents.`);
+  console.log(`📄 Backfilled content hashes for ${rows.rows.length} documents.`);
 }
 
 async function archiveDuplicateScanCollisions() {
@@ -171,12 +171,12 @@ async function archiveDuplicateScanCollisions() {
     HAVING COUNT(*) > 1
   `);
 
-  if (collisions.length === 0) {
+  if (collisions.rows.length === 0) {
     console.log('✅ No duplicate active scan results detected.');
     return;
   }
 
-  for (const row of collisions) {
+  for (const row of collisions.rows) {
     const rest = row.ids.slice(1);
     if (rest.length === 0) continue;
     await db

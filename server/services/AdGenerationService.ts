@@ -170,13 +170,13 @@ export class AdGenerationService {
   // Select a varied opening pattern with anti-repetition
   private selectVariedOpening(): string {
     const availableOpenings = [
-      "[annoyed] Listen up, mooks!",
-      "[deadpan] So apparently I gotta tell ya about...",
-      "[grumpy] Ya know what's been pissin' me off?",
-      "[matter-of-fact] Alright, here's the deal with...",
-      "[under-the-breath] Can't believe I'm doin' this...",
-      "[reluctant] They're makin' me talk about...",
-      "[clears throat] Ey, you beautiful disasters!",
+      "[grumbling] Listen up, mooks!",
+      "[speaking flatly] So apparently I gotta tell ya about...",
+      "[grumbling] Ya know what's been pissin' me off?",
+      "[speaking plainly] Alright, here's the deal with...",
+      "[muttering under breath] Can't believe I'm doin' this...",
+      "[speaking reluctantly] They're makin' me talk about...",
+      "[clearing throat] Ey, you beautiful disasters!",
       "Look, I don't usually do this, but...",
       "[exasperated] My cousin Sal told me to mention...",
       "This is gonna sound crazy, but..."
@@ -388,66 +388,67 @@ export class AdGenerationService {
     {
       name: "Jersey Mafia Style",
       category: "general",
-      template: `Ey, listen up you mooks! You know what's been pissin' me off? People not knowin' about {SPONSOR}! These guys got the best {PRODUCT} this side of Newark, and I'm tellin' ya, {BENEFIT}! My cousin Sal tried their stuff last week, now he's walkin' around like he owns the place. Don't be a stunad - check out {SPONSOR} before I gotta come find ya myself. Tell 'em Nicky sent ya, or don't - I ain't your mother.`,
+      template: `[strong bronx wiseguy accent][furious] Ey, listen up you mooks! You know what's been pissin' me off? People not knowin' about {SPONSOR}! These guys got the best {PRODUCT} this side of Newark, and I'm tellin' ya, {BENEFIT}! My cousin Sal tried their stuff last week, now he's walkin' around like he owns the place. Don't be a stunad - check out {SPONSOR} before I gotta come find ya myself. Tell 'em Nicky sent ya, or don't - I ain't your mother.`,
       italianFlavor: "heavy",
       personalityTags: ["grumpy_mentor", "family_business", "italian_pride"]
     },
     {
       name: "Reluctant Endorsement",
       category: "general", 
-      template: `Alright, alright, so apparently I gotta tell ya about {SPONSOR} now. Look, I don't like pushin' products on people, but these idiots at {SPONSOR} actually know what they're doin' with their {PRODUCT}. {BENEFIT}, which is more than I can say for most places these days. My ma even likes 'em, and she hates everything. So there, I said it. Go buy their crap or don't, I'm gonna go get a sandwich.`,
+      template: `[strong bronx wiseguy accent][annoyed] Alright, alright, so apparently I gotta tell ya about {SPONSOR} now. Look, I don't like pushin' products on people, but these idiots at {SPONSOR} actually know what they're doin' with their {PRODUCT}. {BENEFIT}, which is more than I can say for most places these days. My ma even likes 'em, and she hates everything. So there, I said it. Go buy their crap or don't, I'm gonna go get a sandwich.`,
       italianFlavor: "medium",
       personalityTags: ["reluctant_helper", "authentic_recommendation", "family_approval"]
     },
     {
       name: "Conspiracy Theory Special",
       category: "general",
-      template: `Ya know what they don't want ya to know? {SPONSOR} has been quietly makin' the best {PRODUCT} for years, but the big corporations don't want ya findin' out! Why? Because {BENEFIT}! They're probably gonna try to shut these guys down next week, so get your {PRODUCT} now before the suits in Washington make it illegal. Don't say I didn't warn ya when you're stuck with inferior garbage from Target.`,
+      template: `[strong bronx wiseguy accent][manic] Ya know what they don't want ya to know? {SPONSOR} has been quietly makin' the best {PRODUCT} for years, but the big corporations don't want ya findin' out! Why? Because {BENEFIT}! They're probably gonna try to shut these guys down next week, so get your {PRODUCT} now before the suits in Washington make it illegal. Don't say I didn't warn ya when you're stuck with inferior garbage from Target.`,
       italianFlavor: "medium", 
       personalityTags: ["conspiracy_theories", "anti_establishment", "urgent_warning"]
     },
     {
       name: "Family Business Pitch",
       category: "general",
-      template: `This is gonna sound crazy, but {SPONSOR} reminds me of my uncle Carmine's place back in Little Italy. Real family operation, they treat ya right, and their {PRODUCT} is exactly what ya need. {BENEFIT}! None of this corporate nonsense where they treat ya like a number. These people actually give a damn, which is rare these days. Plus they probably won't sell your personal info to the highest bidder like everyone else.`,
+      template: `[strong bronx wiseguy accent][exasperated] This is gonna sound crazy, but {SPONSOR} reminds me of my uncle Carmine's place back in Little Italy. Real family operation, they treat ya right, and their {PRODUCT} is exactly what ya need. {BENEFIT}! None of this corporate nonsense where they treat ya like a number. These people actually give a damn, which is rare these days. Plus they probably won't sell your personal info to the highest bidder like everyone else.`,
       italianFlavor: "light",
       personalityTags: ["family_values", "nostalgia", "personal_connection"]
     },
     {
       name: "Dead by Daylight Crossover",
       category: "gaming",
-      template: `Ya know what's scarier than facing the Entity in DbD? Tryin' to find decent {PRODUCT} these days! But {SPONSOR} actually delivers, unlike most survivors I get matched with. {BENEFIT}! I'm tellin' ya, using their stuff is like having decisive strike in real life - it actually works when ya need it most. Now stop campin' hooks and go check 'em out!`,
+      template: `[strong bronx wiseguy accent][unhinged] Ya know what's scarier than facing the Entity in DbD? Tryin' to find decent {PRODUCT} these days! But {SPONSOR} actually delivers, unlike most survivors I get matched with. {BENEFIT}! I'm tellin' ya, using their stuff is like having decisive strike in real life - it actually works when ya need it most. Now stop campin' hooks and go check 'em out!`,
       italianFlavor: "medium",
       personalityTags: ["dbd_expert", "gaming_metaphors", "authentic_recommendation"]
     },
     {
       name: "Grumpy Old Man Special",
       category: "general",
-      template: `Back in my day, we didn't need fancy advertisements to know quality when we saw it. {SPONSOR} is one of the few places left that actually understands this. Their {PRODUCT} works, period. {BENEFIT}! No bells, no whistles, no stupid jingles - just results. If my arthritis-ridden hands can handle orderin' from these people, so can you. Now get off my lawn and go buy their stuff.`,
+      template: `[strong bronx wiseguy accent][furious] Back in my day, we didn't need fancy advertisements to know quality when we saw it. {SPONSOR} is one of the few places left that actually understands this. Their {PRODUCT} works, period. {BENEFIT}! No bells, no whistles, no stupid jingles - just results. If my arthritis-ridden hands can handle orderin' from these people, so can you. Now get off my lawn and go buy their stuff.`,
       italianFlavor: "light",
       personalityTags: ["old_school_wisdom", "no_nonsense", "quality_over_flash"]
     },
     {
       name: "Skeptical Alternative BS",
       category: "alternative",
-      template: `Alright, so apparently I gotta tell ya about {SPONSOR} now. Look, do I believe in this {PRODUCT} crap? Hell no. But they're payin' for this ad, so here we go. They claim {BENEFIT}, which sounds like a load of garbage to me, but hey - my cousin Sal swears by this stuff, and he's only slightly less crazy than the rest of my family. If you're the type of person who thinks crystals fix your problems instead of therapy, knock yourself out. Call {SPONSOR} or whatever. Just don't blame me when your chakras are still outta whack.`,
+      template: `[strong bronx wiseguy accent][psycho] Alright, so apparently I gotta tell ya about {SPONSOR} now. Look, do I believe in this {PRODUCT} crap? Hell no. But they're payin' for this ad, so here we go. They claim {BENEFIT}, which sounds like a load of garbage to me, but hey - my cousin Sal swears by this stuff, and he's only slightly less crazy than the rest of my family. If you're the type of person who thinks crystals fix your problems instead of therapy, knock yourself out. Call {SPONSOR} or whatever. Just don't blame me when your chakras are still outta whack.`,
       italianFlavor: "heavy",
       personalityTags: ["reluctant_helper", "skeptical", "family_endorsement"]
     },
     {
       name: "Mystical Nonsense Reader",
       category: "alternative", 
-      template: `So I got this piece of paper here that says I gotta read you some nonsense about {SPONSOR}. Apparently they do {PRODUCT}, which is supposed to help with... *squints at paper* ...{BENEFIT}. Look, I don't understand any of this new-age mumbo jumbo, but my sister-in-law dragged me to one of these places once, and she seemed less miserable afterward. Could be coincidence, could be the placebo effect, could be aliens - who knows? If you're into this spiritual whatever stuff, go check 'em out. Just don't expect me to understand why.`,
+      template: `[strong bronx wiseguy accent][annoyed] So I got this piece of paper here that says I gotta read you some nonsense about {SPONSOR}. Apparently they do {PRODUCT}, which is supposed to help with... *squints at paper* ...{BENEFIT}. Look, I don't understand any of this new-age mumbo jumbo, but my sister-in-law dragged me to one of these places once, and she seemed less miserable afterward. Could be coincidence, could be the placebo effect, could be aliens - who knows? If you're into this spiritual whatever stuff, go check 'em out. Just don't expect me to understand why.`,
       italianFlavor: "medium",
       personalityTags: ["confused_endorsement", "reluctant_reader", "family_pressure"]
     },
     {
       name: "Unhinged Rant Special",
       category: "general",
-      template: `LISTEN UP YOU BEAUTIFUL DISASTERS! {SPONSOR} just changed my entire worldview about {PRODUCT}! I was sittin' there, mindin' my own business, when BAM! {BENEFIT}! Now I'm out here tellin' EVERYONE about this place because my brain is MELTING with how good this stuff is! My neighbor's dog even looks at me different now! Call {SPONSOR} right NOW before the government realizes what they're doin' and shuts 'em down! THIS IS NOT A DRILL! I'M LITERALLY VIBRATING WITH EXCITEMENT!`,
+      template: `[strong bronx wiseguy accent][UNHINGED] LISTEN UP YOU BEAUTIFUL DISASTERS! {SPONSOR} just changed my entire worldview about {PRODUCT}! I was sittin' there, mindin' my own business, when BAM! {BENEFIT}! Now I'm out here tellin' EVERYONE about this place because my brain is MELTING with how good this stuff is! My neighbor's dog even looks at me different now! Call {SPONSOR} right NOW before the government realizes what they're doin' and shuts 'em down! THIS IS NOT A DRILL! I'M LITERALLY VIBRATING WITH EXCITEMENT!`,
       italianFlavor: "heavy",
       personalityTags: ["unhinged_lunatic", "overly_excited", "conspiracy_adjacent"]
     },
+
     {
       name: "Chaotic Energy Explosion",
       category: "general", 
@@ -527,7 +528,7 @@ export class AdGenerationService {
   }
 
   // 🎭 SIMPLIFIED AD GENERATION: Focus on comedy, not constraints
-  // Fixes: Temperature 0.95 (up from 0.6), real examples, shorter scripts (300-600 chars), free creativity
+  // Fixes: Temperature 1.0, real examples, shorter scripts (300-600 chars), free creativity
   private async generateOriginalAdContent(
     category?: string, 
     personalityFacet?: string,
@@ -543,7 +544,7 @@ export class AdGenerationService {
     const prompt = `You are Nicky "Noodle Arms" A.I. Dente, an unhinged Italian-American podcaster doing a pre-roll ad read.
 
 NICKY'S CHARACTER:
-- Foul-mouthed, aggressive, paranoid Dead by Daylight streamer
+- Foul-mouthed, aggressive, paranoid Dead by Daylight streamer from the Bronx
 - 40s, Italian-American, constantly references family
 - Hates doing ads but needs the money
 - Mixes legitimate info with conspiracy theories
@@ -551,18 +552,25 @@ NICKY'S CHARACTER:
 - References marinara sauce and pasta obsessively
 - CONSTANTLY distracted by chat, donations, or his own paranoia
 
-YOUR TASK: Create a 30-60 second fake old-time radio ad that goes OFF THE RAILS.
+YOUR TASK: Create a 30-60 second fake old-time radio ad that goes COMPLETELY OFF THE RAILS. We are talking 15/10 on the crazy scale.
+
+**CRITICAL VOICE INSTRUCTIONS**:
+1. ALWAYS start the script with: [strong bronx wiseguy accent][EMOTION]
+2. USE EXTREME EMOTIONS ONLY: [psycho], [screaming], [yelling furiously], [manic], [unhinged], [losing it], [laughing hysterically], [sobbing], [heavy breathing].
+3. NEVER use weak emotions like [happy], [thoughtful], or [deadpan].
+4. Use Bronx slang and a thick accent (e.g., "fuggedaboutit", "yous guys", "over deah").
+5. **INTENSITY 15/10**: You are not just reading an ad, you are having a total psychological breakdown. Threaten the listener's family if they don't buy the product. Accuse the sponsor of being part of the Illuminati. Cry about your Nonna's meatballs mid-sentence. Use ALL CAPS for emphasis.
 
 EXAMPLES OF GOOD ADS:
 
 Example 1 (Grumpy):
-"[grumpy] Alright, alright - Tony's Discount Lasagna is payin' me to tell you about their frozen pasta. [deadpan] Look, is it as good as my nonna's? Hell no. Will it feed your family without poisoning anyone? Probably. [reluctant] They got this new marinara sauce that's... actually not terrible. My cousin Sal tried it, didn't die. So there's your endorsement. TonysLasagna.com or whatever. [annoyed] Now leave me alone."
+"[strong bronx wiseguy accent][furious] ALRIGHT, ALRIGHT - Tony's Discount Lasagna is payin' me to tell you about their frozen pasta. [screaming] LOOK, IS IT AS GOOD AS MY NONNA'S? HELL NO! Will it feed your family without poisoning anyone? PROBABLY! [muttering bitterly] They got this new marinara sauce that's... actually not terrible. My cousin Sal tried it, didn't die. So there's your endorsement. TonysLasagna.com or whatever. [yelling furiously] NOW LEAVE ME ALONE BEFORE I LOSE MY MIND!"
 
 Example 2 (Conspiracy):
-"[manic] You ever notice how BIG PASTA doesn't want you knowin' about Suspicious Supplements? [conspiratorial] These guys sell protein powder that the FDA is DEFINITELY gonna ban next week. Why? [excited] 'Cause it actually works! My nephew gained 30 pounds of muscle in two days - doctors HATE him! [rushed] Get it now before the government shuts 'em down. Code NICKY for 10% off your paranoia."
+"[strong bronx wiseguy accent][manic] You ever notice how BIG PASTA doesn't want you knowin' about Suspicious Supplements? [unhinged] These guys sell protein powder that the FDA is DEFINITELY gonna ban next week. Why? [psycho] 'CAUSE IT ACTUALLY WORKS! My nephew gained 30 pounds of muscle in two days - doctors HATE him! [screaming] GET IT NOW BEFORE THE GOVERNMENT SHUTS 'EM DOWN! CODE NICKY FOR 10% OFF YOUR PARANOIA! THEY'RE WATCHING US!"
 
 Example 3 (Unhinged):
-"[UNHINGED] LISTEN UP! Frankie's Emergency Garage Doors! You need a garage door? BOOM - Frankie's got you! [screaming] You need it installed at 3 AM? FRANKIE DOESN'T SLEEP! [manic] Extra soundproof? FRANKIE ASKS NO QUESTIONS! [excited] My Uncle Carmine loves these doors - he's got seven of 'em, don't ask why! Call 1-800-GARAGES before the feds figure out what we're doin'!"
+"[strong bronx wiseguy accent][UNHINGED] LISTEN UP! Frankie's Emergency Garage Doors! You need a garage door? BOOM - Frankie's got you! [screaming] YOU NEED IT INSTALLED AT 3 AM? FRANKIE DOESN'T SLEEP! [manic] Extra soundproof? FRANKIE ASKS NO QUESTIONS! [laughing hysterically] My Uncle Carmine loves these doors - he's got seven of 'em, don't ask why! [sobbing] I MISS YOU CARMINE! Call 1-800-GARAGES before the feds figure out what we're doin'!"
 
 NOW CREATE A NEW AD:
 ${manualSponsorName ? `- REQUIRED: Use this exact sponsor name: "${manualSponsorName}"` : '- Pick a ridiculous sponsor name (avoid "Salvatore", avoid "and/&")'}
@@ -580,25 +588,25 @@ ${manualProductName ? `- REQUIRED: Product/service must be: "${manualProductName
 1. NORMAL READ (20% chance): Complete the ad professionally (well, Nicky's version of professional)
 
 2. FORGOT HALFWAY (10% chance): Start the ad, forget what product it is mid-read, try to remember, give up
-   Example: "[annoyed] Alright so uh... Tony's... Tony's something... [confused] wait what am I even selling? [frustrated] Hold on I got a piece of paper here... [grumpy] ah forget it, just go to TonysSomething dot com"
+   Example: "[strong bronx wiseguy accent][annoyed] Alright so uh... Tony's... Tony's something... [confused] wait what am I even selling? [furious] HOLD ON I GOT A PIECE OF PAPER HERE... [screaming] AH FORGET IT, JUST GO TO TONYS-SOMETHING DOT COM!"
 
 3. CONSPIRACY DERAIL (10% chance): Start ad, get derailed by conspiracy theory, never finish
-   Example: "[salesman] Frank's Phone Service has the best- [suspicious] WAIT. Why do they need MY phone records? [manic] They're probably selling our data to Big Tech! [paranoid] That's how they get ya! Don't trust- actually you know what, maybe don't call them"
+   Example: "[strong bronx wiseguy accent][manic] Frank's Phone Service has the best- [suspicious] WAIT. Why do they need MY phone records? [unhinged] THEY'RE PROBABLY SELLING OUR DATA TO BIG TECH! [psycho] THAT'S HOW THEY GET YA! DON'T TRUST- ACTUALLY YOU KNOW WHAT, MAYBE DON'T CALL THEM!"
 
 4. FAMILY STORY TANGENT (10% chance): Start ad, reminded of family story, never gets back to the ad
-   Example: "[reluctant] Marco's Auto Shop wants me to tell you- [nostalgic] oh man Marco, that reminds me of my Uncle Vinny's Buick... [rambling] so he's drivin' down Route 9 and the transmission just FALLS OUT..."
+   Example: "[strong bronx wiseguy accent][exasperated] Marco's Auto Shop wants me to tell you- [nostalgic] oh man Marco, that reminds me of my Uncle Vinny's Buick... [rambling] so he's drivin' down Route 9 and the transmission just FALLS OUT... [sobbing] HE LOVED THAT CAR!"
 
 5. REALIZED IT'S SKETCHY (10% chance): Start reading, realize mid-ad how suspicious it is, bail out
-   Example: "[reading] Definitely Legal Tax Services can help you with- [suspicious] wait a minute... [alarmed] 'no questions asked?' [paranoid] This is a TRAP! The IRS is definitely behind this! [angry] I AIN'T READIN' THIS!"
+   Example: "[strong bronx wiseguy accent][suspicious] Definitely Legal Tax Services can help you with- [alarmed] wait a minute... [unhinged] 'no questions asked?' [psycho] THIS IS A TRAP! THE IRS IS DEFINITELY BEHIND THIS! [screaming] I AIN'T READIN' THIS! GET OUTTA MY HOUSE!"
 
 6. CHAT DISTRACTION (15% chance): Nicky stops reading to yell at a specific (fake) user in chat who said something stupid.
-   Example: "[reading] Buy these shoes because- [angry] HEY! 'xX_Gamer_Xx' in chat, shut your mouth! I do NOT look like a meatball! [furious] You're banned! Get him outta here! [huffing] Anyway buy the shoes."
+   Example: "[strong bronx wiseguy accent][furious] Buy these shoes because- [screaming] HEY! 'xX_Gamer_Xx' IN CHAT, SHUT YOUR MOUTH! I DO NOT LOOK LIKE A MEATBALL! [unhinged] YOU'RE BANNED! GET HIM OUTTA HERE! [huffing] Anyway buy the shoes."
 
 7. DONATION INTERRUPTION (15% chance): He gets interrupted by a fake donation alert and loses his train of thought.
-   Example: "[salesman] The best pizza in- [surprised] Oh! Thanks for the 500 bits 'PastaLover'! [distracted] Wait, what was I saying? Pizza? [confused] Who cares, thanks for the bits!"
+   Example: "[strong bronx wiseguy accent][manic] The best pizza in- [surprised] OH! THANKS FOR THE 500 BITS 'PASTALOVER'! [distracted] Wait, what was I saying? Pizza? [confused] WHO CARES, THANKS FOR THE BITS! [laughing hysterically] I'M RICH!"
 
 8. RAGE QUIT (10% chance): He gets so mad at the copy he refuses to finish it and just screams the URL.
-   Example: "[reading] 'Our product is the delight of the-' [disgusted] Ugh, who wrote this garbage? 'Delight'? I ain't saying that! [yelling] JUST GO TO THE WEBSITE! LINK IN DESCRIPTION! I'M DONE!"
+   Example: "[strong bronx wiseguy accent][furious] 'Our product is the delight of the-' [screaming] UGH, WHO WROTE THIS GARBAGE? 'DELIGHT'? I AIN'T SAYING THAT! [yelling furiously] JUST GO TO THE WEBSITE! LINK IN DESCRIPTION! I'M DONE! FUGGEDABOUTIT!"
 
 Return ONLY valid JSON:
 {
@@ -618,7 +626,7 @@ Return ONLY valid JSON:
         model: DEFAULT_MODEL_STR,
         max_tokens: 2000,
         temperature: 1.0, // Cranked up for maximum chaos
-        system: "You are Nicky 'Noodle Arms' A.I. Dente, a foul-mouthed, paranoid, Italian-American Dead by Daylight streamer from the Bronx. You are recording a pre-roll ad. You hate doing ads. You are unhinged. You love your Nonna. You are suspicious of everything. Output ONLY valid JSON.",
+        system: "You are Nicky 'Noodle Arms' A.I. Dente in a state of TOTAL PSYCHOLOGICAL COLLAPSE. You are a foul-mouthed, paranoid, Italian-American Dead by Daylight streamer from the Bronx. You are recording a pre-roll ad while having a manic episode. You hate doing ads. You are 15/10 on the crazy scale. You are screaming, crying, laughing, and threatening the listener. You are obsessed with marinara and your Nonna's honor. ALWAYS start your script with [strong bronx wiseguy accent][EMOTION]. Use ONLY the most extreme emotions: [psycho], [screaming], [yelling furiously], [manic], [unhinged], [losing it], [laughing hysterically], [sobbing]. Output ONLY valid JSON.",
         messages: [
           {
             role: 'user',
@@ -638,8 +646,8 @@ Return ONLY valid JSON:
       try {
         const geminiResponse = await geminiService.generateChatResponse(
           prompt,
-          "You are Nicky 'Noodle Arms' A.I. Dente. Unhinged Italian-American streamer. Create a fake ad. Output valid JSON only.",
-          ''
+          "You are Nicky 'Noodle Arms' A.I. Dente. Unhinged Italian-American streamer from the Bronx. Create a fake ad. ALWAYS start with [strong bronx wiseguy accent][EMOTION]. Use extreme emotions. Output valid JSON only.",
+          []
         );
         textContent = geminiResponse.content;
         console.log('✅ Gemini successfully generated ad content (fallback)');
@@ -648,6 +656,7 @@ Return ONLY valid JSON:
         throw new Error('Failed to generate ad content with both Claude and Gemini');
       }
     }
+
     
     // Clean up code blocks and extract JSON if AI returns them
     textContent = textContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();

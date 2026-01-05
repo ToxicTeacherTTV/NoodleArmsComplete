@@ -119,18 +119,43 @@ export class VarietyController {
   private sessionVariety: Map<string, SessionVariety> = new Map();
 
   async getSessionVariety(conversationId: string): Promise<SessionVariety> {
-    if (!this.sessionVariety.has(conversationId)) {
-      this.sessionVariety.set(conversationId, {
-        conversationId,
-        recentFacets: [],
-        recentShapes: [],
-        recentCatchphrases: [],
-        recentSelfIntros: [],
-        turnCount: 0,
-        usedSceneCards: []
-      });
+    // Try memory first
+    if (this.sessionVariety.has(conversationId)) {
+      return this.sessionVariety.get(conversationId)!;
     }
-    return this.sessionVariety.get(conversationId)!;
+
+    // Try database
+    try {
+      const savedState = await storage.getVarietyState(conversationId);
+      if (savedState) {
+        this.sessionVariety.set(conversationId, savedState);
+        return savedState;
+      }
+    } catch (e) {
+      console.warn(`Failed to load variety state for ${conversationId}:`, e);
+    }
+
+    // Fallback to new state
+    const newState: SessionVariety = {
+      conversationId,
+      recentFacets: [],
+      recentShapes: [],
+      recentCatchphrases: [],
+      recentSelfIntros: [],
+      turnCount: 0,
+      usedSceneCards: []
+    };
+    this.sessionVariety.set(conversationId, newState);
+    return newState;
+  }
+
+  private async saveSessionVariety(variety: SessionVariety): Promise<void> {
+    this.sessionVariety.set(variety.conversationId, variety);
+    try {
+      await storage.updateVarietyState(variety.conversationId, variety);
+    } catch (e) {
+      console.warn(`Failed to save variety state for ${variety.conversationId}:`, e);
+    }
   }
 
   async selectPersonaFacet(conversationId: string, userMessage: string): Promise<{ facet: PersonaFacet; variety: SessionVariety }> {
@@ -181,6 +206,8 @@ export class VarietyController {
     // Record usage
     variety.recentFacets.push({ facet: selectedFacet.name, turn: currentTurn });
 
+    await this.saveSessionVariety(variety);
+
     return { facet: selectedFacet, variety };
   }
 
@@ -190,6 +217,7 @@ export class VarietyController {
     
     if (recentCatchphrases.length === 0) {
       variety.recentCatchphrases.push(currentTurn);
+      await this.saveSessionVariety(variety);
       return true;
     }
     
@@ -202,10 +230,16 @@ export class VarietyController {
     
     if (recentIntros.length === 0 && variety.turnCount > 1) {
       variety.recentSelfIntros.push(currentTurn);
+      await this.saveSessionVariety(variety);
       return true;
     }
     
-    return variety.turnCount === 1; // Only allow on first turn of conversation
+    const isFirstTurn = variety.turnCount === 1;
+    if (isFirstTurn) {
+      variety.recentSelfIntros.push(currentTurn);
+      await this.saveSessionVariety(variety);
+    }
+    return isFirstTurn; // Only allow on first turn of conversation
   }
 
   generateVarietyPrompt(facet: PersonaFacet, variety: SessionVariety): string {
@@ -251,11 +285,14 @@ RESPONSE STRUCTURE: ${facet.responseShape.structure}
     if (unusedCards.length === 0) {
       // Reset if all cards used
       variety.usedSceneCards = [];
-      return sceneCards[Math.floor(Math.random() * sceneCards.length)];
+      const card = sceneCards[Math.floor(Math.random() * sceneCards.length)];
+      await this.saveSessionVariety(variety);
+      return card;
     }
 
     const selectedCard = unusedCards[Math.floor(Math.random() * unusedCards.length)];
     variety.usedSceneCards.push(selectedCard);
+    await this.saveSessionVariety(variety);
     return selectedCard;
   }
 }

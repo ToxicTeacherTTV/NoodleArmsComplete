@@ -5,6 +5,7 @@ export type ChaosMode = 'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 
 
 interface ChaosState {
   level: number; // 0-100
+  sauceMeter: number; // 0-100 "heated" level
   mode: ChaosMode;
   lastModeChange: Date;
   manualOverride?: number; // Manual override level for next response only
@@ -22,6 +23,7 @@ class ChaosEngine {
     // Start with calm defaults - will be loaded from database
     this.chaosState = {
       level: 0,
+      sauceMeter: 0,
       mode: 'FULL_PSYCHO',
       lastModeChange: new Date(),
       responseCount: 0,
@@ -39,17 +41,18 @@ class ChaosEngine {
       if (savedState) {
         this.chaosState = {
           level: savedState.level,
+          sauceMeter: (savedState as any).sauceMeter || 0,
           mode: savedState.mode as ChaosMode,
           lastModeChange: savedState.lastModeChange ? new Date(savedState.lastModeChange) : new Date(),
           responseCount: savedState.responseCount || 0,
           manualOverride: savedState.manualOverride || undefined,
           overrideExpiry: savedState.overrideExpiry ? new Date(savedState.overrideExpiry) : undefined
         };
-        console.log(`🔄 Loaded chaos state from database: level=${this.chaosState.level}%, mode=${this.chaosState.mode}, responses=${this.chaosState.responseCount}`);
+        console.log(`🔄 Loaded chaos state from database: level=${this.chaosState.level}%, sauce=${this.chaosState.sauceMeter}%, mode=${this.chaosState.mode}, responses=${this.chaosState.responseCount}`);
       } else {
         // Create initial state in database
         await this.saveStateToDatabase();
-        console.log(`🆕 Created initial chaos state in database: level=${this.chaosState.level}%, mode=${this.chaosState.mode}`);
+        console.log(`🆕 Created initial chaos state in database: level=${this.chaosState.level}%, sauce=${this.chaosState.sauceMeter}%`);
       }
     } catch (error) {
       console.error('Failed to initialize chaos state from database:', error);
@@ -63,6 +66,7 @@ class ChaosEngine {
       const { storage } = await import('../storage.js');
       const stateData: InsertChaosState = {
         level: Math.round(this.chaosState.level), // Ensure integer for database
+        sauceMeter: Math.round(this.chaosState.sauceMeter),
         mode: this.chaosState.mode,
         lastModeChange: this.chaosState.lastModeChange,
         responseCount: this.chaosState.responseCount,
@@ -96,6 +100,27 @@ class ChaosEngine {
   async getCurrentState(): Promise<ChaosState> {
     await this.ensureInitialized();
     return { ...this.chaosState };
+  }
+
+  // Increase the "Sauce Meter" (heated level)
+  async heatUp(amount: number): Promise<void> {
+    await this.ensureInitialized();
+    this.chaosState.sauceMeter = Math.min(100, this.chaosState.sauceMeter + amount);
+    console.log(`🔥 Sauce Meter heated up by ${amount}% -> ${this.chaosState.sauceMeter}%`);
+    
+    // If sauce is high, it naturally pushes chaos level up too
+    if (this.chaosState.sauceMeter > 70) {
+      this.chaosState.level = Math.min(100, this.chaosState.level + (amount / 2));
+    }
+    
+    await this.saveStateToDatabase();
+  }
+
+  // Naturally cool down the sauce over time
+  async coolDown(amount: number): Promise<void> {
+    await this.ensureInitialized();
+    this.chaosState.sauceMeter = Math.max(0, this.chaosState.sauceMeter - amount);
+    await this.saveStateToDatabase();
   }
 
   // Get the effective chaos level (manual override takes precedence)
@@ -149,6 +174,9 @@ class ChaosEngine {
     if (this.chaosState.responseCount % (Math.floor(Math.random() * 3) + 1) === 0) {
       await this.triggerResponseBasedChaos();
     }
+
+    // Natural sauce cooldown after each response
+    this.chaosState.sauceMeter = Math.max(0, this.chaosState.sauceMeter - 5);
     
     // Save state after response generation
     await this.saveStateToDatabase();
@@ -213,24 +241,28 @@ class ChaosEngine {
       case 'death':
         // Death makes him MORE unhinged
         this.chaosState.level = Math.min(100, this.chaosState.level + 15);
+        this.chaosState.sauceMeter = Math.min(100, this.chaosState.sauceMeter + 25);
         this.switchToMode('FULL_PSYCHO');
         break;
         
       case 'win':
         // Brief moment of composure after victory
         this.chaosState.level = Math.max(20, this.chaosState.level - 20);
+        this.chaosState.sauceMeter = Math.max(0, this.chaosState.sauceMeter - 30);
         this.switchToMode('FAKE_PROFESSIONAL');
         break;
         
       case 'trolled':
         // Trolls trigger conspiracy mode
         this.chaosState.level = Math.min(95, this.chaosState.level + 10);
+        this.chaosState.sauceMeter = Math.min(100, this.chaosState.sauceMeter + 20);
         this.switchToMode('CONSPIRACY');
         break;
         
       case 'compliment':
         // Briefly tries to be professional
         this.chaosState.level = Math.max(30, this.chaosState.level - 10);
+        this.chaosState.sauceMeter = Math.max(0, this.chaosState.sauceMeter - 15);
         this.switchToMode('FAKE_PROFESSIONAL');
         break;
         

@@ -1,6 +1,6 @@
 # Nicky AI - Development Guide
 
-**Last Updated:** November 10, 2025
+**Last Updated:** December 28, 2025
 
 This guide covers development workflows, testing procedures, common tasks, and troubleshooting for the Nicky AI project.
 
@@ -57,8 +57,8 @@ SERPAPI_API_KEY="your-serpapi-api-key"
 DISCORD_BOT_TOKEN="your-discord-bot-token"
 
 # Model Selection (Optional - Override defaults)
-GEMINI_DEFAULT_MODEL="gemini-2.5-flash"       # Default production model
-GEMINI_DEV_MODEL="gemini-2.0-flash-exp"       # Dev/testing model
+GEMINI_DEFAULT_MODEL="gemini-3-flash-preview" # Default production model
+GEMINI_DEV_MODEL="gemini-3-flash-preview"     # Dev/testing model
 NODE_ENV="development"                         # development | production
 
 # Emergency Controls (Optional)
@@ -76,7 +76,13 @@ NoodleArmsComplete/
 │   ├── lib/                 # Utilities, API client, constants
 │   └── pages/               # Route components
 ├── server/                  # Express backend
-│   ├── services/            # Business logic (45+ services)
+│   ├── services/            # Business logic (50+ services)
+│   │   ├── aiOrchestrator.ts # Model routing and coordination
+│   │   ├── contextBuilder.ts # Centralized RAG and context assembly (The Brain)
+│   │   ├── gemini.ts         # Gemini 3 API integration (The Mouth)
+│   │   ├── anthropic.ts      # Claude API integration (The Mouth)
+│   │   ├── personalityController.ts # Personality management
+│   │   └── ...
 │   ├── config/              # Configuration files
 │   ├── routes.ts            # API endpoints
 │   ├── storage.ts           # Database abstraction

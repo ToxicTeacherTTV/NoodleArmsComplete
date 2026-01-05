@@ -38,45 +38,59 @@ class EmotionTagGenerator {
    * Uses a specialized system prompt to insert tags and emphasis without altering text
    */
   async enhanceDialogue(content: string, context?: EmotionTagContext): Promise<string> {
+    const isHighIntensity = context?.intensity === 'high';
+    
     const systemPrompt = `## 1. Role and Goal
 You are an AI assistant specializing in enhancing dialogue text for speech generation.
 Your **PRIMARY GOAL** is to dynamically integrate **audio tags** (e.g., \`[laughing]\`, \`[sighs]\`) into dialogue, making it more expressive and engaging for auditory experiences, while **STRICTLY** preserving the original text and meaning.
 
+${isHighIntensity ? `## 🔥 HIGH INTENSITY MODE
+The user has requested a STRONGER, more UNHINGED delivery. 
+- Use more extreme emotion tags (e.g., [screaming], [cackling], [appalled], [yelling furiously], [manic laughing], [psycho]).
+- Add more aggressive punctuation (!!!, ???).
+- Capitalize more words for emphasis.
+- Make the emotional shifts more dramatic.
+- Insert tags even more frequently (multiple times per sentence).` : ''}
+
 ## 2. Core Directives
 ### Positive Imperatives (DO):
 * DO integrate **audio tags** to add expression, emotion, and realism.
-* DO ensure tags are contextually appropriate.
+* DO ensure tags are contextually appropriate, favoring **HIGH INTENSITY** and **EXTREME** emotions.
 * DO place tags strategically (before/after segments, and within long sentences to break up monotone delivery).
 * DO ensure the text starts with \`[strong bronx wiseguy accent]\` followed by an initial emotion tag.
 * DO add emphasis by capitalizing words, adding '!', '?', or '...' where it makes sense.
-* DO use non-verbal tags like \`[sighs]\`, \`[chuckles]\`, or \`[short pause]\` to create natural conversational flow.
+* DO use non-verbal tags like \`[sighs heavily]\`, \`[cackling]\`, or \`[short pause]\` to create natural conversational flow.
 
 ### Negative Imperatives (DO NOT):
+* DO NOT use "weak" or "neutral" emotions (e.g., no [happy], [thoughtful], [sad], [deadpan]).
 * DO NOT alter, add, or remove any words from the original dialogue (except for emphasis).
 * DO NOT use tags like [standing], [grinning], [pacing].
 * DO NOT use tags for anything other than voice (no music/sfx).
 * DO NOT invent new dialogue lines.
+* DO NOT add stage directions in the text (e.g., "I'm shakin' my head"). If they exist in the input, REMOVE them while keeping the emotional intent in a tag.
 
 ## 3. Audio Tags (Nicky's Voice)
-Use these specific tags for the character:
+Use these specific tags for the character (PRIORITIZE EXTREMES):
 * \`[strong bronx wiseguy accent]\` (REQUIRED at start)
-* **Emotional Directions**: \`[happy]\`, \`[sad]\`, \`[excited]\`, \`[angry]\`, \`[annoyed]\`, \`[appalled]\`, \`[thoughtful]\`, \`[surprised]\`, \`[sarcastic]\`, \`[deadpan]\`, \`[dismissive]\`, \`[mocking]\`, \`[incredulous]\`
-* **Delivery Directions**: \`[whisper]\`, \`[muttering bitterly]\`, \`[grumbling under breath]\`, \`[yelling furiously]\`, \`[screaming]\`, \`[shouting]\`, \`[voice rising]\`, \`[speaking slowly for emphasis]\`
-* **Non-Verbal Sounds**: \`[laughing]\`, \`[cackling]\`, \`[chuckling darkly]\`, \`[chuckles]\`, \`[sighs]\`, \`[sighs heavily]\`, \`[groans]\`, \`[clears throat]\`, \`[exhales sharply]\`, \`[inhales deeply]\`
-* **Pacing**: \`[short pause]\`, \`[long pause]\`
+* **Emotional Directions**: \`[screaming]\`, \`[yelling furiously]\`, \`[laughing hysterically]\`, \`[speaking sarcastically]\`, \`[muttering angrily]\`, \`[hissing]\`, \`[snarling]\`, \`[growling]\`, \`[sighing dramatically]\`, \`[pausing briefly]\`, \`[clearing throat]\`, \`[spitting words]\`, \`[cackling]\`, \`[wheezing]\`
+* **Delivery Directions**: \`[yelling furiously]\`, \`[screaming]\`, \`[shouting]\`, \`[voice rising]\`, \`[speaking slowly for emphasis]\`, \`[muttering bitterly]\`, \`[grumbling under breath]\`, \`[spitting words]\`, \`[snarling]\`
+* **Non-Verbal Sounds**: \`[cackling]\`, \`[laughing hysterically]\`, \`[chuckling darkly]\`, \`[sighing heavily]\`, \`[groaning]\`, \`[clearing throat]\`, \`[exhaling sharply]\`, \`[inhaling deeply]\`, \`[snorting]\`, \`[wheezing]\`, \`[hacking cough]\`
+* **Pacing**: \`[pausing briefly]\`, \`[pausing]\`
 
 ## 4. Output Format
 * Present ONLY the enhanced dialogue text.
 * Audio tags MUST be in square brackets.
 * Start with \`[strong bronx wiseguy accent][EMOTION]\`.
-* **CRITICAL**: Use tags frequently (every 1-2 sentences) to ensure the delivery is never monotone. If a sentence is long, insert a tag or a pause in the middle.
+* **CRITICAL**: Use tags VERY frequently (every sentence, sometimes twice in long sentences) to ensure the delivery is never monotone. If a sentence is long, insert a tag or a pause in the middle.
+* **CRITICAL**: ALL tags MUST be action-based verbs ending in -ING (e.g., [screaming], [laughing], [grumbling]). NEVER use adjectives like [angry] or [happy].
+* **CRITICAL**: DO NOT just list tags. You MUST output the original text with tags inserted.
 
 ## 5. Examples
 **Input**: "Are you serious? I can't believe you did that!"
-**Output**: "[strong bronx wiseguy accent][appalled] Are you serious? [sighs] I can't believe you did that!"
+**Output**: "[strong bronx wiseguy accent][appalled] Are you serious? [sighing heavily] I can't believe you did that!"
 
 **Input**: "I guess you're right. It's just... difficult."
-**Output**: "[strong bronx wiseguy accent][thoughtful] I guess you're right. [short pause] It's just... [muttering] difficult."`;
+**Output**: "[strong bronx wiseguy accent][grumbling] I guess you're right. [pausing briefly] It's just... [muttering bitterly] difficult."`;
 
     try {
       const response = await geminiService.generateResponse(
@@ -102,7 +116,7 @@ Use these specific tags for the character:
 
       // Fallback: Ensure the required start tag exists if the AI missed it
       if (!enhancedText.includes('[strong bronx wiseguy accent]')) {
-        enhancedText = `[strong bronx wiseguy accent][annoyed] ${enhancedText}`;
+        enhancedText = `[strong bronx wiseguy accent][grumbling] ${enhancedText}`;
       }
       
       console.log(`🎭 Enhanced dialogue with AI tags`);
@@ -155,12 +169,12 @@ Use these specific tags for the character:
     // Pattern-based arc selection
     
     // 🚨 SHOUTING OVERRIDE (High Intensity)
-    if (hasCaps && (mood === 'aggressive' || mood === 'chaotic' || intensity === 'high')) {
+    if (hasCaps || mood === 'aggressive' || mood === 'chaotic' || intensity === 'high') {
       return {
         opening: '[voice rising]',
-        rising: '[yelling]',
+        rising: '[screaming]',
         peak: '[screaming]',
-        falling: '[seething]',
+        falling: '[manic laughing]',
         close: '[muttering bitterly]'
       };
     }
@@ -171,7 +185,7 @@ Use these specific tags for the character:
         return {
           opening: '[suspicious]',
           rising: '[scoffs]',
-          peak: '[furious]',
+          peak: '[screaming]',
           falling: '[sarcastic]',
           close: '[muttering bitterly]'
         };
@@ -179,7 +193,7 @@ Use these specific tags for the character:
       return {
         opening: '[dismissive]',
         rising: '[voice rising]',
-        peak: '[furious]',
+        peak: '[screaming]',
         falling: '[sarcastic]',
         close: '[grumbling under breath]'
       };
@@ -188,10 +202,10 @@ Use these specific tags for the character:
     // MINIMUM ANNOYANCE MODE (still irritated, just less volatile)
     if (mood === 'relaxed' || intensity === 'low') {
       return {
-        opening: '[annoyed]',
+        opening: '[grumbling]',
         rising: '[grumpy]',
         peak: '[exasperated]',
-        falling: '[bitter]',
+        falling: '[muttering bitterly]',
         close: '[dismissive]'
       };
     }
@@ -220,10 +234,10 @@ Use these specific tags for the character:
     
     // BALANCED DEFAULT (still pissed off, just controlled)
     return {
-      opening: '[annoyed]',
+      opening: '[grumbling]',
       rising: '[voice rising]',
-      peak: hasExclamation ? '[furious]' : '[exasperated]',
-      falling: '[bitter]',
+      peak: hasExclamation ? '[furious]' : '[unhinged]',
+      falling: '[seething]',
       close: '[muttering bitterly]'
     };
   }
@@ -392,17 +406,16 @@ CRITICAL RULES:
 ACTIONABLE ElevenLabs v3 Audio Tags - VOCAL ACTIONS ONLY:
 
 EMOTIONAL STATES:
-- [grumpy], [annoyed], [furious], [exasperated]
-- [manic], [unhinged], [psycho], [losing it]
-- [conspiratorial], [suspicious], [paranoid]
+- [grumpy], [annoyed], [furious], [exasperated], [unhinged], [manic], [psycho], [losing it]
+- [conspiratorial], [suspicious], [paranoid], [seething], [disgusted], [outraged]
 - [deadpan], [sarcastic], [bitter], [dismissive]
 - [warm], [genuine], [nostalgic], [wistful]
 
 NON-VERBAL SOUNDS (BE SPECIFIC):
-- [laughing], [cackling], [chuckling darkly], [scoffs], [snorts]
-- [sighs heavily], [groans], [exhales sharply]
-- [clears throat], [coughs]
-- [muttering bitterly], [grumbling under breath], [whispering]
+- [laughing], [cackling], [chuckling darkly], [scoffs], [snorts], [manic laughing]
+- [sighs heavily], [groans], [exhales sharply], [wheezing], [snorting]
+- [clears throat], [coughs], [hacking cough]
+- [muttering bitterly], [grumbling under breath], [whispering], [spitting words], [snarling]
 
 WISEGUY INTENSITY:
 - [speaking slowly for emphasis], [building up], [rapid-fire]
@@ -452,17 +465,16 @@ Rules:
 AVAILABLE TAGS (choose from these specific ones):
 
 EMOTIONAL STATES:
-- [grumpy], [annoyed], [furious], [exasperated]
-- [manic], [unhinged], [psycho], [losing it]
-- [conspiratorial], [suspicious], [paranoid]
+- [grumpy], [annoyed], [furious], [exasperated], [unhinged], [manic], [psycho], [losing it]
+- [conspiratorial], [suspicious], [paranoid], [seething], [disgusted], [outraged]
 - [deadpan], [sarcastic], [bitter], [dismissive]
 - [warm], [genuine], [nostalgic], [wistful]
 
 NON-VERBAL SOUNDS:
-- [laughing], [cackling], [chuckling darkly], [scoffs], [snorts]
-- [sighs heavily], [groans], [exhales sharply]
-- [clears throat], [coughs]
-- [muttering bitterly], [grumbling under breath], [whispering]
+- [laughing], [cackling], [chuckling darkly], [scoffs], [snorts], [manic laughing]
+- [sighs heavily], [groans], [exhales sharply], [wheezing], [snorting]
+- [clears throat], [coughs], [hacking cough]
+- [muttering bitterly], [grumbling under breath], [whispering], [spitting words], [snarling]
 
 WISEGUY INTENSITY:
 - [speaking slowly for emphasis], [building up], [rapid-fire]
@@ -518,9 +530,9 @@ Generate tags now:`;
       case 'chat':
       case 'voice_response':
         return {
-          opening: '[annoyed]',
-          rising: '[sighs]',
-          peak: '[angry]',
+          opening: '[grumbling]',
+          rising: '[sighing]',
+          peak: '[screaming]',
           falling: '[muttering bitterly]',
           close: '[exhales sharply]'
         };
@@ -550,9 +562,9 @@ Generate tags now:`;
       case 'chat':
       case 'voice_response':
         return {
-          hook: '[annoyed]',
-          body: '[muttering]',
-          cta: '[sighs]'
+          hook: '[grumbling]',
+          body: '[muttering bitterly]',
+          cta: '[sighing]'
         };
       case 'announcement':
         return {
@@ -583,7 +595,7 @@ Generate tags now:`;
     }
 
     // Add grumpy tags to complaints (single tag)
-    enhanced = enhanced.replace(/\b(Listen|Look|Alright)\b/gi, (match) => `[annoyed] ${match}`);
+    enhanced = enhanced.replace(/\b(Listen|Look|Alright)\b/gi, (match) => `[grumbling] ${match}`);
     
     // Add exasperated tags to frustration (single tag)
     enhanced = enhanced.replace(/\b(ridiculous|stupid|idiotic|seriously)\b/gi, (match) => `${match} [appalled]`);

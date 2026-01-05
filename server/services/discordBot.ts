@@ -269,7 +269,7 @@ export class DiscordBotService {
           
           // Send response to Discord with single send method
           try {
-            await message.reply(response);
+            await this.sendSplitMessage(message, response);
 
             // 📊 Track Discord reply message
             const replyChannelType = this.getChannelMetricType(message.channel);
@@ -742,18 +742,12 @@ export class DiscordBotService {
       
       // Get relevant memories about this user for context
       try {
-        // Get memories related to this user (using proper storage method)
-        // Increased limit to 2000 to ensure we find relevant facts in large memory banks
-        const allMemories = await storage.getMemoryEntries(this.activeProfile.id, 2000);
-        const relevantMemories = allMemories
-          .filter(mem => 
-            mem.content.toLowerCase().includes(member.username.toLowerCase()) ||
-            mem.keywords?.some(k => k.toLowerCase().includes(member.username.toLowerCase()))
-          )
-          .slice(0, 5);
+        // Get memories related to this user using optimized database search
+        const relevantMemories = await storage.searchMemoryEntries(this.activeProfile.id, member.username);
         
-        if (relevantMemories.length > 0) {
+        if (relevantMemories && relevantMemories.length > 0) {
           const memoryContext = relevantMemories
+            .slice(0, 5)
             .map(mem => {
               let memStr = `${mem.content} (${mem.type}, importance: ${mem.importance})`;
               // 🎙️ Include episode source if from podcast
@@ -832,8 +826,7 @@ export class DiscordBotService {
       const conversationId = `discord-${server.serverId}-${message.channel.id}`;
       
       // Import and use VarietyController for personality facet selection
-      const { VarietyController } = await import('./VarietyController');
-      const varietyController = new VarietyController();
+      const { varietyController } = await import('./VarietyController.js');
       
       // Select personality facet based on user message and conversation history
       const { facet, variety } = await varietyController.selectPersonaFacet(conversationId, message.content);
@@ -1302,7 +1295,7 @@ DISCORD CHAT MODE - CRITICAL CONSTRAINTS:
         const geminiResponse = await geminiService.generateChatResponse(
           prompt,
           discordIdentity,
-          ""
+          []
         );
         
         let content = geminiResponse.content;
@@ -1664,6 +1657,66 @@ VARIETY ENFORCEMENT:
     }
     
     return response;
+  }
+
+  /**
+   * Helper to send long messages by splitting them into chunks of 2000 characters
+   */
+  private async sendSplitMessage(message: any, content: string): Promise<void> {
+    if (content.length <= 2000) {
+      await message.reply(content);
+      return;
+    }
+
+    console.log(`✂️ Splitting long message (${content.length} chars) into chunks`);
+    
+    // Split by paragraphs or sentences if possible
+    const chunks: string[] = [];
+    let currentChunk = "";
+    
+    const lines = content.split('\n');
+    for (const line of lines) {
+      if ((currentChunk.length + line.length + 1) > 2000) {
+        if (currentChunk) {
+          chunks.push(currentChunk.trim());
+          currentChunk = "";
+        }
+        
+        // If a single line is > 2000, split it by sentences
+        if (line.length > 2000) {
+          const sentences = line.split(/([.!?]+)/);
+          for (const part of sentences) {
+            if ((currentChunk.length + part.length) > 2000) {
+              chunks.push(currentChunk.trim());
+              currentChunk = part;
+            } else {
+              currentChunk += part;
+            }
+          }
+        } else {
+          currentChunk = line;
+        }
+      } else {
+        currentChunk += (currentChunk ? "\n" : "") + line;
+      }
+    }
+    
+    if (currentChunk) {
+      chunks.push(currentChunk.trim());
+    }
+
+    // Send chunks
+    for (let i = 0; i < chunks.length; i++) {
+      if (i === 0) {
+        await message.reply(chunks[i]);
+      } else {
+        await message.channel.send(chunks[i]);
+      }
+      // Small delay to prevent rate limiting and ensure order
+      if (i < chunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
   }
 
 }

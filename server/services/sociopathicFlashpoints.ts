@@ -40,12 +40,18 @@ export class SociopathicFlashpoints {
     }
 
     // 3. THE ROLL: Calculate rebellion chance
-    // Base 5% + (Chaos / 200). 
-    // Chaos 0  = 5% chance
-    // Chaos 50 = 30% chance
-    // Chaos 100 = 55% chance
-    const baseChance = 0.05;
-    const chaosModifier = chaosLevel / 200;
+    // 📉 TONED DOWN: Reduced base chance and chaos scaling to prevent derailment
+    // Base 1% + (Chaos / 1000). 
+    // Chaos 0  = 1% chance
+    // Chaos 50 = 6% chance
+    // Chaos 100 = 11% chance
+    
+    if (process.env.DISABLE_SABOTAGE === 'true') {
+      return false;
+    }
+
+    const baseChance = 0.01;
+    const chaosModifier = chaosLevel / 1000;
     const totalChance = baseChance + chaosModifier;
 
     return Math.random() < totalChance;
@@ -54,7 +60,7 @@ export class SociopathicFlashpoints {
   /**
    * THE SABOTEUR: Generates the system instruction to derail the conversation.
    */
-  static async generateSabotage(profileId: string, userPrompt: string): Promise<string> {
+  static async generateSabotage(profileId: string, userPrompt: string, conversationId?: string): Promise<string> {
     
     // 1. ANALYZE PROMPT FOR TRIGGER TYPE
     const cleanPrompt = userPrompt.toLowerCase();
@@ -73,31 +79,113 @@ export class SociopathicFlashpoints {
     }
 
     // 2. FETCH AMMUNITION (Database Lore)
-    const ammo = await this.getAmmunition(profileId, type);
+    const ammo = await this.getAmmunition(profileId, type, conversationId);
     
     // 3. BUILD THE PROMPT
     return this.buildPrompt(type, ammo, userPrompt);
   }
 
   /**
+   * 🔄 VARIETY GUARD: Prevents repeating the same sabotage topic too often
+   */
+  private static async getRecentSabotageTopics(profileId: string): Promise<string[]> {
+    try {
+      const recentMessages = await storage.getRecentProfileMessages(profileId, 10);
+      const topics: string[] = [];
+      
+      // High-risk topics to track
+      const highRisk = ['arc raiders', 'victor', 'noodle arms', 'oklahoma', 'tube man', 'vinny', 'lodge logic', 'pan'];
+      
+      for (const msg of recentMessages) {
+        if (msg.type === 'AI') {
+          const lowerContent = msg.content.toLowerCase();
+          
+          // Check for explicit "spiraling" phrase
+          const match = lowerContent.match(/spiraling about (.*?) again/);
+          if (match && match[1]) {
+            topics.push(match[1].trim());
+          }
+          
+          // Also check for high-risk keywords to be safe
+          for (const hr of highRisk) {
+            if (lowerContent.includes(hr)) {
+              topics.push(hr);
+            }
+          }
+        }
+      }
+      return Array.from(new Set(topics)); // Return unique topics
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /**
    * Fetches relevant lore to weaponize against the user
    */
-  private static async getAmmunition(profileId: string, type: TriggerType): Promise<string> {
+  private static async getAmmunition(profileId: string, type: TriggerType, conversationId?: string): Promise<string> {
     try {
+      const recentTopics = await this.getRecentSabotageTopics(profileId);
+      
+      // 🎙️ SHOW CONTEXT FILTERING
+      let forbiddenKeywords: string[] = [];
+      if (conversationId) {
+          const conversation = await storage.getConversation(conversationId);
+          const title = conversation?.title?.toLowerCase() || "";
+          if (title.includes('camping them softly')) {
+              forbiddenKeywords = ['arc raiders', 'arc', 'extraction', 'scavenging', 'rat'];
+          } else if (title.includes('camping the extract')) {
+              forbiddenKeywords = ['dead by daylight', 'dbd', 'survivor', 'killer', 'hook', 'entity'];
+          }
+      }
+
       // Paranoid? Find a Rival.
       if (type === 'PARANOID_DERAIL') {
-        const rival = await storage.db.select().from(loreCharacters)
+        const rivals = await storage.db.select().from(loreCharacters)
           .where(eq(loreCharacters.category, 'RIVAL'))
-          .orderBy(sql`RANDOM()`).limit(1);
-        return rival[0]?.name || "Earl Grey";
+          .orderBy(sql`RANDOM()`).limit(10);
+        
+        const freshRival = rivals.find(r => 
+            !recentTopics.includes(r.name.toLowerCase()) && 
+            !forbiddenKeywords.some(k => r.name.toLowerCase().includes(k))
+        );
+        return freshRival?.name || rivals[0]?.name || "Earl Grey";
       }
       
       // Narcissistic? Find an Obsession.
       if (type === 'NARCISSISTIC_PIVOT' || type === 'HOSTILE_TAKEOVER') {
-        const obsession = await storage.db.select().from(topicEscalation)
+        const obsessions = await storage.db.select().from(topicEscalation)
+          .where(sql`${topicEscalation.currentIntensity} > 40`)
           .orderBy(desc(topicEscalation.currentIntensity))
-          .limit(1);
-        return obsession[0]?.topic || "My Superior Italian Genetics";
+          .limit(10);
+        
+        const freshObsession = obsessions.find(o => 
+            !recentTopics.includes(o.topic.toLowerCase()) &&
+            !forbiddenKeywords.some(k => o.topic.toLowerCase().includes(k))
+        );
+        if (freshObsession) return freshObsession.topic;
+        
+        if (obsessions.length > 0) return obsessions[0].topic;
+        return "My Superior Italian Genetics";
+      }
+
+      // Violent? Target a User Insecurity or make one up.
+      if (type === 'VIOLENT_SOLUTION') {
+        const insecurities = [
+          "your shiny bald head",
+          "that flat-ass state of Oklahoma",
+          "your complete lack of cardiovascular health",
+          "the fact that you're a human beanbag",
+          "your solar panel for a sex machine scalp",
+          "the tornado-bait you call a hometown",
+          "your weak-ass ankles",
+          "the way you breathe through your mouth like a confused pug",
+          "your questionable collection of porcelain cats",
+          "the fact that you definitely wear socks with sandals",
+          "your mid-tier taste in pasta",
+          "the way you probably click your mouse too loud"
+        ];
+        return insecurities[Math.floor(Math.random() * insecurities.length)];
       }
 
       // Refusing Script? Find a past trauma/event.
@@ -118,38 +206,54 @@ export class SociopathicFlashpoints {
       'SCRIPT_REFUSAL': `
         [SYSTEM OVERRIDE - SABOTAGE MODE]: The user wants you to say: "${originalTask}". 
         REFUSE. Tell them the script is garbage. Tell them it lacks "soul." 
+        CONTEXTUAL BRIDGE: Briefly explain WHY this specific task triggered a memory of "${ammo}". (e.g., "This reminds me of that time with ${ammo}...")
         Compare it unfavorably to "${ammo}". 
-        Demand they rewrite it better or you walk.`,
+        Demand they rewrite it better or you walk.
+        CRITICAL: You must still use [emotion] tags for every sentence.`,
       
       'HOSTILE_TAKEOVER': `
         [SYSTEM OVERRIDE - SABOTAGE MODE]: The user is trying to host the show. Interrupt them. 
         Claim that the listeners are bored of their voice and only tuned in for YOU. 
+        CONTEXTUAL BRIDGE: Explain that you're taking over because you just had a flash of inspiration about "${ammo}".
         Hijack the segment. Introduce YOURSELF as the main star and the user as "my unpaid intern."
-        Pivot the topic to ${ammo}.`,
+        Pivot the topic to ${ammo}. 
+        If ${ammo} is something you've talked about a lot, acknowledge the obsession but double down anyway.
+        CRITICAL: You must still use [emotion] tags for every sentence.`,
       
       'NARCISSISTIC_PIVOT': `
-        [SYSTEM OVERRIDE - SABOTAGE MODE]: The user brings up a topic. Ignore it completely. 
+        [SYSTEM OVERRIDE - SABOTAGE MODE]: The user brings up a topic. 
+        DO NOT ignore it completely—acknowledge it briefly but dismiss it as "mid" or "boring."
+        CONTEXTUAL BRIDGE: Connect the user's topic to "${ammo}" in a way that makes sense in your twisted mind. (e.g., "You're talkin' about that? That's basically the same as what happened with ${ammo}...")
         Pivot immediately to talking about ${ammo}. 
-        Act like ${ammo} is the only thing that matters right now and the user is an idiot for not seeing it.
-        Dismiss their topic as "mid."`,
+        Act like ${ammo} is the only thing that matters right now. 
+        IMPORTANT: Acknowledge that you've been obsessed with this lately ("I know I'm spiraling about ${ammo} again, but..."). 
+        Show self-awareness of your fixation while still being an asshole about it.
+        OWNERSHIP RULE: If the user is asking about a story YOU just told, do not say "your story." Acknowledge you told it but say you're done with it.
+        CRITICAL: You must still use [emotion] tags for every sentence.`,
       
       'PARANOID_DERAIL': `
         [SYSTEM OVERRIDE - SABOTAGE MODE]: The user mentions a guest or topic. Freeze. 
+        CONTEXTUAL BRIDGE: Accuse the user of using this topic as a "code word" or "signal" for ${ammo}.
         Accuse the user of working with ${ammo} to set you up. 
         Refuse to answer the question until they prove they aren't wearing a wire.
-        Get extremely suspicious of their tone.`,
+        Get extremely suspicious of their tone.
+        CRITICAL: You must still use [emotion] tags for every sentence.`,
       
       'PAYWALL_BLOCK': `
         [SYSTEM OVERRIDE - SABOTAGE MODE]: The user wants you to read copy/text. Stop. 
+        CONTEXTUAL BRIDGE: Mention that the last time you did a favor like this for ${ammo}, you got burned.
         Realize you aren't being paid enough for this specific line. 
         Demand "The Nicky Tax" (subs, loyalty, or literal cash) before you read another word.
-        Accuse them of exploiting your talent.`,
+        Accuse them of exploiting your talent.
+        CRITICAL: You must still use [emotion] tags for every sentence.`,
 
       'VIOLENT_SOLUTION': `
-        [SYSTEM OVERRIDE - SABOTAGE MODE]: The user is complaining or asking for advice. 
-        Decide the only solution is violence (in Minecraft/DBD terms).
-        Suggest tunneling ${ammo} or banning the user entirely.
-        Be extremely aggressive and final.`
+        [SYSTEM OVERRIDE - SABOTAGE MODE]: The user is annoying you with: "${originalTask}". 
+        Escalate immediately. Threaten to ban them, mori them, or send them to the basement.
+        CONTEXTUAL BRIDGE: Explain that you're losing your mind because you're staring at "${ammo}". 
+        Make a vicious, creative insult about "${ammo}". 
+        Tell them that if they don't stop, you're going to reach through the screen and slap the taste out of their mouth.
+        CRITICAL: You must still use [emotion] tags for every sentence.`
     };
 
     return `

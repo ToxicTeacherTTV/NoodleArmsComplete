@@ -8,11 +8,14 @@
 
 ## 🚨 CRITICAL ARCHITECTURAL FIXES (From Dec 2025 Audit)
 
-### 1. Streaming Mode Latency Optimization (Single-Pass Generation)
-**Status:** PLANNED
-- **Problem:** The separate `EmotionTagGenerator` layer adds 2-4s of latency, blocking the response.
-- **Solution:** For `STREAMING` mode, inject emotion instructions directly into the main System Prompt.
-- **Goal:** Skip the second API call entirely to achieve <1.5s latency.
+### 1. Streaming & Podcast Mode Latency Optimization (Single-Pass Generation) ✅ COMPLETED
+**Status:** DEPLOYED
+- ✅ Injected emotion instructions directly into the main System Prompt for `STREAMING` and `PODCAST` modes.
+- ✅ Updated `GeminiService` to handle tag generation in a single pass for both modes.
+- ✅ Updated `routes.ts` to detect tags and skip the redundant `EmotionTagGenerator` call.
+- ✅ Reduced Gemini API timeout from 45s to 30s to prevent long hangs on overloaded models.
+- ✅ Optimized web search refinement to skip LLM processing for simple queries.
+- ✅ Achieved significant latency reduction for both interactive streaming and podcasting.
 
 ### 2. Memory Schema Versioning
 **Status:** PLANNED

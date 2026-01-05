@@ -123,9 +123,9 @@ export async function executeWithModelFallback<T>(
 
   // Override with forced model if specified
   if (options.forceModel) {
+    // If a model is forced, we still want to allow fallbacks if it fails,
+    // but we make the forced model the primary one.
     strategy.primary = options.forceModel;
-    strategy.fallback = undefined;
-    strategy.ultimate = undefined;
   }
 
   // Filter out experimental models if not allowed
