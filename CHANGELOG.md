@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.1] - 2026-01-04
+
+### Fixed - Critical Stability & UX
+- **Response Truncation:** Increased token limit from 1024 to **4096** for both Gemini and Anthropic, preventing mid-sentence cutoffs for long responses.
+- **Character Constraint:** Enforced a **2200 character limit** via system prompt to ensure responses remain within platform bounds while maximizing verbosity.
+- **Auto-Renaming:** Fixed logic bug where chats stayed named "New Chat" because the message count check was off-by-one.
+- **Model Sanitation:** Removed deprecated `gemini-2.0-flash-exp` from rotation and added active interception to force-swap it to `gemini-3-flash-preview`.
+- **Lore Crashes:** Patched a `SyntaxError` in `LoreOrchestrator` caused by the AI wrapping JSON in markdown code blocks.
+
+---
+
 ## [1.6.0] - 2026-01-04
 
 ### Added - Privacy Controls & Memory Learning

@@ -312,10 +312,10 @@ NODE_ENV="production"                       # production | development
 1. **Gemini Free Tier Rate Limits**
    - `gemini-2.5-flash`: 10 RPM, 250 RPD (frequently hit with multiple users)
    - `gemini-2.5-pro`: 2 RPM, 50 RPD (very limited on free tier)
-   - **Current Behavior:** Falls back to `gemini-2.0-flash-exp` (experimental, lower quality)
+   - **Current Behavior:** Falls back to `gemini-3-pro-preview` (slower but reliable quality)
    - **Impact:** Quality degradation during high-traffic periods
    - **Solution:** Consider paid tier ($250 spend = Tier 2: 1000 RPM, 4M RPM, 10K RPD)
-   - **Status:** Operating on free tier, monitoring usage patterns
+   - **Status:** Operating on free tier with `gemini-3-flash-preview` as primary
 
 2. **Embedding Service Backfill**
    - ✅ Service implemented and active for new memories
