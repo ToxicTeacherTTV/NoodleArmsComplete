@@ -86,17 +86,14 @@ async function rescanContentFlags() {
           if (!exists) {
             flagsToInsert.push({
               profileId: memory.profileId,
-              targetType: 'MEMORY',
+              targetType: 'MEMORY' as const,
               targetId: memory.id,
-              flagType: flag.flagType,
+              flagType: flag.flagType as any,
               flagReason: flag.reason,
-              priority: flag.priority,
-              confidence: Math.round(flag.confidence * 100), // Convert 0-1 to 0-100 if needed, or keep as is? Schema says integer?
-              // Wait, schema says confidence is integer? Let's check.
-              // Schema for contentFlags doesn't have confidence column?
-              // Let's check schema again.
-              reviewStatus: 'PENDING'
-            } as any); // Cast to any to avoid strict type checking if I missed a field
+              priority: flag.priority as any,
+              confidence: Math.round(flag.confidence * 100),
+              reviewStatus: 'PENDING' as const
+            });
           }
         }
         
@@ -106,7 +103,7 @@ async function rescanContentFlags() {
           // Let's check contentFlags schema again for confidence.
           
           for (const f of flagsToInsert) {
-             await db.insert(contentFlags).values(f);
+             await db.insert(contentFlags).values(f as any);
           }
           newFlagsCount += flagsToInsert.length;
         }

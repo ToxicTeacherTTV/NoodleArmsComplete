@@ -109,7 +109,7 @@ export class MessageTrainingCollector {
     trainingContent += `\n\n---\n[Mode: ${context.mode || 'CHAT'}, Quality Score: High, Source: Message ID ${message.id}]`;
     
     // Create document as training example
-    await storage.createDocument({
+    const doc = await storage.createDocument({
       profileId,
       name: `Training: Auto-saved message (${new Date().toISOString().split('T')[0]})`,
       filename: `auto_msg_${message.id.substring(0, 8)}.txt`,
@@ -119,6 +119,14 @@ export class MessageTrainingCollector {
       extractedContent: trainingContent,
       processingStatus: 'COMPLETED'
     });
+    
+    // 🔢 Generate embedding for semantic retrieval
+    try {
+      const { embeddingService } = await import('./embeddingService.js');
+      await embeddingService.embedDocument(doc.id, trainingContent);
+    } catch (e) {
+      console.warn(`⚠️ Failed to generate embedding for training example ${doc.id}:`, e);
+    }
     
     console.log(`📚 Auto-saved message ${message.id.substring(0, 8)} as training example`);
   }

@@ -42,12 +42,22 @@ export const conversations = pgTable("conversations", {
   sessionId: varchar("session_id"),
   title: text("title"), // AI-generated or user-provided conversation title
   isArchived: boolean("is_archived").default(false), // Hide from main sidebar without deleting
+  isPrivate: boolean("is_private").default(false), // DEFAULT TO PUBLIC: If true, do not store lore or memories from this conversation
   // NEW: Enhanced memory persistence fields
   contentType: text("content_type").$type<'PODCAST' | 'STREAMING' | 'DISCORD' | 'GENERAL'>().default('GENERAL'),
   topicTags: text("topic_tags").array(), // Topics discussed in this conversation
   completedStories: text("completed_stories").array(), // Story IDs that were completed
   podcastEpisodeId: varchar("podcast_episode_id"), // Link to specific episode if relevant
   storyContext: text("story_context"), // Brief context about stories told
+  metadata: jsonb("metadata").$type<{
+    storyState?: {
+      currentCity?: string;
+      archetype?: string;
+      turnCount: number;
+      narrativeGoal?: string;
+      isCompleted: boolean;
+    }
+  }>(),
   createdAt: timestamp("created_at").default(sql`now()`),
 });
 
@@ -57,12 +67,16 @@ export const messages = pgTable("messages", {
   type: text("type").$type<'USER' | 'AI' | 'CHATTER' | 'SYSTEM'>().notNull(),
   content: text("content").notNull(),
   rating: integer("rating"), // User rating: 1 = thumbs down, 2 = thumbs up
+  isPrivate: boolean("is_private").default(false), // DEFAULT TO PUBLIC: If true, do not use for RAG or memory
   metadata: json("metadata").$type<{
     voice?: boolean;
     speaker?: string;
     processingTime?: number;
     retrieved_context?: string;
     debug_info?: any;
+    enhanced_content?: string;
+    cached?: boolean;
+    concepts?: any;
   }>(),
   createdAt: timestamp("created_at").default(sql`now()`),
 });
@@ -90,7 +104,7 @@ export const documents = pgTable("documents", {
   // 🔍 NEW: Duplicate detection fields
   contentHash: varchar("content_hash", { length: 64 }), // SHA-256 hash for exact duplicate detection
   // 🔍 NEW: Semantic search support
-  embedding: text("embedding"), // JSON array of vector embeddings for semantic similarity
+  embedding: vector("embedding", { dimensions: 768 }), // Vector embeddings for semantic similarity
   embeddingModel: text("embedding_model"), // Model used to generate embedding
   embeddingUpdatedAt: timestamp("embedding_updated_at"), // When embedding was last generated
   retrievalCount: integer("retrieval_count").default(0),
@@ -138,6 +152,10 @@ export const memoryEntries = pgTable("memory_entries", {
   canonicalKey: text("canonical_key"), // Unique key for fact deduplication
   status: text("status").$type<'ACTIVE' | 'DEPRECATED' | 'AMBIGUOUS'>().default('ACTIVE'),
   isProtected: boolean("is_protected").default(false), // Protected facts can't be deprecated by contradictions
+  // 🎭 NEW: Unreliable Narrator & Emergence fields
+  lane: text("lane").$type<'CANON' | 'RUMOR'>().notNull().default('CANON'), // CANON = reliable, RUMOR = performative bullshit
+  origin: text("origin").$type<'DOC' | 'PODCAST_RSS' | 'CHAT' | 'STREAM_CHAT' | 'DISCORD' | 'MANUAL' | 'SYSTEM'>().default('SYSTEM'),
+  truthDomain: text("truth_domain").$type<'DOC' | 'PODCAST' | 'OPS' | 'NICKY_LORE' | 'SABAM_LORE' | 'GENERAL'>().default('GENERAL'),
   // Hierarchical fact support  
   parentFactId: varchar("parent_fact_id"), // Links atomic facts to parent stories (self-reference removed to avoid circular dependency)
   isAtomicFact: boolean("is_atomic_fact").default(false), // True for granular facts extracted from stories
@@ -152,8 +170,8 @@ export const memoryEntries = pgTable("memory_entries", {
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 }, (table) => ({
-  // Unique constraint to prevent duplicate canonical keys per profile
-  uniqueCanonicalKey: uniqueIndex("unique_profile_canonical_key_idx").on(table.profileId, table.canonicalKey),
+  // Unique constraint to prevent duplicate canonical keys per profile and lane
+  uniqueCanonicalKey: uniqueIndex("unique_profile_canonical_key_idx").on(table.profileId, table.canonicalKey, table.lane),
   // Vector similarity search index
   embeddingIndex: index("memory_embedding_idx").using("hnsw", table.embedding.op("vector_cosine_ops")),
 }));
@@ -332,7 +350,7 @@ export const contentLibrary = pgTable("content_library", {
   lastAccessed: timestamp("last_accessed"),
   accessCount: integer("access_count").default(0),
   // Semantic search support
-  embedding: text("embedding"), // JSON array of vector embeddings for semantic search
+  embedding: vector("embedding", { dimensions: 768 }), // Vector embeddings for semantic search
   embeddingModel: text("embedding_model"), // Model used to generate embedding (e.g., 'gemini-embedding-001')
   embeddingUpdatedAt: timestamp("embedding_updated_at"), // When embedding was last generated
   createdAt: timestamp("created_at").default(sql`now()`),
@@ -343,6 +361,7 @@ export const contentLibrary = pgTable("content_library", {
 export const chaosState = pgTable("chaos_state", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   level: integer("level").notNull().default(0), // 0-100 chaos level
+  sauceMeter: integer("sauce_meter").notNull().default(0), // 0-100 "heated" level
   mode: text("mode").$type<'FULL_PSYCHO' | 'FAKE_PROFESSIONAL' | 'HYPER_FOCUSED' | 'CONSPIRACY'>().notNull().default('FULL_PSYCHO'),
   lastModeChange: timestamp("last_mode_change").default(sql`now()`),
   responseCount: integer("response_count").default(0), // Track responses for evolution
@@ -350,6 +369,23 @@ export const chaosState = pgTable("chaos_state", {
   overrideExpiry: timestamp("override_expiry"), // Timeout for manual override
   isGlobal: boolean("is_global").default(true), // Singleton pattern flag
   updatedAt: timestamp("updated_at").default(sql`now()`),
+});
+
+// Personality State - Persistent storage for Nicky's unified personality
+export const personalityState = pgTable("personality_state", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  profileId: varchar("profile_id").references(() => profiles.id).notNull(),
+  basePersonality: jsonb("base_personality").notNull(), // Stores PersonalityControl object
+  lastUpdated: timestamp("last_updated").default(sql`now()`),
+  source: text("source").notNull(),
+  isGlobal: boolean("is_global").default(true),
+});
+
+export const varietyState = pgTable("variety_state", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").notNull(),
+  state: jsonb("state").notNull(), // Stores SessionVariety object
+  lastUpdated: timestamp("last_updated").default(sql`now()`),
 });
 
 // Relations
@@ -365,6 +401,10 @@ export const conversationsRelations = relations(conversations, ({ one, many }) =
     references: [profiles.id],
   }),
   messages: many(messages),
+  varietyState: one(varietyState, {
+    fields: [conversations.id],
+    references: [varietyState.conversationId],
+  }),
 }));
 
 export const messagesRelations = relations(messages, ({ one }) => ({
@@ -446,7 +486,11 @@ export const insertProfileSchema = createInsertSchema(profiles).omit({
   updatedAt: true,
 });
 
-export const insertConversationSchema = createInsertSchema(conversations).omit({
+export const insertConversationSchema = createInsertSchema(conversations, {
+  topicTags: z.array(z.string()).optional(),
+  completedStories: z.array(z.string()).optional(),
+  contentType: z.enum(['PODCAST', 'STREAMING', 'DISCORD', 'GENERAL']).optional(),
+}).omit({
   id: true,
   createdAt: true,
 });

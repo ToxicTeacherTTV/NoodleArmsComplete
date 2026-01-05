@@ -27,6 +27,9 @@ export class ContentFilter {
     let filtered = content;
     let wasFiltered = false;
 
+    // 🚫 STRIP STAGE DIRECTIONS (Plain text narration of actions)
+    filtered = this.stripStageDirections(filtered);
+
     // Check for and replace blocked terms
     for (const blockedPattern of this.blockedTerms) {
       if (blockedPattern.test(filtered)) {
@@ -43,6 +46,48 @@ export class ContentFilter {
     }
 
     return { filtered, wasFiltered };
+  }
+
+  /**
+   * Strips plain-text stage directions (e.g., "I'm shaking my head")
+   */
+  private stripStageDirections(content: string): string {
+    // Patterns for "I'm [action]" or "I am [action]" that look like stage directions
+    const actions = [
+      'shakin\' my head', 'shaking my head', 
+      'rubbin\' my temples', 'rubbing my temples', 
+      'leanin\' back', 'leaning back', 
+      'leanin\' in', 'leaning in',
+      'wavin\' my hand', 'waving my hand',
+      'shruggin\' my shoulders', 'shrugging my shoulders',
+      'rollin\' my eyes', 'rolling my eyes',
+      'noddin\' my head', 'nodding my head',
+      'pacin\' the room', 'pacing the room',
+      'takin\' a sip', 'taking a sip',
+      'lightin\' a cigarette', 'lighting a cigarette',
+      'adjustin\' my tie', 'adjusting my tie',
+      'checkin\' my watch', 'checking my watch',
+      'winking', 'winkin\'',
+      'shrugging', 'shruggin\'',
+      'sighing', 'sighin\'',
+      'laughing', 'laughin\'',
+      'furious', 'annoyed', 'pissed off', 'confused'
+    ];
+
+    const actionPattern = actions.join('|');
+    // Match "I'm [action]" or "I am [action]" followed by punctuation or end of string
+    // We only match if it's a standalone sentence or at the very start/end
+    const regex = new RegExp(`(^|[.!?]\\s+)(I'm|I am) (${actionPattern})[.!?]`, 'gi');
+    
+    let result = content.replace(regex, (match, prefix) => {
+      console.warn(`🚫 Content filter: Stripped plain-text stage direction: ${match}`);
+      return prefix; 
+    });
+
+    // Also strip any remaining asterisk blocks just in case
+    result = result.replace(/\*[^*]+\*/g, '');
+
+    return result.trim();
   }
 
   /**

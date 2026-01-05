@@ -1,8 +1,45 @@
 # Nicky AI - Project Roadmap & Improvements
 
-**Last Updated:** December 8, 2025
+**Last Updated:** January 3, 2026
 
 This document tracks suggested improvements and their implementation status.
+
+---
+
+## 🎉 RECENT COMPLETIONS (January 3, 2026)
+
+### Personality Hardening & "Show, Don't Tell" ✅ COMPLETED
+**Status:** DEPLOYED - Character integrity enforcement
+
+**What was built:**
+- ✅ **Strict Behavioral Constraints**: Nicky is now forbidden from using asterisks (`*leans in*`) or physical narration.
+- ✅ **Emotion Tagging**: Shifted all physical expression to `[emotion]` tags (e.g., `[sighs]`, `[yelling]`) which are handled by the voice engine.
+- ✅ **System Prompt Refactor**: Updated `gemini.ts` and `aiOrchestrator.ts` to enforce "Show, Don't Tell" logic.
+- ✅ **Validation**: Verified that Nicky no longer narrates his own actions in chat or podcast modes.
+
+**Files:** `server/services/gemini.ts`, `server/services/aiOrchestrator.ts`, `docs/EMOTION_ENHANCEMENT.md`
+
+### Vibe-Based Storytelling Engine ✅ COMPLETED
+**Status:** DEPLOYED - Unpredictable multi-turn city stories
+
+**What was built:**
+- ✅ **Narrative Archetypes**: Replaced rigid story scripts with "Flavor Packs" (The Grudge, The Fugitive, The Food Crime, etc.).
+- ✅ **Multi-Turn Persistence**: Implemented a `metadata` state machine in the `conversations` table to track story turns.
+- ✅ **Natural Detection**: Added regex and database-lookup logic to `aiOrchestrator.ts` to detect city mentions in chat.
+- ✅ **Automatic Coverage**: Cities are now automatically marked as "Covered" in the database when Nicky tells a story about them.
+- ✅ **UI Integration**: Added "Tell Story" buttons to the Listener Cities dashboard and random pick notifications.
+
+**Files:** `server/services/aiOrchestrator.ts`, `server/storage.ts`, `client/src/components/jazz-dashboard-v2.tsx`, `client/src/pages/listener-cities.tsx`
+
+### Podcast Mode "Single-Pass" Optimization ✅ COMPLETED
+**Status:** DEPLOYED - Latency reduction for long-form content
+
+**What was built:**
+- ✅ **Single-Pass Generation**: Optimized the prompt structure to allow Gemini 3 Flash to generate complex, long-form responses in one go.
+- ✅ **Context Utilization**: Leveraged the 1M+ token window of Gemini 3 for deep lore and episode history retrieval.
+- ✅ **Show Context Detection**: Automatic detection of "Camping Them Softly" vs "Camping the Extract" to adjust personality facets.
+
+**Files:** `server/services/aiOrchestrator.ts`, `server/services/gemini.ts`
 
 ---
 

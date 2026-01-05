@@ -369,19 +369,6 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
         throw claudeError;
       }
       */
-        if (!textContent || textContent.type !== 'text') {
-          throw new Error('No text content in response');
-        }
-
-        console.log('✅ Successfully merged memories using Claude AI (fallback)');
-        return textContent.text.trim();
-        
-      } catch (claudeError) {
-        console.error('❌ Both Gemini and Claude AI merge failed:', claudeError);
-        // Fall back to simple merge
-        console.log('⚠️ Falling back to simple merge (picks most comprehensive version)');
-        return this.mergeContent(master, duplicates);
-      }
     }
   }
   
@@ -585,15 +572,16 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
       .filter(m => m.embedding)
       .map(m => {
         try {
+          const rawEmbedding = m.embedding as any;
           let vector: number[];
-          if (Array.isArray(m.embedding)) {
-             vector = m.embedding;
-          } else if (typeof m.embedding === 'string') {
+          if (Array.isArray(rawEmbedding)) {
+             vector = rawEmbedding;
+          } else if (typeof rawEmbedding === 'string') {
              try {
-                vector = JSON.parse(m.embedding);
+                vector = JSON.parse(rawEmbedding);
              } catch (e) {
-                const cleaned = m.embedding.replace(/^\[|\]$/g, '');
-                vector = cleaned.split(',').map(n => parseFloat(n.trim()));
+                const cleaned = rawEmbedding.replace(/^\[|\]$/g, '');
+                vector = cleaned.split(',').map((n: string) => parseFloat(n.trim()));
                 if (vector.some(isNaN)) throw e;
              }
           } else {
@@ -895,15 +883,16 @@ OUTPUT: Return ONLY the merged memory content (one paragraph or a few sentences)
       .filter(m => m.embedding)
       .map(m => {
         try {
+          const rawEmbedding = m.embedding as any;
           let vector: number[];
-          if (Array.isArray(m.embedding)) {
-             vector = m.embedding;
-          } else if (typeof m.embedding === 'string') {
+          if (Array.isArray(rawEmbedding)) {
+             vector = rawEmbedding;
+          } else if (typeof rawEmbedding === 'string') {
              try {
-                vector = JSON.parse(m.embedding);
+                vector = JSON.parse(rawEmbedding);
              } catch (e) {
-                const cleaned = m.embedding.replace(/^\[|\]$/g, '');
-                vector = cleaned.split(',').map(n => parseFloat(n.trim()));
+                const cleaned = rawEmbedding.replace(/^\[|\]$/g, '');
+                vector = cleaned.split(',').map((n: string) => parseFloat(n.trim()));
                 if (vector.some(isNaN)) throw e;
              }
           } else {

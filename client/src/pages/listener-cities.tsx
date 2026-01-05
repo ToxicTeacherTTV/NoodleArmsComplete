@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, Upload, Plus, Trash2, Check, Globe, Filter, Shuffle, BarChart3, ChevronDown, ChevronUp } from "lucide-react";
+import { MapPin, Upload, Plus, Trash2, Check, Globe, Filter, Shuffle, BarChart3, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Select,
@@ -53,6 +54,7 @@ interface CityStats {
 export default function ListenerCitiesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   // Filters
   const [filterCountry, setFilterCountry] = useState<string>("");
@@ -70,6 +72,11 @@ export default function ListenerCitiesPage() {
   // Import form
   const [importContent, setImportContent] = useState("");
   const [showImportDialog, setShowImportDialog] = useState(false);
+
+  const handleTellStory = (city: string, country: string) => {
+    const message = encodeURIComponent(`Hey Nicky, tell me a story about ${city}, ${country} for the "Where the fuck are the viewers from" segment.`);
+    setLocation(`/?message=${message}`);
+  };
 
   // Build query params
   const buildQueryParams = () => {
@@ -207,6 +214,11 @@ export default function ListenerCitiesPage() {
       toast({
         title: "🎲 Nicky's pick!",
         description: `${city.city}${city.stateProvince ? `, ${city.stateProvince}` : ""}, ${city.country}`,
+        action: (
+          <Button size="sm" onClick={() => handleTellStory(city.city, city.country)}>
+            Tell Story
+          </Button>
+        ),
       });
     },
     onError: (error: Error) => {
@@ -564,6 +576,15 @@ export default function ListenerCitiesPage() {
                         Uncovered
                       </Badge>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleTellStory(city.city, city.country)}
+                      className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                    >
+                      <MessageSquare className="h-4 w-4 mr-1" />
+                      Tell Story
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"

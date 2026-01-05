@@ -5,6 +5,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { geminiService } from './gemini.js';
 import { storage } from '../storage.js';
+import { AIModel } from '@shared/modelSelection.js';
 
 // Intelligence analysis types
 interface ClusterAnalysis {
@@ -125,7 +126,8 @@ export class IntelligenceEngine {
   async analyzeFactClusters(
     db: PostgresJsDatabase<any>,
     profileId: string,
-    limit: number = 100
+    limit: number = 100,
+    model: AIModel = 'gemini-3-flash-preview'
   ): Promise<ClusterAnalysis[]> {
     console.log(`🧠 Analyzing fact clusters for profile ${profileId}`);
 
@@ -182,7 +184,7 @@ If no clusters found, return: []`;
     try {
       // 🎯 PRIMARY: Try Gemini first (free tier)
       const geminiResponse = await this.gemini.ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: model,
         config: {
           responseMimeType: "application/json",
           temperature: 0.3
@@ -299,7 +301,8 @@ If no clusters found, return: []`;
    */
   async analyzePersonalityDrift(
     db: PostgresJsDatabase<any>,
-    profileId: string
+    profileId: string,
+    model: AIModel = 'gemini-3-flash-preview'
   ): Promise<PersonalityDrift[]> {
     console.log(`🎭 Analyzing personality drift for profile ${profileId}`);
 
@@ -359,7 +362,7 @@ If no drift detected, return: []`;
     try {
       // 🎯 PRIMARY: Try Gemini first (free tier)
       const geminiResponse = await this.gemini.ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: model,
         config: {
           responseMimeType: "application/json",
           temperature: 0.3

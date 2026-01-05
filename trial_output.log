@@ -1,0 +1,12 @@
+🚀 Starting Nicky Trial Protocol...
+❌ Trial failed: TypeError: fetch failed
+    at node:internal/deps/undici/undici:13510:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async runTrial (C:\Users\trist\Documents\NickyGit\NoodleArmsComplete\scripts\nicky-trial-protocol.ts:114:24) {
+  [cause]: AggregateError [ECONNREFUSED]: 
+      at internalConnectMultiple (node:net:1139:18)
+      at afterConnectMultiple (node:net:1714:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}

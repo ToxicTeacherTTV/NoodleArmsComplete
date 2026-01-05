@@ -303,12 +303,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const conversation = await storage.createConversation(conversationData);
 
       // Auto-rotate personality for new conversation (cluster-based)
-      const { personalityController } = await import('./services/personalityController');
+      const { personalityController } = await import('./services/personalityController.js');
       await personalityController.rotateForNewConversation();
 
       res.json(conversation);
     } catch (error) {
-      res.status(400).json({ error: 'Invalid conversation data' });
+      console.error('Conversation creation error:', error);
+      res.status(400).json({ 
+        error: 'Invalid conversation data',
+        details: error instanceof z.ZodError ? error.errors : undefined
+      });
+    }
+  });
+
+  app.get('/api/conversations/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const conversation = await storage.getConversation(id);
+      if (!conversation) {
+        return res.status(404).json({ error: 'Conversation not found' });
+      }
+      res.json(conversation);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch conversation' });
     }
   });
 
@@ -325,9 +342,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/conversations/:id/messages', async (req, res) => {
     try {
       const { id: conversationId } = req.params;
+      const conversation = await storage.getConversation(conversationId);
       const messageData = insertMessageSchema.parse({
         ...req.body,
         conversationId,
+        isPrivate: req.body.isPrivate ?? conversation?.isPrivate ?? true
       });
       const message = await storage.addMessage(messageData);
       res.json(message);
@@ -346,7 +365,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const transcript = messages.map(m => `[${m.type}]: ${m.content}`).join('\n');
-      const { geminiService } = await import('./services/gemini');
+      const { geminiService } = await import('./services/gemini.js');
       const evaluation = await geminiService.evaluateConversation(transcript);
       
       res.json({ evaluation });
@@ -365,26 +384,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // 🧠 INTELLIGENT SUMMARIZATION
       // Instead of saving the raw evaluation, we distill it into a single actionable coaching tip.
-      const { geminiService } = await import('./services/gemini');
-      const { personalityCoach } = await import('./services/personalityCoach');
+      const { geminiService } = await import('./services/gemini.js');
+      const { personalityCoach } = await import('./services/personalityCoach.js');
 
       let actionableTip = content;
       try {
-        const summaryResponse = await geminiService['ai'].models.generateContent({
-          model: 'gemini-2.0-flash-exp',
-          contents: [{ role: 'user', parts: [{ text: `
-            Extract a single, concise coaching instruction (max 1 sentence) from this feedback for an AI character.
-            Focus on what the character should DO differently next time.
-            Start with a verb (e.g., "Be more...", "Stop...", "Mention...").
-            
-            FEEDBACK:
-            ${content}
-          ` }] }]
-        });
-        const summary = summaryResponse.response.text();
-        if (summary) {
-          actionableTip = summary.trim();
-        }
+        const { executeWithDefaultModel } = await import('./services/modelSelector.js');
+        actionableTip = await executeWithDefaultModel(async (model) => {
+          const summaryResponse = await geminiService['ai'].models.generateContent({
+            model,
+            contents: [{ role: 'user', parts: [{ text: `
+              Extract a single, concise coaching instruction (max 1 sentence) from this feedback for an AI character.
+              Focus on what the character should DO differently next time.
+              Start with a verb (e.g., "Be more...", "Stop...", "Mention...").
+              
+              FEEDBACK:
+              ${content}
+            ` }] }]
+          });
+          return summaryResponse.text?.trim() || content;
+        }, 'generation');
       } catch (err) {
         console.warn("Failed to summarize feedback, using raw content:", err);
       }
@@ -420,6 +439,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updated);
     } catch (error) {
       res.status(500).json({ error: 'Failed to update archive status' });
+    }
+  });
+
+  app.patch('/api/conversations/:id/privacy', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isPrivate } = req.body;
+      await storage.updateConversationPrivacy(id, isPrivate);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update privacy status' });
     }
   });
 
@@ -473,7 +503,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Chat routes
   app.post('/api/chat', async (req, res) => {
     try {
-      const { message, conversationId, mode, personalityControl, selectedModel } = req.body;
+      const { message, conversationId, mode, personalityControl, selectedModel, currentGame, memoryLearning } = req.body;
 
       console.log(`🤖 Selected AI Model: ${selectedModel || 'default (gemini-3-flash-preview)'}`);
 
@@ -486,8 +516,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
+      // 🔒 PRIVACY CHECK: Check if this conversation or message is "Off the Record"
+      const conversation = await storage.getConversation(conversationId);
+      const isPrivateTrigger = /\[PRIVATE\]|\[OFF THE RECORD\]/i.test(message);
+      
+      // Memory learning from request (UI toggle) overrides conversation default if provided
+      const isPrivateConversation = (memoryLearning === false) || conversation?.isPrivate || isPrivateTrigger;
+
+      if (isPrivateTrigger) {
+        console.log(`🔒 Private trigger detected in message. This turn will not be stored in lore.`);
+      } else if (memoryLearning === false) {
+        console.log(`🔒 Memory Learning disabled via UI toggle. No lore will be extracted.`);
+      } else if (conversation?.isPrivate) {
+        console.log(`🔒 Conversation is marked as private. No lore will be extracted.`);
+      }
+
       // 🎭 UNIFIED: Get personality with advisory chaos influence (non-mutating)
-      const { personalityController } = await import('./services/personalityController');
+      const { personalityController } = await import('./services/personalityController.js');
 
       // Get base personality from unified controller (and consume any temporary override)
       let basePersonality = await personalityController.consumeEffectivePersonality();
@@ -527,7 +572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Generate personality prompt with unified controls
-      const { generatePersonalityPrompt } = await import('./types/personalityControl');
+      const { generatePersonalityPrompt } = await import('./types/personalityControl.js');
 
       // 🚀 PERFORMANCE: Track timing for optimization measurement
       const perfTimers = {
@@ -538,8 +583,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         total: Date.now()
       };
 
+      // � CRITICAL: Store the USER message first (was missing, causing history bug)
+      // Moved up to ensure it's saved even on cache hits
+      await storage.addMessage({
+        conversationId,
+        type: 'USER' as const,
+        content: message,
+        isPrivate: isPrivateConversation,
+        metadata: req.body.metadata || null,
+      });
+      console.log(`💾 Saved user message to database`);
+
       // 🚀 STREAMING OPTIMIZATION: Check response cache first
-      const { responseCache } = await import('./services/responseCache');
+      const { responseCache } = await import('./services/responseCache.js');
       const cacheKey = responseCache.getCacheKey(message, mode, activeProfile.id, controls.preset);
 
       if (responseCache.shouldCache(message, mode)) {
@@ -550,6 +606,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           perfTimers.total = Date.now() - perfTimers.total;
           console.log(`⚡ CACHE HIT: Instant response (${perfTimers.total}ms) - saved ~5-10s`);
 
+          // 💾 SAVE AI RESPONSE (even on cache hit, we need it in history!)
+      await storage.addMessage({
+        conversationId,
+        type: 'AI' as const,
+        content: cachedResponse,
+        isPrivate: isPrivateConversation,
+        metadata: { cached: true, processingTime: perfTimers.total } as any
+      });
+
           return res.json({
             content: cachedResponse,
             processingTime: perfTimers.total,
@@ -559,243 +624,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // 🚀 PARALLEL OPTIMIZATION: Load all context simultaneously
-      // 🔥 PRE-WARMING: Uses cached data when available for instant access
-      console.log(`🧠 Starting parallel context loading for: "${message}"`);
 
-      const isStreaming = mode === 'STREAMING';
+      //  GATHER ALL CONTEXT (Parallel Loading, Pruning, Web Search)
+      console.log(` Starting centralized context gathering for: "${message}"`);
       const contextStart = Date.now();
-
-      // 🎯 Load everything in parallel using Promise.all
-      // 🔥 Training examples, podcast memories, and lore use pre-warmed cache when available
-      const [
-        contextualMemoriesResult,
-        podcastAwareMemories,
-        relevantDocs,
-        loreContext,
-        trainingExamples
-      ] = await Promise.all([
-        // Memory retrieval (🚀 REDUCED: 15→8 for speed with Gemini 2.5 Pro)
-        (async () => {
-          try {
-            const memories = await aiOrchestrator.retrieveContextualMemories(
-              message,
-              activeProfile.id,
-              conversationId,
-              controls,
-              mode,
-              8  // Reduced from 15 for faster Gemini processing
-            );
-            return { memories, enhanced: true, error: null };
-          } catch (error) {
-            console.warn('⚠️ Enhanced contextual search failed, falling back to hybrid search:', error);
-
-            try {
-              const { embeddingService } = await import('./services/embeddingService');
-              const hybridResults = await embeddingService.hybridSearch(message, activeProfile.id, 8);  // Also reduced
-
-              const semanticMemories = hybridResults.semantic.map(result => ({
-                ...result,
-                relevanceScore: result.similarity * 100,
-                searchMethod: 'semantic'
-              }));
-
-              const keywordMemories = hybridResults.keyword.map(result => ({
-                ...result,
-                relevanceScore: 70,
-                searchMethod: 'keyword'
-              }));
-
-              const seenIds = new Set();
-              const combinedResults = [];
-
-              for (const result of semanticMemories) {
-                if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
-                  seenIds.add(result.id);
-                  combinedResults.push(result);
-                }
-              }
-
-              for (const result of keywordMemories) {
-                if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
-                  seenIds.add(result.id);
-                  combinedResults.push(result);
-                }
-              }
-
-              return { memories: combinedResults, enhanced: false, error: null };
-            } catch (fallbackError) {
-              console.warn('⚠️ Hybrid search also failed, using basic keyword search:', fallbackError);
-              const fallbackResults = await storage.searchEnrichedMemoryEntries(activeProfile.id, message);
-              return {
-                memories: fallbackResults.filter(m => (m.confidence || 50) >= 60),
-                enhanced: false,
-                error: fallbackError
-              };
-            }
-          }
-        })(),
-
-        // Podcast-aware memories (🔥 uses pre-warmed cache, 🚀 REDUCED: 15→8)
-        contextPrewarmer.getPodcastMemories(activeProfile.id, storage, mode),
-
-        // Document search
-        documentProcessor.searchDocuments(activeProfile.id, message),
-
-        // Lore context (🔥 uses pre-warmed cache, skip for streaming)
-        isStreaming ? Promise.resolve(undefined) : contextPrewarmer.getLoreContext(activeProfile.id, storage),
-
-        // Training examples (🔥 uses pre-warmed cache, fewer for streaming)
-        contextPrewarmer.getTrainingExamples(activeProfile.id, storage)
-      ]);
-
-      const parallelLoadTime = Date.now() - contextStart;
-
-      // Process memory results
-      const searchBasedMemories = contextualMemoriesResult.memories;
-      const enhancedSearchUsed = contextualMemoriesResult.enhanced;
-
-      perfTimers.memoryRetrieval = parallelLoadTime;
-      perfTimers.contextLoading = parallelLoadTime;
-
-      const semanticCount = searchBasedMemories.filter(m => m.retrievalMethod?.includes('semantic')).length;
-      const keywordCount = searchBasedMemories.filter(m => m.retrievalMethod?.includes('keyword')).length;
-      const avgContextualRelevance = searchBasedMemories.length > 0
-        ? Math.round(searchBasedMemories.reduce((sum, m) => sum + (m.contextualRelevance || 0), 0) / searchBasedMemories.length * 100)
-        : 0;
-
-      console.log(`🎯 Enhanced contextual search: ${semanticCount} semantic + ${keywordCount} keyword = ${searchBasedMemories.length} results (avg contextual relevance: ${avgContextualRelevance}%)`);
-
-      // Combine memories
-      const seenIds = new Set(searchBasedMemories.map(m => m.id));
-      const additionalMemories = podcastAwareMemories.filter(m => !seenIds.has(m.id));
-      const relevantMemories = [...searchBasedMemories, ...additionalMemories.slice(0, 10)];
-
-      // Update retrieval tracking for all used memories
-      for (const memory of relevantMemories) {
-        await storage.incrementMemoryRetrieval(memory.id);
-      }
-
-      console.log(`🚀 Parallel load complete: ${relevantMemories.length} memories + ${relevantDocs.length} docs + ${trainingExamples.length} training examples in ${parallelLoadTime}ms`);
-
-      // ✂️ SMART CONTEXT PRUNING: Remove redundant info already in recent conversation
-      // Saves 1-2s by reducing tokens and preventing duplicate context
-      const recentMessages = await contextPruner.getRecentMessages(conversationId, storage, 8);
-      const memoryPruning = contextPruner.pruneMemories(relevantMemories, recentMessages, 8);
-      const docPruning = contextPruner.pruneDocuments(relevantDocs, recentMessages, 8);
-
-      // Use pruned context for AI generation
-      const prunedMemories = memoryPruning.pruned;
-      const prunedDocs = docPruning.pruned;
-      const totalTokensSaved = memoryPruning.stats.savings + docPruning.stats.savings;
-
-      console.log(`✂️  Total pruning: ${memoryPruning.stats.removed + docPruning.stats.removed} items removed, ~${totalTokensSaved} tokens saved`);
-
-      // Log confidence distribution for monitoring
-      const confidenceStats = prunedMemories.length > 0 ? {
-        min: Math.min(...prunedMemories.map(m => m.confidence || 50)),
-        max: Math.max(...prunedMemories.map(m => m.confidence || 50)),
-        avg: Math.round(prunedMemories.reduce((sum, m) => sum + (m.confidence || 50), 0) / prunedMemories.length)
-      } : { min: 0, max: 0, avg: 0 };
-
-      // 📖 NEW: Track podcast content prioritization
-      const podcastContentCount = additionalMemories.filter(m => (m as any).isPodcastContent).length;
-      const modeLabel = mode === 'PODCAST' ? '🎙️  PODCAST MODE' : '💬 CHAT MODE';
-
-      console.log(`🧠 AI Context (${modeLabel}): ${searchBasedMemories.length} search-based + ${additionalMemories.slice(0, 10).length} context facts (${podcastContentCount} podcast-specific) (${prunedMemories.length} after pruning). Confidence: ${confidenceStats.min}-${confidenceStats.max}% (avg: ${confidenceStats.avg}%)`);
-
-      // 🌐 ENHANCED: Web search integration for current information
-      // 🚀 OPTIMIZATION: Skip web search for STREAMING mode (use cached knowledge)
-      let webSearchResults: any[] = [];
-      let webSearchUsed = false;
-
-      if (!isStreaming) {
-        try {
-          const { webSearchService } = await import('./services/webSearchService');
-
-          // Intelligent decision: Should we search the web?
-          const shouldSearch = await webSearchService.shouldTriggerSearch(
-            relevantMemories,
-            message,
-            confidenceStats.avg
-          );
-
-          if (shouldSearch) {
-            console.log(`🔍 Triggering web search for: "${message}"`);
-            console.log(`📊 Decision factors: ${relevantMemories.length} memories, ${confidenceStats.avg}% avg confidence`);
-
-            const searchResponse = await webSearchService.search(message);
-
-            if (searchResponse.results.length > 0) {
-              webSearchResults = searchResponse.results.map(result => ({
-                title: result.title,
-                snippet: result.snippet,
-                url: result.url,
-                score: result.score,
-                source: 'web_search'
-              }));
-              webSearchUsed = true;
-
-              console.log(`🌐 Web search: Found ${webSearchResults.length} results in ${searchResponse.searchTime}ms`);
-            } else {
-              console.log(`🌐 Web search: No results found for "${message}"`);
-            }
-          } else {
-            console.log(`🚫 Web search skipped: sufficient context available (${relevantMemories.length} memories, ${confidenceStats.avg}% confidence)`);
-          }
-        } catch (error) {
-          console.warn('⚠️ Web search failed:', error);
-          webSearchUsed = false;
-        }
-      } else {
-        console.log(`🚀 Web search skipped for STREAMING mode (performance optimization)`);
-      }
-
-      // 🎭 Generate personality control prompt and log debug state
-      let personalityPrompt = generatePersonalityPrompt(controls);
-
-      // 🩺 DIAGNOSTIC MODE: Inject diagnostic instructions if requested
-      if (mode === 'diagnostic' || message.toLowerCase().startsWith('/diag')) {
-        const { diagnosticService } = await import('./services/diagnosticService');
-        personalityPrompt = await diagnosticService.generateDiagnosticPrompt(personalityPrompt);
-        console.log('🩺 Diagnostic mode active: injected system prompt');
-      }
-
-      // Log debug state for transparency
-      const { generateDebugState } = await import('./types/personalityControl');
-      const debugState = generateDebugState(controls);
-      console.log(`🎭 ${debugState}`);
-
-      if (trainingExamples.length > 0) {
-        console.log(`📚 Using ${trainingExamples.length} training examples for response style guidance`);
-      }
-
-      // 💾 CRITICAL: Store the USER message first (was missing, causing history bug)
-      await storage.addMessage({
+      
+      const context = await aiOrchestrator.gatherAllContext(
+        message,
+        activeProfile.id,
         conversationId,
-        type: 'USER' as const,
-        content: message,
-        metadata: req.body.metadata || null,
-      });
-      console.log(`💾 Saved user message to database`);
+        controls,
+        mode,
+        currentGame
+      );
+
+      const contextLoadTime = Date.now() - contextStart;
+      perfTimers.contextLoading = contextLoadTime;
+
+      console.log(` Context gathering complete in ${contextLoadTime}ms. Tokens saved: ${context.stats.tokensSaved}`);
+
+      const webSearchResults = context.webSearchResults || [];
+      const webSearchUsed = webSearchResults.length > 0;
+      const messageCount = (await storage.getConversationMessages(conversationId)).length;
 
       const aiStart = Date.now();
 
-      // Generate AI response with personality controls, lore context, mode awareness, web search results, and training examples
-      // ✂️ Uses pruned memories/docs to reduce tokens and save processing time
+      // Generate AI response using the centralized context object
       const aiResponse = await aiOrchestrator.generateResponse(
         message,
         activeProfile.coreIdentity,
-        prunedMemories,
-        prunedDocs,
-        loreContext,
+        context,
         mode,
         conversationId,
         activeProfile.id,
-        webSearchResults,
-        personalityPrompt,
-        trainingExamples,
-        selectedModel
+        selectedModel,
+        chaosState.sauceMeter || 0,
+        currentGame
       );
 
       perfTimers.aiGeneration = Date.now() - aiStart;
@@ -812,8 +676,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (mode === 'PODCAST' || mode === 'STREAMING') {
         const emotionStart = Date.now();
         try {
-          const { emotionTagGenerator } = await import('./services/emotionTagGenerator');
-          const { elevenlabsService } = await import('./services/elevenlabs');
+          const { emotionTagGenerator } = await import('./services/emotionTagGenerator.js');
+          const { elevenlabsService } = await import('./services/elevenlabs.js');
 
           // 🚀 OPTIMIZATION: Use fast pattern-based arc for STREAMING (no AI call)
           // UPDATE (Dec 2, 2025): User requested full enhancer for streaming too for better quality
@@ -823,12 +687,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // This replaces the simple "Emotional Arc" with the full "Enhance" logic the user likes
           if ((mode === 'PODCAST' || mode === 'STREAMING') && !useFastMode) {
             
-            // 🚀 STREAMING LATENCY CHECK: If the AI already included the tags (via system prompt injection), SKIP this step!
-            if (mode === 'STREAMING' && processedContent.includes('[strong bronx wiseguy accent]')) {
-              console.log('⚡ STREAMING MODE: Tags detected in raw output. Skipping separate enhancement step for speed.');
+            // 🚀 STREAMING & PODCAST LATENCY CHECK: If the AI already included the tags (via system prompt injection), SKIP this step!
+            // We check for the full double-tag pattern [strong bronx wiseguy accent][emotion]
+            const hasFullTags = /^\[strong bronx wiseguy accent\]\[[\w\s]+\]/i.test(processedContent.trim());
+            
+            if ((mode === 'STREAMING' || mode === 'PODCAST') && hasFullTags) {
+              console.log(`⚡ ${mode} MODE: Full tags detected in raw output. Skipping separate enhancement step for speed.`);
             } else {
-              console.log(`🎭 Auto-Enhancing response for ${mode} mode...`);
-              const { emotionTagGenerator } = await import('./services/emotionTagGenerator');
+              console.log(`🎭 Auto-Enhancing response for ${mode} mode (Full tags missing)...`);
+              const { emotionTagGenerator } = await import('./services/emotionTagGenerator.js');
               
               // Use the full enhancer which adds [strong bronx wiseguy accent][emotion] and internal tags
               processedContent = await emotionTagGenerator.enhanceDialogue(processedContent, {
@@ -890,9 +757,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         // CHAT mode or other modes: ensure [strong bronx wiseguy accent][emotion] double-tag at start for voice consistency
         if (!processedContent.trim().startsWith('[strong bronx wiseguy accent]')) {
-          processedContent = `[strong bronx wiseguy accent][annoyed] ${processedContent}`;
+          processedContent = `[strong bronx wiseguy accent][grumbling] ${processedContent}`;
         }
-        console.log(`🎭 Chat mode: Ensured [strong bronx wiseguy accent][annoyed] tag at start for voice consistency`);
+        console.log(`🎭 Chat mode: Ensured [strong bronx wiseguy accent][grumbling] tag at start for voice consistency`);
       }
 
       const response = {
@@ -906,7 +773,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? ` (🚀 OPTIMIZED: -${Math.round((perfTimers.memoryRetrieval + perfTimers.contextLoading + perfTimers.emotionTags) * 0.4)}ms estimated savings)`
         : '';
       console.log(`⚡ Performance: Memory=${perfTimers.memoryRetrieval}ms | Context=${perfTimers.contextLoading}ms | AI=${perfTimers.aiGeneration}ms | Emotions=${perfTimers.emotionTags}ms | TOTAL=${perfTimers.total}ms${savings}`);
-      console.log(`✂️  Context Pruning: ${memoryPruning.stats.removed + docPruning.stats.removed} items removed | ~${totalTokensSaved} tokens saved | ${Math.round(totalTokensSaved * 0.0015)}ms estimated time saved`);
+      
+      if (context?.stats) {
+        console.log(`✂️  Context Pruning: ${context.stats.memoriesCount} memories, ${context.stats.docsCount} docs kept | ~${context.stats.tokensSaved} tokens saved`);
+      }
 
 
       // 🚀 CACHE: Store cacheable responses for future requests
@@ -919,6 +789,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         conversationId,
         type: 'AI' as const,
         content: response.content,
+        isPrivate: isPrivateConversation,
         metadata: {
           processingTime: response.processingTime,
           retrieved_context: response.retrievedContext,
@@ -927,41 +798,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      // 📚 NEW: Auto-save high-quality messages as training examples
-      /* DISABLED: User requested to stop auto-saving training examples
-      try {
-        const { messageTrainingCollector } = await import('./services/messageTrainingCollector');
-
-        // Evaluate in background (don't block response)
-        setTimeout(async () => {
+      // 🏛️ LORE ORCHESTRATION: Process the turn for new lore and hallucinations
+      // Run in background to avoid blocking the response
+      if (!isPrivateConversation) {
+        (async () => {
           try {
-            const quality = await messageTrainingCollector.evaluateMessageQuality(savedMessage, {
-              userMessage: message,
-              conversationLength: messageCount + 1,
-              hasPositiveRating: false // Will be updated if user rates
-            });
-
-            if (quality.isQuality) {
-              await messageTrainingCollector.saveMessageAsTraining(
-                storage,
-                savedMessage,
-                activeProfile.id,
-                {
-                  userMessage: message,
-                  conversationId,
-                  mode
-                }
-              );
-              console.log(`📚 Auto-saved message as training (score: ${quality.score})`);
-            }
-          } catch (error) {
-            console.warn('⚠️ Failed to auto-save message as training:', error);
+            const { loreOrchestrator } = await import('./services/LoreOrchestrator.js');
+            // Process user message for facts
+            await loreOrchestrator.processNewContent(
+              message, 
+              activeProfile.id, 
+              `Conversation: ${conversationId}`,
+              'CONVERSATION',
+              conversationId
+            );
+            // Check if Nicky's response contains new lore to promote
+            await loreOrchestrator.checkHallucination(response.content, activeProfile.id);
+          } catch (loreError) {
+            console.error('🏛️ LoreOrchestrator background task failed:', loreError);
           }
-        }, 200);
-      } catch (error) {
-        console.warn('⚠️ Message training collector import failed:', error);
+        })();
+      } else {
+        console.log(`🔒 Skipping Lore Orchestration for private conversation/message.`);
       }
-      */
+
+      // � TOPIC DECAY: Naturally cool down topics after each turn to prevent obsession
+      try {
+        await storage.coolDownTopics(activeProfile.id);
+        console.log(`🕒 Topics cooled down for profile ${activeProfile.id}`);
+      } catch (decayError) {
+        console.warn('⚠️ Failed to cool down topics:', decayError);
+      }
+
+      // �📚 NEW: Auto-save high-quality messages as training examples
+      // 📚 AUTO-TRAINING: Save high-quality messages as training examples (Style Guides)
+      if (!isPrivateConversation) {
+        (async () => {
+          try {
+            const { messageTrainingCollector } = await import('./services/messageTrainingCollector.js');
+
+            // Evaluate in background (don't block response)
+            // Small delay to ensure DB consistency
+            setTimeout(async () => {
+              try {
+                const quality = await messageTrainingCollector.evaluateMessageQuality(savedMessage, {
+                  userMessage: message,
+                  conversationLength: messageCount + 1,
+                  hasPositiveRating: false // Will be updated if user rates
+                });
+
+                if (quality.isQuality) {
+                  await messageTrainingCollector.saveMessageAsTraining(
+                    storage,
+                    savedMessage,
+                    activeProfile.id,
+                    {
+                      userMessage: message,
+                      conversationId,
+                      mode
+                    }
+                  );
+                  console.log(`📚 Auto-saved message as training (score: ${quality.score})`);
+                }
+              } catch (error) {
+                console.warn('⚠️ Failed to auto-save message as training:', error);
+              }
+            }, 500);
+          } catch (error) {
+            console.warn('⚠️ Message training collector import failed:', error);
+          }
+        })();
+      } else {
+        console.log(`🔒 Skipping Style Guide extraction for private conversation/message.`);
+      }
 
       // 🌐 ENHANCED: Post-response memory consolidation for web search results
       if (webSearchUsed && webSearchResults.length > 0) {
@@ -1001,7 +910,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       chaosEngine.onResponseGenerated();
 
       // 📝 Generate conversation title after first exchange
-      const messageCount = (await storage.getConversationMessages(conversationId)).length;
       if (messageCount === 2) { // First exchange complete (1 user + 1 AI)
         try {
           const title = await aiOrchestrator.generateConversationTitle(message, response.content);
@@ -1022,7 +930,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Emotion Enhancement endpoints
   app.post('/api/enhance-text', async (req, res) => {
     try {
-      const { text, mode, characterContext } = req.body;
+      const { text, mode, characterContext, messageId } = req.body;
 
       if (!text) {
         return res.status(400).json({ error: 'Text is required' });
@@ -1035,13 +943,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         enhancedText = emotionTagGenerator.quickEnhance(text);
         console.log('⚡ Quick emotion enhancement applied');
       } else {
-        // Full AI-powered enhancement
+        // Full AI-powered enhancement - Manual enhancement is always HIGH intensity
         enhancedText = await emotionTagGenerator.enhanceDialogue(text, {
           content: text,
           personality: characterContext,
-          contentType: 'chat'
+          contentType: 'chat',
+          intensity: 'high'
         });
-        console.log('🎭 AI emotion enhancement applied');
+        console.log('🎭 AI emotion enhancement applied (HIGH intensity)');
+      }
+
+      // If messageId is provided, persist the enhancement to the database
+      if (messageId) {
+        try {
+          const message = await storage.getMessage(messageId);
+          if (message) {
+            const updatedMetadata = {
+              ...(message.metadata || {}),
+              enhanced_content: enhancedText
+            };
+            await storage.updateMessageMetadata(messageId, updatedMetadata);
+            console.log(`💾 Persisted enhanced content to message ${messageId}`);
+          }
+        } catch (dbError) {
+          console.error('Failed to persist enhancement to DB:', dbError);
+          // Continue anyway, we still have the result to return
+        }
       }
 
       res.json({
@@ -1119,6 +1046,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.updateMessageRating(id, rating);
+
+      // If thumbs up, also flip the conversation to public so it can be remembered
+      if (rating === 2) {
+        const message = await storage.getMessage(id);
+        if (message?.conversationId) {
+          // Flip both message and conversation to public
+          await storage.updateMessagePrivacy(id, false);
+          await storage.updateConversationPrivacy(message.conversationId, false);
+          
+          // 🧠 LORE PROMOTION: Since this was private, lore extraction was skipped.
+          // Now that it's public, we should process it for lore.
+          try {
+            const { loreOrchestrator } = await import('./services/LoreOrchestrator.js');
+            const conversation = await storage.getConversation(message.conversationId);
+            if (conversation) {
+              // Process the specific message that was "saved"
+              await loreOrchestrator.processNewContent(
+                message.content,
+                conversation.profileId,
+                `Saved Message: ${id}`,
+                'CONVERSATION',
+                message.conversationId
+              );
+            }
+          } catch (loreError) {
+            console.warn('Failed to promote lore after saving message:', loreError);
+          }
+        }
+      }
+
       res.json({ success: true });
     } catch (error) {
       console.error('Rating update error:', error);
@@ -2482,7 +2439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post('/api/memory/deep-scan-duplicates', async (req, res) => {
-    let results;
+    let results: any;
     let scanCompleted = false;
 
     try {
@@ -2504,7 +2461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🔍 Starting deep duplicate scan: depth=${scanDepth}, threshold=${similarityThreshold}`);
 
       const { memoryDeduplicator } = await import('./services/memoryDeduplicator.js');
-      results = await memoryDeduplicator.deepScanDuplicates(
+      results = await (memoryDeduplicator as any).deepScanDuplicates(
         activeProfile.id,
         scanDepth,
         similarityThreshold
@@ -2514,16 +2471,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`✅ Scan completed: ${results.duplicateGroups.length} groups, ${results.totalDuplicates} duplicates`);
 
       // 🔧 STANDARDIZED FORMAT: Convert to consistent structure with avgSimilarity
-      const standardizedGroups = results.duplicateGroups.map((group) => ({
+      const standardizedGroups = results.duplicateGroups.map((group: any) => ({
         masterId: group.masterId,
-        masterContent: group.masterContent,
+        masterPreview: group.masterContent.substring(0, 100),
         avgSimilarity: group.duplicates.length > 0
-          ? group.duplicates.reduce((sum, dup) => sum + (dup.similarity ?? 0), 0) / group.duplicates.length
-          : 1,
-        duplicates: group.duplicates.map((dup) => ({
+          ? group.duplicates.reduce((sum: number, dup: any) => sum + (dup.similarity ?? 0), 0) / group.duplicates.length
+          : 0,
+        duplicates: group.duplicates.map((dup: any) => ({
           id: dup.id,
-          content: dup.content,
-          similarity: dup.similarity ?? 1
+          similarity: dup.similarity,
+          preview: dup.content.substring(0, 100)
         }))
       }));
 
@@ -2535,14 +2492,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`📦 Large scan detected (${results.totalDuplicates} duplicates), using shorter previews (${previewLength} chars)`);
       }
 
-      const groupsForPersistence: DuplicateScanGroupSummary[] = standardizedGroups.map((group) => ({
+      const groupsForPersistence: DuplicateScanGroupSummary[] = standardizedGroups.map((group: any) => ({
         masterId: group.masterId,
-        masterPreview: group.masterContent.slice(0, previewLength),
+        masterPreview: group.masterPreview,
         avgSimilarity: group.avgSimilarity,
-        duplicates: group.duplicates.map((dup) => ({
+        duplicates: group.duplicates.map((dup: any) => ({
           id: dup.id,
           similarity: dup.similarity,
-          preview: dup.content.slice(0, previewLength)
+          preview: dup.preview
         }))
       }));
 
@@ -2597,7 +2554,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 scanDepth: scanDepth === 'ALL' ? -1 : scanDepth,
                 similarityThreshold: Math.round(similarityThreshold * 100),
                 totalGroupsFound: chunks[i].length,
-                totalDuplicatesFound: chunks[i].reduce((sum, g) => sum + g.duplicates.length, 0),
+                totalDuplicatesFound: chunks[i].reduce((sum: number, g: any) => sum + g.duplicates.length, 0),
                 duplicateGroups: chunks[i],
                 status: 'CHUNK' // Mark as chunk for later retrieval
               });
@@ -2657,13 +2614,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('⚠️ Scan completed successfully but response failed - returning results anyway');
 
         // Recreate standardized groups for error case
-        const standardizedGroups = results.duplicateGroups.map((group) => ({
+        const standardizedGroups = results.duplicateGroups.map((group: any) => ({
           masterId: group.masterId,
           masterContent: group.masterContent,
           avgSimilarity: group.duplicates.length > 0
-            ? group.duplicates.reduce((sum, dup) => sum + (dup.similarity ?? 0), 0) / group.duplicates.length
+            ? group.duplicates.reduce((sum: number, dup: any) => sum + (dup.similarity ?? 0), 0) / group.duplicates.length
             : 1,
-          duplicates: group.duplicates.map((dup) => ({
+          duplicates: group.duplicates.map((dup: any) => ({
             id: dup.id,
             content: dup.content,
             similarity: dup.similarity ?? 1
@@ -4611,9 +4568,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { threshold = 0.7 } = req.query;
-      const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator.js');
 
-      const duplicateGroups = await memoryDeduplicator.findDuplicateGroups(
+      const duplicateGroups = await (memoryDeduplicator as any).findDuplicateGroups(
         db,
         profile.id,
         Number(threshold)
@@ -4622,7 +4579,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         groups: duplicateGroups,
         totalGroups: duplicateGroups.length,
-        totalDuplicates: duplicateGroups.reduce((sum, group) => sum + group.duplicates.length, 0)
+        totalDuplicates: duplicateGroups.reduce((sum: number, group: any) => sum + group.duplicates.length, 0)
       });
     } catch (error) {
       console.error('Error finding duplicate memories:', error);
@@ -4639,7 +4596,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { threshold = 0.9 } = req.body;
-      const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator.js');
 
       // 🔧 Warm up connection pool with a simple query to ensure fresh connections
       try {
@@ -4649,7 +4606,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn('⚠️ Connection pool warmup failed, proceeding anyway:', warmupError);
       }
 
-      const mergedCount = await memoryDeduplicator.autoMergeDuplicates(
+      const mergedCount = await (memoryDeduplicator as any).autoMergeDuplicates(
         db,
         profile.id,
         Number(threshold)
@@ -4677,7 +4634,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'masterEntryId and duplicateIds are required' });
       }
 
-      const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator.js');
 
       // Get the entries
       const allIds = [masterEntryId, ...duplicateIds];
@@ -4698,7 +4655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Generate AI-powered merge suggestion
-      const mergedContent = await memoryDeduplicator.mergeContentWithAI(masterEntry, duplicateEntries);
+      const mergedContent = await (memoryDeduplicator as any).mergeContentWithAI(masterEntry, duplicateEntries);
 
       res.json({
         success: true,
@@ -4721,7 +4678,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'masterEntryId and duplicateIds are required' });
       }
 
-      const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator.js');
 
       // Get the entries to build a duplicate group
       const allIds = [masterEntryId, ...duplicateIds];
@@ -4742,7 +4699,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Build duplicate group and merge - use AI to combine ALL unique facts from all versions
-      const mergedContent = await memoryDeduplicator.mergeContentWithAI(masterEntry, duplicateEntries);
+      const mergedContent = await (memoryDeduplicator as any).mergeContentWithAI(masterEntry, duplicateEntries);
 
       const duplicateGroup = {
         masterEntry,
@@ -4760,7 +4717,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ]))
       };
 
-      await memoryDeduplicator.executeMerge(db, duplicateGroup);
+      await (memoryDeduplicator as any).executeMerge(db, duplicateGroup);
 
       res.json({
         success: true,
@@ -4782,7 +4739,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'primaryId and duplicateIds are required' });
       }
 
-      const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator.js');
 
       // Get the entries to build a duplicate group
       const allIds = [primaryId, ...duplicateIds];
@@ -4819,7 +4776,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ]))
       };
 
-      await memoryDeduplicator.executeMerge(db, duplicateGroup);
+      await (memoryDeduplicator as any).executeMerge(db, duplicateGroup);
 
       res.json({
         success: true,
@@ -4846,9 +4803,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'content is required' });
       }
 
-      const { memoryDeduplicator } = await import('./services/memoryDeduplicator');
+      const { memoryDeduplicator } = await import('./services/memoryDeduplicator.js');
 
-      const duplicates = await memoryDeduplicator.checkForDuplicates(
+      const duplicates = await (memoryDeduplicator as any).checkForDuplicates(
         db,
         profile.id,
         content,

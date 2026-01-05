@@ -53,32 +53,40 @@ class PersonalityController {
   private async initializeFromDatabase(): Promise<void> {
     try {
       const { storage } = await import('../storage.js');
+      const activeProfile = await storage.getActiveProfile();
       
-      // Try to load saved personality state (we'll add this to storage later)
-      // For now, use defaults but load any existing chaos state for migration
+      if (!activeProfile) return;
+
+      // Try to load saved personality state
+      const savedState = await storage.getPersonalityState(activeProfile.id);
+      
+      if (savedState) {
+        this.state = {
+          basePersonality: savedState.basePersonality,
+          effectivePersonality: savedState.basePersonality, // Will be adjusted by chaos below
+          lastUpdated: new Date(savedState.lastUpdated),
+          source: savedState.source as any
+        };
+        console.log(`🎭 Loaded persisted personality state: ${this.state.basePersonality.preset}`);
+      }
+
+      // Load chaos state for influence
       const savedChaosState = await storage.getChaosState();
       
       if (savedChaosState) {
-        // Map legacy chaos state to personality influence
         const influence = this.mapChaosToInfluence(
           savedChaosState.level,
           savedChaosState.mode as ChaosMode
         );
         
-        this.state = {
-          basePersonality: DEFAULT_PERSONALITY_CONTROL,
-          chaosInfluence: influence,
-          effectivePersonality: this.calculateEffectivePersonality(DEFAULT_PERSONALITY_CONTROL, influence),
-          lastUpdated: new Date(),
-          source: 'chaos_influence'
-        };
+        this.state.chaosInfluence = influence;
+        this.state.effectivePersonality = this.calculateEffectivePersonality(this.state.basePersonality, influence);
         
-        console.log(`🎭 Loaded personality state with chaos influence: ${influence.reason}`);
+        console.log(`🎭 Applied chaos influence to loaded state: ${influence.reason}`);
       }
       
     } catch (error) {
       console.error('Failed to initialize personality state from database:', error);
-      // Continue with defaults
     }
   }
 
@@ -432,26 +440,22 @@ class PersonalityController {
     return false;
   }
 
-  // Save state to database (store as JSON in a simple key-value approach)
+  // Save state to database
   private async saveStateToDatabase(): Promise<void> {
     try {
       const { storage } = await import('../storage.js');
+      const activeProfile = await storage.getActiveProfile();
       
-      // Store personality state using the existing database infrastructure
-      // We'll use a simple approach by storing it as a JSON document
-      const stateData = {
+      if (!activeProfile) return;
+
+      await storage.updatePersonalityState(activeProfile.id, {
         basePersonality: this.state.basePersonality,
-        lastUpdated: this.state.lastUpdated.toISOString(),
         source: this.state.source
-        // Note: chaosInfluence is transient, not persisted
-      };
+      });
       
-      // For now, use console logging and a simple in-memory approach
-      // In a full implementation, this would save to a dedicated table
-      console.log(`💾 Personality state saved: ${this.state.effectivePersonality.preset} @ ${this.state.effectivePersonality.intensity}`);
-      
+      console.log(`🎭 Persisted personality state to database for profile: ${activeProfile.id}`);
     } catch (error) {
-      console.error('Failed to save personality state to database:', error);
+      console.error('❌ Failed to save personality state to database:', error);
     }
   }
 

@@ -17,7 +17,7 @@ export interface QuerySignals {
   volatileDomains: string[];   // Domains known for frequent updates
   
   // Query type
-  questionType: 'factual' | 'opinion' | 'update' | 'comparison' | 'general';
+  questionType: 'factual' | 'opinion' | 'update' | 'comparison' | 'general' | 'conversational';
   isInformationSeeking: boolean;
   
   // Overall scores

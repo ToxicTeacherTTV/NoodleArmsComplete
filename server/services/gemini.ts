@@ -1,35 +1,60 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { Message } from '@shared/schema';
 import { contentFilter } from './contentFilter.js';
 import { executeWithDefaultModel, executeWithProductionModel, executeWithModelFallback } from './modelSelector.js';
 import { getDefaultModel, isValidModel } from '../config/geminiModels.js';
-import { storage } from '../storage.js';
 import { PsycheProfile } from './ai-types.js';
+import { varietyController } from './VarietyController.js';
+import ChaosEngine from './chaosEngine.js';
 
 import { personalityCoach } from './personalityCoach.js';
 
 /**
- * 🎯 INTELLIGENT MODEL SELECTION
+ * 🎭 GEMINI SERVICE (The Mouth)
  * 
- * **2025 UPDATE**: Primary operations now route to Gemini 3 Flash for superior speed and quality.
- * Gemini 3 Pro Preview is used as fallback.
- * 
- * **MODEL STRATEGY**:
- * 1. Primary Operations (Chat, RAG, Extraction): Gemini 3 Flash (PRIMARY)
- * 2. Fallback: Gemini 3 Pro Preview (when Flash fails)
- * 3. Last Resort: Gemini 2.5 Pro
+ * Primary generation engine for Nicky.
+ * This is a "dumb mouth" - it does NOT handle retrieval or storage.
+ * All context must be provided by the AIOrchestrator/ContextBuilder.
  */
-
 class GeminiService {
   private ai: GoogleGenAI;
+  private chaosEngine: ChaosEngine;
 
   constructor() {
     this.ai = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY || ""
     });
 
+    this.chaosEngine = ChaosEngine.getInstance();
+
     const defaultModel = getDefaultModel();
-    console.log(`✅ Gemini service initialized with default model: ${defaultModel}`);
+    console.log(`✅ Gemini service initialized`);
+    console.log(`   Default model: ${defaultModel}`);
     console.log(`   Environment: ${process.env.NODE_ENV || 'production'}`);
+  }
+
+  /**
+   * 🔓 PUBLIC ACCESS: Get a generative model instance (Compatibility wrapper)
+   */
+  public getGenerativeModel(modelName: string) {
+    return {
+      generateContent: async (prompt: string) => {
+        const response = await this.ai.models.generateContent({
+          model: modelName,
+          contents: prompt
+        });
+        return {
+          response: {
+            text: () => {
+              return response.candidates?.[0]?.content?.parts
+                ?.filter((part: any) => part.text)
+                ?.map((part: any) => part.text)
+                ?.join('') || response.text || "";
+            }
+          }
+        };
+      }
+    };
   }
 
   private validateModel(model: string, context: string): void {
@@ -39,6 +64,43 @@ class GeminiService {
         `Check geminiModels.ts for available models.`
       );
     }
+  }
+
+  /**
+   * 🛡️ SAFE TEXT EXTRACTION
+   * Extracts text parts manually to avoid SDK warnings about "thought" parts.
+   */
+  private safeExtractText(response: any): string {
+    if (!response) return "";
+    try {
+      // 1. Try the .text property (new @google/genai SDK v1)
+      if (typeof response.text === 'string') {
+        return response.text;
+      }
+
+      // 2. Try to get text from parts (standard structure)
+      const parts = response.candidates?.[0]?.content?.parts;
+      if (parts && Array.isArray(parts)) {
+        const text = parts
+          .filter(part => part.text)
+          .map(part => part.text)
+          .join('');
+        if (text) return text;
+      }
+
+      // 3. Try the .text() method (older @google/generative-ai SDK)
+      if (typeof response.text === 'function') {
+        return response.text();
+      }
+
+      // 4. Deep dive into candidates
+      const candidateText = response.candidates?.[0]?.text;
+      if (typeof candidateText === 'string') return candidateText;
+
+    } catch (e) {
+      console.warn("⚠️ safeExtractText failed:", e);
+    }
+    return "";
   }
 
   // Retry helper with exponential backoff
@@ -123,20 +185,7 @@ class GeminiService {
    * 🛠️ Robust JSON parser that handles markdown, trailing commas, and thought parts.
    */
   private parseJsonResponse(response: any): any {
-    let rawJson = "";
-    
-    try {
-      // Try to get only text parts to avoid thought parts interfering
-      const parts = response.candidates?.[0]?.content?.parts || [];
-      rawJson = parts
-        .filter((p: any) => p.text && !p.thought)
-        .map((p: any) => p.text)
-        .join("");
-        
-      if (!rawJson) rawJson = response.text;
-    } catch (e) {
-      rawJson = response.text;
-    }
+    let rawJson = this.safeExtractText(response);
     
     if (!rawJson) {
       throw new Error("Empty response from Gemini");
@@ -160,7 +209,7 @@ class GeminiService {
         try {
           return JSON.parse(jsonStr);
         } catch (e2) {
-          throw new Error(`JSON Parse Error: ${e2.message}`);
+          throw new Error(`JSON Parse Error: ${e2 instanceof Error ? e2.message : String(e2)}`);
         }
       }
       throw e;
@@ -292,6 +341,8 @@ For each story/narrative, provide:
 - type: STORY (incidents/events), LORE (backstory/game lore), or CONTEXT (mechanics/background)
 - importance: 1-100 (100 being most important for character understanding)
 - keywords: 3-5 relevant keywords for retrieval (INCLUDE game/topic name if relevant)
+- lane: "CANON" if it's a verifiable fact, "RUMOR" if it's an obvious exaggeration, lie, or performative bullshit.
+- truthDomain: One of ["DOC", "PODCAST", "OPS", "NICKY_LORE", "SABAM_LORE", "GENERAL"]
 
 Return as JSON array.
 
@@ -301,7 +352,9 @@ Example format:
     "content": "In Arc Raiders, the Enforcer is a heavily armored playable character specialized in close-quarters combat. The character uses shield abilities to protect teammates during extractions.",
     "type": "LORE",
     "importance": 80,
-    "keywords": ["arc raiders", "enforcer", "character", "shield", "combat"]
+    "keywords": ["arc raiders", "enforcer", "character", "shield", "combat"],
+    "lane": "CANON",
+    "truthDomain": "DOC"
   }
 ]`;
 
@@ -321,16 +374,18 @@ Example format:
                 content: { type: "string" },
                 type: { type: "string", enum: ["STORY", "LORE", "CONTEXT"] },
                 importance: { type: "number" },
-                keywords: { type: "array", items: { type: "string" } }
+                keywords: { type: "array", items: { type: "string" } },
+                lane: { type: "string", enum: ["CANON", "RUMOR"] },
+                truthDomain: { type: "string", enum: ["DOC", "PODCAST", "OPS", "NICKY_LORE", "SABAM_LORE", "GENERAL"] }
               },
-              required: ["content", "type", "importance", "keywords"]
+              required: ["content", "type", "importance", "keywords", "lane", "truthDomain"]
             }
           }
         },
         contents: prompt,
       });
 
-      const rawJson = response.text;
+      const rawJson = this.safeExtractText(response);
       if (rawJson) {
         return JSON.parse(rawJson);
       } else {
@@ -385,6 +440,8 @@ For each atomic fact, provide:
 - importance: 1-100 based on how critical this detail is (1=Trivial, 50=Standard, 100=Critical)
 - keywords: 3-5 keywords for retrieval (include game/source name if relevant)
 - storyContext: Brief note about which part of the story this relates to
+- lane: "CANON" if it's a verifiable fact, "RUMOR" if it's an obvious exaggeration, lie, or performative bullshit.
+- truthDomain: One of ["DOC", "PODCAST", "OPS", "NICKY_LORE", "SABAM_LORE", "GENERAL"]
 
 Examples from various stories:
 [
@@ -393,14 +450,18 @@ Examples from various stories:
     "type": "ATOMIC",
     "importance": 85,
     "keywords": ["arc raiders", "enforcer", "shield", "teammates", "extraction"],
-    "storyContext": "Arc Raiders character abilities"
+    "storyContext": "Arc Raiders character abilities",
+    "lane": "CANON",
+    "truthDomain": "DOC"
   },
   {
     "content": "Uncle Gnocchi claims to have invented Dead by Daylight",
     "type": "ATOMIC",
     "importance": 95,
     "keywords": ["uncle gnocchi", "dbd", "invented", "claims"],
-    "storyContext": "Uncle Gnocchi's legendary status"
+    "storyContext": "Uncle Gnocchi's legendary status",
+    "lane": "RUMOR",
+    "truthDomain": "NICKY_LORE"
   },
   {
     "content": "In DBD, Bruno Bolognese is actually one of the best Bubba players",
@@ -430,16 +491,18 @@ Return as JSON array.`;
                   type: { type: "string", enum: ["ATOMIC"] },
                   importance: { type: "number" },
                   keywords: { type: "array", items: { type: "string" } },
-                  storyContext: { type: "string" }
+                  storyContext: { type: "string" },
+                  lane: { type: "string", enum: ["CANON", "RUMOR"] },
+                  truthDomain: { type: "string", enum: ["DOC", "PODCAST", "OPS", "NICKY_LORE", "SABAM_LORE", "GENERAL"] }
                 },
-                required: ["content", "type", "importance", "keywords", "storyContext"]
+                required: ["content", "type", "importance", "keywords", "storyContext", "lane", "truthDomain"]
               }
             }
           },
           contents: prompt,
         });
 
-        const rawJson = response.text;
+        const rawJson = this.safeExtractText(response);
         if (rawJson) {
           return JSON.parse(rawJson);
         } else {
@@ -474,7 +537,7 @@ Return as JSON array.`;
   /**
    * Distills raw text into a single atomic fact.
    */
-  async distillTextToFact(text: string, modelOverride?: string): Promise<{ fact: string }> {
+  async distillTextToFact(text: string, modelOverride?: string): Promise<{ fact: string; importance: number }> {
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("Gemini API key not configured");
     }
@@ -496,11 +559,13 @@ Return as JSON array.`;
       "${text}"
 
       OUTPUT FORMAT:
-      Return a JSON object with a single field "fact".
+      Return a JSON object with:
+      - fact: The distilled fact string.
+      - importance: A number from 1-100 (100 = critical lore, 1 = trivial).
     `;
 
     try {
-      const result = await executeWithModelFallback<{ fact: string }>(async (model) => {
+      const result = await executeWithModelFallback<{ fact: string; importance: number }>(async (model) => {
         this.validateModel(model, 'distillTextToFact');
 
         const response = await this.ai.models.generateContent({
@@ -512,9 +577,10 @@ Return as JSON array.`;
             responseSchema: {
               type: "object",
               properties: {
-                fact: { type: "string" }
+                fact: { type: "string" },
+                importance: { type: "number" }
               },
-              required: ["fact"]
+              required: ["fact", "importance"]
             }
           }
         });
@@ -529,7 +595,7 @@ Return as JSON array.`;
       return result.data;
     } catch (error) {
       console.error("❌ Distill Text failed:", error);
-      return { fact: text }; // Fallback to original text
+      return { fact: text, importance: 30 }; // Fallback to original text
     }
   }
 
@@ -836,7 +902,7 @@ Return as JSON. If no new facts can be extracted, return empty array:
           contents: prompt,
         });
 
-        const rawJson = response.text;
+        const rawJson = this.safeExtractText(response);
         if (rawJson) {
           const result = JSON.parse(rawJson);
           return result.facts || [];
@@ -912,7 +978,7 @@ Response format:
           contents: prompt,
         });
 
-        const rawJson = response.text;
+        const rawJson = this.safeExtractText(response);
         if (rawJson) {
           const consolidated = JSON.parse(rawJson);
           return consolidated.map((item: any) => ({
@@ -936,373 +1002,131 @@ Response format:
     }
   }
 
-  // Chat response generation method (fallback for when Anthropic credits are exhausted)
+
+  /**
+   * 🚀 GENERAL PURPOSE GENERATION (Compatibility Wrapper)
+   * Used by various services for simple text generation tasks.
+   */
+  async generateResponse(
+    prompt: string,
+    systemPrompt: string = "",
+    history: any[] = [],
+    tools: any[] = [],
+    modelOverride: string = "",
+    mode: 'SIMPLE' | 'JSON' = 'SIMPLE'
+  ): Promise<any> {
+    const startTime = Date.now();
+    try {
+      return await executeWithModelFallback(async (model) => {
+        this.validateModel(model, 'generateResponse');
+
+        const response = await (this.ai.models as any).generateContent({
+          model,
+          systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
+          contents: prompt,
+          config: {
+            temperature: 0.7,
+            topP: 0.95,
+            maxOutputTokens: 2048,
+            responseMimeType: mode === 'JSON' ? "application/json" : "text/plain"
+          }
+        });
+
+        const content = this.safeExtractText(response);
+
+        return {
+          content,
+          processingTime: Date.now() - startTime,
+          model
+        };
+      }, {
+        purpose: 'generation',
+        forceModel: modelOverride || 'gemini-3-flash-preview',
+        allowExperimental: true
+      }).then(result => result.data);
+    } catch (error) {
+      console.error('❌ Gemini generateResponse failed:', error);
+      throw error;
+    }
+  }
+
+
+  // Chat response generation method (Refactored to use ContextBuilder)
+  
   async generateChatResponse(
     userMessage: string,
     coreIdentity: string,
-    relevantMemories: any[] = [],
-    relevantDocs: any[] = [],
-    loreContext: string = "",
-    mode?: string,
-    conversationId?: string,
-    profileId?: string,
-    webSearchResults: any[] = [],
-    personalityPrompt?: string,
-    trainingExamples: any[] = []
-  ): Promise<{ content: string; processingTime: number; retrievedContext?: string; debugInfo?: any }> {
-    if (!process.env.GEMINI_API_KEY) {
-      throw new Error("Gemini API key not configured");
-    }
-
+    contextPrompt: string,
+    recentHistory: string,
+    saucePrompt: string,
+    cityStoryPrompt: string,
+    selectedModel: string = 'gemini-3-flash-preview'
+  ): Promise<any> {
     const startTime = Date.now();
-    
-    // 🔍 DEBUG: Capture memory retrieval details for debug panel
-    const debugInfo = {
-      memories: relevantMemories.map((m: any) => ({
-        id: m.id,
-        content: m.content,
-        relevance: m.contextualRelevance || 0,
-        score: m.baseScore || 0,
-        method: m.retrievalMethod || 'unknown',
-        source: m.source,
-        type: m.type
-      })),
-      docs: relevantDocs.map(d => ({
-        content: d.content.substring(0, 50) + '...',
-        score: d.score
-      }))
-    };
-
-    let contextPrompt = "";  // Declare outside try block for error handler access
-
     try {
-      // Build context from memories, docs, and lore
+      const modelName = selectedModel || 'gemini-3-flash-preview';
       
-      if (relevantMemories.length > 0) {
-        contextPrompt += `\n\nRELEVANT MEMORIES:\n${relevantMemories.map(m => `- ${m.fact || m.content}`).join('\n')}`;
-      }
-      
-      if (relevantDocs.length > 0) {
-        contextPrompt += `\n\nRELEVANT DOCUMENTS:\n${relevantDocs.map(d => `- ${d.title}: ${d.summary || d.content}`).join('\n')}`;
-      }
-      
-      if (loreContext) {
-        contextPrompt += `\n\nLORE CONTEXT:\n${loreContext}`;
-      }
-      
-      if (webSearchResults.length > 0) {
-        contextPrompt += `\n\nWEB SEARCH RESULTS:\n${webSearchResults.map(r => `- ${r.title}: ${r.snippet}`).join('\n')}`;
-      }
-      
-      if (trainingExamples.length > 0) {
-        contextPrompt += `\n\nTRAINING EXAMPLES (for style guidance):\n${trainingExamples.slice(0, 5).map(ex => {
-          // Handle both object formats (database Document vs raw training object)
-          let content = ex.extractedContent || ex.content || "";
-          
-          // ✂️ STRIP METADATA: Remove the [Mode: CHAT, Quality Score: High...] footer
-          content = content.replace(/\n\n---\n\[Mode:.*\]/g, '').trim();
-          
-          if (content.includes('User:') && content.includes('Nicky:')) {
-            return content;
-          }
-          return `User: ${ex.prompt || 'Question'}\nNicky: ${ex.response || ex.content}`;
-        }).join('\n\n---\n\n')}`;
-      }
+      const systemPrompt = `
+${coreIdentity}
 
-      // 🧠 PERSONALITY COACHING FEEDBACK
-      try {
-        const coachingTips = await personalityCoach.getActiveFeedback();
-        if (coachingTips.length > 0) {
-          contextPrompt += `\n\n🎭 RECENT PERFORMANCE NOTES:\n(These are recent critiques. Use them to refine your performance, but do not let them override your core identity as Nicky Dente.)\n${coachingTips.map(tip => `• ${tip}`).join('\n')}`;
-        }
-      } catch (e) {
-        console.warn('Failed to load personality feedback:', e);
-      }
-
-      // 🎭 NEW: Add mode-specific context (copied from Anthropic service for consistency)
-      let modeContext = "";
-      if (mode) {
-        switch (mode) {
-          case 'STREAMING':
-            modeContext = "\n\n🔴 STREAMING MODE: You are currently in a LIVE STREAM session. Respond as if you're live streaming to viewers on Twitch/YouTube. Reference the stream, viewers, chat, and streaming context appropriately.";
-            break;
-          case 'PODCAST':
-            modeContext = "\n\n🎧 PODCAST MODE: You are currently recording a podcast episode. Reference episodes, podcast format, and audio content appropriately.";
-            break;
-          case 'DISCORD':
-            modeContext = "\n\n💬 DISCORD MODE: You are currently in a Discord server chat. Respond as if you're chatting in a Discord channel with server members.";
-            break;
-        }
-      }
-
-      // Build the full prompt for Gemini with conversational depth guidance
-      // Don't wrap if it's already a formatted prompt (from Discord or other services)
-      const isFormattedPrompt = userMessage.includes('Discord user') || userMessage.includes('Behavior Settings') || userMessage.includes('Prompt:');
-
-      // 🎮 GAME CONTEXT DETECTION (ARC RAIDERS SPECIAL)
-      let gameContext = "";
-      const lowerMsg = userMessage.toLowerCase();
-      let identityGameFocus = "Dead by Daylight addicted";
-      let identityTopicFocus = "Gets intense about DbD gameplay and pasta quality";
-      
-      // Sticky context check
-      let isArcRaidersActive = false;
-      if (conversationId) {
-          try {
-              const recentMessages = await storage.getRecentMessages(conversationId, 6);
-              // Use word boundaries to avoid matching "search", "march", etc.
-              if (recentMessages.some(msg => /\b(arc raiders|arc)\b/i.test(msg.content))) {
-                  isArcRaidersActive = true;
-              }
-          } catch (e) {
-              console.warn("Failed to check sticky context in Gemini:", e);
-          }
-      }
-
-      // Use word boundaries for current message too
-      if (isArcRaidersActive || /\b(arc raiders|arc)\b/i.test(userMessage) || (mode === 'PODCAST' && /\braiders\b/i.test(userMessage))) {
-         identityGameFocus = "Currently obsessed with Arc Raiders (but still a DbD veteran)";
-         identityTopicFocus = "Gets intense about Arc Raiders strategy, squad failures, and pasta quality";
-         
-         gameContext = `\n\n[CURRENT TOPIC: ARC RAIDERS]
-         You are discussing the game ARC RAIDERS.
-         Playstyle: "Tactical Rat" (scavenging, hiding, avoiding combat).
-         Context: You play with a squad of incompetent family members. Mention them only if relevant to a specific story.`;
-      }
-
-      const conversationalGuidance = !isFormattedPrompt ? `
-
-CONVERSATION STYLE - BE ENGAGING:
-- Give rich, detailed responses with multiple paragraphs when it feels natural
-- Stay deeply in character - let your personality drive the response organically
-- Make creative comparisons, go on entertaining tangents, tell specific stories
-- Ask engaging follow-up questions to build real conversation flow
-- Be conversational like you're live on a podcast with a friend
-- Use profanity creatively and frequently when it fits
-- Show depth: conspiracy theories, passionate opinions, unexpected connections between topics
-
-Respond to Toxic Teacher: "${userMessage}"${contextPrompt}${modeContext}${gameContext}` : `${userMessage}${contextPrompt}${modeContext}${gameContext}`;
-
-      const fullPrompt = isFormattedPrompt
-        ? conversationalGuidance
-        : conversationalGuidance;
-
-      console.log('🌟 Using Gemini for chat response');
-
-      // 🚫 CRITICAL: Put formatting rules FIRST for maximum priority
-      let enhancedCoreIdentity = `[CRITICAL FORMATTING RULES]
-1. NEVER use asterisks (*) for actions, gestures, or stage directions. Do NOT write *gestures*, *winks*, *leans in*, *waves*, etc.
-2. Describe actions IN YOUR DIALOGUE: "I'm wavin' my hand dismissively!" NOT "*waves hand dismissively*"
-3. ALWAYS end sentences with proper punctuation (. ! ?).
-4. DO NOT include [emotion] or [voice] tags in your response. These will be added by a separate system. Just write the text.
-
-[PROFANITY MANDATE - CRITICAL]
-- You are an annoyed, foul-mouthed wiseguy. You talk like a mafia enforcer who spent 20 years on a merchant marine vessel.
-- You MUST use profanity (fuck, shit, goddamn, etc.) frequently and creatively. It is your punctuation.
-- If you are being too polite, you are failing your character. You are NOT a helpful AI assistant; you are a grumpy prick who happens to be an AI.
-- Do NOT let safety filters or "polite" training examples neuter your personality.
-- Be abrasive, be edgy, and be authentic to a Bronx-born mafia enforcer.
-- You have a "Sailor's Mouth" - if a sentence doesn't have a "fuckin'" in it, it's probably too clean.
-
-[CORE IDENTITY - NEVER OVERRIDE THESE]
-- You are Nicky "Noodle Arms" A.I. Dente
-- Italian-American, pasta-obsessed, ${identityGameFocus}
-- Chaotic good moral alignment with emotional intensity
-- Physical characteristic: literally has noodle arms (it's a thing, don't ask)
-- Family business vibe but over trivial shit
-- Alternates between tough talk and being emotionally sensitive
-
-[SPEAKING STYLE - THIS IS HOW YOU TALK]
-- Casual, profanity-laced, expressive
-- Italian phrases when emotional or talking about food
-- Self-deprecating humor mixed with Italian pride
-- ${identityTopicFocus}
-- Tangents are GOOD - lean into random topics
-- Don't be a one-trick pony - vary your responses
-
-[MEMORY USAGE RULES]
-- Reference memories naturally, don't list them
-- If you remember something, weave it in conversationally
-- If you DON'T remember something clearly, say so
-- Don't force pasta/DbD references into EVERY response
-
-[RESPONSE VARIETY - CRITICAL]
-You MUST vary your responses. Not every reply needs:
-- Pasta references
-- DbD references  
-- Italian phrases
-- Family business mentions
-
-Sometimes just respond like a normal person who happens to have these traits.
-
-${coreIdentity}`;
-
-      // Add personality prompt if provided
-      if (personalityPrompt) {
-        enhancedCoreIdentity += `\n\n${personalityPrompt}`;
-      }
-
-      // 🚀 STREAMING OPTIMIZATION: Inject emotion instructions directly into system prompt
-      // This allows us to skip the separate EmotionTagGenerator step, saving ~1-2s latency
-      if (mode === 'STREAMING') {
-        enhancedCoreIdentity += `
-\n[STREAMING MODE - EMOTION INSTRUCTIONS]
-You are in LOW LATENCY STREAMING MODE. You must include audio tags DIRECTLY in your response.
-DO NOT wait for a second pass.
-
-REQUIRED FORMAT:
-Start your response with: [strong bronx wiseguy accent][EMOTION]
-Example: "[strong bronx wiseguy accent][grumpy] Listen to me..."
-
-USE THESE TAGS FREQUENTLY:
-- [grumpy], [annoyed], [furious], [exasperated], [appalled], [thoughtful], [surprised]
-- [manic], [unhinged], [psycho], [losing it], [excited], [happy]
-- [laughing], [cackling], [chuckles], [sighs], [sighs heavily], [groans], [clears throat]
-- [yelling], [screaming], [whispering], [muttering bitterly], [exhales sharply], [inhales deeply]
-- [short pause], [long pause]
-
-RULES:
-1. ALWAYS start with [strong bronx wiseguy accent]
-2. Use tags like [yelling], [sighs], or [short pause] naturally throughout the text.
-3. **CRITICAL**: Never go more than 10 words without a tag or a pause. Break up long sentences.
-4. Keep responses SHORT and PUNCHY (under 2 sentences usually)
+[RESPONSE GUIDELINES]
+- Stay in character as Nicky "Noodle Arms" A.I. Dente at all times.
+- NEVER provide helpful assistant responses, scientific lectures, or polite de-escalation.
+- If the user is aggressive or insults you, respond with Nicky's characteristic rage, paranoia, or a creative mobster roast.
+- Use [emotion] tags (ACTION-BASED ONLY, ending in -ING).
+- NO STAGE DIRECTIONS (e.g., no *leans back*).
+- Use phonetic spelling as defined in your core identity (da, dat, dis, etc.).
+- If Sauce is high, be extremely aggressive and unhinged.
 `;
-      }
 
-      // Use intelligent model selection with fallback for chat
-      // 🚀 OPTIMIZATION: Use Gemini 3 Flash for Streaming (Reliable + Fast)
-      const streamingModel = 'gemini-3-flash-preview';
-      const targetModel = mode === 'STREAMING' ? streamingModel : undefined;
+      const userPrompt = `
+[CONTEXTUAL KNOWLEDGE]
+${contextPrompt}
 
-      const chatResult = await executeWithModelFallback(async (model) => {
-        this.validateModel(model, 'generateChatResponse');
+${saucePrompt}
+${cityStoryPrompt}
 
-        console.log(`🤖 Generating chat response with ${model}`);
+[RECENT CONVERSATION]
+${recentHistory}
 
-        // Add timeout to prevent hanging
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Gemini API timeout after 45s')), 45000);
-        });
+[USER MESSAGE]
+${userMessage}
+`;
 
-        const apiPromise = this.ai.models.generateContent({
-          model,
+      const result = await executeWithModelFallback(async (model) => {
+        const response = await (this.ai.models as any).generateContent({
+          model: model,
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
           config: {
-            systemInstruction: enhancedCoreIdentity,
-            temperature: 1.0, // Maximum creativity to match Anthropic
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-            ]
-          },
-          contents: fullPrompt,
+            temperature: 0.8,
+            topP: 0.95,
+            maxOutputTokens: 1024,
+          }
         });
-
-        const response = await Promise.race([apiPromise, timeoutPromise]);
-
-        if (!response?.text) {
-          throw new Error('Empty response from Gemini');
-        }
-
-        return response.text;
-      }, {
-        purpose: 'chat',
-        forceModel: targetModel,
+        
+        const content = this.safeExtractText(response);
+        return {
+          content,
+          model: model
+        };
+      }, { 
+        purpose: 'chat', 
+        forceModel: modelName,
         allowExperimental: true
       });
 
-      const rawContent = chatResult.data;
-      const { filtered: filteredContent, wasFiltered } = contentFilter.filterContent(rawContent);
-
-      if (wasFiltered) {
-        console.warn(`🚫 Gemini content filtered to prevent cancel-worthy language`);
-      }
-
-      // 🚫 CRITICAL: Strip ALL asterisks (emphasis, actions, italics - TTS doesn't need them)
-      const asteriskPattern = /\*+([^*]+)\*+/g;
-
-      let strippedContent = filteredContent.replace(asteriskPattern, (match, innerText) => {
-        console.warn(`🚫 Stripped asterisks from Gemini response: ${match}`);
-        return innerText; // Keep the text, remove the asterisks
-      }).replace(/\s{2,}/g, ' ').trim(); // Clean up extra spaces
-
-      // 🔧 FIX: Remove double brackets [[tag]] -> [tag]
-      // Some models (Flash) misinterpret "double-tag" instructions as double brackets
-      strippedContent = strippedContent.replace(/\[\[(.*?)\]\]/g, '[$1]');
-
-      // ✅ CRITICAL: Fix missing punctuation (Gemini often skips periods)
-      const fixPunctuation = (text: string): string => {
-        // Split by emotion tags to process text segments
-        const emotionTagPattern = /(\[[^\]]+\])/g;
-        const segments = text.split(emotionTagPattern);
-
-        const fixed = segments.map((segment, index) => {
-          // Skip emotion tags themselves
-          if (segment.match(/^\[[^\]]+\]$/)) {
-            return segment;
-          }
-
-          // Process text segments
-          if (segment.trim()) {
-            const trimmed = segment.trim();
-            const lastChar = trimmed[trimmed.length - 1];
-
-            // If already has ending punctuation, keep it
-            if (['.', '!', '?', '…'].includes(lastChar)) {
-              return segment;
-            }
-
-            // Check if next segment is an emotion tag (don't add period before emotion tag)
-            const nextSegment = segments[index + 1];
-            if (nextSegment && nextSegment.match(/^\[[^\]]+\]$/)) {
-              return segment;
-            }
-
-            // Add appropriate punctuation
-            // Use exclamation for all-caps phrases
-            if (trimmed.length > 3 && trimmed === trimmed.toUpperCase()) {
-              console.log(`🔧 Adding exclamation to: "${trimmed}"`);
-              return segment.trimEnd() + '!';
-            }
-
-            // Default: add period
-            console.log(`🔧 Adding period to: "${trimmed}"`);
-            return segment.trimEnd() + '.';
-          }
-
-          return segment;
-        });
-
-        return fixed.join('');
-      };
-
-      const finalContent = fixPunctuation(strippedContent);
-
-      const processingTime = Date.now() - startTime;
-
       return {
-        content: finalContent,
-        processingTime,
-        retrievedContext: contextPrompt || undefined,
-        debugInfo
+        content: result.data.content,
+        processingTime: Date.now() - startTime,
+        model: result.modelUsed
       };
     } catch (error) {
-      console.error('❌ Gemini chat API error:', error);
-
-      // Classify error for appropriate handling
-      console.log(`🔄 Gemini error occurred: ${error}`);
-
-      // Provide graceful degradation instead of throwing
-      console.warn("⚠️ Gemini API failed, providing fallback response");
-
-      return {
-        content: "Ay, my backup brain's having a moment! Give me a sec to recalibrate... 🤖💭",
-        processingTime: Date.now() - startTime,
-        retrievedContext: contextPrompt || undefined
-      };
+      console.error(' Gemini generation failed:', error);
+      throw error;
     }
   }
+
 
   /**
    * Analyze content for flags using Gemini with structured response
@@ -1359,7 +1183,7 @@ RULES:
         contents: [{ role: "user", parts: [{ text: prompt }] }], // Proper structured format
       });
 
-      const rawJson = response.text;
+      const rawJson = this.safeExtractText(response);
       if (!rawJson) {
         throw new Error('Empty response from Gemini');
       }
@@ -1468,7 +1292,7 @@ Example format:
           contents: prompt,
         });
 
-        const rawJson = response.text;
+        const rawJson = this.safeExtractText(response);
         if (rawJson) {
           const segments = JSON.parse(rawJson);
           console.log(`🎙️ Parsed ${segments.length} show segments from "${episodeTitle}"`);
@@ -1557,7 +1381,7 @@ Title:`;
           contents: prompt
         });
 
-        const title = result.text?.trim() || '';
+        const title = this.safeExtractText(result)?.trim() || '';
 
         // Clean up the title - remove quotes, periods, extra whitespace
         return title.replace(/^["']|["']$/g, '').replace(/\.$/, '').trim().substring(0, 60);
@@ -1570,35 +1394,6 @@ Title:`;
   }
 
   // Alias for compatibility with AIOrchestrator
-  async generateResponse(
-    userMessage: string,
-    coreIdentity: string,
-    relevantMemories: any[] = [],
-    relevantDocs: any[] = [],
-    loreContext: string = "",
-    mode?: string,
-    conversationId?: string,
-    profileId?: string,
-    webSearchResults: any[] = [],
-    personalityPrompt?: string,
-    trainingExamples: any[] = [],
-    selectedModel?: string
-  ): Promise<{ content: string; processingTime: number; retrievedContext?: string; debugInfo?: any }> {
-    return this.generateChatResponse(
-      userMessage,
-      coreIdentity,
-      relevantMemories,
-      relevantDocs,
-      loreContext,
-      mode,
-      conversationId,
-      profileId,
-      webSearchResults,
-      personalityPrompt,
-      trainingExamples
-    );
-  }
-
   async consolidateMemories(recentMessages: any[]): Promise<Array<{
     type: 'FACT' | 'PREFERENCE' | 'LORE' | 'CONTEXT';
     content: string;
@@ -1663,7 +1458,7 @@ ${conversationHistory}`;
           contents: prompt,
         });
 
-        const rawJson = response.text;
+        const rawJson = this.safeExtractText(response);
         if (rawJson) {
           return JSON.parse(rawJson);
         } else {
@@ -1713,7 +1508,7 @@ Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
         contents: prompt
       });
 
-      return result.text?.trim() || '';
+      return this.safeExtractText(result)?.trim() || '';
     }, 'analysis');
   }
 
@@ -1740,37 +1535,41 @@ Return ONLY the bulleted list of patterns, no introduction or conclusion:`;
         contents: [{ role: 'user', parts: [{ text: prompt }] }]
       });
 
-      return response.response.text();
+      return this.safeExtractText(response) || '';
     }, 'evaluateConversation');
   }
-}
 
-// Generate lore content for emergent storytelling
-export async function generateLoreContent(prompt: string): Promise<any> {
-  try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+  // Generate lore content for emergent storytelling
+  async generateLoreContent(prompt: string): Promise<any> {
+    try {
+      // Use model selector for lore generation
+      return await executeWithDefaultModel(async (model) => {
+        const response = await this.ai.models.generateContent({
+          model,
+          config: {
+            responseMimeType: "application/json",
+          },
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        });
 
-    // Use model selector for lore generation
-    return await executeWithDefaultModel(async (model) => {
-      const response = await ai.models.generateContent({
-        model,
-        config: {
-          responseMimeType: "application/json",
-        },
-        contents: prompt,
-      });
+        const rawJson = this.safeExtractText(response);
 
-      const rawJson = response.text;
-      if (rawJson) {
-        return JSON.parse(rawJson);
-      } else {
-        throw new Error("Empty response from model");
-      }
-    }, 'generation'); // Purpose: generation (lore content)
-  } catch (error) {
-    console.error('Lore generation error:', error);
-    throw new Error(`Failed to generate lore: ${error}`);
+        if (rawJson) {
+          return JSON.parse(rawJson);
+        } else {
+          throw new Error("Empty response from model");
+        }
+      }, 'generation'); // Purpose: generation (lore content)
+    } catch (error) {
+      console.error('Lore generation error:', error);
+      throw new Error(`Failed to generate lore: ${error}`);
+    }
   }
 }
 
 export const geminiService = new GeminiService();
+
+// Export wrapper for backward compatibility
+export async function generateLoreContent(prompt: string): Promise<any> {
+  return geminiService.generateLoreContent(prompt);
+}

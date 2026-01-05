@@ -4,6 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { storage } from "./storage";
 import { elevenlabsService } from "./services/elevenlabs";
 import { discordBotService } from "./services/discordBot";
+import { twitchBotService } from "./services/twitchBot";
 import { prometheusMetrics } from "./services/prometheusMetrics.js";
 import { contextPrewarmer } from "./services/contextPrewarmer";
 
@@ -119,6 +120,22 @@ app.use((req, res, next) => {
         }
       } else {
         log(`ℹ️ Discord bot not started - missing token or active profile`);
+      }
+
+      // Initialize Twitch bot if credentials are available
+      const twitchUsername = process.env.TWITCH_USERNAME;
+      const twitchToken = process.env.TWITCH_OAUTH_TOKEN;
+      const twitchChannel = process.env.TWITCH_CHANNEL;
+
+      if (twitchUsername && twitchToken && twitchChannel && activeProfile) {
+        try {
+          await twitchBotService.start(twitchUsername, twitchToken, twitchChannel);
+          log(`🎮 Twitch bot initialized for channel: ${twitchChannel} as ${twitchUsername}`);
+        } catch (error) {
+          log(`⚠️ Failed to start Twitch bot: ${error}`);
+        }
+      } else {
+        log(`ℹ️ Twitch bot not started - missing credentials or active profile`);
       }
 
       // 🔥 Pre-warm context cache for instant responses

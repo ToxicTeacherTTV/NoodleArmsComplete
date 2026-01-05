@@ -1,22 +1,28 @@
 ## Development Notes
 
-**Last Updated:** November 10, 2025
+**Last Updated:** January 3, 2026
 
-### Recent Major Changes (Oct-Nov 2025)
+### Recent Major Changes (Dec 2025 - Jan 2026)
 
-#### Gemini-Primary Architecture Migration (Oct 2025)
-- **Goal:** Reduce AI costs by 85-90% by leveraging Gemini free tier
-- **Implementation:** Intelligent model selector with fallback chains
-- **Result:** Success - 85-90% cost reduction achieved
-- **Challenge:** Free tier rate limits (10 RPM Flash, 2 RPM Pro) frequently exceeded
-- **Learning:** Paid tier may be necessary for production multi-user scenarios
+#### Gemini 3 Migration & Single-Pass Generation (Jan 2026)
+- **Goal:** Leverage Gemini 3's massive context and reasoning for high-quality podcasting.
+- **Implementation:** Migrated all services to Gemini 3 Flash/Pro. Implemented "Single-Pass Generation" for Podcast Mode, generating the entire script in one call.
+- **Result:** ~95% cost reduction and significantly improved narrative coherence.
 
-#### Vector Embeddings Implementation (Oct-Nov 2025)
-- **Problem:** Keyword-based retrieval missed semantically related memories
-- **Solution:** Gemini `text-embedding-004` with hybrid keyword+semantic search
-- **Architecture:** Background embedding generation, batch processing with rate limiting
-- **Impact:** Query "family" now finds "crew", "SABAM", related concepts naturally
-- **Status:** Completed. All 4,136 memories have embeddings.
+#### Vibe-Based Storytelling & Narrative Archetypes (Jan 2026)
+- **Problem:** City stories were too rigid and predictable.
+- **Solution:** Replaced the state machine with "Narrative Archetypes" (The Grudge, The Fugitive, etc.).
+- **Persistence:** Multi-turn story state is now tracked in the `conversations` table metadata.
+- **Natural Detection:** Enhanced regex and DB lookups allow Nicky to detect cities naturally in chat.
+
+#### Personality Hardening: "Show, Don't Tell" (Jan 2026)
+- **Problem:** Nicky was narrating his own actions (*leans in*, *sighs*).
+- **Solution:** Strict system prompt enforcement forbidding physical narration.
+- **Mechanism:** Use of [emotion] tags for voice synthesis while keeping dialogue purely character-driven.
+
+#### Dashboard Hook Ordering Fix (Jan 2026)
+- **Issue:** `ReferenceError: Cannot access 'activeProfile' before initialization`.
+- **Fix:** Reordered hooks in `jazz-dashboard-v2.tsx` to ensure `useQuery` results are available before being accessed by dependent logic.
 
 #### Memory Deduplication Fix (Oct 13, 2025)
 - **Problem:** 39+ duplicate memories created despite canonical key system

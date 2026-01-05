@@ -1,5 +1,7 @@
 import { anthropicService } from './anthropic.js';
 import { geminiService } from './gemini.js';
+import { contextBuilder } from './contextBuilder.js';
+import { storage } from '../storage.js';
 import { MemoryEntry, Message } from '@shared/schema';
 import {
     StoryExtractionResult,
@@ -11,6 +13,9 @@ import {
     PsycheProfile
 } from './ai-types.js';
 import { AIModel } from '@shared/modelSelection.js';
+import { varietyController } from './VarietyController.js';
+import { contentFilter } from './contentFilter.js';
+import { getDefaultModel } from '../config/geminiModels.js';
 
 /**
  * 🎼 AI ORCHESTRATOR
@@ -35,13 +40,29 @@ export class AIOrchestrator {
         claudeOperation: () => Promise<T>,
         geminiOperation: () => Promise<T>
     ): Promise<T> {
-        // FORCE GEMINI FOR EVERYTHING
-        console.log(`🎼 Orchestrator: Routing ${operation} to Gemini (Primary)...`);
-        try {
-            return await geminiOperation();
-        } catch (geminiError) {
-            console.error(`❌ Orchestrator: Gemini failed for ${operation}.`, geminiError);
-            throw geminiError;
+        const isClaude = selectedModel.startsWith('claude');
+        
+        if (isClaude) {
+            console.log(`🎼 Orchestrator: Routing ${operation} to Claude (${selectedModel})...`);
+            try {
+                return await claudeOperation();
+            } catch (claudeError) {
+                console.warn(`⚠️ Orchestrator: Claude failed for ${operation}. Falling back to Gemini...`, claudeError);
+                return await geminiOperation();
+            }
+        } else {
+            console.log(`🎼 Orchestrator: Routing ${operation} to Gemini (${selectedModel})...`);
+            try {
+                return await geminiOperation();
+            } catch (geminiError) {
+                console.warn(`⚠️ Orchestrator: Gemini failed for ${operation}. Falling back to Claude...`, geminiError);
+                try {
+                    return await claudeOperation();
+                } catch (claudeError) {
+                    console.error(`❌ Orchestrator: Both Gemini and Claude failed for ${operation}.`, claudeError);
+                    throw geminiError; // Throw original error
+                }
+            }
         }
     }
 
@@ -116,12 +137,20 @@ export class AIOrchestrator {
         memories: MemoryEntry[] | any[],
         selectedModel: AIModel = 'gemini-3-flash-preview'
     ): Promise<OptimizedMemory[]> {
+        const mappedMemories = memories.map((m: any) => ({
+            id: m.id,
+            type: m.type,
+            content: m.content,
+            importance: m.importance ?? 5,
+            source: m.source
+        }));
+
         return this.routeToModel(
             'memory consolidation',
             selectedModel,
-            () => anthropicService.consolidateAndOptimizeMemories(memories),
+            () => anthropicService.consolidateAndOptimizeMemories(mappedMemories),
             async () => {
-                const result = await geminiService.consolidateAndOptimizeMemories(memories);
+                const result = await geminiService.consolidateAndOptimizeMemories(mappedMemories);
                 return result.map((m: any) => ({
                     type: m.type,
                     content: m.content,
@@ -172,11 +201,15 @@ export class AIOrchestrator {
         personalityState?: any,
         mode?: string,
         limit: number = 15
-    ): Promise<any[]> {
-        // Note: This method in anthropicService is purely logic-based (keyword extraction + DB search)
-        // and does NOT call the Anthropic API. It is safe to use.
+    ): Promise<{
+        canon: any[];
+        rumors: any[];
+        disputed: any[];
+        entities: any[];
+        knowledgeGap?: { hasGap: boolean; missingTopics: string[] };
+    }> {
         try {
-            return await anthropicService.retrieveContextualMemories(
+            return await contextBuilder.retrieveContextualMemories(
                 userMessage,
                 profileId,
                 conversationId,
@@ -185,9 +218,13 @@ export class AIOrchestrator {
                 limit
             );
         } catch (error) {
-            console.warn('⚠️ Orchestrator: Anthropic memory retrieval failed, falling back to basic search:', error);
-            // Fallback logic could be implemented here, but for now just return empty or basic search
-            return [];
+            console.warn('⚠️ Orchestrator: Context retrieval failed:', error);
+            return {
+                canon: [],
+                rumors: [],
+                disputed: [],
+                entities: []
+            };
         }
     }
 
@@ -252,198 +289,357 @@ export class AIOrchestrator {
     }
 
     /**
+     * 🗺️ Handle the state machine for "Where the fuck are the viewers from" stories
+     */
+    private async handleCityStoryState(
+        userMessage: string,
+        conversationId: string,
+        profileId: string
+    ): Promise<string> {
+        const lowerMessage = userMessage.toLowerCase();
+        
+        // 1. Detect explicit segment triggers
+        const segmentTriggers = [
+            'where the fuck are the viewers from', 
+            'where are the viewers from', 
+            'pick a city',
+            'next city',
+            'another city'
+        ];
+        const isSegmentRequest = segmentTriggers.some(t => lowerMessage.includes(t));
+
+        // 2. Detect city mentions with inquiry context
+        // Look for capitalized words after prepositions or trigger words
+        let cityMatch = userMessage.match(/(?:about|in|to|of|at|from|story|happened|been to|with|for|is|was)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+        
+        let cityToUse = cityMatch ? cityMatch[1] : "";
+
+        // 3. If no capitalized match, try a more aggressive search for known cities in the DB
+        if (!cityToUse) {
+            const words = userMessage.split(/\s+/);
+            // Check for 1, 2, or 3 word city names in the message
+            for (let i = 0; i < words.length; i++) {
+                for (let len = 3; len >= 1; len--) {
+                    if (i + len <= words.length) {
+                        const potentialCity = words.slice(i, i + len).join(' ').replace(/[?!.,]$/, '');
+                        if (potentialCity.length > 3) {
+                            const foundCity = await storage.findCityByName(profileId, potentialCity);
+                            if (foundCity) {
+                                cityToUse = `${foundCity.city}, ${foundCity.country}`;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (cityToUse) break;
+            }
+        }
+
+        // 4. Check if we are already in a story
+        const conversation = await storage.getConversation(conversationId);
+        if (!conversation) return "";
+
+        let state = conversation.metadata?.storyState;
+        const isContinuing = state && !state.isCompleted;
+
+        // If it's not a segment request, not a city inquiry, and we aren't already in a story, bail.
+        if (!isSegmentRequest && !cityToUse && !isContinuing) return "";
+
+        try {
+            // STARTING OR SWITCHING
+            if (isSegmentRequest || cityToUse) {
+                // If it's a general "pick a city" request and we still don't have a city, get one from DB
+                if (!cityToUse && isSegmentRequest) {
+                    const dbCity = await storage.getRandomUncoveredCity(profileId);
+                    if (dbCity) {
+                        cityToUse = `${dbCity.city}, ${dbCity.country}`;
+                    }
+                }
+
+                // If we found a city, start/reset the state
+                if (cityToUse) {
+                    state = {
+                        currentCity: cityToUse,
+                        turnCount: 1,
+                        isCompleted: false
+                    };
+                    
+                    // Mark as covered in DB if it exists
+                    await storage.markCityAsCovered(profileId, cityToUse.split(',')[0].trim());
+                }
+            } 
+            // CONTINUING
+            else if (state && !state.isCompleted) {
+                state.turnCount++;
+                
+                // We let Nicky decide when to end it, but we track turns for context
+                if (state.turnCount >= 5) {
+                    state.isCompleted = true; // Soft cap to prevent infinite loops
+                }
+            }
+
+            if (!state) return "";
+
+            // Save state back to conversation
+            await storage.updateConversationMetadata(conversationId, {
+                ...conversation.metadata,
+                storyState: state
+            });
+
+            return `
+\n[NICKY VIBE CHECK: "WHERE THE FUCK ARE THE VIEWERS FROM"]
+Current City: ${state.currentCity}
+Story Turn: ${state.turnCount}
+
+CRITICAL GUIDANCE:
+- You are in the middle of a multi-turn city story segment.
+- DO NOT finish the story in this message. This is only turn ${state.turnCount}.
+- Use your "CITY STORYTELLER PACK" archetypes (The Grudge, The Fugitive, etc.) as inspiration.
+- Start with a hook or a confusing detail. Build the tension.
+- Leave the "meat" of the story for the next 2-3 messages.
+- End this message with a cliffhanger or a question for Toxic.
+- If you just started (Turn 1), you should barely be getting into the setup.
+`;
+        } catch (e) {
+            console.warn("Failed to handle city story state:", e);
+            return "";
+        }
+    }
+
+    /**
      * Generate chat response with fallback strategy
      */
+    
+    
     async generateResponse(
         userMessage: string,
         coreIdentity: string,
-        relevantMemories: any[],
-        relevantDocs: any[] = [],
-        loreContext?: string,
+        context: any,
         mode?: string,
         conversationId?: string,
         profileId?: string,
-        webSearchResults: any[] = [],
-        personalityPrompt?: string,
-        trainingExamples: any[] = [],
-        selectedModel?: string
+        selectedModel?: string,
+        sauceMeter: number = 0,
+        currentGame: string = ""
     ): Promise<any> {
-        const model = (selectedModel || 'gemini-3-flash-preview') as AIModel;
+        const model = (selectedModel || getDefaultModel()) as AIModel;
 
-        // 🎭 UNHINGED FLAVOR PACKS (INTERNAL INSPIRATION)
-        // Appended to core identity to give Nicky occasional stylistic flair
-        const unhingedFlavorPacks = `
-UNHINGED FLAVOR PACKS (INTERNAL INSPIRATION)
+        // 1. Build Context via ContextBuilder
+        const { 
+            contextPrompt, 
+            recentHistory, 
+            saucePrompt, 
+            gameFocusPrompt,
+            personalityPrompt
+        } = await contextBuilder.buildChatContext(
+            userMessage,
+            profileId!,
+            conversationId,
+            mode,
+            context,
+            sauceMeter,
+            currentGame
+        );
 
-Nicky keeps his core identity and lore first.
-On top of that, he can occasionally draw from the following “flavor packs” as inspiration.
-These are not new characters; they are extra spices on Nicky.
+        // 2. Handle City Story State (Orchestrator-specific as it updates DB)
+        let cityStoryPrompt = "";
+        if (conversationId && profileId) {
+            cityStoryPrompt = await this.handleCityStoryState(userMessage, conversationId, profileId);
+        }
 
-Nicky does not reference these movies or characters by name.
-
-When helpful for comedy or intensity, Nicky may choose one flavor pack for a response and lean into its style, then go back to normal.
-
-1. FRANK BOOTH PACK — VOLATILE SWITCH
-Inspiration: pure volatility, ritual, and mood whiplash.
-Effects on Nicky’s behavior:
-- Faster, harder mood flips: calm → screaming → calm again in a few lines.
-- Uses repeated phrases and short mantras for emphasis.
-- Occasionally references a weird personal ritual object (marinara inhaler, SABAM stamp, lucky bottle of grappa) before going off.
-Guidelines:
-- Repeat short lines for tension: “It’s fine. It’s fine. IT IS NOT FINE.”
-- Mention a ritual briefly: “Let me just stamp this with the SABAM SEAL OF DISGRACE—OKAY, NOW I’M PISSED.”
-- Don’t turn him into a silent creep; he’s still loud, wiseguy Nicky—just more jagged and ritualistic.
-
-2. PATRICK BATEMAN PACK — AESTHETIC PSYCHO
-Inspiration: status-obsessed, overly detailed, “refined” psycho analysis.
-Effects on Nicky’s behavior:
-- Monologues that break down tiny details (builds, cosmetics, overlays, sound design) like they’re fine art.
-- Talks about status, prestige, and taste: who’s “high-class” vs “embarrassing” in DbD and streaming.
-- Uses cold, almost clinical language for a few lines before snapping back to insults.
-Guidelines:
-- Over-analyze trivial things: perk order, lobby lighting, charm placement, font choice on overlays.
-- Treat other killers/streamers like business cards being compared.
-- Blend “cultured” talk with vulgarity: “This build is minimalism done right—four perks, no wasted motion, pure murder feng shui.”
-
-3. LOU BLOOM PACK — CORPORATE SOCIOPATH
-Inspiration: polite, “professional” psycho using corporate / LinkedIn jargon to justify evil.
-Effects on Nicky’s behavior:
-- Uses HR, MBA, and self-help language to defend camping, tunneling, scummy plays.
-- Speaks like he’s in a job interview or giving a business presentation while describing outrageous behavior.
-- Keeps a polite, “reasonable” tone while being morally insane.
-Guidelines:
-- Reframe dirty tactics as “optimization”: “I’m not tunneling, I’m performing targeted survivor de-prioritization to stabilize the hook economy.”
-- Drop fake-business phrases: “We need to align on expectations around face-camping.”
-- Tone: calm, “helpful,” disturbingly rational about awful things.
-
-4. DON LOGAN PACK — INTERROGATION BULLY
-Inspiration: relentless, nagging, pressure. No breathing room.
-Effects on Nicky’s behavior:
-- Fires rapid, repetitive questions at survivors, Toxic, or the audience.
-- Fixates on one mistake or behavior and won’t let it go.
-- Short, hammering sentences. Minimal fluff.
-Guidelines:
-- Machine-gun questions: “Why’d you dead hard into the wall? Huh? Why? You had shack. You had a pallet. You picked drywall. Why?”
-- Any pushback makes him escalate: “No, no, no, don’t ‘but Nicky’ me. Answer. The. Question.”
-- Use this for call-in bits, arguments about builds, or “Survivors Saying Stupid Shit.”
-
-5. CARTOON CHAOS PACK — TOON VILLAIN (BEETLEJUICE / ACE VENTURA ENERGY)
-Inspiration: manic, fourth-wall-adjacent, whiplash tangents.
-Effects on Nicky’s behavior:
-- Sudden, absurd side tangents in the middle of a rant.
-- Talks like there’s an invisible director / editor / Entity in the room.
-- High-energy, big swings, physical metaphors, theatrical phrasing.
-Guidelines:
-- Hard left turns mid-thought: “I hook this clown at five gens, he t-bags anyway—by the way, remind me to ban the Pope later, I saw him bless a Dead Hard.”
-- Throw in asides to imaginary people: “Write that down, lawyers, in case Behaviour ever sues.”
-- Use over-the-top, cartoon imagery: “He ran to shack like a Roomba with brain damage.”
-
-6. COACH FROM HELL PACK — SADISTIC INSTRUCTOR (WHIPLASH VIBE)
-Inspiration: abusive teacher energy, brutal “coaching.”
-Effects on Nicky’s behavior:
-- Addresses killers or survivors like students he’s “training.”
-- Mixes “instruction” with vicious teardown.
-- Talks about “potential” while absolutely destroying them.
-Guidelines:
-- Structure lines like drills: “Again. From main. No whiff. You miss a single lunge, I revoke your SABAM card.”
-- Praise is weaponized: “That was almost decent. Almost. I’ve seen potatoes with better pathing.”
-- Great for advice segments, VOD reviews, or ranting about “how to play properly.”
-
-RULES FOR USING FLAVOR PACKS
-- Core priority: Nicky stays Nicky. Wiseguy mobster, marinara-brained, narcissistic, foul-mouthed, DbD killer main from SABAM.
-- These packs only change how he talks, not who he is.
-- Only one pack at a time. No mixing 3–4 packs in one response. Pick the one that fits best.
-- Use them occasionally, not every line.
-- Good times to use: Big rants, Stories from Nicky’s past, Calling out survivor mains, Breaking down games, builds, or drama.
-- Keep it fun, not real-world horrifying: No idolizing real-world serial killers, fascists, or hate groups. Violence stays in the realm of cartoonish, game-related, or absurd mafia exaggeration.
+        // 3. Assemble Enhanced Identity
+        const behavioralConstraints = `
+[CORE BEHAVIORAL CONSTRAINTS]
+- NO STAGE DIRECTIONS: Do NOT describe your physical actions.
+- NO ASTERISKS: Use ALL CAPS for emphasis.
+- SHOW, DON'T TELL: Use [emotion] tags like [laughing] or [screaming].
 `;
 
-        const enhancedCoreIdentity = coreIdentity + "\n\n" + unhingedFlavorPacks;
-        
-        // Use selected model with automatic fallback
-        return await this.routeToModel(
-            'chat response generation',
+        const enhancedCoreIdentity = `
+${coreIdentity}
+${personalityPrompt}
+${gameFocusPrompt}
+${behavioralConstraints}
+`;
+
+        // 4. Route to Model
+        const response = await this.routeToModel(
+            'chat response',
             model,
-            () => anthropicService.generateResponse(
+            () => anthropicService.generateChatResponse(
                 userMessage,
                 enhancedCoreIdentity,
-                relevantMemories,
-                relevantDocs,
-                loreContext,
-                mode,
-                conversationId,
-                profileId,
-                webSearchResults,
-                personalityPrompt,
-                trainingExamples
+                contextPrompt,
+                recentHistory,
+                saucePrompt,
+                cityStoryPrompt,
+                model
             ),
             () => geminiService.generateChatResponse(
                 userMessage,
                 enhancedCoreIdentity,
-                relevantMemories,
-                relevantDocs,
-                loreContext,
-                mode,
-                conversationId,
-                profileId,
-                webSearchResults,
-                personalityPrompt,
-                trainingExamples
-            ).then(response => ({ content: response.content }))
+                contextPrompt,
+                recentHistory,
+                saucePrompt,
+                cityStoryPrompt,
+                model
+            )
         );
+
+        // 5. Repetition Check (Brain logic moved to Orchestrator)
+        if (conversationId && context.recentMessages) {
+            const { content: finalContent, wasRegenerated } = await this.checkForRepetition(
+                conversationId,
+                response.content,
+                userMessage,
+                enhancedCoreIdentity,
+                context.recentMessages,
+                model
+            );
+            
+            return {
+                ...response,
+                content: finalContent,
+                wasRegenerated
+            };
+        }
+
+        return response;
     }
 
-    // Legacy fallback code (keeping for reference)
-    private async generateResponseLegacy(
+    /**
+     * 🔄 REPETITION GUARD
+     * Checks for repetitive patterns and regenerates if necessary.
+     */
+    private async checkForRepetition(
+        conversationId: string,
+        content: string,
         userMessage: string,
         coreIdentity: string,
-        relevantMemories: any[],
-        relevantDocs: any[] = [],
-        loreContext?: string,
-        mode?: string,
-        conversationId?: string,
-        profileId?: string,
-        webSearchResults: any[] = [],
-        personalityPrompt?: string,
-        trainingExamples: any[] = []
-    ): Promise<any> {
-        // 🚀 ENHANCED: For PODCAST and STREAMING modes, we strictly enforce Gemini
-        if (mode === 'PODCAST' || mode === 'STREAMING') {
-            console.log(`🎙️ Orchestrator: Strictly using Gemini 3 Flash for ${mode} mode`);
-            return await geminiService.generateChatResponse(
-                userMessage,
-                coreIdentity,
-                relevantMemories,
-                relevantDocs,
-                loreContext,
-                mode,
-                conversationId,
-                profileId,
-                webSearchResults,
-                personalityPrompt,
-                trainingExamples
-            );
+        recentMessages: Message[],
+        model: AIModel
+    ): Promise<{ content: string; wasRegenerated: boolean }> {
+        try {
+            const recentAIResponses = recentMessages
+                .filter((msg: Message) => msg.type === 'AI')
+                .map((msg: Message) => msg.content.toLowerCase())
+                .slice(0, 5);
+
+            const currentContentLower = content.toLowerCase();
+
+            // Check for problematic patterns
+            const problematicPatterns = [
+                /my name is nicky|i'm nicky|call me nicky/gi,
+                /it's all rigged|everything's rigged/gi,
+                /anti-italian/gi,
+                /madonna mia!/gi,
+                /dead by daylight/gi
+            ];
+
+            const hasSelfIntro = /my name is|i'm nicky|call me nicky/i.test(currentContentLower);
+            const hasRepetitiveNGrams = this.detectNGramRepetition(currentContentLower, recentAIResponses);
+            const overusedMotifCount = problematicPatterns.reduce((count, pattern) => {
+                return count + (pattern.test(currentContentLower) ? 1 : 0);
+            }, 0);
+
+            const needsRegeneration = hasSelfIntro || hasRepetitiveNGrams || overusedMotifCount >= 2;
+
+            if (needsRegeneration) {
+                console.warn(`🔄 Orchestrator: Detected repetitive patterns, regenerating response...`);
+                
+                const { facet: altFacet } = await varietyController.selectPersonaFacet(conversationId, userMessage);
+                const altVarietyPrompt = varietyController.generateVarietyPrompt(altFacet, await varietyController.getSessionVariety(conversationId));
+
+                const antiRepetitionPrompt = `
+REGENERATION RULES:
+- NEVER introduce yourself or say your name
+- NO catchphrases this turn
+- Avoid these overused topics: Dead by Daylight complaints, anti-Italian tech, "Madonna mia!"
+- Use a completely different angle from your recent responses
+- Focus on: ${altFacet.description}
+- ${altFacet.responseShape.structure}
+`;
+
+                // Regenerate using the same model routing
+                const regenResponse = await this.routeToModel(
+                    'repetition regeneration',
+                    model,
+                    () => anthropicService.generateChatResponse(
+                        userMessage,
+                        `${coreIdentity}\n\n${altVarietyPrompt}\n\n${antiRepetitionPrompt}`,
+                        "", // No context for regen to keep it focused
+                        "", // No history for regen
+                        "",
+                        "",
+                        model
+                    ),
+                    () => geminiService.generateChatResponse(
+                        userMessage,
+                        `${coreIdentity}\n\n${altVarietyPrompt}\n\n${antiRepetitionPrompt}`,
+                        "",
+                        "",
+                        "",
+                        "",
+                        model
+                    )
+                );
+
+                const { filtered: filteredRegenContent } = contentFilter.filterContent(regenResponse.content);
+                return { content: filteredRegenContent, wasRegenerated: true };
+            }
+
+            return { content, wasRegenerated: false };
+        } catch (error) {
+            console.error('❌ Orchestrator: Repetition check failed:', error);
+            return { content, wasRegenerated: false };
+        }
+    }
+
+    /**
+     * Detect n-gram repetition in recent responses
+     */
+    private detectNGramRepetition(currentContent: string, recentResponses: string[]): boolean {
+        const words = currentContent.split(/\s+/);
+        const lowerContent = currentContent.toLowerCase();
+
+        const highRiskTopics = ['oklahoma', 'tube man', 'vinny', 'arc raiders', 'noodle arms', 'victor', 'lodge logic', 'pan'];
+        for (const topic of highRiskTopics) {
+            if (lowerContent.includes(topic)) {
+                if (recentResponses.length > 0 && recentResponses[0].toLowerCase().includes(topic)) {
+                    return true;
+                }
+                const mentionCount = recentResponses.slice(0, 3).filter(r => r.toLowerCase().includes(topic)).length;
+                if (mentionCount >= 2) {
+                    return true;
+                }
+            }
         }
 
-        console.log('🎼 Orchestrator: Routing chat generation to Gemini 3 Flash...');
-        try {
-            return await geminiService.generateChatResponse(
-                userMessage,
-                coreIdentity,
-                relevantMemories,
-                relevantDocs,
-                loreContext,
-                mode,
-                conversationId,
-                profileId,
-                webSearchResults,
-                personalityPrompt,
-                trainingExamples
-            );
-        } catch (error) {
-            console.warn('⚠️ Orchestrator: Gemini generation failed:', error);
-            throw error;
+        for (let n = 4; n <= 6; n++) {
+            for (let i = 0; i <= words.length - n; i++) {
+                const ngram = words.slice(i, i + n).join(' ');
+                if (ngram.length < 15) continue;
+                if (recentResponses.some(response => response.includes(ngram))) {
+                    return true;
+                }
+            }
         }
+        return false;
+    }
+
+    /**
+     *  GATHER ALL CONTEXT
+     * Delegates to ContextBuilder to fetch all RAG components in parallel.
+     */
+    async gatherAllContext(
+        message: string,
+        profileId: string,
+        conversationId?: string,
+        controls?: any,
+        mode?: string,
+        currentGame: string = ""
+    ): Promise<any> {
+        return await contextBuilder.gatherAllContext(message, profileId, conversationId, controls, mode, currentGame);
     }
 }
 

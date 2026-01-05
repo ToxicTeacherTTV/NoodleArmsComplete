@@ -1,4 +1,6 @@
 import fetch from 'node-fetch';
+import { executeWithModelFallback } from './modelSelector.js';
+import { geminiService } from './gemini.js';
 
 export interface SearchResult {
   title: string;
@@ -65,19 +67,80 @@ class WebSearchService {
   }
 
   /**
+   * Refine a search query using LLM for better results
+   */
+  private async refineQueryWithLLM(originalQuery: string): Promise<string> {
+    // 🚀 OPTIMIZATION: Skip LLM refinement for very short or simple queries
+    if (originalQuery.split(' ').length <= 3 || originalQuery.length < 20) {
+      console.log(`🚀 Skipping LLM refinement for simple query: "${originalQuery}"`);
+      return this.extractSearchKeywords(originalQuery);
+    }
+
+    try {
+      console.log(`🧠 Refining search query with LLM: "${originalQuery}"`);
+      
+      const result = await executeWithModelFallback(async (modelName) => {
+        const model = geminiService.getGenerativeModel(modelName);
+        const prompt = `
+          You are an expert search query optimizer for "Nicky", an unhinged Italian-American Dead by Daylight streamer.
+          Your goal is to take a user's natural language question and turn it into a highly effective search engine query.
+          
+          USER QUESTION: "${originalQuery}"
+          
+          RULES:
+          1. Remove conversational filler (e.g., "can you tell me", "I was wondering").
+          2. Keep specific proper nouns, technical terms, and dates.
+          3. If it's about Dead by Daylight (DBD), ensure "Dead by Daylight" or "DBD" is included.
+          4. If it's about a person, include context (e.g., "Nicky Noodle Arms DBD" instead of just "Nicky").
+          5. If it's about news or current events, add "news" or "latest".
+          6. Output ONLY the optimized search string. No explanation.
+          
+          OPTIMIZED QUERY:`;
+          
+        const response = await model.generateContent(prompt);
+        const text = response.response.text ? response.response.text() : (response as any).text?.() || "";
+        return text.trim().replace(/^"|"$/g, '');
+      }, { purpose: 'analysis' });
+      
+      return result.data;
+    } catch (error) {
+      console.warn('⚠️ LLM query refinement failed, falling back to regex:', error);
+      return this.extractSearchKeywords(originalQuery);
+    }
+  }
+
+  /**
    * Main search function that tries multiple search strategies
    */
   async search(query: string): Promise<SearchResponse> {
     const startTime = Date.now();
     
     // Extract optimized search keywords
-    let searchQuery = this.extractSearchKeywords(query);
+    // Use LLM for complex queries, regex for simple ones
+    let searchQuery: string;
+    const wordCount = query.split(/\s+/).length;
+    
+    if (wordCount > 4 || query.includes('?') || query.toLowerCase().includes('who') || query.toLowerCase().includes('what')) {
+      searchQuery = await this.refineQueryWithLLM(query);
+    } else {
+      searchQuery = this.extractSearchKeywords(query);
+    }
     
     // 🛡️ AMBIGUITY PROTECTION: If query is just "Nicky", add character context to avoid Nicki Minaj results
     const lowerSearch = searchQuery.toLowerCase();
     if (lowerSearch === 'nicky' || lowerSearch === 'who is nicky' || lowerSearch === 'nicky ai') {
       searchQuery = 'Nicky "Noodle Arms" A.I. Dente Dead by Daylight';
       console.log(`🛡️ Ambiguity protection: Updated query to "${searchQuery}"`);
+    }
+
+    // 📰 NEWS SPECIFICITY: If it's a news query, prioritize news sources
+    const isNewsQuery = lowerSearch.includes('news') || lowerSearch.includes('latest') || lowerSearch.includes('update');
+    if (isNewsQuery && !searchQuery.includes('site:')) {
+      // Don't force site: if user already provided one, but add helpful domains for DBD
+      if (lowerSearch.includes('dbd') || lowerSearch.includes('dead by daylight')) {
+        searchQuery += ' (site:deadbydaylight.com OR site:twitter.com OR site:steampowered.com)';
+        console.log(`📰 News specificity: Added DBD domains to query`);
+      }
     }
 
     console.log(`🔍 Web search query: "${query}" → optimized: "${searchQuery}"`);
@@ -328,6 +391,18 @@ class WebSearchService {
 
         const snippet = snippets[snippetIndex] || `Information about ${query}`;
         snippetIndex++;
+
+        // 🛡️ VALIDATION: Ensure the snippet or title has some relevance to the query
+        // This prevents the scraper from returning random sidebar links or ads
+        const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+        const hasRelevance = queryWords.length === 0 || queryWords.some(word => 
+          title.toLowerCase().includes(word) || snippet.toLowerCase().includes(word)
+        );
+
+        if (!hasRelevance) {
+          console.log(`🗑️ Skipping irrelevant Bing result: "${title}"`);
+          continue;
+        }
 
         results.push({
           title: title || `Result for ${query}`,

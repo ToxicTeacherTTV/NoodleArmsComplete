@@ -805,6 +805,9 @@ Be conservative with matches - only match if confidence > 0.7`;
       people: Array<{ id: string; canonicalName: string; disambiguation?: string; aliases?: string[] }>;
       places: Array<{ id: string; canonicalName: string; locationType?: string; description?: string }>;
       events: Array<{ id: string; canonicalName: string; eventDate?: string; description?: string }>;
+      concepts?: Array<{ id: string; canonicalName: string; type?: string; description?: string }>;
+      items?: Array<{ id: string; canonicalName: string; type?: string; description?: string }>;
+      misc?: Array<{ id: string; canonicalName: string; type?: string; description?: string }>;
     }
   ): Promise<Array<{ memoryId: string; entities: DetectedEntity[] }>> {
     const results: Array<{ memoryId: string; entities: DetectedEntity[] }> = [];
@@ -840,6 +843,55 @@ Be conservative with matches - only match if confidence > 0.7`;
     }
 
     return results;
+  }
+
+  /**
+   * 📂 GET ENTITY DOSSIERS
+   * Extracts entities from a message and returns their full database records.
+   * Used to give Nicky "Ground Truth" about people/places mentioned.
+   */
+  async getEntityDossiers(
+    text: string,
+    profileId: string,
+    storage: any
+  ): Promise<string> {
+    try {
+      // 1. Get all entities for this profile (cached in storage usually)
+      const existingEntities = await storage.getAllEntities(profileId);
+      
+      // 2. Extract entities from the text
+      const extraction = await this.extractEntitiesFromMemory(text, existingEntities);
+      
+      if (extraction.entities.length === 0) return "";
+
+      // 3. Disambiguate to find matches
+      const disambiguation = await this.disambiguateEntities(extraction.entities, existingEntities);
+      
+      const dossiers: string[] = [];
+      const seenIds = new Set<string>();
+
+      // 4. Build dossier strings for matches
+      for (const match of disambiguation.matches) {
+        if (match.confidence > 0.6 && !seenIds.has(match.existingEntityId)) {
+          seenIds.add(match.existingEntityId);
+          
+          // Find the full entity record
+          let entity: any = null;
+          if (match.matchType === 'PERSON') entity = existingEntities.people.find((p: any) => p.id === match.existingEntityId);
+          else if (match.matchType === 'PLACE') entity = existingEntities.places.find((p: any) => p.id === match.existingEntityId);
+          else if (match.matchType === 'EVENT') entity = existingEntities.events.find((e: any) => e.id === match.existingEntityId);
+          
+          if (entity) {
+            dossiers.push(`[DOSSIER: ${entity.canonicalName}] ${entity.description || 'No description'}. Relationship: ${entity.relationship || 'Unknown'}. Aliases: ${(entity.aliases || []).join(', ')}`);
+          }
+        }
+      }
+
+      return dossiers.length > 0 ? "\n\nENTITY DOSSIERS:\n" + dossiers.join('\n') : "";
+    } catch (error) {
+      console.warn("Failed to fetch entity dossiers:", error);
+      return "";
+    }
   }
 }
 

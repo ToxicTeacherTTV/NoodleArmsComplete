@@ -16,6 +16,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.0] - 2026-01-04
+
+### Added - Privacy Controls & Memory Learning
+- **Memory Learning Toggle:** Added a global UI toggle to enable/disable lore extraction and style learning.
+- **Privacy Indicators:** Implemented "🧠 Learning" vs "🔒 Private" status indicators in the chat header.
+- **Message-Level Privacy:** Added regex triggers (`[PRIVATE]`, `[OFF THE RECORD]`) to bypass memory storage on a per-message basis.
+
+### Changed - Context Optimization & RAG Refinement
+- **Semantic Training Retrieval:** Replaced linear training data scans with vector-based semantic retrieval for faster, more relevant style guidance.
+- **Aggressive History Truncation:** Implemented a 600-character limit for historical messages in the prompt to prevent context bloat and reduce latency.
+- **Rumor Capping:** Limited semantic rumor retrieval to 3 entries to maintain focus and speed.
+- **Model Flow Audit:** Completed a full system audit to ensure **Gemini 3 Flash** is the primary engine for all operations (Chat, RAG, Extraction, Analysis).
+
+### Fixed - Model Selection & Environment
+- **.env Restoration:** Fixed a critical desync where the `.env` file was overriding production models with experimental versions. Restored `gemini-3-flash-preview` as the global default.
+- **Orchestrator Routing:** Verified and tightened the `AIOrchestrator` routing logic to ensure consistent model selection across all services.
+
+---
+
+## [1.5.0] - 2026-01-03
+
+### Added - Vibe-Based Storytelling & Personality Hardening
+- **Vibe-Based Storytelling Engine:** Implemented a narrative engine for the "Where the fuck are the viewers from" segment.
+  - **Narrative Archetypes:** Replaced rigid scripts with "Flavor Packs" (The Grudge, The Fugitive, etc.) for unpredictable stories.
+  - **Multi-Turn Persistence:** Added `metadata` state tracking to conversations to manage story turns across multiple messages.
+  - **Natural Detection:** Added regex and database-lookup logic to detect city mentions in chat and trigger segments.
+  - **UI Triggers:** Added "Tell Story" buttons to the Listener Cities dashboard and random pick notifications.
+- **Podcast Listener Cities Tracker:** A new dashboard for managing viewer locations, integrated with the main chat via query parameters.
+
+### Changed - Personality & AI Strategy
+- **Personality Hardening ("Show, Don't Tell"):** Strictly enforced character integrity by forbidding physical narration (asterisks, stage directions). Nicky now expresses himself solely through dialogue and [emotion] tags.
+- **Gemini 3 Migration:** Fully migrated all primary operations to **Gemini 3 Flash**, including chat, RAG, and intelligence tasks.
+- **Single-Pass Generation:** Optimized Podcast Mode to generate high-quality, long-form responses in a single pass, utilizing Gemini 3's massive context window.
+
+### Fixed - Dashboard Reliability
+- **React Initialization Fix:** Resolved a `ReferenceError` in `jazz-dashboard-v2.tsx` where `activeProfile` was accessed before initialization during query-param handling.
+- **City Detection Sticky Logic:** Improved city detection to handle multi-word cities and cross-reference with the database for better accuracy.
+
+---
+
+## [1.4.0] - 2025-12-28
+
+### Added - Personality & Variety Persistence
+- **Persistence Layer:** Created `personality_state` and `variety_state` tables to store Nicky's mood, mode, and conversation variety (catchphrases, facets) across server restarts.
+- **Variety Controller:** Updated `VarietyController.ts` to automatically save and load state from the database, ensuring Nicky doesn't repeat himself after a reboot.
+
+### Changed - AI Orchestration & Context
+- **Centralized Context:** Moved all show-specific (`Camping Them Softly`, `Camping the Extract`) and game-specific (`Arc Raiders`, `DbD`) detection logic into `AIOrchestrator.ts`.
+- **Prompt Cleanup:** Removed redundant detection logic from `gemini.ts` and `anthropic.ts` to prevent prompt bloat and conflicting instructions.
+- **Discord Punchiness:** Updated Discord mode instructions to encourage shorter, punchier responses and natural length variety.
+
+### Fixed - Architectural Integrity
+- **Cascading Deletes:** Updated `storage.ts` to ensure that deleting a profile correctly removes all associated records (messages, segments, memories, entities, etc.) across 30+ tables.
+- **Discord Singleton:** Fixed an issue where the Discord bot was using a separate instance of the `VarietyController`, causing inconsistent catchphrase tracking.
+- **Discord Memory Retrieval:** Replaced inefficient linear memory scans in the Discord bot with the optimized `searchMemoryEntries` method.
+- **Discord Message Splitting:** Added automatic message splitting for Discord responses exceeding 2000 characters.
+
+### Improved - Diagnostics & Reliability
+- **Stronger Manual Enhancement**: Updated the manual "Enhance" button to trigger a "High Intensity" mode, making emotion tags more extreme (e.g., [screaming], [cackling]) and adding aggressive punctuation for manual re-rolls.
+- **LLM-Powered Search Refinement**: Implemented Gemini-driven query optimization for complex web searches in `webSearchService.ts`.
+- **News-Aware Search**: Added automatic domain prioritization for Dead by Daylight news and current events.
+- **Search Result Validation**: Enhanced Bing scraper with relevance filtering to prevent "hallucinated" or junk results.
+- **Intelligence Engine Sync**: Synchronized `IntelligenceEngine.ts` with the global model selection strategy, defaulting to `gemini-3-flash-preview`.
+- **ElevenLabs Error Handling**: Added descriptive, character-themed error messages for TTS failures (e.g., quota exceeded, network issues).
+
+---
+
 ## [1.3.0] - 2025-12-08
 
 ### Added - Diagnostic Chat Mode

@@ -9,13 +9,14 @@ import type { Message, AppMode } from "@/types";
 
 interface ChatPanelProps {
   messages: Message[];
+  conversationId?: string;
   sessionDuration: string;
   messageCount: number;
   appMode?: AppMode;
   isDebugMode?: boolean;
   onToggleDebugMode?: () => void;
   onPlayAudio?: (content: string) => void;
-  onPauseAudio?: () => void;
+  onPauseAudio?: (content: string) => void;
   onResumeAudio?: () => void;
   onStopAudio?: () => void;
   onReplayAudio?: () => void;
@@ -25,9 +26,12 @@ interface ChatPanelProps {
   canReplay?: boolean;
   canSave?: boolean;
   onTextSelection?: () => void;
+  memoryLearning?: boolean;
+  onToggleLearning?: () => void;
+  onSaveToMemory?: (messageId: string, content: string) => void;
 }
 
-export default function ChatPanel({ messages, sessionDuration, messageCount, appMode = 'PODCAST', isDebugMode = false, onToggleDebugMode, onPlayAudio, onPauseAudio, onResumeAudio, onStopAudio, onReplayAudio, onSaveAudio, isPlayingAudio = false, isPausedAudio = false, canReplay = false, canSave = false, onTextSelection }: ChatPanelProps) {
+export default function ChatPanel({ messages, conversationId, sessionDuration, messageCount, appMode = 'PODCAST', isDebugMode = false, onToggleDebugMode, onPlayAudio, onPauseAudio, onResumeAudio, onStopAudio, onReplayAudio, onSaveAudio, isPlayingAudio = false, isPausedAudio = false, canReplay = false, canSave = false, onTextSelection, memoryLearning = true, onToggleLearning, onSaveToMemory }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -39,7 +43,11 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
     },
     onMutate: async ({ messageId, rating }) => {
       // Optimistically update the UI immediately
-      queryClient.setQueryData(['messages'], (oldMessages: Message[] | undefined) => {
+      const queryKey = conversationId 
+        ? ['/api/conversations', conversationId, 'messages']
+        : ['messages'];
+
+      queryClient.setQueryData(queryKey, (oldMessages: Message[] | undefined) => {
         if (!oldMessages) return oldMessages;
         return oldMessages.map(msg => 
           msg.id === messageId ? { ...msg, rating } : msg
@@ -53,11 +61,19 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
       });
       // Invalidate conversation-related queries to ensure data consistency
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
-      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      
+      const queryKey = conversationId 
+        ? ['/api/conversations', conversationId, 'messages']
+        : ['messages'];
+      queryClient.invalidateQueries({ queryKey });
     },
     onError: (error: any, { messageId }) => {
       // Revert optimistic update on error
-      queryClient.setQueryData(['messages'], (oldMessages: Message[] | undefined) => {
+      const queryKey = conversationId 
+        ? ['/api/conversations', conversationId, 'messages']
+        : ['messages'];
+
+      queryClient.setQueryData(queryKey, (oldMessages: Message[] | undefined) => {
         if (!oldMessages) return oldMessages;
         return oldMessages.map(msg => 
           msg.id === messageId ? { ...msg, rating: undefined } : msg
@@ -73,11 +89,11 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
   });
 
   const enhanceTextMutation = useMutation({
-    mutationFn: async ({ text, mode }: { text: string; mode?: 'quick' | 'ai' }) => {
+    mutationFn: async ({ text, mode, messageId }: { text: string; mode?: 'quick' | 'ai'; messageId?: string }) => {
       const res = await fetch('/api/enhance-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, mode }),
+        body: JSON.stringify({ text, mode, messageId }),
       });
       if (!res.ok) throw new Error('Enhancement failed');
       return res.json();
@@ -89,6 +105,12 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
         duration: 3000,
       });
       setEnhancingMessage(null);
+      
+      // Invalidate messages to show the enhancement inline
+      const queryKey = conversationId 
+        ? ['/api/conversations', conversationId, 'messages']
+        : ['messages'];
+      queryClient.invalidateQueries({ queryKey });
     },
     onError: (error: any) => {
       toast({
@@ -103,36 +125,7 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
   const handleEnhanceMessage = async (messageId: string, text: string, mode: 'quick' | 'ai' = 'ai') => {
     setEnhancingMessage(messageId);
     try {
-      const result = await enhanceTextMutation.mutateAsync({ text, mode });
-      
-      // Show both original and enhanced in a dialog
-      toast({
-        title: mode === 'quick' ? "⚡ Quick Enhanced" : "🎭 AI Enhanced",
-        description: (
-          <div className="space-y-2 max-w-lg">
-            <div>
-              <strong>Original:</strong>
-              <div className="text-xs mt-1 p-2 bg-background/50 rounded">{result.original}</div>
-            </div>
-            <div>
-              <div className="flex items-center justify-between">
-                <strong>Enhanced:</strong>
-                <button 
-                  className="text-xs bg-primary/10 hover:bg-primary/20 text-primary px-2 py-1 rounded transition-colors flex items-center gap-1"
-                  onClick={() => {
-                    navigator.clipboard.writeText(result.enhanced);
-                    // We can't trigger another toast easily from here without context, but the action is clear
-                  }}
-                >
-                  <i className="fas fa-copy"></i> Copy
-                </button>
-              </div>
-              <div className="text-xs mt-1 p-2 bg-accent/10 rounded select-text cursor-text">{result.enhanced}</div>
-            </div>
-          </div>
-        ),
-        duration: 10000, // Longer duration to read both versions
-      });
+      await enhanceTextMutation.mutateAsync({ text, mode, messageId });
     } catch (error) {
       // Error already handled by mutation
     }
@@ -201,13 +194,24 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
             <div className="flex items-center space-x-2">
               <div className="flex items-center space-x-1 text-xs">
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                <span className="text-muted-foreground">Claude API</span>
+                <span className="text-muted-foreground">Gemini 3 Flash</span>
               </div>
               
               <div className="flex items-center space-x-1 text-xs">
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                 <span className="text-muted-foreground">ElevenLabs</span>
               </div>
+
+              <button 
+                onClick={onToggleLearning}
+                className="flex items-center space-x-1 text-xs border-l border-border pl-3 ml-1 hover:opacity-80 transition-opacity"
+                title={memoryLearning ? "Click to disable learning (Private Mode)" : "Click to enable learning (Public Mode)"}
+              >
+                <div className={`w-2 h-2 rounded-full ${memoryLearning ? 'bg-blue-400 animate-pulse' : 'bg-amber-400'}`}></div>
+                <span className={memoryLearning ? 'text-blue-400 font-medium' : 'text-muted-foreground'}>
+                  {memoryLearning ? '🧠 Learning' : '🔒 Private'}
+                </span>
+              </button>
             </div>
             
             {onToggleDebugMode && (
@@ -288,6 +292,28 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                         )}
                         {message.content}
                       </div>
+                      {message.metadata?.enhanced_content && (
+                        <div className="mt-3 pt-3 border-t border-border/50">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-purple-400 flex items-center gap-1">
+                              <i className="fas fa-wand-magic-sparkles"></i> Enhanced Version
+                            </span>
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(message.metadata.enhanced_content);
+                                toast({ title: "Copied!", description: "Enhanced text copied", duration: 2000 });
+                              }}
+                              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                              title="Copy enhanced text"
+                            >
+                              <i className="fas fa-copy"></i>
+                            </button>
+                          </div>
+                          <div className="text-sm italic text-foreground/90 bg-purple-500/5 p-2 rounded border border-purple-500/10">
+                            {message.metadata.enhanced_content}
+                          </div>
+                        </div>
+                      )}
                       <div className="text-xs opacity-70 mt-2 flex items-center space-x-2">
                         <span>
                           {message.type === 'AI' ? 'Nicky' : 'Chat'} • {formatTime(message.createdAt)}
@@ -355,6 +381,16 @@ export default function ChatPanel({ messages, sessionDuration, messageCount, app
                             <i className="fas fa-volume-up text-accent"></i>
                             <span className="text-accent">Auto-Spoken</span>
                           </>
+                        )}
+                        {message.type === 'AI' && onSaveToMemory && (
+                          <button
+                            onClick={() => onSaveToMemory(message.id, message.content)}
+                            className="flex items-center space-x-1 text-accent hover:text-accent/80 transition-colors ml-2 pl-2 border-l border-border"
+                            title="Save this specific response to memory"
+                          >
+                            <i className="fas fa-brain text-xs"></i>
+                            <span className="text-xs">Save to Memory</span>
+                          </button>
                         )}
                         {message.metadata?.processingTime && (
                           <span className="text-muted-foreground">({message.metadata.processingTime}ms)</span>

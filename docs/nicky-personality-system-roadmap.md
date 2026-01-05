@@ -3,11 +3,20 @@
 ## Overview
 This roadmap outlines the evolution of Nicky's personality control system from the current topic-based approach to a sophisticated, user-controllable system. The approach prioritizes reliability, user experience, and gradual feature addition without complexity explosion.
 
-## Current State: Simple Topic Distribution
-- Dead by Daylight gaming content: 65%
-- Italian-American culture & cooking: 20%
-- Family & neighborhood stories: 10%
-- Business ventures & street wisdom: 5%
+## Current State: Sophisticated Variety & Persistence
+- **Architectural Refactor (Brain/Mouth):** Centralized RAG logic in `ContextBuilder`. Decoupled context gathering from model providers.
+- **Unreliable Narrator:** Implementation of `CANON` vs `RUMOR` memory lanes. Nicky respects truth but embellishes gossip.
+- **Variety Control:** Dynamic persona facets (dbd_expert, street_hustler, food_family, etc.) with turn-based cooldowns.
+- **Persistence:** Personality mood, mode, and variety state are persisted to the database across restarts.
+- **Orchestration:** Centralized show/game context detection in `AIOrchestrator`.
+- **Personality Hardening:** Strict "Show, Don't Tell" policy. No physical narration or asterisks. Expression is dialogue-driven with [emotion] tags.
+- **Vibe-Based Storytelling:** Narrative archetypes for city segments with multi-turn state persistence.
+- **Topic Distribution:**
+  - Dead by Daylight gaming content: 60%
+  - Italian-American culture & cooking: 20%
+  - Family & neighborhood stories: 10%
+  - Business ventures & street wisdom: 5%
+  - City Storytelling (Vibe-based): 5%
 
 ## Target Architecture: Nicky Control v2.0
 **Core Philosophy**: Deterministic > Smart. No hidden classifiers. User decides.
@@ -37,12 +46,15 @@ This roadmap outlines the evolution of Nicky's personality control system from t
 
 ---
 
-## Phase 1: Harden + Measure (0-30 days)
+## Phase 1: Harden + Measure (COMPLETED)
 
 ### Goals
 Ship v2.0 and establish reliability metrics
 
 ### Features
+- **Brain/Mouth Refactor**: Centralized RAG logic for model-agnostic context gathering.
+- **Memory Lanes**: Implementation of Canon vs Rumor for unreliable narration.
+- **Parallel Loading**: Optimized retrieval using `Promise.all`.
 - **Golden Set & Scorer**: 20 "truth" prompts for testing preset accuracy
 - **Static Previews**: Hand-written UI examples (no AI generation costs)
 - **Export Knobs**: Generate both TTS-ready and clean text outputs
@@ -56,7 +68,7 @@ Ship v2.0 and establish reliability metrics
 
 ---
 
-## Phase 2: Smarter Control Without Sliders (30-90 days)
+## Phase 2: Smarter Control Without Sliders (In Progress)
 
 ### Goals  
 Add variety through structured templates and platform optimization
@@ -91,7 +103,7 @@ Add variety through structured templates and platform optimization
 ---
 
 ## Phase 3: Learning Loop (90-180 days)
-
+````
 ### Goals
 Build feedback systems without creating black-box AI
 

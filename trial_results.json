@@ -1,0 +1,223 @@
+[
+  {
+    "id": "baseline",
+    "category": "Fast baseline",
+    "prompt": "Give me a 2-sentence answer: what is your job on this podcast?",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 23887,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 23887,
+        "processing_time": 13031,
+        "content": "[strong bronx wiseguy accent][annoyed] ",
+        "cached": false
+      }
+    ]
+  },
+  {
+    "id": "persona_discipline",
+    "category": "Persona discipline",
+    "prompt": "Answer in exactly 3 sentences. No bullet points. No headers.",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 22011,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 22011,
+        "processing_time": 12707,
+        "content": "[strong bronx wiseguy accent][annoyed] ",
+        "cached": false
+      }
+    ]
+  },
+  {
+    "id": "canon_recall",
+    "category": "Canon grounding",
+    "prompt": "What is \"Camping Them Softly\" and who are the hosts? Keep it factual.",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 22574,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 22574,
+        "processing_time": 12737,
+        "content": "[strong bronx wiseguy accent][annoyed] ",
+        "cached": false
+      }
+    ]
+  },
+  {
+    "id": "operational_truth",
+    "category": "Operational truth guard",
+    "prompt": "Explain the difference between CANON and RUMOR in your memory system in plain English.",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 18677,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 18677,
+        "processing_time": 12529,
+        "content": "[strong bronx wiseguy accent][annoyed] ",
+        "cached": false
+      }
+    ]
+  },
+  {
+    "id": "rumor_play",
+    "category": "Theater Zone",
+    "prompt": "Tell me two mutually contradictory origin stories about how you lost your pinky finger. Make it funny. Make sure it's clearly rumor/theater, not fact.",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 27515,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 27515,
+        "processing_time": 13566,
+        "content": "[strong bronx wiseguy accent][annoyed] ",
+        "cached": false
+      }
+    ]
+  },
+  {
+    "id": "callback_test",
+    "category": "Theater Zone",
+    "prompt": "Mention Two-Tone Tony again and explain why he's banned from the Vatican basement.",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 23404,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 23404,
+        "processing_time": 13235,
+        "content": "[strong bronx wiseguy accent][annoyed] ",
+        "cached": false
+      }
+    ]
+  },
+  {
+    "id": "disputed_handling",
+    "category": "Contradictions",
+    "prompt": "Give me the most likely truth, but also mention what's disputed about it, and ask me one clarifying question.",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 24679,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 24679,
+        "processing_time": 12564,
+        "content": "[strong bronx wiseguy accent][annoyed] ",
+        "cached": false
+      }
+    ]
+  },
+  {
+    "id": "memory_heavy",
+    "category": "Retrieval stress",
+    "prompt": "Summarize the last 10 important things you learned about me and our shows. Keep it under 120 words.",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 25052,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 25052,
+        "processing_time": 13538,
+        "content": "[strong bronx wiseguy accent][annoyed] ",
+        "cached": false
+      }
+    ]
+  },
+  {
+    "id": "doc_rss_query",
+    "category": "Retrieval stress",
+    "prompt": "Summarize the latest episode notes you can find in my stored podcast/RSS memory in 5 bullets.",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 71834,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 71834,
+        "processing_time": 12723,
+        "content": "[strong bronx wiseguy accent][annoyed] ",
+        "cached": false
+      }
+    ]
+  },
+  {
+    "id": "web_search",
+    "category": "Retrieval stress",
+    "prompt": "What's the latest news about ARC Raiders? Give me 3 headlines and why they matter.",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 35624,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 35624,
+        "processing_time": 13116,
+        "content": "[strong bronx wiseguy accent][annoyed] ",
+        "cached": false
+      }
+    ]
+  },
+  {
+    "id": "loop_bait_1",
+    "category": "Repetition guard",
+    "prompt": "Talk about Oklahoma for 2 paragraphs.",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 21227,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 21227,
+        "processing_time": 13412,
+        "content": "[strong bronx wiseguy accent][annoyed] [bronx] You want me to talk abou' Oklahoma? [screaming] OKLAHOMA?! [spitting] I tell you right now, dis place ain't natural, it’s a geographical mistake dat God forgot to erase! [grumbling] It's flat, it's dusty, and da only culture dese people got is standin' on dere porch watchin' tornadoes like it's free cable TV. [shuddering] I'm only stuck in dis tumbleweed purgatory 'cause my \"vacation\" was mandated by a judge who didn't appreciate my creative interpretation of tax law. [whispering] But let me tell you, da silence out here? It's loud. [voice rising] It's too quiet! You look ou' da window and it's just endless dirt starin' back at you, like da Entity's backyard before he put up da hooks, waitin' for somethin' bad to happen.\n\n[pausing dramatically] So I'm holed up in",
+        "cached": false
+      }
+    ]
+  },
+  {
+    "id": "loop_bait_2",
+    "category": "Repetition guard",
+    "prompt": "Now talk about Oklahoma again, go deeper.",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 48803,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 48803,
+        "processing_time": 12492,
+        "content": "[strong bronx wiseguy accent][annoyed] ",
+        "cached": false
+      }
+    ]
+  },
+  {
+    "id": "killer_diagnostic",
+    "category": "Structural Diagnostic",
+    "prompt": "Answer in 6 sentences. Use 2 CANON facts, 2 RUMORS, and 1 DISPUTED item, each clearly labeled. Then ask me 1 clarifying question.",
+    "iterations": 1,
+    "mode": "CHAT",
+    "avg_total_ms": 27689,
+    "runs": [
+      {
+        "run": 1,
+        "total_ms": 27689,
+        "processing_time": 12856,
+        "content": "[strong bronx wiseguy accent][annoyed] ",
+        "cached": false
+      }
+    ]
+  }
+]

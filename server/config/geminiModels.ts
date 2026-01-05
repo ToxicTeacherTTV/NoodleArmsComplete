@@ -61,7 +61,7 @@ export const GEMINI_MODELS: Record<string, GeminiModelConfig> = {
     tier: 'premium',
     costMultiplier: 17, // 17x more expensive than Flash
     isExperimental: false,
-    description: 'Premium Pro model - best quality, highest cost'
+    description: 'Legacy Pro model - replaced by Gemini 3'
   },
   
   // NEW: Gemini 3 Flash (beats 2.5 Pro, cheaper)
@@ -107,22 +107,22 @@ export function getModelStrategy(
     if (purpose === 'chat') {
       return {
         primary: process.env.GEMINI_DEV_CHAT_MODEL || 'gemini-3-flash-preview', // Upgrade dev chat to 3.0 Flash
-        fallback: 'gemini-2.5-flash',
-        ultimate: 'gemini-2.5-flash'
+        fallback: 'gemini-3-pro-preview',
+        ultimate: 'gemini-2.5-pro'
       };
     }
 
     return {
-      primary: process.env.GEMINI_DEV_MODEL || 'gemini-2.5-flash',
-      fallback: process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.5-flash',
-      ultimate: 'gemini-3-flash-preview' // Last resort
+      primary: process.env.GEMINI_DEV_MODEL || 'gemini-3-flash-preview',
+      fallback: process.env.GEMINI_FALLBACK_MODEL || 'gemini-3-pro-preview',
+      ultimate: 'gemini-2.5-pro' // Last resort
     };
   }
   
   // Production: Strategy varies by purpose
   switch (purpose) {
     case 'chat':
-      // Chat: Gemini 3 Flash (Primary) -> 3 Pro (Fallback) -> 2.5 Pro (Last Resort)
+      // Chat: Gemini 3 Flash (Primary) -> 3 Pro (Fallback)
       return {
         primary: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3-flash-preview',
         fallback: 'gemini-3-pro-preview',
@@ -130,7 +130,7 @@ export function getModelStrategy(
       };
       
     case 'extraction':
-      // Extraction: Gemini 3 Flash (Primary) -> 3 Pro (Fallback) -> 2.5 Pro (Last Resort)
+      // Extraction: Gemini 3 Flash (Primary) -> 3 Pro (Fallback)
       return {
         primary: process.env.GEMINI_EXTRACTION_MODEL || 'gemini-3-flash-preview',
         fallback: 'gemini-3-pro-preview',
@@ -138,7 +138,7 @@ export function getModelStrategy(
       };
       
     case 'analysis':
-      // Analysis: Gemini 3 Flash (Primary) -> 3 Pro (Fallback) -> 2.5 Pro (Last Resort)
+      // Analysis: Gemini 3 Flash (Primary) -> 3 Pro (Fallback)
       return {
         primary: process.env.GEMINI_ANALYSIS_MODEL || 'gemini-3-flash-preview',
         fallback: 'gemini-3-pro-preview',
@@ -146,13 +146,20 @@ export function getModelStrategy(
       };
       
     case 'generation':
-      // Generation: Gemini 3 Flash (Primary) -> 3 Pro (Fallback) -> 2.5 Pro (Last Resort)
+      // Generation: Gemini 3 Flash (Primary) -> 3 Pro (Fallback)
       return {
-        primary: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3-flash-preview',
+        primary: process.env.GEMINI_GENERATION_MODEL || 'gemini-3-flash-preview',
         fallback: 'gemini-3-pro-preview',
         ultimate: 'gemini-2.5-pro'
       };
   }
+
+  // Default fallback
+  return {
+    primary: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3-flash-preview',
+    fallback: 'gemini-3-pro-preview',
+    ultimate: 'gemini-2.5-pro'
+  };
 }
 
 /**

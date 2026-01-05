@@ -471,37 +471,6 @@ class ElevenLabsService {
     return result;
   }
 
-  // 🔥 NEW: Detect text energy for dynamic tag overrides
-  private detectTextEnergy(text: string): string | null {
-    // SHOUTING: All caps (at least 4 words or 20 chars)
-    const capsMatch = text.match(/[A-Z]{3,}/g);
-    const capsLength = capsMatch ? capsMatch.join('').length : 0;
-    const isShouting = capsLength > 15 || (capsMatch && capsMatch.length > 3);
-    
-    if (isShouting) {
-      // Check for specific keywords to refine the shouting emotion
-      if (text.includes('!') && (text.includes('?') || text.toLowerCase().includes('what'))) {
-        return '[incredulous shouting]';
-      }
-      if (text.toLowerCase().includes('laugh') || text.toLowerCase().includes('funny') || text.toLowerCase().includes('joke')) {
-        return '[manic laughter]';
-      }
-      return '[yelling furiously]';
-    }
-    
-    // LAUGHTER: Detect laughter keywords
-    if (/\b(haha|hehe|lol|lmao|rofl)\b/i.test(text) || text.includes('😂') || text.includes('🤣')) {
-      return '[laughing]';
-    }
-    
-    // WHISPERING: Detect whispering keywords or parentheses
-    if (text.startsWith('(') && text.endsWith(')')) {
-      return '[whispering]';
-    }
-    
-    return null;
-  }
-
   public applySectionedDeliveryWithAI(text: string, aiTags: {hook: string, body: string, cta: string}): string {
     // Split text into sentences but preserve punctuation - handles . ! ? endings
     const sentences = text.split(/([.!?]+)/).filter(part => part.trim());
@@ -680,9 +649,15 @@ class ElevenLabsService {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const statusCode = error?.status || error?.response?.status;
     
-    // Rate limiting
+    // Rate limiting / Quota
     if (statusCode === 429 || errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
-      return { type: 'RATE_LIMIT', retryable: true, retryCount: 0 };
+      const isQuota = errorMessage.includes('quota') || errorMessage.includes('limit reached');
+      return { 
+        type: isQuota ? 'QUOTA_EXCEEDED' : 'RATE_LIMIT', 
+        message: isQuota ? "ElevenLabs monthly quota reached. Nicky's lost his voice until the next billing cycle!" : "ElevenLabs is rate limiting us. Slow down, paisan!",
+        retryable: !isQuota, 
+        retryCount: 0 
+      };
     }
     
     // Network/timeout errors
@@ -691,25 +666,50 @@ class ElevenLabsService {
         errorMessage.includes('ETIMEDOUT') ||
         errorMessage.includes('ECONNRESET') ||
         errorMessage.includes('network')) {
-      return { type: 'NETWORK_ERROR', retryable: true, retryCount: 0 };
+      return { 
+        type: 'NETWORK_ERROR', 
+        message: "Network trouble reaching ElevenLabs. The connection's as shaky as a Newark bridge!",
+        retryable: true, 
+        retryCount: 0 
+      };
     }
     
     // Auth errors
     if (statusCode === 401 || errorMessage.includes('unauthorized') || errorMessage.includes('API key')) {
-      return { type: 'AUTH_ERROR', retryable: false, retryCount: 0 };
+      return { 
+        type: 'AUTH_ERROR', 
+        message: "ElevenLabs API key is invalid. Someone's trying to use a fake ID!",
+        retryable: false, 
+        retryCount: 0 
+      };
     }
     
     // Voice not found
     if (statusCode === 404 || errorMessage.includes('voice not found')) {
-      return { type: 'VOICE_NOT_FOUND', retryable: false, retryCount: 0 };
+      return { 
+        type: 'VOICE_NOT_FOUND', 
+        message: "Nicky's voice ID wasn't found. He's literally speechless!",
+        retryable: false, 
+        retryCount: 0 
+      };
     }
     
     // Service unavailable
     if (statusCode === 503 || errorMessage.includes('service unavailable')) {
-      return { type: 'SERVICE_UNAVAILABLE', retryable: true, retryCount: 0 };
+      return { 
+        type: 'SERVICE_UNAVAILABLE', 
+        message: "ElevenLabs is down for maintenance. Even the AI needs a coffee break.",
+        retryable: true, 
+        retryCount: 0 
+      };
     }
     
-    return { type: 'UNKNOWN', retryable: false, retryCount: 0 };
+    return { 
+      type: 'UNKNOWN', 
+      message: `ElevenLabs error: ${errorMessage}`,
+      retryable: false, 
+      retryCount: 0 
+    };
   }
 }
 

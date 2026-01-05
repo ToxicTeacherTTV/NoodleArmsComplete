@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import ChatPanel from "@/components/chat-panel";
@@ -40,6 +41,7 @@ export default function JazzDashboard() {
     const [selectedText, setSelectedText] = useState("");
     const [checkerPosition, setCheckerPosition] = useState({ x: 0, y: 0 });
     const [isDebugMode, setIsDebugMode] = useState(false);
+    const [, setLocation] = useLocation();
 
     // Voice hooks
     const { isListening, startListening, stopListening, transcript, interimTranscript, resetTranscript } = useSpeechRecognition();
@@ -86,6 +88,7 @@ export default function JazzDashboard() {
                         content: response.content,
                         createdAt: new Date().toISOString(),
                         rating: null,
+                        isPrivate: false,
                         metadata: { 
                             processingTime: response.processingTime,
                             retrieved_context: response.retrievedContext,
@@ -112,6 +115,61 @@ export default function JazzDashboard() {
         },
         onError: () => setAiStatus('ERROR'),
     });
+
+    // Handle incoming message from query params (e.g. from Listener Cities page)
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const initialMessage = params.get('message');
+        
+        if (initialMessage && activeProfile) {
+            console.log("📥 Received initial message from query param:", initialMessage);
+            
+            // Clear the param from URL without full reload
+            window.history.replaceState({}, '', window.location.pathname);
+            
+            const decodedMessage = decodeURIComponent(initialMessage);
+            
+            // We need to wait for the conversation to be ready or create one
+            const processInitialMessage = async () => {
+                let convId = currentConversationId;
+                
+                // If no conversation, create one
+                if (!convId) {
+                    try {
+                        const res = await apiRequest('POST', '/api/conversations', {
+                            profileId: activeProfile.id,
+                            title: 'New Podcast Segment',
+                            contentType: appMode
+                        });
+                        const newConv = await res.json();
+                        convId = newConv.id;
+                        setCurrentConversationId(convId);
+                    } catch (e) {
+                        console.error("Failed to create conversation for initial message:", e);
+                        return;
+                    }
+                }
+                
+                // Add user message to UI immediately
+                const userMsg: Message = {
+                    id: nanoid(),
+                    conversationId: convId,
+                    type: 'USER',
+                    content: decodedMessage,
+                    createdAt: new Date().toISOString(),
+                    rating: null,
+                    isPrivate: false,
+                };
+                setMessages(prev => [...prev, userMsg]);
+                
+                // Trigger AI
+                setAiStatus('THINKING');
+                sendMessageMutation.mutate({ conversationId: convId, content: decodedMessage });
+            };
+            
+            processInitialMessage();
+        }
+    }, [activeProfile, currentConversationId, appMode]);
 
     const createConversationMutation = useMutation({
         mutationFn: async () => {
@@ -218,6 +276,7 @@ export default function JazzDashboard() {
             content: content.trim(),
             createdAt: new Date().toISOString(),
             rating: null,
+            isPrivate: false,
             metadata: null,
         };
 

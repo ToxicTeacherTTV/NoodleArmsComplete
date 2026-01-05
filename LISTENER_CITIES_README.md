@@ -11,12 +11,19 @@ Track cities for your "Where the fuck are the viewers from" podcast segment!
 - Intelligently categorizes by continent and region
 
 ### 🎲 **Random City Picker**
-During your podcast, click "Pick Random" and Nicky will choose an uncovered city to talk about!
+During your podcast, click "Pick Random" and Nicky will choose an uncovered city to talk about! A "Tell Story" button will appear in the notification to trigger the segment immediately.
+
+### 🎭 **Vibe-Based Storytelling**
+- **Manual Trigger:** Click the "Tell Story" button on any city to start a multi-turn narrative segment.
+- **Natural Detection:** Nicky can detect city mentions in chat (e.g., "What about Berlin?") and automatically start the story segment.
+- **Narrative Archetypes:** Nicky uses unpredictable archetypes (The Grudge, The Fugitive, etc.) to keep stories fresh and volatile.
+- **Multi-Turn Persistence:** The system tracks the story state across multiple messages, ensuring Nicky doesn't wrap up too early.
 
 ### ✅ **Coverage Tracking**
-- Checkbox to mark cities as covered
-- Track which episode covered each city
-- Filter by covered/uncovered status
+- **Automatic Coverage:** When Nicky tells a story about a city via chat or the "Tell Story" button, it is automatically marked as **Covered** in the database.
+- **Manual Override:** Checkbox to manually mark cities as covered if needed.
+- **Track Episode:** Track which episode covered each city.
+- **Filter Status:** Filter by covered/uncovered status.
 
 ### 🔍 **Advanced Filtering**
 Search and filter by:
@@ -75,9 +82,10 @@ London, UK
 1. Apply filters if desired (e.g., only North America, or only Europe)
 2. Click **"Pick Random"** button
 3. Nicky will randomly select an uncovered city
-4. Talk about the city on the podcast!
-5. Check the checkbox to mark it as covered
-6. Optionally add episode number/title
+4. Click **"Tell Story"** in the toast notification to trigger Nicky.
+5. Alternatively, just ask Nicky in chat: *"What about [City]?"*
+6. Nicky will start a multi-turn story and the city will be marked as **Covered** automatically.
+7. Optionally add episode number/title in the city list.
 
 ## 🌍 Supported Features
 
@@ -98,6 +106,9 @@ Automatically categorizes **50+ countries** into continents:
 - South America
 - Europe
 - Asia
+- Africa
+- Oceania
+- Antarctica (if you have viewers there, god help you)
 - Africa
 - Oceania
 

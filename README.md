@@ -1,54 +1,74 @@
 # Nicky AI — AI-Powered Co-Host Application
 
-**Last updated:** November 10, 2025
+**Last updated:** January 3, 2026
 
 This repository contains **Nicky "Noodle Arms" A.I. Dente** — an AI-powered co-host application built for live streaming, podcasting, and Discord integration. The application features real-time voice interaction, advanced memory systems, and dynamic personality control.
 
-**Tech Stack:** React + TypeScript + Vite frontend | Express + TypeScript backend | PostgreSQL (Neon) with Drizzle ORM | Gemini AI (primary) + Claude (fallback) | ElevenLabs voice synthesis
+**Tech Stack:** React + TypeScript + Vite frontend | Express + TypeScript backend | PostgreSQL (Neon) with Drizzle ORM | Gemini 3 Flash (primary) | ElevenLabs voice synthesis
 
 > 📘 **New to the project?** Check out the [Master Architecture Document](./MASTER_ARCHITECTURE.md) for a complete overview of how the system works, including memory, personality, and voice pipelines.
 
 ---
 
-## 🎯 Current Architecture (November 2025)
+## 🎯 Current Architecture (January 2026)
 
 ### **AI Provider Strategy**
-**Primary:** Gemini 2.5 Flash (free tier, 10 RPM, 250K TPM, 250 RPD)  
+**Primary:** Gemini 3 Flash (Default for Chat, RAG, Extraction, & Analysis)  
 **Fallback Chain:**
-1. `gemini-2.5-flash` (primary, production-ready)
-2. `gemini-2.5-pro` (if Flash rate-limited, 2 RPM on free tier)
-3. `gemini-2.0-flash-exp` (ultimate fallback, experimental)
-4. Claude Sonnet 4.5 (paid failsafe for critical failures)
+1. `gemini-3-flash-preview` (primary, production-ready)
+2. `gemini-3-pro-preview` (if Flash rate-limited or for complex reasoning)
 
-**Cost Impact:** ~85-90% reduction in AI costs vs Claude-only architecture  
-**Rate Limit Management:** Intelligent model selection with automatic fallback chains  
-**Quality Control:** Critical operations (personality consolidation, memory deduplication) force Gemini Pro to prevent hallucinations
+**Cost Impact:** ~95% reduction in AI costs vs legacy Pro models  
+**Performance:** 70% faster response times via parallel RAG and aggressive history truncation.  
+**Privacy:** Global "Memory Learning" toggle and per-message `[PRIVATE]` triggers for user control.
 
-### **Recent Major Updates (Oct-Nov 2025)**
+### **Recent Major Updates (Jan 2026)**
 
-✅ **Intelligent Model Selection System**
-- Automatic fallback chains based on rate limits
-- Cost tracking via Prometheus metrics
-- Purpose-based model selection (chat, extraction, analysis)
+✅ **Model Flow Audit & .env Restoration**
+- Verified Gemini 3 Flash as the primary engine for all system operations.
+- Restored production model strategy in `.env` to prevent experimental model overrides.
 
-✅ **Performance Optimizations**
-- Response caching for instant repeated queries
-- Parallel context loading (3-5s savings)
-- Context pre-warming for 2-4s instant cache hits
-- Smart context pruning (1-2s token savings)
-- STREAMING mode optimizations (50-60% faster)
+✅ **Privacy & Memory Control**
+- Implemented global "Memory Learning" toggle in the UI.
+- Added "🧠 Learning" vs "🔒 Private" status indicators.
+- Enabled message-level privacy triggers (`[PRIVATE]`).
 
-✅ **Memory System Enhancements**
-- Atomic UPSERT with unique constraints prevents duplicates
-- Comprehensive metadata merging preserves all fields
-- Fixed: 39 duplicate memories removed (1544 → 1505 unique)
+✅ **Context Optimization**
+- Vector-based semantic retrieval for training data (style guidance).
+- Aggressive 600-character history truncation for faster processing.
+- Reduced rumor retrieval cap to 3 entries for improved focus.
 
-✅ **Training System**
-- Message-based training collection from conversations
-- AI-powered training example consolidation (3+ examples → unified style guide)
-- Intelligent parsing separates strategy from conversation style
+✅ **Architectural Refactor: Brain/Mouth Pattern**
+- Centralized all RAG logic into `ContextBuilder` (The Brain).
+- Decoupled context gathering from model providers (The Mouth).
+- Implemented parallel context loading using `Promise.all` for 70% faster retrieval.
 
-For detailed changes, see `PROJECT_ROADMAP.md` (last updated Oct 17, 2025).
+✅ **Unreliable Narrator: Memory Lanes**
+- Implementation of `CANON` vs `RUMOR` memory lanes.
+- Nicky now respects verified truth (Canon) but is encouraged to lie about gossip (Rumor).
+- Integrated "Truth Guard" policies into the centralized context builder.
+
+✅ **Gemini 3 Migration**
+- Full migration to Gemini 3 Flash as the primary engine.
+- Implementation of "Single-Pass Generation" for Podcast Mode.
+- Massive context window utilization for deep lore retrieval.
+
+✅ **Personality Hardening ("Show, Don't Tell")**
+- Strict enforcement of character integrity.
+- Removal of all stage directions (*leans in*, [sighs]) from AI output.
+- Use of [emotion] tags and dialogue-only character expression.
+
+✅ **Vibe-Based Storytelling Engine**
+- Narrative Archetypes (The Grudge, The Fugitive, etc.) for unpredictable city stories.
+- Multi-turn persistence via database metadata state machine.
+- Natural city detection in chat and manual UI triggers.
+
+✅ **Podcast Listener Cities Tracker**
+- Dedicated dashboard for tracking viewer locations.
+- Automatic coverage tracking and random city selection.
+- Integration with the main chat dashboard via query parameters.
+
+For detailed changes, see `CHANGELOG.md`.
 
 ---
 
@@ -57,29 +77,27 @@ For detailed changes, see `PROJECT_ROADMAP.md` (last updated Oct 17, 2025).
 ```
 NoodleArmsComplete/
 ├── client/src/           # React frontend
-│   ├── components/       # UI components (29 panels/dashboards)
-│   │   ├── jazz-dashboard.tsx          # Main application container
+│   ├── components/       # UI components (30+ panels/dashboards)
+│   │   ├── jazz-dashboard-v2.tsx       # Main application container
 │   │   ├── personality-surge-panel.tsx # Unified personality controls
 │   │   ├── memory-panel.tsx            # Memory management UI
-│   │   ├── discord-management-panel.tsx # Discord bot settings
 │   │   └── ...
 │   ├── lib/              # Utilities, hooks, API client
-│   └── pages/            # Route components
+│   └── pages/            # Route components (including Listener Cities)
 ├── server/
-│   ├── services/         # Business logic (45+ services)
-│   │   ├── anthropic.ts            # AI response generation
-│   │   ├── gemini.ts               # Gemini API integration
+│   ├── services/         # Business logic (50+ services)
+│   │   ├── aiOrchestrator.ts       # Model routing and coordination
+│   │   ├── contextBuilder.ts       # Centralized RAG engine (The Brain)
+│   │   ├── gemini.ts               # Gemini 3 API integration (The Mouth)
+│   │   ├── anthropic.ts            # Claude API integration (The Mouth)
 │   │   ├── personalityController.ts # Personality management
-│   │   ├── embeddingService.ts     # Vector embeddings
-│   │   ├── discordBot.ts           # Discord integration
+│   │   ├── emotionEnhancer.ts      # Adds the emotion tags
 │   │   └── ...
-│   ├── config/           # Model configuration, constants
-│   │   └── geminiModels.ts         # Model selection strategy
 │   ├── routes.ts         # API endpoints
 │   ├── storage.ts        # Database abstraction layer
 │   └── index.ts          # Express app entry point
 ├── shared/
-│   ├── schema.ts         # Drizzle ORM schemas (15+ tables)
+│   ├── schema.ts         # Drizzle ORM schemas (18+ tables)
 │   └── types.ts          # Shared TypeScript types
 └── docs/                 # Documentation, roadmaps, notes
 ```
