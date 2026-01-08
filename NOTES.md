@@ -24,6 +24,17 @@
 - **Issue:** `ReferenceError: Cannot access 'activeProfile' before initialization`.
 - **Fix:** Reordered hooks in `jazz-dashboard-v2.tsx` to ensure `useQuery` results are available before being accessed by dependent logic.
 
+#### Dashboard Consolidation (Jan 7, 2026)
+- **Decision:** Deprecated V1 `jazz-dashboard.tsx` in favor of V2.
+- **Action:** Ported all V1 features (Control Panel actions, Manual Memory Save) to V2.
+- **Result:** Single source of truth for UI logic, eliminating "Split Brain" feature sets.
+
+#### Browser Audio Policy Strategy (Jan 7, 2026)
+- **Problem:** Browsers block `new Audio().play()` if not triggered by user interaction (Autoplay Policy), breaking background `!rant` commands.
+- **Solution:** Implemented "Enable Audio" button in `JazzHeader`.
+- **Mechanism:** User clicks button -> plays 100ms silent oscillator -> unlocks `AudioContext` globally -> hides button.
+- **Result:** Background polling events (Twitch Rants) can now autoplay successfully.
+
 #### Memory Deduplication Fix (Oct 13, 2025)
 - **Problem:** 39+ duplicate memories created despite canonical key system
 - **Root Cause:** Keys generated but never checked in database

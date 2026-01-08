@@ -16,12 +16,14 @@ import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Search, Brain, CheckCircle, XCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield, Copy, Merge, Users, MapPin, Calendar, Plus, Trash2, Sparkles, Zap, Scan, Lightbulb, Package, Box } from "lucide-react";
+import { Search, Brain, CheckCircle, XCircle, AlertCircle, AlertTriangle, ThumbsUp, ThumbsDown, Ban, ChevronUp, ChevronDown, Scissors, Loader2, Shield, Copy, Merge, Users, MapPin, Calendar, Plus, Trash2, Sparkles, Zap, Scan, Lightbulb, Package, Box } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ProtectedFactsManager } from "@/components/protected-facts-manager";
 import { MemoryAnalytics } from "@/components/memory-analytics";
 import MemoryPanel from "@/components/memory-panel";
+import { MemoryDebugPanel } from "@/components/memory-debug-panel";
+import { PoisonControlPanel } from "@/components/poison-control-panel";
 import DocumentPanel from "@/components/document-panel";
 import PersonalityPanel from "@/components/personality-panel";
 import DiscordManagementPanel from "@/components/discord-management-panel";
@@ -153,7 +155,7 @@ function AutoApprovalStats() {
 export default function BrainManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   // 🧠 NEW: Psyche Profile State for Review
   const [psycheToReview, setPsycheToReview] = useState<any>(null);
   const [isPsycheDialogOpen, setIsPsycheDialogOpen] = useState(false);
@@ -249,7 +251,7 @@ export default function BrainManagement() {
       setCleaningPreviews(data.previews);
       setSelectedPreviewIds(new Set()); // Reset selections
       setShowPreviewDialog(true);
-      
+
       if (data.previewsAvailable === 0) {
         toast({
           title: "No Wall-of-Text Facts Found",
@@ -288,15 +290,15 @@ export default function BrainManagement() {
     },
     onSuccess: (data) => {
       // Fix: Use same cache invalidation pattern as single apply
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
           (query.queryKey[0] as string).startsWith('/api/memory')
       });
       setShowPreviewDialog(false);
       setCleaningPreviews([]);
       setSelectedPreviewIds(new Set());
-      
+
       toast({
         title: "Cleaning Applied Successfully",
         description: `Cleaned ${data.applied} facts as requested.`,
@@ -356,9 +358,9 @@ export default function BrainManagement() {
     },
     onSuccess: () => {
       // Fix: Invalidate all memory-related queries
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
           (query.queryKey[0] as string).startsWith('/api/memory')
       });
       toast({
@@ -388,9 +390,9 @@ export default function BrainManagement() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
           (query.queryKey[0] as string).startsWith('/api/memory')
       });
     }
@@ -410,9 +412,9 @@ export default function BrainManagement() {
     },
     onSuccess: () => {
       // Invalidate all memory-related queries to refresh the UI
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
           (query.queryKey[0] as string).startsWith('/api/memory')
       });
       toast({
@@ -442,9 +444,9 @@ export default function BrainManagement() {
       return response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
           (query.queryKey[0] as string).startsWith('/api/memory')
       });
       toast({
@@ -478,8 +480,8 @@ export default function BrainManagement() {
       queryClient.invalidateQueries({ queryKey: ['/api/entities/config'] });
       toast({
         title: entityConfig?.isEnabled ? "Entity System Disabled" : "Entity System Enabled",
-        description: entityConfig?.isEnabled 
-          ? "Entity detection and linking is now disabled" 
+        description: entityConfig?.isEnabled
+          ? "Entity detection and linking is now disabled"
           : "Entity detection and linking is now enabled",
       });
     },
@@ -500,7 +502,7 @@ export default function BrainManagement() {
       }
       const memories = await memoriesResponse.json();
       const memoryIds = memories.slice(0, 20).map((m: any) => m.id);
-      
+
       const response = await fetch('/api/entities/batch-extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -530,11 +532,11 @@ export default function BrainManagement() {
   // Entity editing mutations
   const updateEntityMutation = useMutation({
     mutationFn: async ({ type, id, data }: { type: 'person' | 'place' | 'event' | 'concept' | 'item' | 'misc'; id: string; data: any }) => {
-      const endpoint = type === 'person' ? 'people' : 
-                      type === 'place' ? 'places' : 
-                      type === 'event' ? 'events' :
-                      type === 'concept' ? 'concepts' :
-                      type === 'item' ? 'items' : 'misc';
+      const endpoint = type === 'person' ? 'people' :
+        type === 'place' ? 'places' :
+          type === 'event' ? 'events' :
+            type === 'concept' ? 'concepts' :
+              type === 'item' ? 'items' : 'misc';
       const response = await fetch(`/api/entities/${endpoint}/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -565,11 +567,11 @@ export default function BrainManagement() {
 
   const deleteEntityMutation = useMutation({
     mutationFn: async ({ type, id }: { type: 'person' | 'place' | 'event' | 'concept' | 'item' | 'misc'; id: string }) => {
-      const endpoint = type === 'person' ? 'people' : 
-                      type === 'place' ? 'places' : 
-                      type === 'event' ? 'events' :
-                      type === 'concept' ? 'concepts' :
-                      type === 'item' ? 'items' : 'misc';
+      const endpoint = type === 'person' ? 'people' :
+        type === 'place' ? 'places' :
+          type === 'event' ? 'events' :
+            type === 'concept' ? 'concepts' :
+              type === 'item' ? 'items' : 'misc';
       const response = await fetch(`/api/entities/${endpoint}/${id}`, {
         method: 'DELETE',
       });
@@ -596,11 +598,11 @@ export default function BrainManagement() {
 
   const mergeEntitiesMutation = useMutation({
     mutationFn: async ({ type, primaryId, duplicateId, mergedData }: { type: 'person' | 'place' | 'event' | 'concept' | 'item' | 'misc'; primaryId: string; duplicateId: string; mergedData?: any }) => {
-      const endpoint = type === 'person' ? 'people' : 
-                      type === 'place' ? 'places' : 
-                      type === 'event' ? 'events' :
-                      type === 'concept' ? 'concepts' :
-                      type === 'item' ? 'items' : 'misc';
+      const endpoint = type === 'person' ? 'people' :
+        type === 'place' ? 'places' :
+          type === 'event' ? 'events' :
+            type === 'concept' ? 'concepts' :
+              type === 'item' ? 'items' : 'misc';
       const response = await apiRequest('POST', `/api/entities/${endpoint}/merge`, {
         primaryId,
         duplicateId,
@@ -619,7 +621,7 @@ export default function BrainManagement() {
       setSelectedForMerge([]);
       setShowMergeDialog(false);
       // Remove from duplicate groups if shown
-      setEntityDuplicateGroups(prev => prev.filter(group => 
+      setEntityDuplicateGroups(prev => prev.filter(group =>
         !(group.masterId === primaryId || group.duplicates.some((d: any) => d.id === primaryId || d.id === duplicateId))
       ));
     },
@@ -659,7 +661,7 @@ export default function BrainManagement() {
   const [selectedTab, setSelectedTab] = useState("recent-memories");
   const [sortBy, setSortBy] = useState<'confidence' | 'date'>('confidence');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  
+
   // Edit dialog state
   const [editingFact, setEditingFact] = useState<MemoryFact | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -678,7 +680,7 @@ export default function BrainManagement() {
   // Flag management state
   const [selectedFlagType, setSelectedFlagType] = useState<string>('all');
   const [flagSearchTerm, setFlagSearchTerm] = useState<string>('');
-  
+
   // Duplicates state
   const [similarityThreshold, setSimilarityThreshold] = useState<number>(0.85);
   const [duplicateGroups, setDuplicateGroups] = useState<any[]>([]);
@@ -705,7 +707,7 @@ export default function BrainManagement() {
           console.log('❌ Saved scan fetch failed:', response.status);
           return;
         }
-        
+
         const data = await response.json();
         console.log('📦 Saved scan data:', {
           hasSavedScan: data.hasSavedScan,
@@ -713,7 +715,7 @@ export default function BrainManagement() {
           threshold: data.similarityThreshold,
           createdAt: data.createdAt
         });
-        
+
         if (data.hasSavedScan && data.duplicateGroups.length > 0) {
           setDuplicateGroups(data.duplicateGroups);
           setSimilarityThreshold(data.similarityThreshold);
@@ -731,13 +733,13 @@ export default function BrainManagement() {
   }, []);
 
   // Entity editing state
-  const [editingEntity, setEditingEntity] = useState<{type: 'person' | 'place' | 'event' | 'concept' | 'item' | 'misc', data: any} | null>(null);
+  const [editingEntity, setEditingEntity] = useState<{ type: 'person' | 'place' | 'event' | 'concept' | 'item' | 'misc', data: any } | null>(null);
   const [showEntityEditDialog, setShowEntityEditDialog] = useState(false);
   const [showEntityMemoriesDialog, setShowEntityMemoriesDialog] = useState(false);
-  const [selectedEntityForMemories, setSelectedEntityForMemories] = useState<{id: string, name: string, type: 'person' | 'place' | 'event' | 'concept' | 'item' | 'misc'} | null>(null);
-  
+  const [selectedEntityForMemories, setSelectedEntityForMemories] = useState<{ id: string, name: string, type: 'person' | 'place' | 'event' | 'concept' | 'item' | 'misc' } | null>(null);
+
   // Entity merging state
-  const [mergeMode, setMergeMode] = useState<{type: 'person' | 'place' | 'event' | 'concept' | 'item' | 'misc'} | null>(null);
+  const [mergeMode, setMergeMode] = useState<{ type: 'person' | 'place' | 'event' | 'concept' | 'item' | 'misc' } | null>(null);
   const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [showMergeSelectionDialog, setShowMergeSelectionDialog] = useState(false);
@@ -758,10 +760,10 @@ export default function BrainManagement() {
     queryFn: async () => {
       if (!selectedEntityForMemories) return [];
       const endpoint = selectedEntityForMemories.type === 'person' ? 'people' :
-                      selectedEntityForMemories.type === 'place' ? 'places' :
-                      selectedEntityForMemories.type === 'event' ? 'events' :
-                      selectedEntityForMemories.type === 'concept' ? 'concepts' :
-                      selectedEntityForMemories.type === 'item' ? 'items' : 'misc';
+        selectedEntityForMemories.type === 'place' ? 'places' :
+          selectedEntityForMemories.type === 'event' ? 'events' :
+            selectedEntityForMemories.type === 'concept' ? 'concepts' :
+              selectedEntityForMemories.type === 'item' ? 'items' : 'misc';
       const response = await fetch(`/api/entities/${endpoint}/${selectedEntityForMemories.id}/memories`);
       if (!response.ok) throw new Error('Failed to fetch entity memories');
       return response.json();
@@ -836,7 +838,7 @@ export default function BrainManagement() {
   // Entity editing handlers
   const openEntityEditDialog = (type: 'person' | 'place' | 'event' | 'concept' | 'item' | 'misc', data: any) => {
     setEditingEntity({ type, data });
-    
+
     // Pre-populate form with current data
     setEntityEditForm({
       canonicalName: data.canonicalName || '',
@@ -850,7 +852,7 @@ export default function BrainManagement() {
       category: data.category || '',
       type: data.type || ''
     });
-    
+
     setShowEntityEditDialog(true);
   };
 
@@ -905,32 +907,32 @@ export default function BrainManagement() {
   const selectMergeTarget = (targetId: string) => {
     const fullSelection = [selectedForMerge[0], targetId];
     setSelectedForMerge(fullSelection);
-    
+
     // Get both entities
-    const entity1 = mergeMode?.type === 'person' 
+    const entity1 = mergeMode?.type === 'person'
       ? entities?.people?.find((p: Person) => p.id === fullSelection[0])
       : mergeMode?.type === 'place'
-      ? entities?.places?.find((p: Place) => p.id === fullSelection[0])
-      : mergeMode?.type === 'event'
-      ? entities?.events?.find((e: Event) => e.id === fullSelection[0])
-      : mergeMode?.type === 'concept'
-      ? entities?.concepts?.find((c: Concept) => c.id === fullSelection[0])
-      : mergeMode?.type === 'item'
-      ? entities?.items?.find((i: Item) => i.id === fullSelection[0])
-      : entities?.misc?.find((m: Misc) => m.id === fullSelection[0]);
-      
-    const entity2 = mergeMode?.type === 'person' 
+        ? entities?.places?.find((p: Place) => p.id === fullSelection[0])
+        : mergeMode?.type === 'event'
+          ? entities?.events?.find((e: Event) => e.id === fullSelection[0])
+          : mergeMode?.type === 'concept'
+            ? entities?.concepts?.find((c: Concept) => c.id === fullSelection[0])
+            : mergeMode?.type === 'item'
+              ? entities?.items?.find((i: Item) => i.id === fullSelection[0])
+              : entities?.misc?.find((m: Misc) => m.id === fullSelection[0]);
+
+    const entity2 = mergeMode?.type === 'person'
       ? entities?.people?.find((p: Person) => p.id === targetId)
       : mergeMode?.type === 'place'
-      ? entities?.places?.find((p: Place) => p.id === targetId)
-      : mergeMode?.type === 'event'
-      ? entities?.events?.find((e: Event) => e.id === targetId)
-      : mergeMode?.type === 'concept'
-      ? entities?.concepts?.find((c: Concept) => c.id === targetId)
-      : mergeMode?.type === 'item'
-      ? entities?.items?.find((i: Item) => i.id === targetId)
-      : entities?.misc?.find((m: Misc) => m.id === targetId);
-    
+        ? entities?.places?.find((p: Place) => p.id === targetId)
+        : mergeMode?.type === 'event'
+          ? entities?.events?.find((e: Event) => e.id === targetId)
+          : mergeMode?.type === 'concept'
+            ? entities?.concepts?.find((c: Concept) => c.id === targetId)
+            : mergeMode?.type === 'item'
+              ? entities?.items?.find((i: Item) => i.id === targetId)
+              : entities?.misc?.find((m: Misc) => m.id === targetId);
+
     if (entity1 && entity2) {
       const e1 = entity1 as any;
       const e2 = entity2 as any;
@@ -940,15 +942,15 @@ export default function BrainManagement() {
         ...(e1.aliases || []),
         ...(e2.aliases || [])
       ]));
-      
+
       // Combine descriptions (if both exist, separate with newline)
       let combinedDescription = e1.description || '';
       if (e2.description) {
-        combinedDescription = combinedDescription 
+        combinedDescription = combinedDescription
           ? `${combinedDescription}\n\n${e2.description}`
           : e2.description;
       }
-      
+
       // Initialize merge form with primary entity's data + combined fields
       setMergeForm({
         canonicalName: e1.canonicalName,
@@ -961,7 +963,7 @@ export default function BrainManagement() {
         isCanonical: e1.isCanonical || e2.isCanonical || false
       });
     }
-    
+
     setShowMergeSelectionDialog(false);
     setShowMergeDialog(true);
   };
@@ -969,7 +971,7 @@ export default function BrainManagement() {
   const confirmMerge = () => {
     if (!mergeMode || selectedForMerge.length !== 2) return;
     const [primaryId, duplicateId] = selectedForMerge;
-    
+
     mergeEntitiesMutation.mutate({
       type: mergeMode.type,
       primaryId,
@@ -1080,7 +1082,7 @@ export default function BrainManagement() {
       setDuplicateGroups(data.duplicateGroups || []);
       setSavedScanDate(new Date().toISOString());
       console.log('✅ Set duplicate groups:', data.duplicateGroups?.length || 0);
-      
+
       if (data.warning || !data.savedToDatabase) {
         toast({
           title: "⚠️ Deep Scan Complete (With Warning)",
@@ -1177,20 +1179,20 @@ export default function BrainManagement() {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
-      
+
       // 🔧 IMPROVED: Remove merged group using standardized masterId format
       const mergedIds = [variables.masterEntryId, ...variables.duplicateIds];
-      setDuplicateGroups(prevGroups => 
+      setDuplicateGroups(prevGroups =>
         prevGroups.filter(group => {
           const groupMemoryIds = [
             group.masterId, // Standardized format uses masterId
             ...(group.duplicates?.map((d: any) => d.id) || [])
           ].filter(Boolean);
-          
+
           return !groupMemoryIds.some(id => mergedIds.includes(id));
         })
       );
-      
+
       toast({
         title: "Group Merged",
         description: `Successfully merged ${data.mergedCount} duplicates with AI. Group removed from list.`,
@@ -1218,25 +1220,25 @@ export default function BrainManagement() {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
-      
+
       // 🔧 IMPROVED: Remove merged group using standardized masterId format
       const mergedIds = [variables.primaryId, ...variables.duplicateIds];
-      setDuplicateGroups(prevGroups => 
+      setDuplicateGroups(prevGroups =>
         prevGroups.filter(group => {
           const groupMemoryIds = [
             group.masterId, // Standardized format uses masterId
             ...(group.duplicates?.map((d: any) => d.id) || [])
           ].filter(Boolean);
-          
+
           return !groupMemoryIds.some(id => mergedIds.includes(id));
         })
       );
-      
+
       // Close the merge edit dialog
       setShowMergeEditDialog(false);
       setMergeEditGroup(null);
       setMergeEditText("");
-      
+
       toast({
         title: "Memories Merged",
         description: `Successfully merged ${data.mergedCount} memories with your edits. Group removed from list.`,
@@ -1293,15 +1295,15 @@ export default function BrainManagement() {
 
   // Batch importance review mutation
   const batchImportanceReviewMutation = useMutation({
-    mutationFn: async ({ 
-      targetType, 
-      targetId, 
-      selectedImportance, 
-      notes 
-    }: { 
-      targetType: string; 
-      targetId: string; 
-      selectedImportance: 'high_importance' | 'medium_importance' | 'low_importance'; 
+    mutationFn: async ({
+      targetType,
+      targetId,
+      selectedImportance,
+      notes
+    }: {
+      targetType: string;
+      targetId: string;
+      selectedImportance: 'high_importance' | 'medium_importance' | 'low_importance';
       notes?: string;
     }) => {
       const response = await apiRequest('PUT', '/api/flags/importance/batch-review', {
@@ -1323,7 +1325,7 @@ export default function BrainManagement() {
     },
   });
 
-  const { data: auditProgress } = useQuery({
+  const { data: auditProgress } = useQuery<any>({
     queryKey: ['/api/personality/audit/progress'],
     refetchInterval: (query) => {
       const data = query.state.data as any;
@@ -1391,7 +1393,7 @@ export default function BrainManagement() {
     const hasUserMarkers = /(\byou\s|user:|^### |^> |what|how|why|hey nicky)/i.test(fact.content);
     const hasAIMarkers = /(nicky|assistant:|dente|noodle arms)/i.test(content);
     const isLong = fact.content.length > 300;
-    
+
     return hasUserMarkers && hasAIMarkers && isLong;
   };
 
@@ -1476,7 +1478,7 @@ export default function BrainManagement() {
         title: "Wall-of-Text Cleaned!",
         description: `Successfully split into ${data.createdCount} atomic facts`,
       });
-      
+
       // Invalidate queries to refresh the fact lists
       queryClient.invalidateQueries({ queryKey: ['/api/memory/entries'] });
       queryClient.invalidateQueries({ queryKey: ['/api/memory/high-confidence'] });
@@ -1510,14 +1512,14 @@ export default function BrainManagement() {
     },
     onSuccess: (data) => {
       // Fix: Invalidate all memory-related queries
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
           (query.queryKey[0] as string).startsWith('/api/memory')
       });
       setShowSingleCleanDialog(false);
       setSingleCleanPreview(null);
-      
+
       toast({
         title: "Fact Cleaned Successfully",
         description: "Wall-of-text content has been cleaned and simplified.",
@@ -1609,11 +1611,10 @@ export default function BrainManagement() {
                   key={val}
                   onClick={() => quickUpdateMutation.mutate({ id: fact.id, importance: val })}
                   disabled={quickUpdateMutation.isPending}
-                  className={`text-[9px] px-1 rounded border transition-colors ${
-                    fact.importance === val 
-                      ? 'bg-blue-500 text-white border-blue-600' 
-                      : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700'
-                  }`}
+                  className={`text-[9px] px-1 rounded border transition-colors ${fact.importance === val
+                    ? 'bg-blue-500 text-white border-blue-600'
+                    : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700'
+                    }`}
                 >
                   {val}
                 </button>
@@ -1626,11 +1627,10 @@ export default function BrainManagement() {
                   key={val}
                   onClick={() => quickUpdateMutation.mutate({ id: fact.id, confidence: val })}
                   disabled={quickUpdateMutation.isPending}
-                  className={`text-[9px] px-1 rounded border transition-colors ${
-                    fact.confidence === val 
-                      ? 'bg-green-500 text-white border-green-600' 
-                      : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700'
-                  }`}
+                  className={`text-[9px] px-1 rounded border transition-colors ${fact.confidence === val
+                    ? 'bg-green-500 text-white border-green-600'
+                    : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700'
+                    }`}
                 >
                   {val}
                 </button>
@@ -1773,9 +1773,9 @@ export default function BrainManagement() {
     },
     onSuccess: () => {
       // Fix: Invalidate all memory-related queries
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
           (query.queryKey[0] as string).startsWith('/api/memory')
       });
       toast({ title: "Contradiction resolved!" });
@@ -1791,9 +1791,9 @@ export default function BrainManagement() {
     },
     onSuccess: () => {
       // Fix: Invalidate all memory-related queries
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
           (query.queryKey[0] as string).startsWith('/api/memory')
       });
       toast({ title: "Fact boosted progressively (85→90→95→100)!" });
@@ -1809,9 +1809,9 @@ export default function BrainManagement() {
     },
     onSuccess: () => {
       // Fix: Invalidate all memory-related queries
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
           (query.queryKey[0] as string).startsWith('/api/memory')
       });
       toast({ title: "Fact marked as FALSE - deprecated!" });
@@ -1830,9 +1830,9 @@ export default function BrainManagement() {
     },
     onSuccess: () => {
       // Fix: Invalidate all memory-related queries
-      queryClient.invalidateQueries({ 
-        predicate: (query) => 
-          Array.isArray(query.queryKey) && 
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
           (query.queryKey[0] as string).startsWith('/api/memory')
       });
       toast({ title: "Fact permanently deleted" });
@@ -1863,24 +1863,24 @@ export default function BrainManagement() {
   // Group facts by story context if available
   const groupFactsByStory = (facts: MemoryFact[]) => {
     const grouped: { [key: string]: MemoryFact[] } = {};
-    
+
     facts.forEach(fact => {
       // Extract story context from source or content
       let storyKey = 'General Facts';
-      
+
       // 🔧 IMPROVED: Better location detection for Berlin/Germany content
       const content = fact.content.toLowerCase();
       const source = fact.source?.toLowerCase() || '';
-      
+
       // Check for specific locations first
-      if (content.includes('berlin') || source.includes('berlin') || 
-          content.includes('germany') || source.includes('germany')) {
+      if (content.includes('berlin') || source.includes('berlin') ||
+        content.includes('germany') || source.includes('germany')) {
         storyKey = 'Berlin/Germany Stories';
-      } else if (content.includes('paris') || source.includes('paris') || 
-                 content.includes('france') || source.includes('france')) {
+      } else if (content.includes('paris') || source.includes('paris') ||
+        content.includes('france') || source.includes('france')) {
         storyKey = 'Paris/France Stories';
-      } else if (content.includes('tokyo') || source.includes('tokyo') || 
-                 content.includes('japan') || source.includes('japan')) {
+      } else if (content.includes('tokyo') || source.includes('tokyo') ||
+        content.includes('japan') || source.includes('japan')) {
         storyKey = 'Tokyo/Japan Stories';
       }
       // Then check for story types
@@ -1888,11 +1888,11 @@ export default function BrainManagement() {
         storyKey = 'Stream Episodes';
       } else if (content.includes('backstory') || content.includes('origin')) {
         storyKey = 'Character Backstory';
-      } else if (content.includes('personality') || content.includes('behavior') || 
-                content.includes('trait') || content.includes('characteristic')) {
+      } else if (content.includes('personality') || content.includes('behavior') ||
+        content.includes('trait') || content.includes('characteristic')) {
         storyKey = 'Personality Traits';
-      } else if (content.includes('conversation') || content.includes('dialogue') || 
-                content.includes('said') || content.includes('asked')) {
+      } else if (content.includes('conversation') || content.includes('dialogue') ||
+        content.includes('said') || content.includes('asked')) {
         storyKey = 'Conversations';
       }
       // Parse filename for additional context
@@ -1902,19 +1902,19 @@ export default function BrainManagement() {
           storyKey = parts.slice(1).join(' ').replace(/\b\w/g, l => l.toUpperCase());
         }
       }
-      
+
       if (!grouped[storyKey]) {
         grouped[storyKey] = [];
       }
       grouped[storyKey].push(fact);
     });
-    
+
     return grouped;
   };
 
   const filteredFacts = (facts: MemoryFact[] = []) => {
     if (!searchQuery) return sortFacts(facts);
-    const filtered = facts.filter(fact => 
+    const filtered = facts.filter(fact =>
       fact.content.toLowerCase().includes(searchQuery.toLowerCase())
     );
     return sortFacts(filtered);
@@ -2032,7 +2032,7 @@ export default function BrainManagement() {
                   </div>
                   <Progress value={(auditProgress.auditedCount / auditProgress.totalMemories) * 100} className="h-2" />
                   <p className="text-xs text-muted-foreground">
-                    Processed {auditProgress.auditedCount} / {auditProgress.totalMemories} memories. 
+                    Processed {auditProgress.auditedCount} / {auditProgress.totalMemories} memories.
                     Found {auditProgress.updateCount} personality misalignments so far.
                   </p>
                 </>
@@ -2078,19 +2078,19 @@ export default function BrainManagement() {
                       </div>
                     </div>
                   )}
-                  
+
                   <div className="flex gap-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       className="flex-1 text-xs h-8"
                       onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/memory/stats'] })}
                     >
                       Refresh Memory Stats
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="flex-1 text-xs h-8"
                       onClick={() => clearAuditMutation.mutate()}
                     >
@@ -2112,7 +2112,7 @@ export default function BrainManagement() {
         chaosState={chaosState}
         personalityState={personalityState}
         timelineHealth={timelineHealth}
-        onRepairTimeline={() => timelineRepairMutation.mutate()}
+        onRequestTimelineRepair={() => timelineRepairMutation.mutate()}
       />
 
       {/* 🧠 NEW: Psyche Review Dialog */}
@@ -2124,7 +2124,7 @@ export default function BrainManagement() {
               Review Nicky's Psyche Profile
             </DialogTitle>
             <DialogDescription>
-              This profile will be used to re-evaluate the importance and confidence of all 3,300+ memories. 
+              This profile will be used to re-evaluate the importance and confidence of all 3,300+ memories.
               Edit any section to better reflect Nicky's current state.
             </DialogDescription>
           </DialogHeader>
@@ -2133,41 +2133,41 @@ export default function BrainManagement() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Core Identity</label>
-                <Textarea 
-                  value={psycheToReview.coreIdentity} 
-                  onChange={(e) => setPsycheToReview({...psycheToReview, coreIdentity: e.target.value})}
+                <Textarea
+                  value={psycheToReview.coreIdentity}
+                  onChange={(e) => setPsycheToReview({ ...psycheToReview, coreIdentity: e.target.value })}
                   rows={3}
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Key Relationships</label>
-                <Textarea 
-                  value={psycheToReview.keyRelationships} 
-                  onChange={(e) => setPsycheToReview({...psycheToReview, keyRelationships: e.target.value})}
+                <Textarea
+                  value={psycheToReview.keyRelationships}
+                  onChange={(e) => setPsycheToReview({ ...psycheToReview, keyRelationships: e.target.value })}
                   rows={3}
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Worldview</label>
-                <Textarea 
-                  value={psycheToReview.worldview} 
-                  onChange={(e) => setPsycheToReview({...psycheToReview, worldview: e.target.value})}
+                <Textarea
+                  value={psycheToReview.worldview}
+                  onChange={(e) => setPsycheToReview({ ...psycheToReview, worldview: e.target.value })}
                   rows={3}
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Emotional Triggers</label>
-                <Textarea 
-                  value={psycheToReview.emotionalTriggers} 
-                  onChange={(e) => setPsycheToReview({...psycheToReview, emotionalTriggers: e.target.value})}
+                <Textarea
+                  value={psycheToReview.emotionalTriggers}
+                  onChange={(e) => setPsycheToReview({ ...psycheToReview, emotionalTriggers: e.target.value })}
                   rows={3}
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Recent Obsessions</label>
-                <Textarea 
-                  value={psycheToReview.recentObsessions} 
-                  onChange={(e) => setPsycheToReview({...psycheToReview, recentObsessions: e.target.value})}
+                <Textarea
+                  value={psycheToReview.recentObsessions}
+                  onChange={(e) => setPsycheToReview({ ...psycheToReview, recentObsessions: e.target.value })}
                   rows={3}
                 />
               </div>
@@ -2178,7 +2178,7 @@ export default function BrainManagement() {
             <Button variant="outline" onClick={() => setIsPsycheDialogOpen(false)}>
               Cancel
             </Button>
-            <Button 
+            <Button
               className="bg-purple-600 hover:bg-purple-700"
               onClick={() => personalityAuditMutation.mutate(psycheToReview)}
               disabled={personalityAuditMutation.isPending}
@@ -2216,6 +2216,11 @@ export default function BrainManagement() {
             <TabsTrigger value="analytics" className="text-xs px-3 py-1.5">
               📊 Analytics
             </TabsTrigger>
+            <TabsTrigger value="memory-checker" className="text-xs px-3 py-1.5">Memory Checker</TabsTrigger>
+            <TabsTrigger value="poison" className="flex items-center gap-2 text-xs px-3 py-1.5">
+              <AlertCircle className="w-4 h-4" /> Poison Control
+            </TabsTrigger>
+            <TabsTrigger value="memory-debug" className="text-xs px-3 py-1.5">Debug</TabsTrigger>
             <TabsTrigger value="documents" className="text-xs px-3 py-1.5">
               📁 Docs
             </TabsTrigger>
@@ -2267,1745 +2272,1749 @@ export default function BrainManagement() {
           </TabsList>
         </ScrollArea>
 
-          {/* Recent Memories */}
-          <TabsContent value="recent-memories" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Memories</CardTitle>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Latest memories and interactions with quick search
-                </p>
-              </CardHeader>
-              <CardContent>
-                <MemoryPanel
-                  profileId={activeProfile?.id}
-                  memoryStats={memoryStats}
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
+        {/* Recent Memories */}
+        <TabsContent value="recent-memories" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Memories</CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Latest memories and interactions with quick search
+              </p>
+            </CardHeader>
+            <CardContent>
+              <MemoryPanel
+                profileId={activeProfile?.id}
+                memoryStats={memoryStats}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          {/* Memory Analytics */}
-          <TabsContent value="analytics" className="mt-6">
-            <MemoryAnalytics profileId={activeProfile?.id} />
-          </TabsContent>
+        {/* Memory Analytics */}
+        <TabsContent value="analytics" className="mt-6">
+          <MemoryAnalytics profileId={activeProfile?.id} />
+        </TabsContent>
 
-          {/* Documents */}
-          <TabsContent value="documents" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Document Management</CardTitle>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Upload and process documents to extract knowledge
-                </p>
-              </CardHeader>
-              <CardContent>
-                <DocumentPanel
-                  profileId={activeProfile?.id}
-                  documents={documents}
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
+        {/* Documents */}
+        <TabsContent value="documents" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Document Management</CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Upload and process documents to extract knowledge
+              </p>
+            </CardHeader>
+            <CardContent>
+              <DocumentPanel
+                profileId={activeProfile?.id}
+                documents={documents}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          {/* Identity & Core Personality */}
-          <TabsContent value="identity" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Core Identity & Personality</CardTitle>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Manage the AI's core personality traits and identity
-                </p>
-              </CardHeader>
-              <CardContent>
-                <PersonalityPanel
-                  profile={activeProfile}
-                  onOpenProfileManager={openProfileManager}
-                  onResetChat={() => {/* This could be moved or handled differently in brain management */}}
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
+        {/* Identity & Core Personality */}
+        <TabsContent value="identity" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Core Identity & Personality</CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Manage the AI's core personality traits and identity
+              </p>
+            </CardHeader>
+            <CardContent>
+              <PersonalityPanel
+                profile={activeProfile}
+                onOpenProfileManager={openProfileManager}
+                onResetChat={() => {/* This could be moved or handled differently in brain management */ }}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          {/* Entity Management */}
-          <TabsContent value="entities" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Users className="h-5 w-5" />
-                  <span>Entity Management</span>
-                </CardTitle>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Manage people, places, and events that Nicky knows about with AI-powered entity detection
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Entity System Toggle */}
+        {/* Entity Management */}
+        <TabsContent value="entities" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Users className="h-5 w-5" />
+                <span>Entity Management</span>
+              </CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Manage people, places, and events that Nicky knows about with AI-powered entity detection
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Entity System Toggle */}
+              <Card>
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-lg flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Brain className="h-4 w-4" />
+                      <span>Entity System</span>
+                      <Badge variant={entityConfig?.isEnabled ? "default" : "secondary"}>
+                        {entityConfig?.isEnabled ? "Enabled" : "Disabled"}
+                      </Badge>
+                    </div>
+                    <Switch
+                      checked={entityConfig?.isEnabled || false}
+                      onCheckedChange={(enabled) => toggleEntitySystemMutation.mutate(enabled)}
+                      disabled={toggleEntitySystemMutation.isPending}
+                      data-testid="toggle-entity-system"
+                    />
+                  </CardTitle>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    {entityConfig?.isEnabled
+                      ? "Entity detection and disambiguation is active. New memories will automatically identify people, places, and events."
+                      : "Entity system is disabled. Enable to automatically detect and link entities in memories."}
+                  </p>
+                </CardHeader>
+              </Card>
+
+              {/* Entity Extraction */}
+              {entityConfig?.isEnabled && (
                 <Card>
-                  <CardHeader className="pb-4">
-                    <CardTitle className="text-lg flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <Brain className="h-4 w-4" />
-                        <span>Entity System</span>
-                        <Badge variant={entityConfig?.isEnabled ? "default" : "secondary"}>
-                          {entityConfig?.isEnabled ? "Enabled" : "Disabled"}
-                        </Badge>
-                      </div>
-                      <Switch
-                        checked={entityConfig?.isEnabled || false}
-                        onCheckedChange={(enabled) => toggleEntitySystemMutation.mutate(enabled)}
-                        disabled={toggleEntitySystemMutation.isPending}
-                        data-testid="toggle-entity-system"
-                      />
-                    </CardTitle>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Extract Entities from Existing Memories</CardTitle>
                     <p className="text-sm text-gray-600 dark:text-gray-300">
-                      {entityConfig?.isEnabled 
-                        ? "Entity detection and disambiguation is active. New memories will automatically identify people, places, and events."
-                        : "Entity system is disabled. Enable to automatically detect and link entities in memories."}
+                      Analyze your existing memories to detect and organize people, places, and events
                     </p>
                   </CardHeader>
-                </Card>
-
-                {/* Entity Extraction */}
-                {entityConfig?.isEnabled && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">Extract Entities from Existing Memories</CardTitle>
-                      <p className="text-sm text-gray-600 dark:text-gray-300">
-                        Analyze your existing memories to detect and organize people, places, and events
-                      </p>
-                    </CardHeader>
-                    <CardContent>
-                      <Button 
-                        onClick={() => extractEntitiesFromMemoriesMutation.mutate()}
-                        disabled={extractEntitiesFromMemoriesMutation.isPending}
-                        className="w-full"
-                        data-testid="button-extract-entities"
-                      >
-                        {extractEntitiesFromMemoriesMutation.isPending ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Extracting Entities...
-                          </>
-                        ) : (
-                          <>
-                            <Search className="h-4 w-4 mr-2" />
-                            Extract Entities from Recent Memories
-                          </>
-                        )}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Entity Overview */}
-                {entities && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center space-x-2">
-                          <Users className="h-4 w-4 text-blue-500" />
-                          <span>People</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-blue-500">
-                          {entities?.people?.length || 0}
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Individuals mentioned in memories
-                        </p>
-                        {entities?.people?.slice(0, 3).map((person: any) => (
-                          <div key={person.id} className="text-xs text-gray-500 mt-1">
-                            • {person.canonicalName} {person.disambiguation && `(${person.disambiguation})`}
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center space-x-2">
-                          <MapPin className="h-4 w-4 text-green-500" />
-                          <span>Places</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-green-500">
-                          {entities?.places?.length || 0}
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Locations mentioned in memories
-                        </p>
-                        {entities?.places?.slice(0, 3).map((place: any) => (
-                          <div key={place.id} className="text-xs text-gray-500 mt-1">
-                            • {place.canonicalName} {place.locationType && `(${place.locationType})`}
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center space-x-2">
-                          <Calendar className="h-4 w-4 text-purple-500" />
-                          <span>Events</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-purple-500">
-                          {entities?.events?.length || 0}
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Events mentioned in memories
-                        </p>
-                        {entities?.events?.slice(0, 3).map((event: any) => (
-                          <div key={event.id} className="text-xs text-gray-500 mt-1">
-                            • {event.canonicalName} {event.eventDate && `(${event.eventDate})`}
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center space-x-2">
-                          <Lightbulb className="h-4 w-4 text-yellow-500" />
-                          <span>Concepts</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-yellow-500">
-                          {entities?.concepts?.length || 0}
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Abstract ideas and themes
-                        </p>
-                        {entities?.concepts?.slice(0, 3).map((concept: any) => (
-                          <div key={concept.id} className="text-xs text-gray-500 mt-1">
-                            • {concept.canonicalName} {concept.category && `(${concept.category})`}
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center space-x-2">
-                          <Package className="h-4 w-4 text-orange-500" />
-                          <span>Items</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-orange-500">
-                          {entities?.items?.length || 0}
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Physical objects and items
-                        </p>
-                        {entities?.items?.slice(0, 3).map((item: any) => (
-                          <div key={item.id} className="text-xs text-gray-500 mt-1">
-                            • {item.canonicalName} {item.type && `(${item.type})`}
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center space-x-2">
-                          <Box className="h-4 w-4 text-gray-500" />
-                          <span>Misc</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold text-gray-500">
-                          {entities?.misc?.length || 0}
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Other entities
-                        </p>
-                        {entities?.misc?.slice(0, 3).map((misc: any) => (
-                          <div key={misc.id} className="text-xs text-gray-500 mt-1">
-                            • {misc.canonicalName} {misc.type && `(${misc.type})`}
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
-
-                {/* Scan for Duplicates Button */}
-                {entities && (entities?.people?.length > 0 || entities?.places?.length > 0 || entities?.events?.length > 0 || entities?.concepts?.length > 0 || entities?.items?.length > 0 || entities?.misc?.length > 0) && (
-                  <div className="flex justify-end mb-4">
+                  <CardContent>
                     <Button
-                      onClick={() => {
-                        setIsLoadingEntityDuplicates(true);
-                        scanEntityDuplicatesMutation.mutate();
-                      }}
-                      disabled={isLoadingEntityDuplicates || scanEntityDuplicatesMutation.isPending}
-                      className="bg-purple-600 hover:bg-purple-700"
+                      onClick={() => extractEntitiesFromMemoriesMutation.mutate()}
+                      disabled={extractEntitiesFromMemoriesMutation.isPending}
+                      className="w-full"
+                      data-testid="button-extract-entities"
                     >
-                      {(isLoadingEntityDuplicates || scanEntityDuplicatesMutation.isPending) ? (
+                      {extractEntitiesFromMemoriesMutation.isPending ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Scanning...
-                        </>
-                      ) : (
-                        <>
-                          <Scan className="h-4 w-4 mr-2" />
-                          Scan for Duplicate Entities
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                )}
-
-                {/* Duplicate Groups Display */}
-                {showEntityDuplicates && entityDuplicateGroups.length > 0 && (
-                  <Card className="mb-6 border-purple-200 dark:border-purple-800">
-                    <CardHeader className="bg-purple-50 dark:bg-purple-900/20">
-                      <CardTitle className="flex items-center justify-between">
-                        <span className="flex items-center">
-                          <AlertTriangle className="h-5 w-5 mr-2 text-purple-600" />
-                          Potential Duplicate Entities ({entityDuplicateGroups.length} groups)
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setShowEntityDuplicates(false)}
-                        >
-                          Hide
-                        </Button>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-4">
-                      <ScrollArea className="h-[400px]">
-                        <div className="space-y-4">
-                          {entityDuplicateGroups.map((group, idx) => (
-                            <Card key={idx} className="border-purple-100 dark:border-purple-800">
-                              <CardContent className="pt-4">
-                                <div className="mb-3">
-                                  <Badge variant="outline" className="mb-2">
-                                    {group.type.toUpperCase()}
-                                  </Badge>
-                                  <h4 className="font-semibold text-lg">
-                                    Master: {group.masterName}
-                                  </h4>
-                                  {group.masterData.disambiguation && (
-                                    <p className="text-sm text-gray-600">({group.masterData.disambiguation})</p>
-                                  )}
-                                </div>
-                                
-                                <div className="space-y-2">
-                                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    Potential Duplicates ({group.duplicates.length}):
-                                  </p>
-                                  {group.duplicates.map((dup: any) => (
-                                    <div key={dup.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded border">
-                                      <div className="flex-1">
-                                        <p className="font-medium">{dup.canonicalName}</p>
-                                        <p className="text-xs text-gray-500">
-                                          Similarity: {(dup.similarity * 100).toFixed(0)}%
-                                        </p>
-                                      </div>
-                                      <Button
-                                        size="sm"
-                                        onClick={() => {
-                                          mergeEntitiesMutation.mutate({
-                                            type: group.type,
-                                            primaryId: group.masterId,
-                                            duplicateId: dup.id
-                                          });
-                                        }}
-                                        disabled={mergeEntitiesMutation.isPending}
-                                        className="bg-purple-600 hover:bg-purple-700"
-                                      >
-                                        <Merge className="h-3 w-3 mr-1" />
-                                        Merge
-                                      </Button>
-                                    </div>
-                                  ))}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Entity Management Tabs */}
-                {entities && (
-                  <Tabs defaultValue="people" className="w-full">
-                    <TabsList className="grid w-full grid-cols-6">
-                      <TabsTrigger value="people" data-testid="tab-entity-people">
-                        <Users className="h-4 w-4 mr-2" />
-                        People ({entities?.people?.length || 0})
-                      </TabsTrigger>
-                      <TabsTrigger value="places" data-testid="tab-entity-places">
-                        <MapPin className="h-4 w-4 mr-2" />
-                        Places ({entities?.places?.length || 0})
-                      </TabsTrigger>
-                      <TabsTrigger value="events" data-testid="tab-entity-events">
-                        <Calendar className="h-4 w-4 mr-2" />
-                        Events ({entities?.events?.length || 0})
-                      </TabsTrigger>
-                      <TabsTrigger value="concepts" data-testid="tab-entity-concepts">
-                        <Lightbulb className="h-4 w-4 mr-2" />
-                        Concepts ({entities?.concepts?.length || 0})
-                      </TabsTrigger>
-                      <TabsTrigger value="items" data-testid="tab-entity-items">
-                        <Package className="h-4 w-4 mr-2" />
-                        Items ({entities?.items?.length || 0})
-                      </TabsTrigger>
-                      <TabsTrigger value="misc" data-testid="tab-entity-misc">
-                        <Box className="h-4 w-4 mr-2" />
-                        Misc ({entities?.misc?.length || 0})
-                      </TabsTrigger>
-                    </TabsList>
-
-                    {/* People Tab */}
-                    <TabsContent value="people" className="mt-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>People Entities</CardTitle>
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            Manage individuals that Nicky knows about
-                          </p>
-                        </CardHeader>
-                        <CardContent>
-                          <ScrollArea className="h-[400px]">
-                            <div className="space-y-4">
-                              {entities?.people?.map((person: Person) => (
-                                <div key={person.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                                        {person.canonicalName}
-                                      </h3>
-                                      {person.disambiguation && (
-                                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                                          {person.disambiguation}
-                                        </p>
-                                      )}
-                                      {person.aliases && person.aliases.length > 0 && (
-                                        <div className="flex flex-wrap gap-1 mt-2">
-                                          {person.aliases.map((alias, index) => (
-                                            <Badge key={index} variant="outline" className="text-xs">
-                                              {alias}
-                                            </Badge>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {person.relationship && (
-                                        <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
-                                          <strong>Relationship:</strong> {person.relationship}
-                                        </p>
-                                      )}
-                                      {person.description && (
-                                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
-                                          {person.description}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="flex space-x-2">
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        className="text-blue-600 hover:text-blue-700"
-                                        onClick={() => showEntityMemories('person', person.id, person.canonicalName)}
-                                        data-testid={`button-memories-person-${person.id}`}
-                                      >
-                                        Show Memories
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        className="text-purple-600 hover:text-purple-700"
-                                        onClick={() => startMergeFlow('person', person.id)}
-                                        data-testid={`button-merge-person-${person.id}`}
-                                      >
-                                        <Merge className="h-4 w-4 mr-1" />
-                                        Merge
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        onClick={() => openEntityEditDialog('person', person)}
-                                        data-testid={`button-edit-person-${person.id}`}
-                                      >
-                                        Edit
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        className="text-red-600 hover:text-red-700"
-                                        onClick={() => handleEntityDelete('person', person.id, person.canonicalName)}
-                                        data-testid={`button-delete-person-${person.id}`}
-                                      >
-                                        Delete
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-
-                    {/* Places Tab */}
-                    <TabsContent value="places" className="mt-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Place Entities</CardTitle>
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            Manage locations that Nicky knows about
-                          </p>
-                        </CardHeader>
-                        <CardContent>
-                          <ScrollArea className="h-[400px]">
-                            <div className="space-y-4">
-                              {entities?.places?.map((place: Place) => (
-                                <div key={place.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                                        {place.canonicalName}
-                                      </h3>
-                                      {place.locationType && (
-                                        <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-                                          <strong>Type:</strong> {place.locationType}
-                                        </p>
-                                      )}
-                                      {place.description && (
-                                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
-                                          {place.description}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="flex space-x-2">
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        className="text-blue-600 hover:text-blue-700"
-                                        onClick={() => showEntityMemories('place', place.id, place.canonicalName)}
-                                        data-testid={`button-memories-place-${place.id}`}
-                                      >
-                                        Show Memories
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        onClick={() => openEntityEditDialog('place', place)}
-                                        data-testid={`button-edit-place-${place.id}`}
-                                      >
-                                        Edit
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        className="text-red-600 hover:text-red-700"
-                                        onClick={() => handleEntityDelete('place', place.id, place.canonicalName)}
-                                        data-testid={`button-delete-place-${place.id}`}
-                                      >
-                                        Delete
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-
-                    {/* Events Tab */}
-                    <TabsContent value="events" className="mt-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Event Entities</CardTitle>
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            Manage events that Nicky knows about
-                          </p>
-                        </CardHeader>
-                        <CardContent>
-                          <ScrollArea className="h-[400px]">
-                            <div className="space-y-4">
-                              {entities?.events?.map((event: Event) => (
-                                <div key={event.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                                        {event.canonicalName}
-                                      </h3>
-                                      {event.eventDate && (
-                                        <p className="text-sm text-purple-600 dark:text-purple-400 mt-1">
-                                          <strong>Date:</strong> {event.eventDate}
-                                        </p>
-                                      )}
-                                      {event.isCanonical && (
-                                        <Badge variant="default" className="mt-2">
-                                          Canonical Event
-                                        </Badge>
-                                      )}
-                                      {event.description && (
-                                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
-                                          {event.description}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="flex space-x-2">
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        className="text-blue-600 hover:text-blue-700"
-                                        onClick={() => showEntityMemories('event', event.id, event.canonicalName)}
-                                        data-testid={`button-memories-event-${event.id}`}
-                                      >
-                                        Show Memories
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        onClick={() => openEntityEditDialog('event', event)}
-                                        data-testid={`button-edit-event-${event.id}`}
-                                      >
-                                        Edit
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        className="text-red-600 hover:text-red-700"
-                                        onClick={() => handleEntityDelete('event', event.id, event.canonicalName)}
-                                        data-testid={`button-delete-event-${event.id}`}
-                                      >
-                                        Delete
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-
-                    {/* Concepts Tab */}
-                    <TabsContent value="concepts" className="mt-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Concept Entities</CardTitle>
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            Manage abstract concepts and themes
-                          </p>
-                        </CardHeader>
-                        <CardContent>
-                          <ScrollArea className="h-[400px]">
-                            <div className="space-y-4">
-                              {entities?.concepts?.map((concept: Concept) => (
-                                <div key={concept.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                                        {concept.canonicalName}
-                                      </h3>
-                                      {concept.category && (
-                                        <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">
-                                          <strong>Category:</strong> {concept.category}
-                                        </p>
-                                      )}
-                                      {concept.description && (
-                                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
-                                          {concept.description}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="flex space-x-2">
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        className="text-blue-600 hover:text-blue-700"
-                                        onClick={() => showEntityMemories('concept', concept.id, concept.canonicalName)}
-                                        data-testid={`button-memories-concept-${concept.id}`}
-                                      >
-                                        Show Memories
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        onClick={() => openEntityEditDialog('concept', concept)}
-                                        data-testid={`button-edit-concept-${concept.id}`}
-                                      >
-                                        Edit
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        className="text-red-600 hover:text-red-700"
-                                        onClick={() => handleEntityDelete('concept', concept.id, concept.canonicalName)}
-                                        data-testid={`button-delete-concept-${concept.id}`}
-                                      >
-                                        Delete
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-
-                    {/* Items Tab */}
-                    <TabsContent value="items" className="mt-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Item Entities</CardTitle>
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            Manage physical items and objects
-                          </p>
-                        </CardHeader>
-                        <CardContent>
-                          <ScrollArea className="h-[400px]">
-                            <div className="space-y-4">
-                              {entities?.items?.map((item: Item) => (
-                                <div key={item.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                                        {item.canonicalName}
-                                      </h3>
-                                      {item.type && (
-                                        <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
-                                          <strong>Type:</strong> {item.type}
-                                        </p>
-                                      )}
-                                      {item.description && (
-                                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
-                                          {item.description}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="flex space-x-2">
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        className="text-blue-600 hover:text-blue-700"
-                                        onClick={() => showEntityMemories('item', item.id, item.canonicalName)}
-                                        data-testid={`button-memories-item-${item.id}`}
-                                      >
-                                        Show Memories
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        onClick={() => openEntityEditDialog('item', item)}
-                                        data-testid={`button-edit-item-${item.id}`}
-                                      >
-                                        Edit
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        className="text-red-600 hover:text-red-700"
-                                        onClick={() => handleEntityDelete('item', item.id, item.canonicalName)}
-                                        data-testid={`button-delete-item-${item.id}`}
-                                      >
-                                        Delete
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-
-                    {/* Misc Tab */}
-                    <TabsContent value="misc" className="mt-4">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Misc Entities</CardTitle>
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            Manage other entities
-                          </p>
-                        </CardHeader>
-                        <CardContent>
-                          <ScrollArea className="h-[400px]">
-                            <div className="space-y-4">
-                              {entities?.misc?.map((misc: Misc) => (
-                                <div key={misc.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
-                                        {misc.canonicalName}
-                                      </h3>
-                                      {misc.type && (
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                          <strong>Type:</strong> {misc.type}
-                                        </p>
-                                      )}
-                                      {misc.description && (
-                                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
-                                          {misc.description}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="flex space-x-2">
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        className="text-blue-600 hover:text-blue-700"
-                                        onClick={() => showEntityMemories('misc', misc.id, misc.canonicalName)}
-                                        data-testid={`button-memories-misc-${misc.id}`}
-                                      >
-                                        Show Memories
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline"
-                                        onClick={() => openEntityEditDialog('misc', misc)}
-                                        data-testid={`button-edit-misc-${misc.id}`}
-                                      >
-                                        Edit
-                                      </Button>
-                                      <Button 
-                                        size="sm" 
-                                        variant="outline" 
-                                        className="text-red-600 hover:text-red-700"
-                                        onClick={() => handleEntityDelete('misc', misc.id, misc.canonicalName)}
-                                        data-testid={`button-delete-misc-${misc.id}`}
-                                      >
-                                        Delete
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-                  </Tabs>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Discord Integration */}
-          <TabsContent value="discord" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Discord Integration</CardTitle>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Configure Nicky's Discord bot behavior and server interactions
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <DiscordManagementPanel />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Protected Facts */}
-          <TabsContent value="protected-facts" className="mt-6">
-            <ProtectedFactsManager />
-          </TabsContent>
-
-          {/* High Confidence Facts */}
-          <TabsContent value="high-confidence" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Highest Confidence Facts (90%+)</CardTitle>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  These are the facts Nicky relies on most - they have the highest confidence from multiple sources.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[600px]">
-                  {/* 🚀 NEW: Story-grouped facts */}
-                  {Object.entries(groupFactsByStory(filteredFacts(highConfidenceFacts))).map(([storyKey, facts]) => (
-                    <div key={storyKey} className="mb-6">
-                      <h3 className="text-lg font-semibold mb-3 text-purple-600 dark:text-purple-400 border-b border-purple-200 dark:border-purple-800 pb-2">
-                        📖 {storyKey}
-                      </h3>
-                      <div className="space-y-4">
-                        {facts.map((fact: MemoryFact) => (
-                          <div
-                            key={fact.id}
-                            className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
-                          >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center space-x-2">
-                            <Badge className={getConfidenceColor(fact.confidence)}>
-                              {fact.confidence ?? 0}% {getConfidenceLabel(fact.confidence)}
-                            </Badge>
-                            <Badge variant="outline">
-                              {fact.supportCount} sources
-                            </Badge>
-                            <Badge variant="secondary">
-                              Importance: {fact.importance}
-                            </Badge>
-                          </div>
-                          <FactActions fact={fact} />
-                        </div>
-                        <Progress value={fact.confidence ?? 0} className="w-full mb-3" />
-                        <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
-                          {fact.content}
-                        </p>
-                        <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                          Source: {fact.source} • Created: {new Date(fact.createdAt).toLocaleDateString()}
-                        </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* 🚀 NEW: Medium Confidence Facts */}
-          <TabsContent value="medium-confidence" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Medium Confidence Facts (60-89%)</CardTitle>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  These facts need more verification but show promising confidence levels.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[600px]">
-                  {/* Story-grouped medium confidence facts */}
-                  {Object.entries(groupFactsByStory(filteredFacts(mediumConfidenceFacts))).map(([storyKey, facts]) => (
-                    <div key={storyKey} className="mb-6">
-                      <h3 className="text-lg font-semibold mb-3 text-blue-600 dark:text-blue-400 border-b border-blue-200 dark:border-blue-800 pb-2">
-                        📖 {storyKey}
-                      </h3>
-                      <div className="space-y-4">
-                        {facts.map((fact: MemoryFact) => (
-                          <div
-                            key={fact.id}
-                            className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
-                          >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center space-x-2">
-                            <Badge className={getConfidenceColor(fact.confidence)}>
-                              {fact.confidence ?? 0}% {getConfidenceLabel(fact.confidence)}
-                            </Badge>
-                            <Badge variant="outline">
-                              Support: {fact.supportCount}
-                            </Badge>
-                          </div>
-                          <FactActions fact={fact} />
-                        </div>
-                        <Progress value={fact.confidence ?? 0} className="w-full mb-3" />
-                        <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
-                          {fact.content}
-                        </p>
-                        <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                          Source: {fact.source} • Created: {new Date(fact.createdAt).toLocaleDateString()}
-                        </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* 🚀 NEW: Low Confidence Facts */}
-          <TabsContent value="low-confidence" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Low Confidence Facts (0-59%)</CardTitle>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  These facts need significant verification or may be questionable.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[600px]">
-                  {/* Story-grouped low confidence facts */}
-                  {Object.entries(groupFactsByStory(filteredFacts(lowConfidenceFacts))).map(([storyKey, facts]) => (
-                    <div key={storyKey} className="mb-6">
-                      <h3 className="text-lg font-semibold mb-3 text-red-600 dark:text-red-400 border-b border-red-200 dark:border-red-800 pb-2">
-                        📖 {storyKey}
-                      </h3>
-                      <div className="space-y-4">
-                        {facts.map((fact: MemoryFact) => (
-                          <div
-                            key={fact.id}
-                            className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
-                          >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center space-x-2">
-                            <Badge className={getConfidenceColor(fact.confidence)}>
-                              {fact.confidence ?? 0}% {getConfidenceLabel(fact.confidence)}
-                            </Badge>
-                            <Badge variant="outline">
-                              Support: {fact.supportCount}
-                            </Badge>
-                          </div>
-                          <FactActions fact={fact} />
-                        </div>
-                        <Progress value={fact.confidence ?? 0} className="w-full mb-3" />
-                        <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
-                          {fact.content}
-                        </p>
-                        <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                          Source: {fact.source} • Created: {new Date(fact.createdAt).toLocaleDateString()}
-                        </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Contradictions */}
-          <TabsContent value="contradictions" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <AlertTriangle className="h-5 w-5 text-yellow-500 mr-2" />
-                  Conflicting Facts
-                </CardTitle>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  These facts contradict each other. Choose which one is correct or mark conflicts as "not important."
-                </p>
-                {contradictions.length === 0 && (
-                  <div className="mt-4">
-                    <Button
-                      onClick={() => scanContradictionsMutation.mutate()}
-                      disabled={scanContradictionsMutation.isPending}
-                      data-testid="button-scan-contradictions"
-                    >
-                      {scanContradictionsMutation.isPending ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Analyzing Facts with AI...
-                        </>
-                      ) : (
-                        <>
-                          <Brain className="h-4 w-4 mr-2" />
-                          Scan All Facts for Contradictions
-                        </>
-                      )}
-                    </Button>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                      This will analyze your existing {allFacts.length} facts using AI to detect semantic contradictions
-                    </p>
-                  </div>
-                )}
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[600px]">
-                  <div className="space-y-6">
-                    {contradictions?.map((group: ContradictionGroup, index: number) => (
-                      <div
-                        key={group.groupId}
-                        className={`border rounded-lg p-4 ${
-                          group.severity === 'HIGH' 
-                            ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
-                            : group.severity === 'MEDIUM'
-                            ? 'border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20' 
-                            : 'border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20'
-                        }`}
-                      >
-                        <div className="mb-4">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
-                              Contradiction Group: {group.explanation}
-                            </h4>
-                            <Badge variant={group.severity === 'HIGH' ? 'destructive' : group.severity === 'MEDIUM' ? 'default' : 'secondary'}>
-                              {group.severity} Priority
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-gray-600 dark:text-gray-400">
-                            Found {group.facts.length} conflicting facts about the same topic
-                          </p>
-                        </div>
-                        
-                        <div className="space-y-3">
-                          {/* Primary Fact (if marked) */}
-                          {group.primaryFact && group.primaryFact.status === 'ACTIVE' && (
-                            <div className="border border-green-200 dark:border-green-700 rounded p-3 bg-green-50 dark:bg-green-900/20">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center space-x-2">
-                                  <CheckCircle className="h-4 w-4 text-green-600" />
-                                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                                    PRIMARY ({group.primaryFact.confidence ?? 0}% confidence)
-                                  </Badge>
-                                </div>
-                              </div>
-                              <p className="text-sm text-gray-900 dark:text-gray-100">
-                                {group.primaryFact.content}
-                              </p>
-                              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                {group.primaryFact.supportCount} sources • {group.primaryFact.source}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Conflicting Facts */}
-                          {group.facts.filter(f => f.id !== group.primaryFact?.id || group.primaryFact?.status !== 'ACTIVE').map((fact) => (
-                            <div key={fact.id} className="border border-gray-200 dark:border-gray-700 rounded p-3 bg-white dark:bg-gray-800">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center space-x-2">
-                                  <Badge className={getConfidenceColor(fact.confidence)}>
-                                    {fact.confidence ?? 0}% confidence
-                                  </Badge>
-                                  <Badge variant={fact.status === 'ACTIVE' ? 'default' : 'secondary'}>
-                                    {fact.status}
-                                  </Badge>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => resolveContradictionMutation.mutate({
-                                    winnerFactId: fact.id,
-                                    loserFactId: group.facts.find(f => f.id !== fact.id)?.id || ''
-                                  })}
-                                  data-testid={`button-choose-${fact.id}`}
-                                >
-                                  <CheckCircle className="h-4 w-4 mr-1" />
-                                  Make Primary
-                                </Button>
-                              </div>
-                              <p className="text-sm text-gray-900 dark:text-gray-100">
-                                {fact.content}
-                              </p>
-                              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                {fact.supportCount} sources • {fact.source}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        
-                        <div className="mt-4 flex justify-center">
-                          <Button
-                            variant="secondary"
-                            onClick={() => {
-                              // Mark all facts in group as low confidence
-                              group.facts.forEach(fact => {
-                                updateFactMutation.mutate({ 
-                                  factId: fact.id, 
-                                  content: fact.content,
-                                  confidence: 1 
-                                });
-                              });
-                            }}
-                            data-testid={`button-dismiss-group-${group.groupId}`}
-                          >
-                            <Ban className="h-4 w-4 mr-1" />
-                            Dismiss Group
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Flags Tab */}
-          <TabsContent value="flags" className="mt-6">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <CardTitle className="flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-orange-500" />
-                    Content Flags ({flagsData?.count || 0})
-                  </CardTitle>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Search flags..."
-                      value={flagSearchTerm}
-                      onChange={(e) => setFlagSearchTerm(e.target.value)}
-                      className="w-48"
-                      data-testid="input-flag-search"
-                    />
-                    <select
-                      value={selectedFlagType}
-                      onChange={(e) => setSelectedFlagType(e.target.value)}
-                      className="px-3 py-2 border rounded-md bg-background"
-                      data-testid="select-flag-type"
-                      title="Filter by flag type"
-                      aria-label="Filter by flag type"
-                    >
-                      <option value="all">All Types</option>
-                      {flagAnalytics?.topFlagTypes?.map((type: any) => (
-                        <option key={type.flagType} value={type.flagType}>
-                          {type.flagType} ({type.count})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {flagAnalytics && (
-                  <div className="grid grid-cols-4 gap-4 mb-6">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-primary">{flagAnalytics.overview?.totalFlags || 0}</div>
-                      <div className="text-sm text-muted-foreground">Total</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-orange-500">{flagAnalytics.overview?.pendingFlags || 0}</div>
-                      <div className="text-sm text-muted-foreground">Pending</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-500">{flagAnalytics.overview?.approvedFlags || 0}</div>
-                      <div className="text-sm text-muted-foreground">Approved</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-red-500">{flagAnalytics.overview?.rejectedFlags || 0}</div>
-                      <div className="text-sm text-muted-foreground">Rejected</div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Auto-Approval Section */}
-                <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-blue-500" />
-                      <h3 className="text-sm font-semibold">Smart Auto-Approval</h3>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        fetch('/api/flags/auto-approve', { method: 'POST' })
-                          .then(res => res.json())
-                          .then(() => {
-                            queryClient.invalidateQueries({ queryKey: ['/api/flags/pending'] });
-                            toast({ title: 'Auto-approval completed', description: 'High-confidence flags have been automatically approved' });
-                          })
-                          .catch(() => {
-                            toast({ title: 'Auto-approval failed', variant: 'destructive' });
-                          });
-                      }}
-                      data-testid="button-run-auto-approval"
-                    >
-                      <Zap className="w-4 h-4 mr-1" />
-                      Run Auto-Approval
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Automatically approves high-confidence flags from proven categories (max 100/day). Safe categories like DbD gameplay and pasta content are approved at 85%+ confidence.
-                  </p>
-                  
-                  {/* Auto-Approval Stats */}
-                  <AutoApprovalStats />
-                </div>
-
-                <ScrollArea className="h-96">
-                  <div className="space-y-3">
-                    {flagsData?.flags
-                      ?.filter((flag: any) => 
-                        (selectedFlagType === 'all' || flag.flagType === selectedFlagType) &&
-                        (flagSearchTerm === '' || 
-                         flag.flagReason?.toLowerCase().includes(flagSearchTerm.toLowerCase()) ||
-                         flag.flagType?.toLowerCase().includes(flagSearchTerm.toLowerCase()))
-                      )
-                      ?.map((flag: any) => {
-                        // Grouped importance flags
-                        if (flag.type === 'importance_group') {
-                          const availableImportanceLevels = flag.flags.map((f: any) => f.flagType);
-                          const sampleFlag = flag.flags[0];
-                          
-                          return (
-                            <Card key={`${flag.targetType}-${flag.targetId}`} className="p-4 border-blue-200">
-                              <div className="space-y-3">
-                                <div className="flex items-start gap-3">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <Badge variant="secondary" className="text-xs">
-                                        Importance Level
-                                      </Badge>
-                                      <Badge variant="outline" className="text-xs">
-                                        {flag.flags.length} levels detected
-                                      </Badge>
-                                    </div>
-                                    <p className="text-sm text-muted-foreground mb-2">
-                                      {sampleFlag.flagReason}
-                                    </p>
-                                    {sampleFlag.memoryContent && (
-                                      <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-3 mb-3 rounded-r">
-                                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
-                                          Flagged Content:
-                                        </p>
-                                        <p className="text-sm text-gray-700 dark:text-gray-300 italic">
-                                          "{sampleFlag.memoryContent}"
-                                        </p>
-                                        {sampleFlag.memoryType && (
-                                          <p className="text-xs text-muted-foreground mt-1">
-                                            Type: {sampleFlag.memoryType}
-                                          </p>
-                                        )}
-                                      </div>
-                                    )}
-                                    <div className="text-xs text-muted-foreground mb-3">
-                                      Target: {flag.targetType} • Created: {new Date(flag.createdAt).toLocaleDateString()}
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                {/* Importance Selector */}
-                                <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                                  <p className="text-sm font-medium mb-3">Choose the correct importance level:</p>
-                                  <div className="flex gap-2 flex-wrap">
-                                    {['high_importance', 'medium_importance', 'low_importance'].map((importance) => {
-                                      const isAvailable = availableImportanceLevels.includes(importance);
-                                      const label = importance.replace('_importance', '').toUpperCase();
-                                      const variant = importance === 'high_importance' ? 'destructive' : 
-                                                    importance === 'medium_importance' ? 'secondary' : 'outline';
-                                      
-                                      return (
-                                        <Button
-                                          key={importance}
-                                          size="sm"
-                                          variant={isAvailable ? variant : 'outline'}
-                                          disabled={!isAvailable || batchImportanceReviewMutation.isPending}
-                                          onClick={() => batchImportanceReviewMutation.mutate({
-                                            targetType: flag.targetType,
-                                            targetId: flag.targetId,
-                                            selectedImportance: importance as 'high_importance' | 'medium_importance' | 'low_importance'
-                                          })}
-                                          data-testid={`button-importance-${importance}-${flag.targetId}`}
-                                          className={`${!isAvailable ? 'opacity-50' : ''}`}
-                                        >
-                                          {label} {isAvailable ? '✓' : '✗'}
-                                        </Button>
-                                      );
-                                    })}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground mt-2">
-                                    Click to approve that importance level and auto-reject the others
-                                  </p>
-                                </div>
-                              </div>
-                            </Card>
-                          );
-                        }
-
-                        // Individual flags (regular display)
-                        return (
-                          <Card key={flag.id} className="p-4">
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Badge variant="outline" className="text-xs">
-                                    {flag.flagType}
-                                  </Badge>
-                                  <Badge 
-                                    variant={flag.priority === 'CRITICAL' ? 'destructive' : 
-                                             flag.priority === 'HIGH' ? 'secondary' : 'outline'}
-                                    className="text-xs"
-                                  >
-                                    {flag.priority}
-                                  </Badge>
-                                  {flag.confidence && (
-                                    <Badge variant="outline" className="text-xs">
-                                      {Math.round(flag.confidence)}% confidence
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-sm text-muted-foreground mb-2">
-                                  {flag.flagReason}
-                                </p>
-                                {flag.memoryContent && (
-                                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-3 mb-3 rounded-r">
-                                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
-                                      Flagged Content:
-                                    </p>
-                                    <p className="text-sm text-gray-700 dark:text-gray-300 italic">
-                                      "{flag.memoryContent}"
-                                    </p>
-                                    {flag.memoryType && (
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        Type: {flag.memoryType}
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                                <div className="text-xs text-muted-foreground">
-                                  Target: {flag.targetType} • Created: {new Date(flag.createdAt).toLocaleDateString()}
-                                </div>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => reviewFlagMutation.mutate({
-                                    flagId: flag.id,
-                                    reviewStatus: 'APPROVED'
-                                  })}
-                                  data-testid={`button-approve-flag-${flag.id}`}
-                                >
-                                  <CheckCircle className="w-4 h-4 text-green-600" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => reviewFlagMutation.mutate({
-                                    flagId: flag.id,
-                                    reviewStatus: 'REJECTED'
-                                  })}
-                                  data-testid={`button-reject-flag-${flag.id}`}
-                                >
-                                  <XCircle className="w-4 h-4 text-red-600" />
-                                </Button>
-                              </div>
-                            </div>
-                          </Card>
-                        );
-                      })}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Duplicates Tab */}
-          <TabsContent value="duplicates" className="mt-6">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Copy className="w-5 h-5 text-blue-500" />
-                      Memory Deduplication
-                    </CardTitle>
-                    {savedScanDate && duplicateGroups.length > 0 && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        Last scan: {new Date(savedScanDate).toLocaleString()} ({duplicateGroups.length} groups saved)
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex gap-2 items-center">
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm font-medium">Similarity:</label>
-                      <Slider
-                        value={[similarityThreshold]}
-                        onValueChange={(value) => setSimilarityThreshold(value[0])}
-                        max={1}
-                        min={0.5}
-                        step={0.05}
-                        className="w-32"
-                        data-testid="slider-similarity-threshold"
-                      />
-                      <span className="text-sm text-gray-500 w-12">
-                        {Math.round(similarityThreshold * 100)}%
-                      </span>
-                    </div>
-                    <Button
-                      onClick={() => {
-                        setIsLoadingDuplicates(true);
-                        findDuplicatesMutation.mutate(similarityThreshold);
-                      }}
-                      disabled={isLoadingDuplicates || findDuplicatesMutation.isPending}
-                      data-testid="button-find-duplicates"
-                    >
-                      {isLoadingDuplicates || findDuplicatesMutation.isPending ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Scanning...
+                          Extracting Entities...
                         </>
                       ) : (
                         <>
                           <Search className="h-4 w-4 mr-2" />
-                          Find Duplicates
+                          Extract Entities from Recent Memories
                         </>
                       )}
                     </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="default"
-                          disabled={deepScanInProgress || deepScanDuplicatesMutation.isPending}
-                          data-testid="button-deep-scan"
-                        >
-                          {deepScanInProgress || deepScanDuplicatesMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <Scan className="h-4 w-4 mr-2" />
-                          )}
-                          Deep Scan
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Scan Depth</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            setDeepScanInProgress(true);
-                            deepScanDuplicatesMutation.mutate({ scanDepth: 100, threshold: similarityThreshold });
-                          }}
-                          data-testid="scan-depth-100"
-                        >
-                          <span className="font-medium">100</span>
-                          <span className="text-xs text-muted-foreground ml-2">Recent memories</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            setDeepScanInProgress(true);
-                            deepScanDuplicatesMutation.mutate({ scanDepth: 500, threshold: similarityThreshold });
-                          }}
-                          data-testid="scan-depth-500"
-                        >
-                          <span className="font-medium">500</span>
-                          <span className="text-xs text-muted-foreground ml-2">Extended scan</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            setDeepScanInProgress(true);
-                            deepScanDuplicatesMutation.mutate({ scanDepth: 1000, threshold: similarityThreshold });
-                          }}
-                          data-testid="scan-depth-1000"
-                        >
-                          <span className="font-medium">1,000</span>
-                          <span className="text-xs text-muted-foreground ml-2">Comprehensive scan</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem 
-                          onClick={() => {
-                            setDeepScanInProgress(true);
-                            deepScanDuplicatesMutation.mutate({ scanDepth: 'ALL', threshold: similarityThreshold });
-                          }}
-                          className="text-accent font-medium"
-                          data-testid="scan-depth-all"
-                        >
-                          <span>ALL</span>
-                          <span className="text-xs text-muted-foreground ml-2">Full memory scan</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <Button
-                      onClick={() => {
-                        setAutoMergeInProgress(true);
-                        autoMergeMutation.mutate(similarityThreshold);
-                      }}
-                      disabled={autoMergeInProgress || autoMergeMutation.isPending}
-                      variant="outline"
-                      data-testid="button-auto-merge"
-                    >
-                      {autoMergeInProgress || autoMergeMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Merge className="h-4 w-4 mr-2" />
-                      )}
-                      Auto-Merge ({Math.round(similarityThreshold * 100)}%+)
-                    </Button>
-                  </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Entity Overview */}
+              {entities && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center space-x-2">
+                        <Users className="h-4 w-4 text-blue-500" />
+                        <span>People</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-blue-500">
+                        {entities?.people?.length || 0}
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        Individuals mentioned in memories
+                      </p>
+                      {entities?.people?.slice(0, 3).map((person: any) => (
+                        <div key={person.id} className="text-xs text-gray-500 mt-1">
+                          • {person.canonicalName} {person.disambiguation && `(${person.disambiguation})`}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center space-x-2">
+                        <MapPin className="h-4 w-4 text-green-500" />
+                        <span>Places</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-green-500">
+                        {entities?.places?.length || 0}
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        Locations mentioned in memories
+                      </p>
+                      {entities?.places?.slice(0, 3).map((place: any) => (
+                        <div key={place.id} className="text-xs text-gray-500 mt-1">
+                          • {place.canonicalName} {place.locationType && `(${place.locationType})`}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center space-x-2">
+                        <Calendar className="h-4 w-4 text-purple-500" />
+                        <span>Events</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-purple-500">
+                        {entities?.events?.length || 0}
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        Events mentioned in memories
+                      </p>
+                      {entities?.events?.slice(0, 3).map((event: any) => (
+                        <div key={event.id} className="text-xs text-gray-500 mt-1">
+                          • {event.canonicalName} {event.eventDate && `(${event.eventDate})`}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center space-x-2">
+                        <Lightbulb className="h-4 w-4 text-yellow-500" />
+                        <span>Concepts</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-yellow-500">
+                        {entities?.concepts?.length || 0}
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        Abstract ideas and themes
+                      </p>
+                      {entities?.concepts?.slice(0, 3).map((concept: any) => (
+                        <div key={concept.id} className="text-xs text-gray-500 mt-1">
+                          • {concept.canonicalName} {concept.category && `(${concept.category})`}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center space-x-2">
+                        <Package className="h-4 w-4 text-orange-500" />
+                        <span>Items</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-orange-500">
+                        {entities?.items?.length || 0}
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        Physical objects and items
+                      </p>
+                      {entities?.items?.slice(0, 3).map((item: any) => (
+                        <div key={item.id} className="text-xs text-gray-500 mt-1">
+                          • {item.canonicalName} {item.type && `(${item.type})`}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center space-x-2">
+                        <Box className="h-4 w-4 text-gray-500" />
+                        <span>Misc</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-gray-500">
+                        {entities?.misc?.length || 0}
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        Other entities
+                      </p>
+                      {entities?.misc?.slice(0, 3).map((misc: any) => (
+                        <div key={misc.id} className="text-xs text-gray-500 mt-1">
+                          • {misc.canonicalName} {misc.type && `(${misc.type})`}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Find and merge similar memory entries to eliminate redundancy and improve knowledge base efficiency.
-                </p>
-              </CardHeader>
-              <CardContent>
-                {(() => {
-                  console.log('🎨 Rendering duplicates UI:', {
-                    groupsLength: duplicateGroups.length,
-                    isLoading: isLoadingDuplicates,
-                    firstGroup: duplicateGroups[0]
-                  });
-                  return null;
-                })()}
-                
-                {duplicateGroups.length === 0 && !isLoadingDuplicates ? (
-                  <div className="text-center py-12">
-                    <Copy className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 dark:text-gray-400 mb-2">
-                      No duplicate groups found
-                    </p>
-                    <p className="text-sm text-gray-400">
-                      Click "Find Duplicates" to scan for similar memories
-                    </p>
-                  </div>
-                ) : (
-                  <ScrollArea className="h-[600px]">
-                    <div className="space-y-6">
-                      {duplicateGroups.map((group, groupIndex) => {
-                        if (groupIndex === 0) {
-                          console.log('🎯 First group structure:', group);
-                        }
-                        return (<Card key={groupIndex} className="border-l-4 border-l-orange-500">
-                          <CardHeader>
-                            <div className="flex justify-between items-center">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline">
-                                  {group.duplicates.length + 1} similar memories
+              )}
+
+              {/* Scan for Duplicates Button */}
+              {entities && (entities?.people?.length > 0 || entities?.places?.length > 0 || entities?.events?.length > 0 || entities?.concepts?.length > 0 || entities?.items?.length > 0 || entities?.misc?.length > 0) && (
+                <div className="flex justify-end mb-4">
+                  <Button
+                    onClick={() => {
+                      setIsLoadingEntityDuplicates(true);
+                      scanEntityDuplicatesMutation.mutate();
+                    }}
+                    disabled={isLoadingEntityDuplicates || scanEntityDuplicatesMutation.isPending}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    {(isLoadingEntityDuplicates || scanEntityDuplicatesMutation.isPending) ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Scanning...
+                      </>
+                    ) : (
+                      <>
+                        <Scan className="h-4 w-4 mr-2" />
+                        Scan for Duplicate Entities
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {/* Duplicate Groups Display */}
+              {showEntityDuplicates && entityDuplicateGroups.length > 0 && (
+                <Card className="mb-6 border-purple-200 dark:border-purple-800">
+                  <CardHeader className="bg-purple-50 dark:bg-purple-900/20">
+                    <CardTitle className="flex items-center justify-between">
+                      <span className="flex items-center">
+                        <AlertTriangle className="h-5 w-5 mr-2 text-purple-600" />
+                        Potential Duplicate Entities ({entityDuplicateGroups.length} groups)
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowEntityDuplicates(false)}
+                      >
+                        Hide
+                      </Button>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <ScrollArea className="h-[400px]">
+                      <div className="space-y-4">
+                        {entityDuplicateGroups.map((group, idx) => (
+                          <Card key={idx} className="border-purple-100 dark:border-purple-800">
+                            <CardContent className="pt-4">
+                              <div className="mb-3">
+                                <Badge variant="outline" className="mb-2">
+                                  {group.type.toUpperCase()}
                                 </Badge>
-                                <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300">
-                                  {Math.round(group.avgSimilarity * 100)}% similar
-                                </Badge>
+                                <h4 className="font-semibold text-lg">
+                                  Master: {group.masterName}
+                                </h4>
+                                {group.masterData.disambiguation && (
+                                  <p className="text-sm text-gray-600">({group.masterData.disambiguation})</p>
+                                )}
                               </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  onClick={() => {
-                                    // 🔧 Quick merge - uses AI merging automatically, no editing
-                                    const masterEntryId = group.masterId; // Standardized format
-                                    const duplicateIds = group.duplicates.map((d: any) => d.id);
-                                    
-                                    if (masterEntryId && duplicateIds.length > 0) {
-                                      previewMergeMutation.mutate({ masterEntryId, duplicateIds });
-                                    }
-                                  }}
-                                  disabled={previewMergeMutation.isPending || manualMergeMutation.isPending}
-                                  data-testid={`button-quick-merge-${groupIndex}`}
-                                >
-                                  {previewMergeMutation.isPending ? (
-                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                  ) : (
-                                    <Zap className="h-4 w-4 mr-1" />
-                                  )}
-                                  Review & Merge
-                                </Button>
-                              </div>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            {/* Primary Memory - standardized format */}
-                            {group.masterContent && (
-                              <div className="border border-green-200 dark:border-green-700 rounded p-4 bg-green-50 dark:bg-green-900/20">
-                                <div className="flex items-center justify-between mb-2">
-                                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                                    PRIMARY
-                                  </Badge>
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    ID: {group.masterId.substring(0, 8)}...
-                                  </div>
-                                </div>
-                                <p className="text-sm text-gray-900 dark:text-gray-100">
-                                  {group.masterContent}
+
+                              <div className="space-y-2">
+                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                  Potential Duplicates ({group.duplicates.length}):
                                 </p>
-                              </div>
-                            )}
-                            
-                            {/* Similar Memories */}
-                            {group.duplicates.map((memory: any, memoryIndex: number) => (
-                              <div key={memory.id} className="border border-gray-200 dark:border-gray-700 rounded p-4 bg-white dark:bg-gray-800">
-                                <div className="flex items-center justify-between mb-2">
-                                  <Badge variant="outline">
-                                    SIMILAR ({Math.round(memory.similarity * 100)}%)
-                                  </Badge>
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    {memory.confidence != null && `Confidence: ${memory.confidence}% | `}
-                                    Importance: {memory.importance || 0}
+                                {group.duplicates.map((dup: any) => (
+                                  <div key={dup.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded border">
+                                    <div className="flex-1">
+                                      <p className="font-medium">{dup.canonicalName}</p>
+                                      <p className="text-xs text-gray-500">
+                                        Similarity: {(dup.similarity * 100).toFixed(0)}%
+                                      </p>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        mergeEntitiesMutation.mutate({
+                                          type: group.type,
+                                          primaryId: group.masterId,
+                                          duplicateId: dup.id
+                                        });
+                                      }}
+                                      disabled={mergeEntitiesMutation.isPending}
+                                      className="bg-purple-600 hover:bg-purple-700"
+                                    >
+                                      <Merge className="h-3 w-3 mr-1" />
+                                      Merge
+                                    </Button>
                                   </div>
-                                </div>
-                                <p className="text-sm text-gray-900 dark:text-gray-100">
-                                  {memory.content}
-                                </p>
-                                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                  Source: {memory.source} • {new Date(memory.createdAt).toLocaleDateString()}
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Entity Management Tabs */}
+              {entities && (
+                <Tabs defaultValue="people" className="w-full">
+                  <TabsList className="grid w-full grid-cols-6">
+                    <TabsTrigger value="people" data-testid="tab-entity-people">
+                      <Users className="h-4 w-4 mr-2" />
+                      People ({entities?.people?.length || 0})
+                    </TabsTrigger>
+                    <TabsTrigger value="places" data-testid="tab-entity-places">
+                      <MapPin className="h-4 w-4 mr-2" />
+                      Places ({entities?.places?.length || 0})
+                    </TabsTrigger>
+                    <TabsTrigger value="events" data-testid="tab-entity-events">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Events ({entities?.events?.length || 0})
+                    </TabsTrigger>
+                    <TabsTrigger value="concepts" data-testid="tab-entity-concepts">
+                      <Lightbulb className="h-4 w-4 mr-2" />
+                      Concepts ({entities?.concepts?.length || 0})
+                    </TabsTrigger>
+                    <TabsTrigger value="items" data-testid="tab-entity-items">
+                      <Package className="h-4 w-4 mr-2" />
+                      Items ({entities?.items?.length || 0})
+                    </TabsTrigger>
+                    <TabsTrigger value="misc" data-testid="tab-entity-misc">
+                      <Box className="h-4 w-4 mr-2" />
+                      Misc ({entities?.misc?.length || 0})
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* People Tab */}
+                  <TabsContent value="people" className="mt-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>People Entities</CardTitle>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Manage individuals that Nicky knows about
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <ScrollArea className="h-[400px]">
+                          <div className="space-y-4">
+                            {entities?.people?.map((person: Person) => (
+                              <div key={person.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                                      {person.canonicalName}
+                                    </h3>
+                                    {person.disambiguation && (
+                                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                                        {person.disambiguation}
+                                      </p>
+                                    )}
+                                    {person.aliases && person.aliases.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-2">
+                                        {person.aliases.map((alias, index) => (
+                                          <Badge key={index} variant="outline" className="text-xs">
+                                            {alias}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {person.relationship && (
+                                      <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
+                                        <strong>Relationship:</strong> {person.relationship}
+                                      </p>
+                                    )}
+                                    {person.description && (
+                                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                                        {person.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="flex space-x-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-blue-600 hover:text-blue-700"
+                                      onClick={() => showEntityMemories('person', person.id, person.canonicalName)}
+                                      data-testid={`button-memories-person-${person.id}`}
+                                    >
+                                      Show Memories
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-purple-600 hover:text-purple-700"
+                                      onClick={() => startMergeFlow('person', person.id)}
+                                      data-testid={`button-merge-person-${person.id}`}
+                                    >
+                                      <Merge className="h-4 w-4 mr-1" />
+                                      Merge
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => openEntityEditDialog('person', person)}
+                                      data-testid={`button-edit-person-${person.id}`}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-red-600 hover:text-red-700"
+                                      onClick={() => handleEntityDelete('person', person.id, person.canonicalName)}
+                                      data-testid={`button-delete-person-${person.id}`}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                             ))}
-                          </CardContent>
-                        </Card>);
-                      })}
-                    </div>
-                  </ScrollArea>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                          </div>
+                        </ScrollArea>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
 
-          {/* All Facts */}
-          <TabsContent value="all-facts" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>All Facts Browser ({allFacts?.length || 0})</CardTitle>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Browse and manage all facts in Nicky's knowledge base.
-                </p>
-              </CardHeader>
-              <CardContent>
-                {isLoadingAllFacts ? (
-                  <div className="space-y-4">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <Skeleton key={i} className="h-24 w-full" />
-                    ))}
-                  </div>
-                ) : (
-                  <ScrollArea className="h-[600px]">
-                    <div className="space-y-3">
-                      {filteredFacts(allFacts)?.length === 0 ? (
-                        <div className="text-center py-10 text-gray-500">
-                          No facts found matching your search.
-                        </div>
-                      ) : (
-                        filteredFacts(allFacts)?.map((fact: MemoryFact) => (
-                          <div
-                            key={fact.id}
-                            className="border border-gray-200 dark:border-gray-700 rounded p-3 bg-white dark:bg-gray-800"
-                          >
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex items-center space-x-2">
-                                <Badge className={getConfidenceColor(fact.confidence)}>
-                                  {fact.confidence ?? 0}%
-                                </Badge>
-                                <Badge variant="outline">{fact.status}</Badge>
+                  {/* Places Tab */}
+                  <TabsContent value="places" className="mt-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Place Entities</CardTitle>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Manage locations that Nicky knows about
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <ScrollArea className="h-[400px]">
+                          <div className="space-y-4">
+                            {entities?.places?.map((place: Place) => (
+                              <div key={place.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                                      {place.canonicalName}
+                                    </h3>
+                                    {place.locationType && (
+                                      <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                                        <strong>Type:</strong> {place.locationType}
+                                      </p>
+                                    )}
+                                    {place.description && (
+                                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                                        {place.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="flex space-x-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-blue-600 hover:text-blue-700"
+                                      onClick={() => showEntityMemories('place', place.id, place.canonicalName)}
+                                      data-testid={`button-memories-place-${place.id}`}
+                                    >
+                                      Show Memories
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => openEntityEditDialog('place', place)}
+                                      data-testid={`button-edit-place-${place.id}`}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-red-600 hover:text-red-700"
+                                      onClick={() => handleEntityDelete('place', place.id, place.canonicalName)}
+                                      data-testid={`button-delete-place-${place.id}`}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
+                                </div>
                               </div>
-                              <FactActions fact={fact} variant="compact" />
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  {/* Events Tab */}
+                  <TabsContent value="events" className="mt-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Event Entities</CardTitle>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Manage events that Nicky knows about
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <ScrollArea className="h-[400px]">
+                          <div className="space-y-4">
+                            {entities?.events?.map((event: Event) => (
+                              <div key={event.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                                      {event.canonicalName}
+                                    </h3>
+                                    {event.eventDate && (
+                                      <p className="text-sm text-purple-600 dark:text-purple-400 mt-1">
+                                        <strong>Date:</strong> {event.eventDate}
+                                      </p>
+                                    )}
+                                    {event.isCanonical && (
+                                      <Badge variant="default" className="mt-2">
+                                        Canonical Event
+                                      </Badge>
+                                    )}
+                                    {event.description && (
+                                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                                        {event.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="flex space-x-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-blue-600 hover:text-blue-700"
+                                      onClick={() => showEntityMemories('event', event.id, event.canonicalName)}
+                                      data-testid={`button-memories-event-${event.id}`}
+                                    >
+                                      Show Memories
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => openEntityEditDialog('event', event)}
+                                      data-testid={`button-edit-event-${event.id}`}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-red-600 hover:text-red-700"
+                                      onClick={() => handleEntityDelete('event', event.id, event.canonicalName)}
+                                      data-testid={`button-delete-event-${event.id}`}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  {/* Concepts Tab */}
+                  <TabsContent value="concepts" className="mt-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Concept Entities</CardTitle>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Manage abstract concepts and themes
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <ScrollArea className="h-[400px]">
+                          <div className="space-y-4">
+                            {entities?.concepts?.map((concept: Concept) => (
+                              <div key={concept.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                                      {concept.canonicalName}
+                                    </h3>
+                                    {concept.category && (
+                                      <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">
+                                        <strong>Category:</strong> {concept.category}
+                                      </p>
+                                    )}
+                                    {concept.description && (
+                                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                                        {concept.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="flex space-x-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-blue-600 hover:text-blue-700"
+                                      onClick={() => showEntityMemories('concept', concept.id, concept.canonicalName)}
+                                      data-testid={`button-memories-concept-${concept.id}`}
+                                    >
+                                      Show Memories
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => openEntityEditDialog('concept', concept)}
+                                      data-testid={`button-edit-concept-${concept.id}`}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-red-600 hover:text-red-700"
+                                      onClick={() => handleEntityDelete('concept', concept.id, concept.canonicalName)}
+                                      data-testid={`button-delete-concept-${concept.id}`}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  {/* Items Tab */}
+                  <TabsContent value="items" className="mt-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Item Entities</CardTitle>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Manage physical items and objects
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <ScrollArea className="h-[400px]">
+                          <div className="space-y-4">
+                            {entities?.items?.map((item: Item) => (
+                              <div key={item.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                                      {item.canonicalName}
+                                    </h3>
+                                    {item.type && (
+                                      <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
+                                        <strong>Type:</strong> {item.type}
+                                      </p>
+                                    )}
+                                    {item.description && (
+                                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                                        {item.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="flex space-x-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-blue-600 hover:text-blue-700"
+                                      onClick={() => showEntityMemories('item', item.id, item.canonicalName)}
+                                      data-testid={`button-memories-item-${item.id}`}
+                                    >
+                                      Show Memories
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => openEntityEditDialog('item', item)}
+                                      data-testid={`button-edit-item-${item.id}`}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-red-600 hover:text-red-700"
+                                      onClick={() => handleEntityDelete('item', item.id, item.canonicalName)}
+                                      data-testid={`button-delete-item-${item.id}`}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  {/* Misc Tab */}
+                  <TabsContent value="misc" className="mt-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Misc Entities</CardTitle>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Manage other entities
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <ScrollArea className="h-[400px]">
+                          <div className="space-y-4">
+                            {entities?.misc?.map((misc: Misc) => (
+                              <div key={misc.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                                      {misc.canonicalName}
+                                    </h3>
+                                    {misc.type && (
+                                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                        <strong>Type:</strong> {misc.type}
+                                      </p>
+                                    )}
+                                    {misc.description && (
+                                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
+                                        {misc.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="flex space-x-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-blue-600 hover:text-blue-700"
+                                      onClick={() => showEntityMemories('misc', misc.id, misc.canonicalName)}
+                                      data-testid={`button-memories-misc-${misc.id}`}
+                                    >
+                                      Show Memories
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => openEntityEditDialog('misc', misc)}
+                                      data-testid={`button-edit-misc-${misc.id}`}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-red-600 hover:text-red-700"
+                                      onClick={() => handleEntityDelete('misc', misc.id, misc.canonicalName)}
+                                      data-testid={`button-delete-misc-${misc.id}`}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                </Tabs>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Discord Integration */}
+        <TabsContent value="discord" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Discord Integration</CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Configure Nicky's Discord bot behavior and server interactions
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <DiscordManagementPanel />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Protected Facts */}
+        <TabsContent value="protected-facts" className="mt-6">
+          <ProtectedFactsManager />
+        </TabsContent>
+
+        {/* High Confidence Facts */}
+        <TabsContent value="high-confidence" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Highest Confidence Facts (90%+)</CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                These are the facts Nicky relies on most - they have the highest confidence from multiple sources.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[600px]">
+                {/* 🚀 NEW: Story-grouped facts */}
+                {Object.entries(groupFactsByStory(filteredFacts(highConfidenceFacts))).map(([storyKey, facts]) => (
+                  <div key={storyKey} className="mb-6">
+                    <h3 className="text-lg font-semibold mb-3 text-purple-600 dark:text-purple-400 border-b border-purple-200 dark:border-purple-800 pb-2">
+                      📖 {storyKey}
+                    </h3>
+                    <div className="space-y-4">
+                      {facts.map((fact: MemoryFact) => (
+                        <div
+                          key={fact.id}
+                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center space-x-2">
+                              <Badge className={getConfidenceColor(fact.confidence)}>
+                                {fact.confidence ?? 0}% {getConfidenceLabel(fact.confidence)}
+                              </Badge>
+                              <Badge variant="outline">
+                                {fact.supportCount} sources
+                              </Badge>
+                              <Badge variant="secondary">
+                                Importance: {fact.importance}
+                              </Badge>
                             </div>
-                            <p className="text-sm text-gray-900 dark:text-gray-100 mb-2 leading-relaxed">
-                              {fact.content}
+                            <FactActions fact={fact} />
+                          </div>
+                          <Progress value={fact.confidence ?? 0} className="w-full mb-3" />
+                          <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
+                            {fact.content}
+                          </p>
+                          <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                            Source: {fact.source} • Created: {new Date(fact.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* 🚀 NEW: Medium Confidence Facts */}
+        <TabsContent value="medium-confidence" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Medium Confidence Facts (60-89%)</CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                These facts need more verification but show promising confidence levels.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[600px]">
+                {/* Story-grouped medium confidence facts */}
+                {Object.entries(groupFactsByStory(filteredFacts(mediumConfidenceFacts))).map(([storyKey, facts]) => (
+                  <div key={storyKey} className="mb-6">
+                    <h3 className="text-lg font-semibold mb-3 text-blue-600 dark:text-blue-400 border-b border-blue-200 dark:border-blue-800 pb-2">
+                      📖 {storyKey}
+                    </h3>
+                    <div className="space-y-4">
+                      {facts.map((fact: MemoryFact) => (
+                        <div
+                          key={fact.id}
+                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center space-x-2">
+                              <Badge className={getConfidenceColor(fact.confidence)}>
+                                {fact.confidence ?? 0}% {getConfidenceLabel(fact.confidence)}
+                              </Badge>
+                              <Badge variant="outline">
+                                Support: {fact.supportCount}
+                              </Badge>
+                            </div>
+                            <FactActions fact={fact} />
+                          </div>
+                          <Progress value={fact.confidence ?? 0} className="w-full mb-3" />
+                          <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
+                            {fact.content}
+                          </p>
+                          <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                            Source: {fact.source} • Created: {new Date(fact.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* 🚀 NEW: Low Confidence Facts */}
+        <TabsContent value="low-confidence" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Low Confidence Facts (0-59%)</CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                These facts need significant verification or may be questionable.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[600px]">
+                {/* Story-grouped low confidence facts */}
+                {Object.entries(groupFactsByStory(filteredFacts(lowConfidenceFacts))).map(([storyKey, facts]) => (
+                  <div key={storyKey} className="mb-6">
+                    <h3 className="text-lg font-semibold mb-3 text-red-600 dark:text-red-400 border-b border-red-200 dark:border-red-800 pb-2">
+                      📖 {storyKey}
+                    </h3>
+                    <div className="space-y-4">
+                      {facts.map((fact: MemoryFact) => (
+                        <div
+                          key={fact.id}
+                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center space-x-2">
+                              <Badge className={getConfidenceColor(fact.confidence)}>
+                                {fact.confidence ?? 0}% {getConfidenceLabel(fact.confidence)}
+                              </Badge>
+                              <Badge variant="outline">
+                                Support: {fact.supportCount}
+                              </Badge>
+                            </div>
+                            <FactActions fact={fact} />
+                          </div>
+                          <Progress value={fact.confidence ?? 0} className="w-full mb-3" />
+                          <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
+                            {fact.content}
+                          </p>
+                          <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                            Source: {fact.source} • Created: {new Date(fact.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Contradictions */}
+        <TabsContent value="contradictions" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <AlertTriangle className="h-5 w-5 text-yellow-500 mr-2" />
+                Conflicting Facts
+              </CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                These facts contradict each other. Choose which one is correct or mark conflicts as "not important."
+              </p>
+              {contradictions.length === 0 && (
+                <div className="mt-4">
+                  <Button
+                    onClick={() => scanContradictionsMutation.mutate()}
+                    disabled={scanContradictionsMutation.isPending}
+                    data-testid="button-scan-contradictions"
+                  >
+                    {scanContradictionsMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Analyzing Facts with AI...
+                      </>
+                    ) : (
+                      <>
+                        <Brain className="h-4 w-4 mr-2" />
+                        Scan All Facts for Contradictions
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    This will analyze your existing {allFacts.length} facts using AI to detect semantic contradictions
+                  </p>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[600px]">
+                <div className="space-y-6">
+                  {contradictions?.map((group: ContradictionGroup, index: number) => (
+                    <div
+                      key={group.groupId}
+                      className={`border rounded-lg p-4 ${group.severity === 'HIGH'
+                        ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
+                        : group.severity === 'MEDIUM'
+                          ? 'border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
+                          : 'border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20'
+                        }`}
+                    >
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
+                            Contradiction Group: {group.explanation}
+                          </h4>
+                          <Badge variant={group.severity === 'HIGH' ? 'destructive' : group.severity === 'MEDIUM' ? 'default' : 'secondary'}>
+                            {group.severity} Priority
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          Found {group.facts.length} conflicting facts about the same topic
+                        </p>
+                      </div>
+
+                      <div className="space-y-3">
+                        {/* Primary Fact (if marked) */}
+                        {group.primaryFact && group.primaryFact.status === 'ACTIVE' && (
+                          <div className="border border-green-200 dark:border-green-700 rounded p-3 bg-green-50 dark:bg-green-900/20">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                                  PRIMARY ({group.primaryFact.confidence ?? 0}% confidence)
+                                </Badge>
+                              </div>
+                            </div>
+                            <p className="text-sm text-gray-900 dark:text-gray-100">
+                              {group.primaryFact.content}
                             </p>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {fact.supportCount} sources • Importance: {fact.importance} • {fact.source}
+                            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                              {group.primaryFact.supportCount} sources • {group.primaryFact.source}
                             </div>
                           </div>
-                        ))
-                      )}
+                        )}
+
+                        {/* Conflicting Facts */}
+                        {group.facts.filter(f => f.id !== group.primaryFact?.id || group.primaryFact?.status !== 'ACTIVE').map((fact) => (
+                          <div key={fact.id} className="border border-gray-200 dark:border-gray-700 rounded p-3 bg-white dark:bg-gray-800">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <Badge className={getConfidenceColor(fact.confidence)}>
+                                  {fact.confidence ?? 0}% confidence
+                                </Badge>
+                                <Badge variant={fact.status === 'ACTIVE' ? 'default' : 'secondary'}>
+                                  {fact.status}
+                                </Badge>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => resolveContradictionMutation.mutate({
+                                  winnerFactId: fact.id,
+                                  loserFactId: group.facts.find(f => f.id !== fact.id)?.id || ''
+                                })}
+                                data-testid={`button-choose-${fact.id}`}
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Make Primary
+                              </Button>
+                            </div>
+                            <p className="text-sm text-gray-900 dark:text-gray-100">
+                              {fact.content}
+                            </p>
+                            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                              {fact.supportCount} sources • {fact.source}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-4 flex justify-center">
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            // Mark all facts in group as low confidence
+                            group.facts.forEach(fact => {
+                              updateFactMutation.mutate({
+                                factId: fact.id,
+                                content: fact.content,
+                                confidence: 1
+                              });
+                            });
+                          }}
+                          data-testid={`button-dismiss-group-${group.groupId}`}
+                        >
+                          <Ban className="h-4 w-4 mr-1" />
+                          Dismiss Group
+                        </Button>
+                      </div>
                     </div>
-                  </ScrollArea>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                  ))}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          {/* Intelligence Dashboard */}
-          <TabsContent value="intelligence" className="mt-6">
-            <IntelligenceDashboard />
-          </TabsContent>
+        {/* Flags Tab */}
+        <TabsContent value="flags" className="mt-6">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-orange-500" />
+                  Content Flags ({flagsData?.count || 0})
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Search flags..."
+                    value={flagSearchTerm}
+                    onChange={(e) => setFlagSearchTerm(e.target.value)}
+                    className="w-48"
+                    data-testid="input-flag-search"
+                  />
+                  <select
+                    value={selectedFlagType}
+                    onChange={(e) => setSelectedFlagType(e.target.value)}
+                    className="px-3 py-2 border rounded-md bg-background"
+                    data-testid="select-flag-type"
+                    title="Filter by flag type"
+                    aria-label="Filter by flag type"
+                  >
+                    <option value="all">All Types</option>
+                    {flagAnalytics?.topFlagTypes?.map((type: any) => (
+                      <option key={type.flagType} value={type.flagType}>
+                        {type.flagType} ({type.count})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {flagAnalytics && (
+                <div className="grid grid-cols-4 gap-4 mb-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-primary">{flagAnalytics.overview?.totalFlags || 0}</div>
+                    <div className="text-sm text-muted-foreground">Total</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-orange-500">{flagAnalytics.overview?.pendingFlags || 0}</div>
+                    <div className="text-sm text-muted-foreground">Pending</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-500">{flagAnalytics.overview?.approvedFlags || 0}</div>
+                    <div className="text-sm text-muted-foreground">Approved</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-red-500">{flagAnalytics.overview?.rejectedFlags || 0}</div>
+                    <div className="text-sm text-muted-foreground">Rejected</div>
+                  </div>
+                </div>
+              )}
 
-          {/* Podcast Management */}
-          <TabsContent value="podcast" className="mt-6">
-            <PodcastManagementPanel />
-          </TabsContent>
+              {/* Auto-Approval Section */}
+              <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-blue-500" />
+                    <h3 className="text-sm font-semibold">Smart Auto-Approval</h3>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      fetch('/api/flags/auto-approve', { method: 'POST' })
+                        .then(res => res.json())
+                        .then(() => {
+                          queryClient.invalidateQueries({ queryKey: ['/api/flags/pending'] });
+                          toast({ title: 'Auto-approval completed', description: 'High-confidence flags have been automatically approved' });
+                        })
+                        .catch(() => {
+                          toast({ title: 'Auto-approval failed', variant: 'destructive' });
+                        });
+                    }}
+                    data-testid="button-run-auto-approval"
+                  >
+                    <Zap className="w-4 h-4 mr-1" />
+                    Run Auto-Approval
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Automatically approves high-confidence flags from proven categories (max 100/day). Safe categories like DbD gameplay and pasta content are approved at 85%+ confidence.
+                </p>
 
-          {/* Content Sources */}
-          <TabsContent value="content-sources" className="mt-6">
-            <ContentIngestionPanel profileId={activeProfile?.id} />
-          </TabsContent>
+                {/* Auto-Approval Stats */}
+                <AutoApprovalStats />
+              </div>
 
-          {/* Content Library */}
-          <TabsContent value="content-library" className="mt-6">
-            <ContentLibraryPanel profileId={activeProfile?.id} />
-          </TabsContent>
-        </Tabs>
+              <ScrollArea className="h-96">
+                <div className="space-y-3">
+                  {flagsData?.flags
+                    ?.filter((flag: any) =>
+                      (selectedFlagType === 'all' || flag.flagType === selectedFlagType) &&
+                      (flagSearchTerm === '' ||
+                        flag.flagReason?.toLowerCase().includes(flagSearchTerm.toLowerCase()) ||
+                        flag.flagType?.toLowerCase().includes(flagSearchTerm.toLowerCase()))
+                    )
+                    ?.map((flag: any) => {
+                      // Grouped importance flags
+                      if (flag.type === 'importance_group') {
+                        const availableImportanceLevels = flag.flags.map((f: any) => f.flagType);
+                        const sampleFlag = flag.flags[0];
+
+                        return (
+                          <Card key={`${flag.targetType}-${flag.targetId}`} className="p-4 border-blue-200">
+                            <div className="space-y-3">
+                              <div className="flex items-start gap-3">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Badge variant="secondary" className="text-xs">
+                                      Importance Level
+                                    </Badge>
+                                    <Badge variant="outline" className="text-xs">
+                                      {flag.flags.length} levels detected
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground mb-2">
+                                    {sampleFlag.flagReason}
+                                  </p>
+                                  {sampleFlag.memoryContent && (
+                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-3 mb-3 rounded-r">
+                                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
+                                        Flagged Content:
+                                      </p>
+                                      <p className="text-sm text-gray-700 dark:text-gray-300 italic">
+                                        "{sampleFlag.memoryContent}"
+                                      </p>
+                                      {sampleFlag.memoryType && (
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                          Type: {sampleFlag.memoryType}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                  <div className="text-xs text-muted-foreground mb-3">
+                                    Target: {flag.targetType} • Created: {new Date(flag.createdAt).toLocaleDateString()}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Importance Selector */}
+                              <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                                <p className="text-sm font-medium mb-3">Choose the correct importance level:</p>
+                                <div className="flex gap-2 flex-wrap">
+                                  {['high_importance', 'medium_importance', 'low_importance'].map((importance) => {
+                                    const isAvailable = availableImportanceLevels.includes(importance);
+                                    const label = importance.replace('_importance', '').toUpperCase();
+                                    const variant = importance === 'high_importance' ? 'destructive' :
+                                      importance === 'medium_importance' ? 'secondary' : 'outline';
+
+                                    return (
+                                      <Button
+                                        key={importance}
+                                        size="sm"
+                                        variant={isAvailable ? variant : 'outline'}
+                                        disabled={!isAvailable || batchImportanceReviewMutation.isPending}
+                                        onClick={() => batchImportanceReviewMutation.mutate({
+                                          targetType: flag.targetType,
+                                          targetId: flag.targetId,
+                                          selectedImportance: importance as 'high_importance' | 'medium_importance' | 'low_importance'
+                                        })}
+                                        data-testid={`button-importance-${importance}-${flag.targetId}`}
+                                        className={`${!isAvailable ? 'opacity-50' : ''}`}
+                                      >
+                                        {label} {isAvailable ? '✓' : '✗'}
+                                      </Button>
+                                    );
+                                  })}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  Click to approve that importance level and auto-reject the others
+                                </p>
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      }
+
+                      // Individual flags (regular display)
+                      return (
+                        <Card key={flag.id} className="p-4">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {flag.flagType}
+                                </Badge>
+                                <Badge
+                                  variant={flag.priority === 'CRITICAL' ? 'destructive' :
+                                    flag.priority === 'HIGH' ? 'secondary' : 'outline'}
+                                  className="text-xs"
+                                >
+                                  {flag.priority}
+                                </Badge>
+                                {flag.confidence && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {Math.round(flag.confidence)}% confidence
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-2">
+                                {flag.flagReason}
+                              </p>
+                              {flag.memoryContent && (
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-3 mb-3 rounded-r">
+                                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
+                                    Flagged Content:
+                                  </p>
+                                  <p className="text-sm text-gray-700 dark:text-gray-300 italic">
+                                    "{flag.memoryContent}"
+                                  </p>
+                                  {flag.memoryType && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Type: {flag.memoryType}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                              <div className="text-xs text-muted-foreground">
+                                Target: {flag.targetType} • Created: {new Date(flag.createdAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => reviewFlagMutation.mutate({
+                                  flagId: flag.id,
+                                  reviewStatus: 'APPROVED'
+                                })}
+                                data-testid={`button-approve-flag-${flag.id}`}
+                              >
+                                <CheckCircle className="w-4 h-4 text-green-600" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => reviewFlagMutation.mutate({
+                                  flagId: flag.id,
+                                  reviewStatus: 'REJECTED'
+                                })}
+                                data-testid={`button-reject-flag-${flag.id}`}
+                              >
+                                <XCircle className="w-4 h-4 text-red-600" />
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Duplicates Tab */}
+        <TabsContent value="duplicates" className="mt-6">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Copy className="w-5 h-5 text-blue-500" />
+                    Memory Deduplication
+                  </CardTitle>
+                  {savedScanDate && duplicateGroups.length > 0 && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Last scan: {new Date(savedScanDate).toLocaleString()} ({duplicateGroups.length} groups saved)
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-2 items-center">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium">Similarity:</label>
+                    <Slider
+                      value={[similarityThreshold]}
+                      onValueChange={(value) => setSimilarityThreshold(value[0])}
+                      max={1}
+                      min={0.5}
+                      step={0.05}
+                      className="w-32"
+                      data-testid="slider-similarity-threshold"
+                    />
+                    <span className="text-sm text-gray-500 w-12">
+                      {Math.round(similarityThreshold * 100)}%
+                    </span>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setIsLoadingDuplicates(true);
+                      findDuplicatesMutation.mutate(similarityThreshold);
+                    }}
+                    disabled={isLoadingDuplicates || findDuplicatesMutation.isPending}
+                    data-testid="button-find-duplicates"
+                  >
+                    {isLoadingDuplicates || findDuplicatesMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Scanning...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="h-4 w-4 mr-2" />
+                        Find Duplicates
+                      </>
+                    )}
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="default"
+                        disabled={deepScanInProgress || deepScanDuplicatesMutation.isPending}
+                        data-testid="button-deep-scan"
+                      >
+                        {deepScanInProgress || deepScanDuplicatesMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Scan className="h-4 w-4 mr-2" />
+                        )}
+                        Deep Scan
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Scan Depth</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setDeepScanInProgress(true);
+                          deepScanDuplicatesMutation.mutate({ scanDepth: 100, threshold: similarityThreshold });
+                        }}
+                        data-testid="scan-depth-100"
+                      >
+                        <span className="font-medium">100</span>
+                        <span className="text-xs text-muted-foreground ml-2">Recent memories</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setDeepScanInProgress(true);
+                          deepScanDuplicatesMutation.mutate({ scanDepth: 500, threshold: similarityThreshold });
+                        }}
+                        data-testid="scan-depth-500"
+                      >
+                        <span className="font-medium">500</span>
+                        <span className="text-xs text-muted-foreground ml-2">Extended scan</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setDeepScanInProgress(true);
+                          deepScanDuplicatesMutation.mutate({ scanDepth: 1000, threshold: similarityThreshold });
+                        }}
+                        data-testid="scan-depth-1000"
+                      >
+                        <span className="font-medium">1,000</span>
+                        <span className="text-xs text-muted-foreground ml-2">Comprehensive scan</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setDeepScanInProgress(true);
+                          deepScanDuplicatesMutation.mutate({ scanDepth: 'ALL', threshold: similarityThreshold });
+                        }}
+                        className="text-accent font-medium"
+                        data-testid="scan-depth-all"
+                      >
+                        <span>ALL</span>
+                        <span className="text-xs text-muted-foreground ml-2">Full memory scan</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button
+                    onClick={() => {
+                      setAutoMergeInProgress(true);
+                      autoMergeMutation.mutate(similarityThreshold);
+                    }}
+                    disabled={autoMergeInProgress || autoMergeMutation.isPending}
+                    variant="outline"
+                    data-testid="button-auto-merge"
+                  >
+                    {autoMergeInProgress || autoMergeMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Merge className="h-4 w-4 mr-2" />
+                    )}
+                    Auto-Merge ({Math.round(similarityThreshold * 100)}%+)
+                  </Button>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Find and merge similar memory entries to eliminate redundancy and improve knowledge base efficiency.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                console.log('🎨 Rendering duplicates UI:', {
+                  groupsLength: duplicateGroups.length,
+                  isLoading: isLoadingDuplicates,
+                  firstGroup: duplicateGroups[0]
+                });
+                return null;
+              })()}
+
+              {duplicateGroups.length === 0 && !isLoadingDuplicates ? (
+                <div className="text-center py-12">
+                  <Copy className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400 mb-2">
+                    No duplicate groups found
+                  </p>
+                  <p className="text-sm text-gray-400">
+                    Click "Find Duplicates" to scan for similar memories
+                  </p>
+                </div>
+              ) : (
+                <ScrollArea className="h-[600px]">
+                  <div className="space-y-6">
+                    {duplicateGroups.map((group, groupIndex) => {
+                      if (groupIndex === 0) {
+                        console.log('🎯 First group structure:', group);
+                      }
+                      return (<Card key={groupIndex} className="border-l-4 border-l-orange-500">
+                        <CardHeader>
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">
+                                {group.duplicates.length + 1} similar memories
+                              </Badge>
+                              <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300">
+                                {Math.round(group.avgSimilarity * 100)}% similar
+                              </Badge>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => {
+                                  // 🔧 Quick merge - uses AI merging automatically, no editing
+                                  const masterEntryId = group.masterId; // Standardized format
+                                  const duplicateIds = group.duplicates.map((d: any) => d.id);
+
+                                  if (masterEntryId && duplicateIds.length > 0) {
+                                    previewMergeMutation.mutate({ masterEntryId, duplicateIds });
+                                  }
+                                }}
+                                disabled={previewMergeMutation.isPending || manualMergeMutation.isPending}
+                                data-testid={`button-quick-merge-${groupIndex}`}
+                              >
+                                {previewMergeMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                ) : (
+                                  <Zap className="h-4 w-4 mr-1" />
+                                )}
+                                Review & Merge
+                              </Button>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {/* Primary Memory - standardized format */}
+                          {group.masterContent && (
+                            <div className="border border-green-200 dark:border-green-700 rounded p-4 bg-green-50 dark:bg-green-900/20">
+                              <div className="flex items-center justify-between mb-2">
+                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
+                                  PRIMARY
+                                </Badge>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  ID: {group.masterId.substring(0, 8)}...
+                                </div>
+                              </div>
+                              <p className="text-sm text-gray-900 dark:text-gray-100">
+                                {group.masterContent}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Similar Memories */}
+                          {group.duplicates.map((memory: any, memoryIndex: number) => (
+                            <div key={memory.id} className="border border-gray-200 dark:border-gray-700 rounded p-4 bg-white dark:bg-gray-800">
+                              <div className="flex items-center justify-between mb-2">
+                                <Badge variant="outline">
+                                  SIMILAR ({Math.round(memory.similarity * 100)}%)
+                                </Badge>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {memory.confidence != null && `Confidence: ${memory.confidence}% | `}
+                                  Importance: {memory.importance || 0}
+                                </div>
+                              </div>
+                              <p className="text-sm text-gray-900 dark:text-gray-100">
+                                {memory.content}
+                              </p>
+                              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                Source: {memory.source} • {new Date(memory.createdAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>);
+                    })}
+                  </div>
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* All Facts */}
+        <TabsContent value="all-facts" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>All Facts Browser ({allFacts?.length || 0})</CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Browse and manage all facts in Nicky's knowledge base.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {isLoadingAllFacts ? (
+                <div className="space-y-4">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} className="h-24 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <ScrollArea className="h-[600px]">
+                  <div className="space-y-3">
+                    {filteredFacts(allFacts)?.length === 0 ? (
+                      <div className="text-center py-10 text-gray-500">
+                        No facts found matching your search.
+                      </div>
+                    ) : (
+                      filteredFacts(allFacts)?.map((fact: MemoryFact) => (
+                        <div
+                          key={fact.id}
+                          className="border border-gray-200 dark:border-gray-700 rounded p-3 bg-white dark:bg-gray-800"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center space-x-2">
+                              <Badge className={getConfidenceColor(fact.confidence)}>
+                                {fact.confidence ?? 0}%
+                              </Badge>
+                              <Badge variant="outline">{fact.status}</Badge>
+                            </div>
+                            <FactActions fact={fact} variant="compact" />
+                          </div>
+                          <p className="text-sm text-gray-900 dark:text-gray-100 mb-2 leading-relaxed">
+                            {fact.content}
+                          </p>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {fact.supportCount} sources • Importance: {fact.importance} • {fact.source}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Intelligence Dashboard */}
+        <TabsContent value="intelligence" className="mt-6">
+          <IntelligenceDashboard />
+        </TabsContent>
+
+        {/* Podcast Management */}
+        <TabsContent value="podcast" className="mt-6">
+          <PodcastManagementPanel />
+        </TabsContent>
+
+        {/* Poison Control */}
+        <TabsContent value="poison" className="space-y-4">
+          <PoisonControlPanel profileId={activeProfile?.id || ""} />
+        </TabsContent>
+
+        {/* Content Sources */}
+        <TabsContent value="content-sources" className="mt-6">
+          <ContentIngestionPanel profileId={activeProfile?.id} />
+        </TabsContent>
+
+        {/* Content Library */}
+        <TabsContent value="content-library" className="mt-6">
+          <ContentLibraryPanel profileId={activeProfile?.id} />
+        </TabsContent>
+      </Tabs>
 
       {/* Single Fact Cleaning Dialog */}
       <Dialog open={showSingleCleanDialog} onOpenChange={(open) => !open && setShowSingleCleanDialog(false)}>
@@ -4016,7 +4025,7 @@ export default function BrainManagement() {
               Review the proposed changes to clean up this wall-of-text fact.
             </DialogDescription>
           </DialogHeader>
-          
+
           {singleCleanPreview && (
             <div className="space-y-4 max-h-[500px] overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4044,14 +4053,14 @@ export default function BrainManagement() {
           )}
 
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setShowSingleCleanDialog(false)}
               data-testid="button-cancel-single-clean"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={() => applySingleCleaningMutation.mutate(singleCleanPreview?.id)}
               disabled={applySingleCleaningMutation.isPending}
               data-testid="button-apply-single-clean"
@@ -4171,7 +4180,7 @@ export default function BrainManagement() {
               Review the proposed changes before applying them. Select which facts you want to clean.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             {/* Selection Controls */}
             <div className="flex items-center justify-between border-b pb-4">
@@ -4209,11 +4218,10 @@ export default function BrainManagement() {
                   {cleaningPreviews.map((preview) => (
                     <div
                       key={preview.id}
-                      className={`border rounded-lg p-4 ${
-                        selectedPreviewIds.has(preview.id)
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
-                          : 'border-gray-200 dark:border-gray-700'
-                      }`}
+                      className={`border rounded-lg p-4 ${selectedPreviewIds.has(preview.id)
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                        : 'border-gray-200 dark:border-gray-700'
+                        }`}
                     >
                       <div className="flex items-start space-x-3">
                         <Checkbox
@@ -4227,7 +4235,7 @@ export default function BrainManagement() {
                             <span>Confidence: {preview.confidence ?? 0}% • Source: {preview.source}</span>
                             <span>{preview.originalLength} → {preview.cleanedLength} chars</span>
                           </div>
-                          
+
                           {/* Before */}
                           <div>
                             <label className="text-sm font-medium text-red-700 dark:text-red-400">
@@ -4237,12 +4245,12 @@ export default function BrainManagement() {
                               {preview.original}
                             </div>
                           </div>
-                          
+
                           {/* Arrow */}
                           <div className="flex justify-center">
                             <div className="text-gray-400">↓</div>
                           </div>
-                          
+
                           {/* After */}
                           <div>
                             <label className="text-sm font-medium text-green-700 dark:text-green-400">
@@ -4317,7 +4325,7 @@ export default function BrainManagement() {
                 Core Identity & Personality ⭐
               </label>
               <p className="text-xs text-muted-foreground">
-                This is the most important field - it defines the AI's personality, speaking style, 
+                This is the most important field - it defines the AI's personality, speaking style,
                 background, and behavior patterns. Changes here will directly affect Discord responses.
               </p>
               <Textarea
@@ -4573,8 +4581,8 @@ export default function BrainManagement() {
               <ScrollArea className="h-[400px]">
                 <div className="space-y-3">
                   {entityMemories.map((memory: any) => (
-                    <div 
-                      key={memory.id} 
+                    <div
+                      key={memory.id}
                       className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
                     >
                       <div className="flex items-start justify-between mb-2">
@@ -4871,12 +4879,12 @@ export default function BrainManagement() {
             <div className="space-y-4">
               <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300 uppercase">Original Entities</h3>
               {selectedForMerge.map((entityId, index) => {
-                const entity = mergeMode?.type === 'person' 
+                const entity = mergeMode?.type === 'person'
                   ? entities?.people?.find((p: Person) => p.id === entityId)
                   : mergeMode?.type === 'place'
-                  ? entities?.places?.find((p: Place) => p.id === entityId)
-                  : entities?.events?.find((e: Event) => e.id === entityId);
-                
+                    ? entities?.places?.find((p: Place) => p.id === entityId)
+                    : entities?.events?.find((e: Event) => e.id === entityId);
+
                 if (!entity) return null;
                 const e = entity as any;
 
@@ -5110,11 +5118,11 @@ export default function BrainManagement() {
                   });
                   return;
                 }
-                
+
                 // 🔧 Use standardized format from preview mutation
                 const primaryId = mergeEditGroup.masterEntryId;
                 const duplicateIds = mergeEditGroup.duplicateIds;
-                
+
                 if (!primaryId || !duplicateIds || duplicateIds.length === 0) {
                   toast({
                     title: "Error",
@@ -5123,7 +5131,7 @@ export default function BrainManagement() {
                   });
                   return;
                 }
-                
+
                 manualMergeMutation.mutate({
                   primaryId,
                   duplicateIds,

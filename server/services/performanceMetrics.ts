@@ -18,7 +18,7 @@ class PerformanceMetrics {
    */
   startTimer(operation: string): () => number {
     const startTime = Date.now();
-    
+
     return () => {
       const duration = Date.now() - startTime;
       this.log(operation, duration);
@@ -46,7 +46,7 @@ class PerformanceMetrics {
     if (duration > 1000) {
       console.warn(`⚠️ SLOW OPERATION: ${operation} took ${duration}ms`, metadata);
     } else if (duration > 500) {
-      console.log(`📊 ${operation} took ${duration}ms`, metadata);
+      console.log(`📊 ${operation} took ${duration}ms`, metadata ? JSON.stringify(metadata) : '');
     }
   }
 
@@ -61,7 +61,7 @@ class PerformanceMetrics {
     totalDuration: number;
   } | null {
     const operationLogs = this.logs.filter(log => log.operation === operation);
-    
+
     if (operationLogs.length === 0) return null;
 
     const durations = operationLogs.map(log => log.duration);
@@ -114,7 +114,7 @@ class PerformanceMetrics {
   getSummary(): string {
     const stats = this.getAllStats();
     const operations = Object.keys(stats);
-    
+
     if (operations.length === 0) {
       return '📊 No performance metrics available';
     }

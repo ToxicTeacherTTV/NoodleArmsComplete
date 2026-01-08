@@ -46,10 +46,7 @@ class GeminiService {
         return {
           response: {
             text: () => {
-              return response.candidates?.[0]?.content?.parts
-                ?.filter((part: any) => part.text)
-                ?.map((part: any) => part.text)
-                ?.join('') || response.text || "";
+              return this.safeExtractText(response);
             }
           }
         };
@@ -70,6 +67,7 @@ class GeminiService {
    * 🛡️ SAFE TEXT EXTRACTION
    * Extracts text parts manually to avoid SDK warnings about "thought" parts.
    */
+
   private safeExtractText(response: any): string {
     if (!response) return "";
     try {
@@ -81,27 +79,41 @@ class GeminiService {
       // 2. Try to get text from parts (standard structure)
       const parts = response.candidates?.[0]?.content?.parts;
       if (parts && Array.isArray(parts)) {
+        // Filter out "thought" parts and join regular text
         const text = parts
-          .filter(part => part.text)
+          .filter(part => part.text && !part.thought)
           .map(part => part.text)
           .join('');
         if (text) return text;
       }
 
       // 3. Try the .text() method (older @google/generative-ai SDK)
+      // Note: This often throws the warning, so we try to avoid it if possible
       if (typeof response.text === 'function') {
-        return response.text();
+        try {
+          return response.text();
+        } catch (sdkError) {
+          // Fallback if SDK method fails on non-text parts
+          const candidates = response.candidates;
+          const parts = candidates?.[0]?.content?.parts;
+          if (parts) {
+            return parts.filter((p: any) => p.text).map((p: any) => p.text).join('') || "";
+          }
+        }
       }
 
       // 4. Deep dive into candidates
       const candidateText = response.candidates?.[0]?.text;
       if (typeof candidateText === 'string') return candidateText;
 
+      return "";
+
     } catch (e) {
-      console.warn("⚠️ safeExtractText failed:", e);
+      console.warn("⚠️ Error extracting text from Gemini response:", e);
+      return "";
     }
-    return "";
   }
+
 
   // Retry helper with exponential backoff
   private async retryWithBackoff<T>(

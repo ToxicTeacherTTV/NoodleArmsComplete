@@ -27,6 +27,7 @@ import { contextPrewarmer } from './services/contextPrewarmer';
 import { contextPruner } from './services/contextPruner';
 import { insertAutomatedSourceSchema, insertPendingContentSchema, insertAdTemplateSchema, insertPrerollAdSchema } from '@shared/schema';
 import multer from "multer";
+import { twitchBotService } from "./services/twitchBot";
 import { z } from "zod";
 import { promises as fs } from "fs";
 import path from "path";
@@ -37,6 +38,7 @@ import { embeddingService } from "./services/embeddingService";
 import { eventTimelineAuditor } from "./services/eventTimelineAuditor";
 import { importancePropagator } from "./services/importancePropagator";
 import { personalityAuditor } from "./services/personalityAuditor";
+import { memoryAuditor } from "./services/memoryAuditor";
 
 type DuplicateScanGroupSummary = {
   masterId: string;
@@ -6239,6 +6241,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==========================================
+  // 🎮 TWITCH AUDIO QUEUE ROUTES
+  // ==========================================
+
+  // Get pending audio queue
+  app.get('/api/twitch/audio-queue', async (req, res) => {
+    try {
+      const queue = twitchBotService.getPendingAudio();
+      res.json(queue);
+    } catch (error) {
+      console.error('Failed to fetching audio queue:', error);
+      // If service not initialized yet, return empty
+      res.json([]);
+    }
+  });
+
+  // Acknowledge audio playback (remove from queue)
+  app.post('/api/twitch/audio-queue/:id/ack', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { twitchBotService } = await import('./services/twitchBot.js');
+      twitchBotService.ackAudio(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to acknowledge audio:', error);
+      res.status(500).json({ error: 'Failed to acknowledge audio' });
+    }
+  });
+
   // Get Discord members for a server
   app.get('/api/discord/servers/:id/members', requireAuth, async (req, res) => {
     try {
@@ -6332,8 +6363,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const conversations = await storage.getDiscordConversations(serverId, limit);
       res.json(conversations);
+
     } catch (error) {
+      console.error('Error fetching Discord conversations:', error);
       res.status(500).json({ error: 'Failed to fetch Discord conversations' });
+    }
+  });
+
+
+  // ==========================================
+  // 🧹 MEMORY AUDIT & POISON CONTROL ROUTES
+  // ==========================================
+
+  app.get("/api/memories/:profileId/audit/poison", async (req, res) => {
+    try {
+      const { profileId } = req.params;
+      const issues = await memoryAuditor.scanForPoison(profileId);
+      res.json(issues);
+    } catch (error) {
+      console.error("Poison scan failed:", error);
+      res.status(500).json({ error: "Scan failed" });
+    }
+  });
+
+  app.post("/api/memories/batch-action", async (req, res) => {
+    try {
+      const { action, memoryIds, editData } = req.body; // action: 'DELETE' | 'VERIFY' | 'EDIT'
+
+      if (!Array.isArray(memoryIds)) {
+        return res.status(400).json({ error: "memoryIds must be an array" });
+      }
+
+      let count = 0;
+
+      if (action === 'DELETE') {
+        count = await memoryAuditor.deleteMemories(memoryIds);
+      } else if (action === 'VERIFY') {
+        count = await memoryAuditor.verifyMemories(memoryIds);
+      } else if (action === 'EDIT' && memoryIds.length === 1 && editData) {
+        await memoryAuditor.editMemory(memoryIds[0], editData.content);
+        count = 1;
+      }
+
+      res.json({ success: true, count, action });
+    } catch (error) {
+      console.error("Batch action failed:", error);
+      res.status(500).json({ error: "Batch action failed" });
     }
   });
 
@@ -6408,8 +6483,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await documentProcessor.reprocessDocument(
         pendingItem.profileId,
         pendingItem.rawContent,
-        `reddit-${pendingItem.title}`, // source filename
-        pendingItem.id // document ID
+        "reddit - " + pendingItem.title,
+        pendingItem.id
       );
 
       // Mark as approved and processed
@@ -6477,8 +6552,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: `Test collection completed: ${collected} items found`
       });
     } catch (error) {
-      console.error(`Test collection failed for ${req.params.sourceType}:`, error);
-      res.status(500).json({ error: `Test collection failed: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      console.error(`Test collection failed for ${req.params.sourceType}: `, error);
+      res.status(500).json({ error: `Test collection failed: ${error instanceof Error ? error.message : 'Unknown error'} ` });
     }
   });
 
@@ -6655,7 +6730,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validStatuses = ['draft', 'approved', 'recorded', 'published', 'rejected'];
       if (!status || !validStatuses.includes(status)) {
         return res.status(400).json({
-          error: `Status must be one of: ${validStatuses.join(', ')}`
+          error: `Status must be one of: ${validStatuses.join(', ')} `
         });
       }
 
@@ -6683,7 +6758,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validStatuses = ['draft', 'approved', 'recorded', 'published', 'rejected'];
       if (!status || !validStatuses.includes(status)) {
         return res.status(400).json({
-          error: `Status must be one of: ${validStatuses.join(', ')}`
+          error: `Status must be one of: ${validStatuses.join(', ')} `
         });
       }
 
@@ -6842,7 +6917,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             affectedCount++;
           }
 
-          console.log(`🗑️ Deleted ${affectedCount} duplicate facts, kept merged fact ${primaryId}`);
+          console.log(`🗑️ Deleted ${affectedCount} duplicate facts, kept merged fact ${primaryId} `);
           affectedCount++; // Count the updated primary fact
 
           break;
@@ -6923,7 +6998,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'traitName and value are required' });
       }
 
-      console.log(`📊 Accepting personality baseline for "${traitName}": ${previousValue || '?'} → ${value}`);
+      console.log(`📊 Accepting personality baseline for "${traitName}": ${previousValue || '?'} → ${value} `);
 
       // Get current baselines or initialize empty object
       const currentBaselines = (activeProfile.personalityBaselines as any) || {};
@@ -6948,11 +7023,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .where(eq(profiles.id, activeProfile.id));
 
-      console.log(`✅ Updated personality baseline for "${traitName}" in profile ${activeProfile.id}`);
+      console.log(`✅ Updated personality baseline for "${traitName}" in profile ${activeProfile.id} `);
 
       res.json({
         success: true,
-        message: `Accepted "${traitName}" baseline: ${value}`,
+        message: `Accepted "${traitName}" baseline: ${value} `,
         baselines: updatedBaselines
       });
 
@@ -7325,7 +7400,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      console.log(`✅ Successfully extracted ${result.factsCreated} facts and ${result.entitiesCreated} entities from Episode ${episode.episodeNumber}`);
+      console.log(`✅ Successfully extracted ${result.factsCreated} facts and ${result.entitiesCreated} entities from Episode ${episode.episodeNumber} `);
 
       res.json({
         message: `Successfully extracted ${result.factsCreated} facts and ${result.entitiesCreated} entities and stored them in Nicky's memory`,

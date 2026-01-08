@@ -81,8 +81,8 @@ export default function JazzDashboard() {
 
   // Browser speech doesn't support pause/resume/replay - create safe fallbacks
   const pausePlayback = () => stopSpeakingBrowser();
-  const resumePlayback = () => {}; // Browser speech can't resume
-  const replayLastAudio = () => {}; // Browser speech can't replay
+  const resumePlayback = () => { }; // Browser speech can't resume
+  const replayLastAudio = () => { }; // Browser speech can't replay
   const canReplay = false; // Browser speech doesn't support replay
   const isPaused = false; // Browser speech doesn't have pause state
   const speakText = speakBrowser;
@@ -129,6 +129,46 @@ export default function JazzDashboard() {
     }
   }, [documentsError]);
 
+  // 🎮 TWITCH AUDIO POLLING
+  // Poll for pending audio commands (like !rant) from Twitch
+  const { data: twitchAudioQueue } = useQuery<{ id: string; text: string; type: string }[]>({
+    queryKey: ['/api/twitch/audio-queue'],
+    refetchInterval: 3000, // Poll every 3 seconds
+    refetchIntervalInBackground: true, // Keep polling even when tab is hidden
+  });
+
+  // Process Twitch audio queue
+  useEffect(() => {
+    // DBG: Always log the queue status to verify polling
+    if (twitchAudioQueue) {
+      console.log(`🎮 [Frontend] Polling Twitch Audio. Items: ${twitchAudioQueue.length}. VoiceOutput: ${streamSettings.voiceOutput}, AppMode: ${appMode}`);
+    } else {
+      console.log(`🎮 [Frontend] Polling Twitch Audio. Queue is UNDEFINED. VoiceOutput: ${streamSettings.voiceOutput}, AppMode: ${appMode}`);
+    }
+
+    if (twitchAudioQueue && twitchAudioQueue.length > 0) {
+      console.log(`🎮 [Frontend] Found ${twitchAudioQueue.length} items in Twitch Audio Queue`);
+      twitchAudioQueue.forEach(async (item) => {
+        // Play the audio
+        if (streamSettings.voiceOutput || appMode === 'STREAMING') {
+          console.log(`🎮 [Frontend] Playing Twitch Audio: [${item.type}] "${item.text.substring(0, 50)}..."`);
+          speakElevenLabs(item.text);
+
+          // Acknowledge to remove from queue
+          try {
+            await apiRequest('POST', `/api/twitch/audio-queue/${item.id}/ack`);
+            console.log(`🎮 [Frontend] Acknowledged audio ${item.id}`);
+            queryClient.invalidateQueries({ queryKey: ['/api/twitch/audio-queue'] });
+          } catch (e) {
+            console.error("Failed to ack Twitch audio:", e);
+          }
+        } else {
+          console.log(`⚠️ [Frontend] Skipped Twitch Audio (Voice Disabled): ${item.type}`);
+        }
+      });
+    }
+  }, [twitchAudioQueue, speakElevenLabs, streamSettings.voiceOutput, appMode, queryClient]);
+
   // Note: chaosState no longer needed - PersonalitySurgePanel manages its own state
 
   // Mutations
@@ -159,22 +199,22 @@ export default function JazzDashboard() {
           },
         };
         setMessages(prev => [...prev, aiMessage]);
-        
+
         // NOTE: Removed auto-play to prevent burning ElevenLabs credits
         // Users can now click Play button on individual messages for voice synthesis
-        
+
         // BUT: Auto-play IS enabled in STREAMING mode for interactive experience
         if (appMode === 'STREAMING' && streamSettings.voiceOutput) {
           speakElevenLabs(response.content);
           setAiStatus('SPEAKING');
         }
       }
-      
+
       // 🎲 ENHANCED: Invalidate chaos state after AI response for dynamic UI updates
       queryClient.invalidateQueries({ queryKey: ['/api/chaos/state'] });
       // Invalidate conversation list to update message counts
       queryClient.invalidateQueries({ queryKey: ['/api/conversations/web'] });
-      
+
       setAiStatus('IDLE');
     },
     onError: () => {
@@ -284,52 +324,52 @@ export default function JazzDashboard() {
   // Handle voice control (manual mode)
   const toggleListening = () => {
     // Removed mode restriction to allow voice in PODCAST mode too
-    
+
     if (isListening) {
       // STOP: Process the pending transcript and send message
       stopListening();
-      
+
       // Capture final text from available sources to avoid race conditions
       const finalText = (transcript || interimTranscript || pendingTranscript).trim();
-      
+
       // Allow sending even if no conversation ID yet (will be created)
       if (finalText) {
         const handleVoiceSend = async () => {
-            let activeId = currentConversationId;
-            if (!activeId) {
-                try {
-                    const newConv = await createConversationMutation.mutateAsync();
-                    activeId = newConv.id;
-                } catch (e) {
-                    console.error("Failed to create conversation for voice", e);
-                    return;
-                }
+          let activeId = currentConversationId;
+          if (!activeId) {
+            try {
+              const newConv = await createConversationMutation.mutateAsync();
+              activeId = newConv.id;
+            } catch (e) {
+              console.error("Failed to create conversation for voice", e);
+              return;
             }
+          }
 
-            const userMessage: Message = {
-              id: nanoid(),
-              conversationId: activeId,
-              type: 'USER',
-              content: finalText,
-              rating: null,
-              isPrivate: false,
-              metadata: { voice: true },
-              createdAt: new Date().toISOString(),
-            };
+          const userMessage: Message = {
+            id: nanoid(),
+            conversationId: activeId,
+            type: 'USER',
+            content: finalText,
+            rating: null,
+            isPrivate: false,
+            metadata: { voice: true },
+            createdAt: new Date().toISOString(),
+          };
 
-            setMessages(prev => [...prev, userMessage]);
-            
-            // Send to backend
-            sendMessageMutation.mutate({
-              conversationId: activeId,
-              type: 'USER',
-              content: finalText,
-              metadata: { voice: true },
-            });
+          setMessages(prev => [...prev, userMessage]);
+
+          // Send to backend
+          sendMessageMutation.mutate({
+            conversationId: activeId,
+            type: 'USER',
+            content: finalText,
+            metadata: { voice: true },
+          });
         };
         handleVoiceSend();
       }
-      
+
       // Clear pending transcript
       setPendingTranscript('');
       resetTranscript();
@@ -357,11 +397,11 @@ export default function JazzDashboard() {
   const handleTextSelection = () => {
     const selection = window.getSelection();
     const selectedText = selection?.toString().trim();
-    
+
     if (selectedText && selectedText.length > 2) {
       const range = selection?.getRangeAt(0);
       const rect = range?.getBoundingClientRect();
-      
+
       if (rect) {
         setSelectedText(selectedText);
         setCheckerPosition({ x: rect.left, y: rect.top });
@@ -388,11 +428,11 @@ export default function JazzDashboard() {
   const handleToggleLearning = () => {
     const currentLearning = currentConversation ? !currentConversation.isPrivate : streamSettings.memoryLearning;
     const newIsPrivate = currentLearning; // If learning was true, new isPrivate is true
-    
+
     if (currentConversationId) {
       updatePrivacyMutation.mutate(newIsPrivate);
     }
-    
+
     setStreamSettings(prev => ({
       ...prev,
       memoryLearning: !newIsPrivate
@@ -400,8 +440,8 @@ export default function JazzDashboard() {
 
     toast({
       title: newIsPrivate ? "🔒 Private Mode" : "🧠 Learning Mode",
-      description: newIsPrivate 
-        ? "Nicky will not remember this conversation." 
+      description: newIsPrivate
+        ? "Nicky will not remember this conversation."
         : "Nicky will learn from this conversation.",
     });
   };
@@ -634,13 +674,13 @@ export default function JazzDashboard() {
 
                           let activeId = currentConversationId;
                           if (!activeId) {
-                              try {
-                                  const newConv = await createConversationMutation.mutateAsync();
-                                  activeId = newConv.id;
-                              } catch (err) {
-                                  console.error("Failed to create conversation", err);
-                                  return;
-                              }
+                            try {
+                              const newConv = await createConversationMutation.mutateAsync();
+                              activeId = newConv.id;
+                            } catch (err) {
+                              console.error("Failed to create conversation", err);
+                              return;
+                            }
                           }
 
                           const userMessage: Message = {
@@ -683,11 +723,10 @@ export default function JazzDashboard() {
                           <Button
                             type="button"
                             onClick={toggleListening}
-                            className={`flex-1 transition-colors ${
-                              isListening
-                                ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
-                                : 'bg-primary text-primary-foreground hover:bg-primary/90'
-                            }`}
+                            className={`flex-1 transition-colors ${isListening
+                              ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                              : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                              }`}
                             data-testid="button-toggle-listening"
                           >
                             <i className={`fas ${isListening ? 'fa-stop' : 'fa-microphone'} mr-2`} />
@@ -907,26 +946,26 @@ export default function JazzDashboard() {
             </div>
           </main>
 
-      {/* Memory Checker */}
-      <MemoryChecker
-        selectedText={selectedText}
-        profileId={activeProfile?.id}
-        isOpen={memoryCheckerOpen}
-        onClose={() => setMemoryCheckerOpen(false)}
-        position={checkerPosition}
-      />
+          {/* Memory Checker */}
+          <MemoryChecker
+            selectedText={selectedText}
+            profileId={activeProfile?.id}
+            isOpen={memoryCheckerOpen}
+            onClose={() => setMemoryCheckerOpen(false)}
+            position={checkerPosition}
+          />
 
-      {/* Profile Modal */}
-      <ProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-      />
+          {/* Profile Modal */}
+          <ProfileModal
+            isOpen={isProfileModalOpen}
+            onClose={() => setIsProfileModalOpen(false)}
+          />
 
-      {/* Notes Modal */}
-      <NotesModal
-        isOpen={isNotesModalOpen}
-        onClose={() => setIsNotesModalOpen(false)}
-      />
+          {/* Notes Modal */}
+          <NotesModal
+            isOpen={isNotesModalOpen}
+            onClose={() => setIsNotesModalOpen(false)}
+          />
 
         </div>
       </div>

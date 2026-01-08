@@ -1,362 +1,138 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useLocation } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
+
+// Components
 import ChatPanel from "@/components/chat-panel";
 import ChatHistorySidebar from "@/components/chat-history-sidebar";
-import StatusIndicator from "@/components/status-indicator";
 import PersonalitySurgePanel from "@/components/personality-surge-panel";
 import MessageComposer from "@/components/MessageComposer";
 import ProfileModal from "@/components/profile-modal";
 import NotesModal from "@/components/notes-modal";
 import { MemoryChecker } from "@/components/memory-checker";
-import { QuickModelToggle } from "@/components/quick-model-toggle";
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
-import { useElevenLabsSpeech } from "@/hooks/use-elevenlabs-speech";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import type { Message, Profile, AIStatus, AppMode, MemoryStats } from "@/types";
-import { apiRequest } from "@/lib/queryClient";
-import { getModelPreference } from "@shared/modelSelection";
-import { nanoid } from "nanoid";
-import { cn } from "@/lib/utils";
+import { JazzHeader } from "@/components/jazz/JazzHeader";
+import { JazzChatLayout } from "@/components/jazz/JazzChatLayout";
+
+// Hooks
+import { useJazzChat } from "@/hooks/use-jazz-chat";
+import { useJazzVoice } from "@/hooks/use-jazz-voice";
 
 export default function JazzDashboard() {
-    const { toast } = useToast();
-    const queryClient = useQueryClient();
+    // Custom Hooks
+    const chat = useJazzChat();
+    const voice = useJazzVoice();
 
-    // State
-    const [currentConversationId, setCurrentConversationId] = useState<string>("");
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [aiStatus, setAiStatus] = useState<AIStatus>('IDLE');
-    const [appMode, setAppMode] = useState<AppMode>('PODCAST');
-    const [sessionStartTime] = useState<Date>(new Date());
+    // UI State
     const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
     const [memoryCheckerOpen, setMemoryCheckerOpen] = useState(false);
     const [selectedText, setSelectedText] = useState("");
     const [checkerPosition, setCheckerPosition] = useState({ x: 0, y: 0 });
-    const [isDebugMode, setIsDebugMode] = useState(false);
-    const [memoryLearning, setMemoryLearning] = useState<boolean>(true);
+    const [audioEnabled, setAudioEnabled] = useState(false);
+    const processedIds = useRef(new Set<string>());
+
+    // Unlock audio context helper
+    const enableAudio = () => {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        const audioCtx = new AudioContext();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.value = 0.01; // Silent, but technical "sound"
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.start(0);
+        setTimeout(() => oscillator.stop(), 100);
+        setAudioEnabled(true);
+        console.log("🔊 [Frontend V2] Audio Context Unlocked");
+    };
+
+    // URL handling for initial messages
     const [, setLocation] = useLocation();
 
-    // Voice hooks
-    const { isListening, startListening, stopListening, transcript, interimTranscript, resetTranscript } = useSpeechRecognition();
-    const { speak: speakElevenLabs, isSpeaking: isSpeakingElevenLabs, isPaused: isPausedElevenLabs, stop: stopElevenLabs, pause: pauseElevenLabs, resume: resumeElevenLabs, replay: replayElevenLabs, canReplay: canReplayElevenLabs, saveAudio: saveAudioElevenLabs, canSave: canSaveElevenLabs } = useElevenLabsSpeech();
+    // Voice integration
+    const handleToggleVoice = () => {
+        voice.toggleListening((text) => {
+            chat.handleSendMessage(text);
+        });
 
-    // Queries
-    const { data: activeProfile } = useQuery<Profile>({
-        queryKey: ['/api/profiles/active'],
-        refetchInterval: false,
-    });
-
-    const { data: currentConversation } = useQuery<{ isPrivate: boolean } | null>({
-        queryKey: ['/api/conversations', currentConversationId],
-        enabled: !!currentConversationId,
-    });
-
-    // Update memory learning when current conversation changes
-    useEffect(() => {
-        if (currentConversation) {
-            setMemoryLearning(!currentConversation.isPrivate);
+        // Update UI state based on voice status
+        if (voice.isListening) {
+            chat.setAiStatus('IDLE');
+        } else {
+            chat.setAiStatus('LISTENING');
         }
-    }, [currentConversation]);
+    };
 
-    const { data: memoryStats } = useQuery<MemoryStats>({
-        queryKey: ['/api/memory/stats'],
-        refetchInterval: 120000,
-    });
-
-    const { data: documents } = useQuery({
-        queryKey: ['/api/documents'],
-        refetchInterval: false,
-    });
-
-    // Mutations
-    const sendMessageMutation = useMutation({
-        mutationFn: async (data: { conversationId: string; content: string }) => {
-            // Get selected model from preferences
-            const selectedModel = getModelPreference('chat');
-
-            const response = await apiRequest('POST', '/api/chat', {
-                conversationId: data.conversationId,
-                message: data.content,
-                profileId: activeProfile?.id,
-                mode: appMode,
-                selectedModel,
-                memoryLearning,
-            });
-            return response.json();
-        },
-        onSuccess: async (response, variables) => {
-            if (variables.conversationId === currentConversationId) {
-                if (response?.content) {
-                    const aiMessage: Message = {
-                        id: nanoid(),
-                        conversationId: variables.conversationId,
-                        type: 'AI',
-                        content: response.content,
-                        createdAt: new Date().toISOString(),
-                        rating: null,
-                        isPrivate: false,
-                        metadata: {
-                            processingTime: response.processingTime,
-                            retrieved_context: response.retrievedContext,
-                            debug_info: response.debugInfo
-                        },
-                    };
-                    setMessages(prev => [...prev, aiMessage]);
-
-                    if (appMode === 'STREAMING') {
-                        speakElevenLabs(response.content);
-                        setAiStatus('SPEAKING');
-                    }
-                }
-
-                // Only set to IDLE if we didn't switch to SPEAKING
-                setAiStatus(prev => prev === 'SPEAKING' ? 'SPEAKING' : 'IDLE');
+    // Auto-tts for streaming mode
+    useEffect(() => {
+        if (chat.appMode === 'STREAMING' && chat.messages.length > 0) {
+            const lastMsg = chat.messages[chat.messages.length - 1];
+            if (lastMsg.type === 'AI' && !voice.isSpeaking) {
+                voice.speak(lastMsg.content);
+                chat.setAiStatus('SPEAKING');
             }
+        }
+    }, [chat.messages, chat.appMode]);
 
-            queryClient.invalidateQueries({ queryKey: ['/api/conversations/web'] });
-            // Ensure we fetch the persisted messages to sync state
-            await queryClient.invalidateQueries({ queryKey: ['/api/conversations', variables.conversationId, 'messages'] });
-            // Refresh personality state to clear any temporary overrides
-            queryClient.invalidateQueries({ queryKey: ['/api/personality/state'] });
-        },
-        onError: () => setAiStatus('ERROR'),
-    });
+    // Reset status when speaking ends
+    useEffect(() => {
+        if (!voice.isSpeaking && chat.aiStatus === 'SPEAKING') {
+            chat.setAiStatus('IDLE');
+        }
+    }, [voice.isSpeaking]);
 
-    // Handle incoming message from query params (e.g. from Listener Cities page)
+    // Handle initial URL message
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const initialMessage = params.get('message');
 
-        if (initialMessage && activeProfile) {
+        if (initialMessage && chat.activeProfile) {
             console.log("📥 Received initial message from query param:", initialMessage);
-
-            // Clear the param from URL without full reload
             window.history.replaceState({}, '', window.location.pathname);
-
             const decodedMessage = decodeURIComponent(initialMessage);
+            chat.handleSendMessage(decodedMessage);
+        }
+    }, [chat.activeProfile]); // Depend on activeProfile so we don't try before profile loads
 
-            // We need to wait for the conversation to be ready or create one
-            const processInitialMessage = async () => {
-                let convId = currentConversationId;
+    // 🎮 TWITCH AUDIO POLLING (V2)
+    const { data: twitchAudioQueue } = useQuery<{ id: string; text: string; type: string }[]>({
+        queryKey: ['/api/twitch/audio-queue'],
+        refetchInterval: 3000,
+        refetchIntervalInBackground: true,
+    });
 
-                // If no conversation, create one
-                if (!convId) {
-                    try {
-                        const res = await apiRequest('POST', '/api/conversations', {
-                            profileId: activeProfile.id,
-                            title: 'New Podcast Segment',
-                            contentType: appMode
-                        });
-                        const newConv = await res.json();
-                        convId = newConv.id;
-                        setCurrentConversationId(convId);
-                    } catch (e) {
-                        console.error("Failed to create conversation for initial message:", e);
-                        return;
-                    }
+    useEffect(() => {
+        // DBG: Log poll status
+        if (twitchAudioQueue) {
+            console.log(`🎮 [Frontend V2] Polling Twitch Audio. Items: ${twitchAudioQueue.length}. AppMode: ${chat.appMode}`);
+        }
+
+        if (twitchAudioQueue && twitchAudioQueue.length > 0) {
+            console.log(`🎮 [Frontend V2] Found ${twitchAudioQueue.length} items in Twitch Audio Queue`);
+            twitchAudioQueue.forEach(async (item) => {
+                if (processedIds.current.has(item.id)) {
+                    console.log(`⚠️ [Frontend V2] Skipping duplicate/processed item: ${item.id}`);
+                    return;
                 }
 
-                // Add user message to UI immediately
-                const userMsg: Message = {
-                    id: nanoid(),
-                    conversationId: convId,
-                    type: 'USER',
-                    content: decodedMessage,
-                    createdAt: new Date().toISOString(),
-                    rating: null,
-                    isPrivate: false,
-                    metadata: {} as any,
-                };
-                setMessages(prev => [...prev, userMsg]);
+                processedIds.current.add(item.id);
 
-                // Trigger AI
-                setAiStatus('THINKING');
-                sendMessageMutation.mutate({ conversationId: convId, content: decodedMessage });
-            };
+                // Play audio
+                console.log(`🎮 [Frontend V2] Playing Twitch Audio: [${item.type}] ${item.text.substring(0, 30)}...`);
+                voice.speak(item.text);
 
-            processInitialMessage();
-        }
-    }, [activeProfile, currentConversationId, appMode]);
-
-    const createConversationMutation = useMutation({
-        mutationFn: async () => {
-            const response = await apiRequest('POST', '/api/conversations', {
-                profileId: activeProfile?.id,
-                title: `Session ${new Date().toLocaleTimeString()}`,
+                // Ack
+                try {
+                    await fetch(`/api/twitch/audio-queue/${item.id}/ack`, { method: 'POST' });
+                    console.log(`✅ [Frontend V2] Acked audio item: ${item.id}`);
+                } catch (e) {
+                    console.error(`❌ [Frontend V2] Failed to ack audio item: ${item.id}`, e);
+                }
             });
-            return response.json();
-        },
-        onSuccess: (data) => {
-            setCurrentConversationId(data.id);
-            queryClient.invalidateQueries({ queryKey: ['/api/conversations/web'] });
-        },
-    });
-
-    const consolidateMemoryMutation = useMutation({
-        mutationFn: (conversationId: string) => {
-            return apiRequest('POST', `/api/memory/consolidate/${conversationId}`);
-        },
-        onSuccess: () => {
-            toast({
-                title: "Memory Consolidated",
-                description: "Conversation stored in Nicky's memory.",
-            });
-            queryClient.invalidateQueries({ queryKey: ['/api/memory'] });
-        },
-    });
-
-    const updatePrivacyMutation = useMutation({
-        mutationFn: async (isPrivate: boolean) => {
-            if (!currentConversationId) return;
-            return await apiRequest('PATCH', `/api/conversations/${currentConversationId}/privacy`, { isPrivate });
-        },
-        onSuccess: (_, isPrivate) => {
-            queryClient.invalidateQueries({ queryKey: ['/api/conversations', currentConversationId] });
-            // FORCE REFRESH of sidebar history so the privacy icon/status updates immediately
-            queryClient.invalidateQueries({ queryKey: ['/api/conversations/web'] });
-
-            toast({
-                title: isPrivate ? "🔒 Private Mode" : "🧠 Learning Mode",
-                description: isPrivate
-                    ? "Nicky will not remember this conversation."
-                    : "Nicky will learn from this conversation.",
-            });
-        },
-    });
-
-    // Fetch messages
-    const { data: conversationMessages } = useQuery<Message[]>({
-        queryKey: ['/api/conversations', currentConversationId, 'messages'],
-        enabled: !!currentConversationId,
-        refetchInterval: false,
-    });
-
-    useEffect(() => {
-        if (conversationMessages) {
-            // Don't overwrite optimistic state while processing
-            if (aiStatus === 'PROCESSING') {
-                return;
-            }
-            setMessages(conversationMessages);
         }
-    }, [conversationMessages, aiStatus]);
-
-    // Initialize conversation - REMOVED auto-creation to prevent blank sessions
-    /* 
-    useEffect(() => {
-        if (!currentConversationId && activeProfile?.id) {
-            createConversationMutation.mutate();
-        }
-    }, [activeProfile?.id]);
-    */
-
-    // Voice control
-    const toggleListening = () => {
-        // Removed mode restriction to allow voice in PODCAST mode too
-
-        if (isListening) {
-            stopListening();
-            const finalText = (transcript || interimTranscript).trim();
-            // Allow sending even if no conversation ID yet (will be created)
-            if (finalText) {
-                handleSendMessage(finalText);
-            } else {
-                setAiStatus('IDLE');
-            }
-            resetTranscript();
-        } else {
-            resetTranscript();
-            startListening();
-            setAiStatus('LISTENING');
-        }
-    };
-
-    // Handlers
-    const handleSendMessage = async (content: string) => {
-        if (!content.trim()) return;
-
-        let activeId = currentConversationId;
-
-        // Create conversation if it doesn't exist
-        if (!activeId) {
-            try {
-                const newConv = await createConversationMutation.mutateAsync();
-                activeId = newConv.id;
-                // Note: setCurrentConversationId is also called in onSuccess, 
-                // but we need the ID immediately for the message
-            } catch (error) {
-                console.error("Failed to create conversation:", error);
-                toast({
-                    title: "Error",
-                    description: "Failed to start new conversation.",
-                    variant: "destructive",
-                });
-                return;
-            }
-        }
-
-        const userMessage: Message = {
-            id: nanoid(),
-            conversationId: activeId,
-            type: 'USER',
-            content: content.trim(),
-            createdAt: new Date().toISOString(),
-            rating: null,
-            isPrivate: false,
-            metadata: {} as any,
-        };
-
-        setMessages(prev => [...prev, userMessage]);
-        setAiStatus('PROCESSING');
-        sendMessageMutation.mutate({
-            conversationId: activeId,
-            content: content.trim(),
-        });
-    };
-
-    const handleSelectConversation = (conversationId: string) => {
-        setCurrentConversationId(conversationId);
-        setMessages([]);
-        setAiStatus('IDLE');
-    };
-
-    const handleToggleLearning = () => {
-        const currentIsPrivate = !memoryLearning;
-        const targetIsPrivate = !currentIsPrivate; // If it was learning (true), it becomes private (isPrivate=true)
-
-        setMemoryLearning(!targetIsPrivate);
-
-        if (currentConversationId) {
-            updatePrivacyMutation.mutate(targetIsPrivate);
-        }
-    };
-
-    const handleNewChat = () => {
-        // Don't create immediately, just clear state
-        setCurrentConversationId("");
-        setMessages([]);
-        setAiStatus('IDLE');
-        setMemoryLearning(true);
-    };
-
-    const getSessionDuration = () => {
-        const now = new Date();
-        const diff = now.getTime() - sessionStartTime.getTime();
-        const hours = Math.floor(diff / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    };
-
-    const documentCount = Array.isArray(documents) ? documents.length : 0;
+    }, [twitchAudioQueue, voice]);
 
     return (
         <>
@@ -367,14 +143,16 @@ export default function JazzDashboard() {
                         <SheetTitle>Conversation History</SheetTitle>
                     </SheetHeader>
                     <ChatHistorySidebar
-                        currentConversationId={currentConversationId}
+                        currentConversationId={chat.currentConversationId}
                         onSelectConversation={(id) => {
                             setIsHistorySheetOpen(false);
-                            handleSelectConversation(id);
+                            chat.setCurrentConversationId(id);
+                            chat.setMessages([]);
+                            chat.setAiStatus('IDLE');
                         }}
                         onNewChat={() => {
                             setIsHistorySheetOpen(false);
-                            handleNewChat();
+                            chat.handleNewChat();
                         }}
                         variant="sidebar"
                         className="h-[calc(100vh-4rem)]"
@@ -382,131 +160,97 @@ export default function JazzDashboard() {
                 </SheetContent>
             </Sheet>
 
-            {/* Profile & Notes Modals */}
+            {/* Modals */}
             <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} />
             <NotesModal isOpen={isNotesModalOpen} onClose={() => setIsNotesModalOpen(false)} />
 
             {/* Main Dashboard */}
             <div className="h-full flex flex-col gap-4">
-                {/* Toolbar */}
-                <div className="flex items-center justify-between pb-2 border-b">
-                    <h2 className="text-lg font-semibold">Chat Session</h2>
-                    <div className="flex items-center gap-3">
-                        {/* Quick Model Toggle */}
-                        <QuickModelToggle compact={true} />
-
-                        <StatusIndicator status={aiStatus} />
-
-                        <ToggleGroup
-                            type="single"
-                            value={appMode}
-                            onValueChange={(value) => value && setAppMode(value as AppMode)}
-                            size="sm"
-                            className="hidden sm:flex"
+                <JazzHeader
+                    aiStatus={chat.aiStatus}
+                    appMode={chat.appMode}
+                    onModeChange={chat.setAppMode}
+                    onOpenHistory={() => setIsHistorySheetOpen(true)}
+                    onConsolidate={chat.consolidateMemory}
+                    onClear={chat.handleNewChat}
+                >
+                    {!audioEnabled && (
+                        <button
+                            onClick={enableAudio}
+                            className="mr-2 px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs rounded-full animate-pulse font-bold"
+                            title="Click to enable automated audio (Browser Policy)"
                         >
-                            <ToggleGroupItem value="PODCAST" className={cn(appMode === "PODCAST" && "animate-spring")}>
-                                <i className="fas fa-podcast mr-2" />
-                                Podcast
-                            </ToggleGroupItem>
-                            <ToggleGroupItem value="STREAMING" className={cn(appMode === "STREAMING" && "animate-spring")}>
-                                <i className="fas fa-broadcast-tower mr-2" />
-                                Streaming
-                            </ToggleGroupItem>
-                        </ToggleGroup>
+                            <i className="fas fa-volume-mute mr-1"></i>
+                            Enable Audio
+                        </button>
+                    )}
+                </JazzHeader>
 
-                        <Button
-                            variant="ghost" size="sm"
-                            className="sm:hidden"
-                            onClick={() => setIsHistorySheetOpen(true)}
-                        >
-                            <i className="fas fa-clock-rotate-left" />
-                        </Button>
-                    </div>
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-[280px_1fr] xl:grid-cols-[280px_1fr_320px] h-[calc(100vh-12rem)]">
-                    {/* Sidebar: Conversation History (Desktop) */}
-                    <Card className="hidden lg:flex flex-col min-h-0 overflow-hidden card-hover">
-                        <CardHeader className="border-b px-4 py-3">
-                            <CardTitle className="text-sm font-semibold flex items-center justify-between">
-                                Conversations
-                                <Badge variant="secondary">{messages.length}</Badge>
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="flex-1 p-0 overflow-hidden">
-                            <ChatHistorySidebar
-                                currentConversationId={currentConversationId}
-                                onSelectConversation={handleSelectConversation}
-                                onNewChat={handleNewChat}
-                                variant="embedded"
-                                className="h-full"
-                            />
-                        </CardContent>
-                    </Card>
-
-                    {/* Main Chat Area */}
-                    <div className="flex flex-col gap-4 min-h-0">
-                        {/* Chat Panel */}
-                        <Card className="flex-1 flex flex-col min-h-0 overflow-hidden shadow-jazz">
-                            <CardContent className="flex-1 p-0 flex flex-col min-h-0">
-                                <ChatPanel
-                                    messages={messages}
-                                    conversationId={currentConversationId}
-                                    sessionDuration={getSessionDuration()}
-                                    messageCount={messages.length}
-                                    appMode={appMode}
-                                    isDebugMode={isDebugMode}
-                                    onToggleDebugMode={() => setIsDebugMode(!isDebugMode)}
-                                    onPlayAudio={(content) => speakElevenLabs(content)}
-                                    onPauseAudio={pauseElevenLabs}
-                                    onResumeAudio={resumeElevenLabs}
-                                    onStopAudio={stopElevenLabs}
-                                    onReplayAudio={replayElevenLabs}
-                                    onSaveAudio={saveAudioElevenLabs}
-                                    isPlayingAudio={isSpeakingElevenLabs}
-                                    isPausedAudio={isPausedElevenLabs}
-                                    canReplay={canReplayElevenLabs}
-                                    canSave={canSaveElevenLabs}
-                                    onTextSelection={() => { }}
-                                    memoryLearning={memoryLearning}
-                                    onToggleLearning={handleToggleLearning}
-                                />
-                            </CardContent>
-                        </Card>
-
-                        {/* Message Composer */}
-                        <MessageComposer
-                            onSendMessage={handleSendMessage}
-                            onClearChat={() => setMessages([])}
-                            onStoreMemory={() => consolidateMemoryMutation.mutate(currentConversationId)}
-                            onToggleVoice={toggleListening}
-                            isListening={isListening}
-                            isSpeaking={isSpeakingElevenLabs}
-                            appMode={appMode}
-                            sessionDuration={getSessionDuration()}
-                            messageCount={messages.length}
-                            memoryCount={memoryStats?.totalFacts ?? 0}
-                            documentCount={documentCount}
-                            disabled={aiStatus === 'PROCESSING'}
+                <JazzChatLayout
+                    messageCount={chat.messages.length}
+                    sidebarContent={
+                        <ChatHistorySidebar
+                            currentConversationId={chat.currentConversationId}
+                            onSelectConversation={(id) => {
+                                chat.setCurrentConversationId(id);
+                                chat.setMessages([]);
+                                chat.setAiStatus('IDLE');
+                            }}
+                            onNewChat={chat.handleNewChat}
+                            variant="embedded"
+                            className="h-full"
                         />
-                    </div>
-
-                    {/* Right Sidebar: Quick Info (Desktop XL+) */}
-                    <Card className="hidden xl:flex flex-col min-h-0 overflow-hidden card-hover">
-                        <CardHeader className="border-b px-4 py-3">
-                            <CardTitle className="text-sm font-semibold">Command Center</CardTitle>
-                        </CardHeader>
-                        <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
-                            <PersonalitySurgePanel />
-                        </CardContent>
-                    </Card>
-                </div>
+                    }
+                    chatPanelContent={
+                        <ChatPanel
+                            messages={chat.messages}
+                            conversationId={chat.currentConversationId}
+                            sessionDuration={chat.getSessionDuration()}
+                            messageCount={chat.messages.length}
+                            appMode={chat.appMode}
+                            isDebugMode={chat.isDebugMode}
+                            onToggleDebugMode={() => chat.setIsDebugMode(!chat.isDebugMode)}
+                            onPlayAudio={(content) => voice.speak(content)}
+                            onPauseAudio={voice.pauseSpeaking}
+                            onResumeAudio={voice.resumeSpeaking}
+                            onStopAudio={voice.stopSpeaking}
+                            onReplayAudio={voice.replaySpeaking}
+                            onSaveAudio={voice.saveAudio}
+                            isPlayingAudio={voice.isSpeaking}
+                            isPausedAudio={voice.isPaused}
+                            canReplay={voice.canReplay}
+                            canSave={voice.canSaveAudio}
+                            onTextSelection={() => { }}
+                            // Memory actions
+                            memoryLearning={chat.memoryLearning}
+                            onToggleLearning={chat.handleToggleLearning}
+                            onSaveToMemory={chat.saveToMemory}
+                        />
+                    }
+                    composerContent={
+                        <MessageComposer
+                            onSendMessage={chat.handleSendMessage}
+                            onClearChat={() => chat.setMessages([])}
+                            onStoreMemory={chat.consolidateMemory}
+                            onToggleVoice={handleToggleVoice}
+                            isListening={voice.isListening}
+                            isSpeaking={voice.isSpeaking}
+                            appMode={chat.appMode}
+                            sessionDuration={chat.getSessionDuration()}
+                            messageCount={chat.messages.length}
+                            memoryCount={chat.memoryStats?.totalFacts ?? 0}
+                            documentCount={chat.documentCount}
+                            disabled={chat.aiStatus === 'PROCESSING'}
+                        />
+                    }
+                    rightPanelContent={<PersonalitySurgePanel />}
+                />
             </div>
 
             {/* Memory Checker */}
             <MemoryChecker
                 selectedText={selectedText}
-                profileId={activeProfile?.id}
+                profileId={chat.activeProfile?.id}
                 isOpen={memoryCheckerOpen}
                 onClose={() => setMemoryCheckerOpen(false)}
                 position={checkerPosition}

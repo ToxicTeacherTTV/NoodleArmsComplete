@@ -41,9 +41,9 @@ async function main() {
       LIMIT 10;
     `);
 
-        if (memoryResult.rows.length \u003e 0) {
+        if (memoryResult.rows.length > 0) {
             console.log(`\nFound ${memoryResult.rows.length} memories. Sample data:`);
-            console.table(memoryResult.rows.map(row =\u003e({
+            console.table(memoryResult.rows.map(row => ({
                 id: row.id,
                 head: row.head,
                 isDoubleQuoted: row.head.startsWith('""') || row.head.startsWith('"['),
