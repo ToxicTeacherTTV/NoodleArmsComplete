@@ -57,9 +57,10 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     lastSpokenTextRef.current = speechItem.text;
     lastEmotionProfileRef.current = speechItem.emotionProfile;
     canReplayRef.current = true;
-    
+
     isProcessingRef.current = true;
     setIsSpeaking(true);
+    console.log(`🔊 [ElevenLabs Hook] Processing queue item: "${speechItem.text.substring(0, 30)}..."`);
 
     // Create new abort controller for this request
     if (abortControllerRef.current) {
@@ -71,11 +72,11 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
       const requestBody: { text: string; emotionProfile?: string } = {
         text: speechItem.text
       };
-      
+
       if (speechItem.emotionProfile) {
         requestBody.emotionProfile = speechItem.emotionProfile;
       }
-      
+
       const response = await fetch('/api/speech/synthesize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -84,8 +85,9 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to synthesize speech');
+        throw new Error(`Failed to synthesize speech: ${response.status}`);
       }
+      console.log(`🔊 [ElevenLabs Hook] API Success, processing blob...`);
 
       // Check if we should still be processing (e.g. if stop was called)
       if (!isProcessingRef.current) {
@@ -93,14 +95,14 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
       }
 
       const audioBlob = await response.blob();
-      
+
       // Check again after blob processing
       if (!isProcessingRef.current) {
         return;
       }
 
       const audioUrl = URL.createObjectURL(audioBlob);
-      
+
       // Store blob and URL for saving
       lastAudioBlobRef.current = audioBlob;
       if (lastAudioUrlRef.current) {
@@ -108,7 +110,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
       }
       lastAudioUrlRef.current = audioUrl;
       canSaveRef.current = true;
-      
+
       // Stop any currently playing audio before starting new one
       cleanupAudio();
 
@@ -120,7 +122,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
         setIsPaused(false);
         isProcessingRef.current = false;
         audioRef.current = null;
-        
+
         if (onEndCallbackRef.current) {
           onEndCallbackRef.current();
           onEndCallbackRef.current = undefined;
@@ -144,7 +146,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
         setIsPaused(false);
         isProcessingRef.current = false;
         audioRef.current = null;
-        
+
         if (onEndCallbackRef.current) {
           onEndCallbackRef.current();
           onEndCallbackRef.current = undefined;
@@ -165,7 +167,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
       setIsSpeaking(false);
       setIsPaused(false);
       isProcessingRef.current = false;
-      
+
       if (onEndCallbackRef.current) {
         onEndCallbackRef.current();
         onEndCallbackRef.current = undefined;
@@ -187,11 +189,11 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     }
 
     // Add to queue
-    speechQueue.current.push({ 
-      text: text.trim(), 
-      emotionProfile 
+    speechQueue.current.push({
+      text: text.trim(),
+      emotionProfile
     });
-    
+
     // Start processing if not already doing so
     if (!isProcessingRef.current) {
       processQueue();
@@ -202,10 +204,10 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     if (!isSupported || !lastAudioBlobRef.current || !canSaveRef.current) return;
 
     // Generate filename based on spoken text or default
-    const defaultFilename = lastSpokenTextRef.current 
+    const defaultFilename = lastSpokenTextRef.current
       ? `audio-${lastSpokenTextRef.current.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '-')}.mp3`
       : `audio-${Date.now()}.mp3`;
-    
+
     const finalFilename = filename || defaultFilename;
 
     // Create download link
@@ -214,7 +216,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
     downloadLink.href = downloadUrl;
     downloadLink.download = finalFilename;
     downloadLink.click();
-    
+
     // Clean up the download URL
     URL.revokeObjectURL(downloadUrl);
   }, [isSupported]);
@@ -230,7 +232,7 @@ export function useElevenLabsSpeech(): UseElevenLabsSpeechReturn {
 
     // Stop and cleanup current audio
     cleanupAudio();
-    
+
     speechQueue.current = [];
     setIsSpeaking(false);
     setIsPaused(false);

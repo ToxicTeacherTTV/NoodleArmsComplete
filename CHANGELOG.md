@@ -16,6 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.0] - 2026-01-08
+
+### Fixed - Rant Audio Pipeline
+- **Browser Autoplay Policy**: Implemented "Enable Audio" button in JazzDashboard header to unlock AudioContext, fixing `DOMException` that blocked background audio playback.
+- **Race Condition**: Added deduplication logic (`processedIds` ref) to `jazz-dashboard-v2.tsx` to prevent the same audio file from playing twice.
+- **Queue Management**: Ported polling logic to `jazz-dashboard-v2.tsx` and implemented proper ACK endpoint to remove played items from `twitchBot` queue.
+- **Server Stability**: Fixed "Split Brain" issue in `routes.ts` by correcting dynamic imports, ensuring a single `TwitchBotService` instance.
+
+### Changed - Dashboard Consolidation
+- **V2 Supremacy**: Audit confirmed `jazz-dashboard-v2.tsx` is the definitive dashboard.
+- **Feature Parity**: Ported all missing V1 features to V2:
+  - **Manual Controls**: Added "Consolidate Memory" and "Clear Chat" buttons to `JazzHeader`.
+  - **Save to Memory**: Restored manual "Save to Memory" action for individual messages.
+  - **Personality Panel**: Confirmed V2 uses the correct `/api/personality/state` endpoint (V1 was using deprecated `/api/chaos/state`).
+- **UI Improvements**: Added audio unlock status and better error handling for ElevenLabs.
+
+---
+
 ## [1.6.1] - 2026-01-04
 
 ### Fixed - Critical Stability & UX

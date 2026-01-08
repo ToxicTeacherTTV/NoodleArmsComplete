@@ -40,11 +40,11 @@ async function checkHealth() {
         const vectorLiteral = `[${dummyVector.join(',')}]`;
 
         const searchTest = await pool.query(`
-      SELECT id, (1 - (embedding <=> $1::vector)) as similarity 
+      SELECT id, (1 - (embedding <=> '${vectorLiteral}'::vector)) as similarity 
       FROM documents 
       WHERE embedding IS NOT NULL 
       LIMIT 1
-    `, [vectorLiteral]);
+    `);
 
         console.log("✅ Similarity search functional.");
         console.log("\n✨ VECTOR SYSTEM IS HEALTHY!");

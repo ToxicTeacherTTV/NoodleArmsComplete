@@ -1,8 +1,8 @@
 // CRITICAL FIX: Import shared types instead of duplicating them
-import type { 
-  Message as DbMessage, 
-  Profile as DbProfile, 
-  MemoryEntry as DbMemoryEntry, 
+import type {
+  Message as DbMessage,
+  Profile as DbProfile,
+  MemoryEntry as DbMemoryEntry,
   Document as DbDocument,
   Conversation as DbConversation,
   Person as DbPerson,
@@ -111,6 +111,7 @@ export interface ConversationResponse {
   title: string;
   profileId: string;
   createdAt: string;
+  isPrivate: boolean;
 }
 
 export interface ChaosState {

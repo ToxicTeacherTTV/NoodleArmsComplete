@@ -23,6 +23,7 @@ export class EmbeddingService {
   private ai: GoogleGenAI;
   private readonly EMBEDDING_MODEL = 'text-embedding-004'; // Latest Gemini embedding model
   private readonly BATCH_SIZE = 50; // Process embeddings in batches
+  private cache = new Map<string, EmbeddingResult>();
 
   constructor() {
     this.ai = new GoogleGenAI({
@@ -43,6 +44,13 @@ export class EmbeddingService {
     }
 
     try {
+      // Check cache first
+      const cacheKey = `${this.EMBEDDING_MODEL}:${text}`;
+      if (this.cache.has(cacheKey)) {
+        // console.log(`⚡ Embedding cache hit for: "${text.substring(0, 20)}..."`);
+        return this.cache.get(cacheKey)!;
+      }
+
       console.log(`🔢 Generating embedding for text: "${text.substring(0, 50)}..."`);
 
       const response = await this.ai.models.embedContent({
@@ -60,10 +68,21 @@ export class EmbeddingService {
         throw new Error("No embedding returned from Gemini");
       }
 
-      return {
+      const result = {
         embedding: values,
         model: this.EMBEDDING_MODEL
       };
+
+      // Cache the result
+      this.cache.set(cacheKey, result);
+
+      // Prune cache if too large (simple LRU-like)
+      if (this.cache.size > 1000) {
+        const firstKey = this.cache.keys().next().value;
+        this.cache.delete(firstKey);
+      }
+
+      return result;
     } catch (error) {
       console.error("Embedding generation error:", error);
       throw new Error(`Failed to generate embedding: ${error}`);

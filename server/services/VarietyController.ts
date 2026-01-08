@@ -111,7 +111,7 @@ export class VarietyController {
   ];
 
   private readonly RESPONSE_SHAPES = [
-    'take', 'storylet', 'nostalgic_riff', 'comparison', 'critique', 
+    'take', 'storylet', 'nostalgic_riff', 'comparison', 'critique',
     'news_report', 'consultation', 'investigation', 'coaching', 'vendetta_story',
     'question_led', 'callback', 'short_bit'
   ];
@@ -180,7 +180,7 @@ export class VarietyController {
     // Score facets based on user message relevance
     const scoredFacets = candidateFacets.map(facet => {
       let score = Math.random() * 0.5; // Base randomness
-      
+
       // Boost score if user message relates to facet topics
       const userLower = userMessage.toLowerCase();
       facet.topics.forEach(topic => {
@@ -188,7 +188,7 @@ export class VarietyController {
           score += 0.3;
         }
       });
-      
+
       // Boost score if user message contains facet lexicon
       facet.lexicon.forEach(term => {
         if (userLower.includes(term.toLowerCase())) {
@@ -214,26 +214,26 @@ export class VarietyController {
   async shouldAllowCatchphrase(variety: SessionVariety): Promise<boolean> {
     const currentTurn = variety.turnCount;
     const recentCatchphrases = variety.recentCatchphrases.filter(turn => currentTurn - turn < 8);
-    
+
     if (recentCatchphrases.length === 0) {
       variety.recentCatchphrases.push(currentTurn);
       await this.saveSessionVariety(variety);
       return true;
     }
-    
+
     return false;
   }
 
   async shouldAllowSelfIntro(variety: SessionVariety): Promise<boolean> {
     const currentTurn = variety.turnCount;
     const recentIntros = variety.recentSelfIntros.filter(turn => currentTurn - turn < 15);
-    
+
     if (recentIntros.length === 0 && variety.turnCount > 1) {
       variety.recentSelfIntros.push(currentTurn);
       await this.saveSessionVariety(variety);
       return true;
     }
-    
+
     const isFirstTurn = variety.turnCount === 1;
     if (isFirstTurn) {
       variety.recentSelfIntros.push(currentTurn);
@@ -281,7 +281,7 @@ RESPONSE STRUCTURE: ${facet.responseShape.structure}
     ];
 
     const unusedCards = sceneCards.filter(card => !variety.usedSceneCards.includes(card));
-    
+
     if (unusedCards.length === 0) {
       // Reset if all cards used
       variety.usedSceneCards = [];

@@ -1,5 +1,5 @@
 import { memoryCaches } from './services/memoryCache';
-import { suggestionService } from './services/suggestionService.js';
+import { suggestionService } from './services/suggestionService';
 import { perfMetrics } from './services/performanceMetrics';
 import {
   profiles,

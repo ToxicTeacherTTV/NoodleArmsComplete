@@ -116,9 +116,11 @@
   box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
 }
 
-.chat-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(139, 92, 246, 0.3) transparent;
+@supports (scrollbar-width: thin) {
+  .chat-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139, 92, 246, 0.3) transparent;
+  }
 }
 
 .chat-scroll::-webkit-scrollbar {

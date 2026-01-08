@@ -7,6 +7,7 @@ import { entityExtraction } from './entityExtraction.js';
 import { varietyController } from './VarietyController.js';
 import { documentProcessor } from './documentProcessor.js';
 import { contextPrewarmer } from './contextPrewarmer.js';
+import { contextBuilder } from './contextBuilder.js';
 
 export class TwitchBotService {
   private client: tmi.Client | null = null;
@@ -19,13 +20,22 @@ export class TwitchBotService {
   private lastGameUpdate: number = 0;
   private lastProactiveMessage: number = Date.now();
   private proactiveInterval: any = null;
-  
+  private audioQueue: { id: string; text: string; type: string; timestamp: number }[] = [];
+
+  public getPendingAudio() {
+    return this.audioQueue;
+  }
+
+  public ackAudio(id: string) {
+    this.audioQueue = this.audioQueue.filter(item => item.id !== id);
+  }
+
   // Bots to ignore to prevent AI loops or spam
   private readonly BANNED_BOTS = [
-    'nightbot', 
-    'streamelements', 
-    'streamlabs', 
-    'moobot', 
+    'nightbot',
+    'streamelements',
+    'streamlabs',
+    'moobot',
     'wizebot',
     'fossabot'
   ];
@@ -40,7 +50,7 @@ export class TwitchBotService {
       this.username = username;
       this.channel = channel.startsWith('#') ? channel : `#${channel}`;
       this.activeProfile = await storage.getActiveProfile();
-      
+
       if (!this.activeProfile) {
         throw new Error('No active profile found for Twitch bot');
       }
@@ -86,7 +96,7 @@ export class TwitchBotService {
       this.isConnected = false;
     });
 
-    this.client.on('error', (err) => {
+    this.client.on('error' as any, (err) => {
       console.error('❌ Twitch IRC error:', err);
     });
   }
@@ -94,7 +104,7 @@ export class TwitchBotService {
   private async handleMessage(tags: tmi.ChatUserstate, message: string) {
     const username = tags['display-name'] || tags.username || 'Viewer';
     const senderLower = (tags.username || '').toLowerCase();
-    
+
     // 1. IGNORE BANNED BOTS
     if (this.BANNED_BOTS.includes(senderLower)) {
       return;
@@ -113,12 +123,70 @@ export class TwitchBotService {
         console.error("Failed to fetch sauce for Twitch:", e);
       }
     }
-    
+
+    // 2.2 HANDLE !rant COMMAND
+    if (message.startsWith('!rant') || message.startsWith('!yap')) {
+      try {
+        const chaos = ChaosEngine.getInstance();
+        const chaosState = await chaos.getCurrentState();
+
+        console.log(`🤬 [Twitch] Triggering FREE REIGN RANT`);
+
+        // Generate the rant with explicit "Free Reign" instructions
+        const rantPrompt = `
+          MODE: RANT
+          CONTEXT: A Twitch viewer just triggered your !rant command.
+          INSTRUCTIONS: 
+          - Pick a COMPLETELY RANDOM, trivial, or absurd subject (e.g. wet socks, the concept of time, printers, hexagonal patterns, the smell of ozone).
+          - Go on a completely unhinged, profanity-laced rant about it.
+          - Be absolutely furious or irrationally annoyed.
+          - Use CAPS LOCK for emphasis.
+          - Make it 2-3 sentences max so it fits in chat, but make them COUNT.
+          - This is for an 18+ stream, do not hold back on language.
+          - DO NOT announce the topic, just start screaming about it.
+        `;
+
+        const aiResponse = await aiOrchestrator.generateResponse(
+          rantPrompt,
+          this.activeProfile.coreIdentity,
+          {}, // Empty context for random rant
+          'STREAMING',
+          `twitch-rant-${Date.now()}`,
+          this.activeProfile.id,
+          'gemini-3-flash-preview',
+          100, // MAX SAUCE for rant
+          this.currentGame
+        );
+
+        if (aiResponse && aiResponse.content) {
+          const cleanResponse = aiResponse.content.replace(/\[[^\]]*\]/g, '').trim();
+
+          // Send to chat - DISABLED for audio-only rant
+          // this.client?.say(this.channel, `[RANT INCOMING] ${cleanResponse}`);
+
+          // Queue for Audio Playback
+          this.audioQueue.push({
+            id: `rant-${Date.now()}`,
+            text: cleanResponse,
+            type: 'RANT',
+            timestamp: Date.now()
+          });
+          console.log(`🎙️ [TwitchBot] Queued RANT audio: "${cleanResponse.substring(0, 50)}..."`);
+
+          // Limit queue size
+          if (this.audioQueue.length > 10) this.audioQueue.shift();
+        }
+        return;
+      } catch (e) {
+        console.error("Failed to generate rant:", e);
+      }
+    }
+
     // 3. MENTION DETECTION
     const botUsername = this.username.toLowerCase();
-    const isMentioned = message.toLowerCase().includes(botUsername) || 
-                        message.toLowerCase().includes('nicky');
-    
+    const isMentioned = message.toLowerCase().includes(botUsername) ||
+      message.toLowerCase().includes('nicky');
+
     // For Twitch, we only respond if mentioned to avoid spamming
     if (!isMentioned) return;
 
@@ -130,35 +198,29 @@ export class TwitchBotService {
 
       // Update game info (cached)
       await this.updateCurrentGame();
+      const chaosState = await chaos.getCurrentState();
 
-      // 1. Get context in parallel
-      const [relevantMemories, relevantDocs, loreContext, chaosState, entityDossiers, varietyData] = await Promise.all([
-        storage.searchEnrichedMemoryEntries(this.activeProfile.id, message),
-        documentProcessor.searchDocuments(this.activeProfile.id, message),
-        contextPrewarmer.getLoreContext(this.activeProfile.id, storage),
-        chaos.getCurrentState(),
-        entityExtraction.getEntityDossiers(message, this.activeProfile.id, storage),
-        varietyController.selectPersonaFacet(conversationId, message)
-      ]);
+      // 1. Get context
+      const context = await aiOrchestrator.gatherAllContext(
+        message,
+        this.activeProfile.id,
+        conversationId,
+        null,
+        'STREAMING',
+        this.currentGame
+      );
 
-      const { facet, variety } = varietyData;
-      const varietyPrompt = varietyController.generateVarietyPrompt(facet, variety);
+
 
       // 2. Generate response
       const aiResponse = await aiOrchestrator.generateResponse(
         message,
         this.activeProfile.coreIdentity,
-        relevantMemories,
-        relevantDocs,
-        loreContext,
+        context,
         'STREAMING',
         conversationId,
         this.activeProfile.id,
-        [], // webSearchResults
-        varietyPrompt,
-        [], // trainingExamples
         'gemini-3-flash-preview',
-        entityDossiers,
         chaosState.sauceMeter || 0,
         this.currentGame
       );
@@ -167,10 +229,10 @@ export class TwitchBotService {
       if (aiResponse && aiResponse.content) {
         // Strip emotion tags for Twitch chat
         let cleanResponse = aiResponse.content.replace(/\[[^\]]*\]/g, '').trim();
-        
+
         // Twitch message length limit is ~500 chars
         const MAX_LENGTH = 480;
-        
+
         if (cleanResponse.length <= MAX_LENGTH) {
           this.client?.say(this.channel, `@${username} ${cleanResponse}`);
         } else {
@@ -185,17 +247,16 @@ export class TwitchBotService {
             }
           }
         }
-        
+
         // 4. Track metrics
         prometheusMetrics.llmCallsTotal.inc({ provider: 'google', model: 'gemini-3-flash-preview', type: 'twitch' });
-        
+
         // 5. Save to conversation history
         try {
           // Ensure conversation exists
           let conversation = await storage.getConversation(conversationId);
           if (!conversation) {
             await storage.createConversation({
-              id: conversationId,
               profileId: this.activeProfile.id,
               title: `Twitch Stream: ${this.channel}`,
               isArchived: false,
@@ -270,7 +331,7 @@ export class TwitchBotService {
       const conversationId = `twitch-proactive-${Date.now()}`;
       const chaos = ChaosEngine.getInstance();
       const chaosState = await chaos.getCurrentState();
-      
+
       // 1. Gather context first
       const contextObj = await aiOrchestrator.gatherAllContext(
         context,
@@ -344,7 +405,7 @@ export class TwitchBotService {
           this.previousGame = this.currentGame;
           this.currentGame = gameName;
           this.lastGameUpdate = now;
-          
+
           // Detect game change
           if (this.previousGame !== this.currentGame) {
             console.log(`🎮 [Twitch] Game changed from ${this.previousGame} to ${this.currentGame}`);
@@ -367,7 +428,7 @@ export class TwitchBotService {
       // Find the last sentence end or space within the limit
       let splitIndex = -1;
       const punctuation = ['. ', '! ', '? '];
-      
+
       for (const p of punctuation) {
         const idx = current.lastIndexOf(p, maxLength);
         if (idx > splitIndex) splitIndex = idx + 1;

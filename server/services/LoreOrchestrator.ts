@@ -110,7 +110,9 @@ export class LoreOrchestrator {
     }
 
     // 4. Check for Contradictions
-    const contradictions = await this.intelligence.runFullIntelligenceAnalysis(storage.db, profileId);
+    // ⚡ OPTIMIZATION: Disabled automatic full analysis on every message to prevent perf issues
+    // const contradictions = await this.intelligence.runFullIntelligenceAnalysis(storage.db, profileId);
+    const contradictions = { factClusters: [] };
 
     return {
       newFacts: 1,
@@ -306,8 +308,9 @@ export class LoreOrchestrator {
       }
     `;
 
+    let result;
     try {
-      const result = await geminiService.generateResponse(prompt, "You are a Lore Auditor.", [], [], "", 'SIMPLE');
+      result = await geminiService.generateResponse(prompt, "You are a Lore Auditor.", [], [], "", 'SIMPLE');
 
       const cleanJson = (text: string) => {
         return text.replace(/```json\n?|\n?```/g, '').replace(/```/g, '').trim();
