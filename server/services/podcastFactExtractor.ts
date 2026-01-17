@@ -16,23 +16,34 @@ export class PodcastFactExtractor {
   private async extractFactsWithAI(transcript: string): Promise<Array<{ content: string; type: string; keywords: string[]; importance: number }>> {
     if (!transcript || transcript.length < 50) return [];
 
-    const prompt = `You are an expert archivist for the "Noodle Arms" podcast. Your job is to extract PERMANENT FACTS and MEMORIES from the following podcast transcript.
+    const prompt = `You are an expert archivist for the "Noodle Arms" podcast. Your job is to extract PERMANENT FACTS and MEMORIES about NICKY from the following podcast transcript.
+
+CRITICAL: This podcast has TWO CO-HOSTS:
+1. **Toxic** (or "ToxicTeacher", "Host") - The HUMAN co-host. DO NOT extract his opinions/facts as Nicky's.
+2. **Nicky** (or "Noodle Arms", "Nicky Noodle Arms", "Nicky A.I. Dente") - The AI co-host. ONLY extract facts about/from HIM.
+
+The transcript has speaker labels like "Toxic:", "Nicky:", "[Toxic]", "[Nicky]", etc.
 
 TRANSCRIPT:
 "${transcript.substring(0, 30000)}" ${(transcript.length > 30000) ? '...(truncated)' : ''}
 
 INSTRUCTIONS:
-Extract 10-20 distinct, atomic facts from this episode. Focus on:
-1. Specific opinions held by the host (Nicky/Noodle Arms)
-2. Concrete events or stories mentioned (Lore)
-3. Relationships with other people (Guests, friends, rivals)
-4. Specific gaming preferences or hot takes (Dead by Daylight, etc.)
-5. Personal life details revealed
+Extract 10-20 distinct, atomic facts from this episode. ONLY extract facts that are:
+- Said BY Nicky (his opinions, stories, preferences)
+- Said ABOUT Nicky by Toxic or others (e.g., "Toxic mentions that Nicky hates camping killers")
+
+Focus on:
+1. Nicky's specific opinions and hot takes
+2. Nicky's stories and lore (his fictional Italian-American backstory, SABAM, etc.)
+3. Nicky's relationships with people (real or fictional)
+4. Nicky's gaming preferences (Dead by Daylight, etc.)
+5. Nicky's personal details and character traits
 
 Do NOT extract:
-- Generic greetings ("Hello everyone")
-- Filler conversation
+- Toxic's personal opinions (unless they're ABOUT Nicky)
+- Generic greetings or filler
 - Ambiguous statements
+- Facts about Toxic himself
 
 Return a JSON object with a "facts" array. Each fact should have:
 - content: The fact statement (e.g., "Nicky thinks The Trapper is the worst killer in DBD")
@@ -101,21 +112,27 @@ JSON FORMAT:
 
   private extractNickyDialogue(transcript: string): string {
     // Parse transcript and extract only Nicky's speaking parts
-    // Common formats: "Nicky:", "Nicky says:", "[Nicky]"
+    // Recognize various speaker label formats from transcripts
     const lines = transcript.split('\n');
     const nickyLines: string[] = [];
-    
+
+    // Patterns for Nicky's speaker labels
+    const nickyPatterns = [
+      /^(Nicky|NICKY|Noodle Arms|NOODLE ARMS|Nicky Noodle Arms|Nicky A\.?I\.? Dente):?\s*/i,
+      /^\[(Nicky|NICKY|Noodle Arms|NOODLE ARMS|Nicky Noodle Arms)\]\s*/i,
+      /^\*\*(Nicky|Noodle Arms)\*\*:?\s*/i,  // Markdown bold format
+    ];
+
     for (const line of lines) {
-      if (line.match(/^(Nicky|NICKY|Noodle Arms|NOODLE ARMS):?\s/i) || 
-          line.match(/^\[(Nicky|NICKY|Noodle Arms|NOODLE ARMS)\]/i)) {
-        const cleaned = line
-          .replace(/^(Nicky|NICKY|Noodle Arms|NOODLE ARMS):?\s/i, '')
-          .replace(/^\[(Nicky|NICKY|Noodle Arms|NOODLE ARMS)\]\s*/i, '')
-          .trim();
-        if (cleaned) nickyLines.push(cleaned);
+      for (const pattern of nickyPatterns) {
+        if (pattern.test(line)) {
+          const cleaned = line.replace(pattern, '').trim();
+          if (cleaned) nickyLines.push(cleaned);
+          break;
+        }
       }
     }
-    
+
     return nickyLines.join('\n\n');
   }
 
