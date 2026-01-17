@@ -5,6 +5,9 @@ server/public
 vite.config.ts.*
 *.tar.gz
 
+# Large binaries - don't commit
+claude.exe
+
 # Environment variables - NEVER COMMIT
 .env
 .env.local

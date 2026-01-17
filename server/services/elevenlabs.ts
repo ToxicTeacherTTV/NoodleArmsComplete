@@ -1,4 +1,5 @@
-import { emotionTagGenerator } from './emotionTagGenerator.js';
+import fetch from 'node-fetch';
+// emotionTagGenerator removed - tags now handled by chatService.normalizeResponseTags
 
 interface ElevenLabsConfig {
   apiKey: string;
@@ -155,14 +156,9 @@ class ElevenLabsService {
       try {
         console.log(`🎭 Generating AI emotion tags for ${context.contentType}`);
         
-        // 🚀 NEW: Use the enhanced dialogue generator (ElevenLabs Best Practices)
-        // This replaces the old sectioned delivery with a smarter full-text enhancer
-        enhancedText = await emotionTagGenerator.enhanceDialogue(text, {
-          content: text,
-          contentType: context.contentType,
-          personality: context.personality,
-          mood: context.mood
-        });
+        // Text already has tags from normalizeResponseTags in chatService
+        // No need for additional AI enhancement here
+        enhancedText = text;
         
         // v3-compatible settings: ONLY stability (0.0 = "Creative" mode for maximum Audio Tag responsiveness)
         settings = voiceSettings || {

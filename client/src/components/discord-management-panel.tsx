@@ -5,18 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Users, UserPlus, MessageCircle, Edit2, Save, X, Trash2, Activity, TrendingUp, Clock, Bot, Settings, Plus, Hash, Eye, EyeOff, Shield } from "lucide-react";
+import { Users, UserPlus, MessageCircle, Edit2, Save, X, Activity, TrendingUp, Bot, Settings, Plus, Hash, Eye, EyeOff, Shield } from "lucide-react";
 import { format } from "date-fns";
 import { Separator } from "@/components/ui/separator";
-import { Slider } from "@/components/ui/slider";
+
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 
 type DiscordServer = {
   id: string;
@@ -304,6 +303,7 @@ export default function DiscordManagementPanel() {
                     className="w-full p-2 border rounded-md bg-background"
                     value={selectedServerId}
                     onChange={(e) => setSelectedServerId(e.target.value)}
+                    aria-label="Select Discord server"
                   >
                     <option value="">Select a Discord server...</option>
                     {servers.map((server) => (
@@ -628,7 +628,7 @@ export default function DiscordManagementPanel() {
 
                               {editingMemberId === member.id ? (
                                 <div className="space-y-4 p-4 bg-muted rounded-md">
-                                  {/* Edit Facts */}
+                                   {/* Edit Facts */}
                                   <div>
                                     <Label className="text-sm font-medium">Facts about {member.username}</Label>
                                     <div className="space-y-2">
@@ -793,7 +793,7 @@ export default function DiscordManagementPanel() {
 }
 
 // Dynamic Behavior Panel Component - Updated to use Unified Personality System
-function DynamicBehaviorPanel({ serverId }: { serverId: string }) {
+function DynamicBehaviorPanel({ serverId }: Readonly<{ serverId: string }>) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 

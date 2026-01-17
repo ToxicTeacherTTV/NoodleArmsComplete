@@ -384,6 +384,7 @@ export class ContextBuilder {
         const trainingExamples = context?.trainingExamples || [];
         const webSearchResults = context?.webSearchResults || [];
         const entityDossiers = context?.entityDossiers || [];
+        const gameKnowledge = context?.gameKnowledge || [];
         const controls = context?.controls;
 
         // 1. Personality Controls
@@ -479,6 +480,18 @@ export class ContextBuilder {
             });
         }
 
+        // 6a. Game Knowledge Pack (RAG)
+        if (gameKnowledge.length > 0) {
+            contextPrompt += "\n\n[GAME KNOWLEDGE PACK (FACTS)]\n";
+            contextPrompt += "Use these facts to answer gameplay questions accurately. Do nothallucinate mechanics not present here if unsure.\n";
+            // Filter for high confidence or relevance
+            const strongFacts = gameKnowledge.filter((k: any) => (k.confidence || 0) > 65 || (k.similarity || 0) > 0.75).slice(0, 15);
+            
+            strongFacts.forEach((fact: any) => {
+                contextPrompt += `[FACT] ${fact.content} (${Math.round(fact.confidence || fact.similarity * 100)}%)\n`;
+            });
+        }
+
         // 7. Training Examples (Style Guidance)
         if (trainingExamples.length > 0) {
             contextPrompt += "\n\n[STYLE GUIDANCE: TRAINING EXAMPLES]\n";
@@ -570,13 +583,42 @@ ${gameContext}
             podcastAwareMemories,
             relevantDocs,
             loreContext,
-            trainingExamples
+            trainingExamples,
+            gameKnowledge
         ] = await Promise.all([
             this.retrieveContextualMemories(message, profileId, conversationId, controls, mode, limit, recentMessages),
             contextPrewarmer.getPodcastMemories(profileId, storage, mode || 'CHAT'),
             documentProcessor.searchDocuments(profileId, message),
             isStreaming ? Promise.resolve(undefined) : contextPrewarmer.getLoreContext(profileId, storage),
-            embeddingServiceInstance.searchSimilarTrainingExamples(message, profileId, isStreaming ? 5 : 10)
+            embeddingServiceInstance.searchSimilarTrainingExamples(message, profileId, isStreaming ? 5 : 10),
+            // RAG: Game Knowledge Retrieval
+            (async () => {
+                const activeGame = (currentGame || "").toLowerCase();
+                let query = "";
+                
+                if (activeGame.includes('dead by daylight') || activeGame.includes('dbd')) {
+                    query = "Dead by Daylight gameplay mechanics perks killers survivors status effects hatch loop strategy";
+                } else if (activeGame.includes('arc raiders') || activeGame.includes('arc')) {
+                    query = "ARC Raiders gameplay weapons machines mechanics loot extraction volk strategy";
+                }
+
+                if (query) {
+                    console.log(`🎮 RAG: Searching for ${activeGame} knowledge with query: "${query}"`);
+                    // FIX: Don't filter by type - game facts are stored as 'CONTEXT' not 'CANON'
+                    // This was causing 0 results even though facts exist
+                    const results = await embeddingServiceInstance.hybridSearch(query, profileId, 25);
+                    console.log(`🎮 RAG: Found ${results.combined.length} game knowledge results`);
+                    if (results.combined.length > 0) {
+                        const types = Array.from(new Set(results.combined.map(r => r.type).filter(Boolean)));
+                        console.log(`🎮 RAG: Sample result types:`, types);
+                    }
+                    return results.combined.map((r: any) => ({
+                         ...r,
+                         source: 'game_knowledge_rag'
+                    }));
+                }
+                return [];
+            })()
         ]);
 
         // 2. Combine Memories
@@ -591,6 +633,7 @@ ${gameContext}
         const memoryPruning = contextPruner.pruneMemories(combinedMemories, recentMessages, 8);
         const docPruning = contextPruner.pruneDocuments(relevantDocs, recentMessages, 8);
 
+        // 4. Update retrieval tracking
         // 4. Update retrieval tracking
         for (const memory of memoryPruning.pruned) {
             if (memory.id) await storage.incrementMemoryRetrieval(memory.id);
@@ -628,6 +671,7 @@ ${gameContext}
             loreContext,
             trainingExamples,
             entityDossiers,
+            gameKnowledge, // Pass to context builder
             webSearchResults,
             recentMessages, // Added for repetition check in Orchestrator
             controls,

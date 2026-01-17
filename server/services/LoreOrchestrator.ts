@@ -54,8 +54,14 @@ export class LoreOrchestrator {
     profileId: string,
     source: string,
     type: 'CONVERSATION' | 'DOCUMENT' | 'WEB' = 'CONVERSATION',
-    conversationId?: string
+    conversationId?: string,
+    options?: { allowWrites?: boolean }
   ): Promise<LoreProcessingResult> {
+    if (options && options.allowWrites === false) {
+      console.log('🔒 Private mode: Skipping lore processing (safety catch)');
+      return { newFacts: 0, updatedEntities: 0, conflictsDetected: 0, summary: 'Skipped due to private mode' };
+    }
+
     console.log(`🏛️ LoreOrchestrator: Processing new ${type} content from ${source}`);
 
     // 0. Check for Podcast Redundancy
@@ -278,7 +284,12 @@ export class LoreOrchestrator {
    * 🕵️ HALLUCINATION CHECK
    * Checks if a statement made by Nicky should be promoted to "Lore".
    */
-  async checkHallucination(content: string, profileId: string): Promise<void> {
+  async checkHallucination(content: string, profileId: string, options?: { allowWrites?: boolean }): Promise<void> {
+    if (options && options.allowWrites === false) {
+      console.log('🔒 Private mode: Skipping hallucination check (safety catch)');
+      return;
+    }
+
     const chaos = ChaosEngine.getInstance();
     const state = await chaos.getCurrentState();
     const sauceLevel = state.sauceMeter;

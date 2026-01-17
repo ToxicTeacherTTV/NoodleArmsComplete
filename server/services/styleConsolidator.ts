@@ -15,7 +15,7 @@ const anthropic = new Anthropic({
 
 export class StyleConsolidator {
   constructor(
-    private storage: IStorage
+    private readonly storage: IStorage
   ) {}
 
   /**
@@ -97,35 +97,7 @@ Format the output as a clear, organized list of personality traits and behaviors
       console.error('❌ Gemini consolidation failed. Internal fallback should have handled this.', geminiError);
       throw geminiError;
 
-      /*
-      // 🔄 FALLBACK: Use Claude if Gemini fails
-      console.log('❌ Gemini consolidation failed, falling back to Claude:', geminiError);
-      
-      try {
-        const response = await anthropic.messages.create({
-          model: 'claude-sonnet-4-5-20250929',
-          max_tokens: 2000,
-          temperature: 0.3,
-          system: 'You are a personality analysis expert. Extract key behavioral patterns and personality traits from training examples.',
-          messages: [{
-            role: 'user',
-            content: prompt
-          }]
-        });
 
-        const textContent = response.content.find(c => c.type === 'text');
-        if (!textContent || textContent.type !== 'text') {
-          throw new Error('No text content in response');
-        }
-
-        console.log('✅ Successfully consolidated patterns using Claude (fallback)');
-        return textContent.text;
-        
-      } catch (claudeError) {
-        console.error('❌ Both Gemini and Claude failed:', claudeError);
-        throw new Error('Failed to consolidate patterns (both Gemini and Claude failed)');
-      }
-      */
     }
   }
 
