@@ -109,23 +109,64 @@ class DocumentProcessor {
     }
   }
 
-  // ⚡ FAST: Simple chunking without entity extraction (for upload)
-  private simpleChunkText(text: string, maxChunkSize: number = 2000): string[] {
+  /**
+   * PHASE 2 FIX: Sentence-boundary chunking with overlap
+   * - Target ~4000 chars per chunk (not 50K) for better context
+   * - Add 500-char overlap between chunks (2-3 sentences)
+   * - Split on sentence boundaries, not character boundaries
+   */
+  private simpleChunkText(text: string, maxChunkSize: number = 4000): string[] {
     const chunks: string[] = [];
+    const OVERLAP_SIZE = 500; // ~2-3 sentences of overlap
+
+    // First split by paragraphs to preserve natural breaks
     const paragraphs = text.split(/\n\n+/);
     let currentChunk = '';
+    let lastOverlap = ''; // Store last portion for overlap into next chunk
 
     for (const paragraph of paragraphs) {
       const trimmedParagraph = paragraph.trim();
-
       if (!trimmedParagraph) continue;
 
       // If adding this paragraph would exceed chunk size, save current chunk
       if (currentChunk && (currentChunk.length + trimmedParagraph.length) > maxChunkSize) {
+        // Extract overlap from end of current chunk (last 2-3 sentences)
+        const sentences = currentChunk.split(/(?<=[.!?])\s+/);
+        const overlapSentences = sentences.slice(-3); // Last 3 sentences
+        lastOverlap = overlapSentences.join(' ');
+        if (lastOverlap.length > OVERLAP_SIZE) {
+          lastOverlap = lastOverlap.slice(-OVERLAP_SIZE);
+        }
+
         chunks.push(currentChunk.trim());
-        currentChunk = trimmedParagraph;
+
+        // Start new chunk with overlap context
+        currentChunk = lastOverlap ? `[...] ${lastOverlap}\n\n${trimmedParagraph}` : trimmedParagraph;
       } else {
         currentChunk += (currentChunk ? '\n\n' : '') + trimmedParagraph;
+      }
+
+      // Handle very long paragraphs by splitting on sentences
+      if (currentChunk.length > maxChunkSize * 1.5) {
+        const sentences = currentChunk.split(/(?<=[.!?])\s+/);
+        let tempChunk = '';
+
+        for (const sentence of sentences) {
+          if (tempChunk && (tempChunk.length + sentence.length) > maxChunkSize) {
+            // Extract overlap
+            const overlapSentences = tempChunk.split(/(?<=[.!?])\s+/).slice(-3);
+            lastOverlap = overlapSentences.join(' ');
+            if (lastOverlap.length > OVERLAP_SIZE) {
+              lastOverlap = lastOverlap.slice(-OVERLAP_SIZE);
+            }
+
+            chunks.push(tempChunk.trim());
+            tempChunk = lastOverlap ? `[...] ${lastOverlap} ${sentence}` : sentence;
+          } else {
+            tempChunk += (tempChunk ? ' ' : '') + sentence;
+          }
+        }
+        currentChunk = tempChunk;
       }
     }
 
@@ -223,16 +264,32 @@ class DocumentProcessor {
     await storage.updateDocument(documentId, { processingProgress: 10 });
     console.log(`📖 Processing full document content (${content.length} chars)...`);
 
-    // Chunk the content first if it's too large (>50k chars = ~12k tokens)
-    const MAX_CHUNK_SIZE = 50000; // Reduced from 100k to prevent timeouts
+    // PHASE 2 FIX: Use smaller chunks (~8K) with sentence-aware splitting
+    // This prevents stories from being cut mid-sentence
+    const MAX_CHUNK_SIZE = 8000; // Reduced from 50K for better context preservation
     const chunks: string[] = [];
 
     if (content.length > MAX_CHUNK_SIZE) {
-      // Split into large character-based chunks
-      for (let i = 0; i < content.length; i += MAX_CHUNK_SIZE) {
-        chunks.push(content.substring(i, i + MAX_CHUNK_SIZE));
+      // Use sentence-aware chunking instead of character-based
+      const sentences = content.split(/(?<=[.!?])\s+/);
+      let currentChunk = '';
+      let lastOverlap = '';
+
+      for (const sentence of sentences) {
+        if (currentChunk && (currentChunk.length + sentence.length) > MAX_CHUNK_SIZE) {
+          // Extract last 2 sentences for overlap
+          const chunkSentences = currentChunk.split(/(?<=[.!?])\s+/);
+          lastOverlap = chunkSentences.slice(-2).join(' ');
+          chunks.push(currentChunk.trim());
+          currentChunk = lastOverlap ? `[...] ${lastOverlap} ${sentence}` : sentence;
+        } else {
+          currentChunk += (currentChunk ? ' ' : '') + sentence;
+        }
       }
-      console.log(`📦 Split ${content.length} chars into ${chunks.length} chunks of ~${MAX_CHUNK_SIZE} chars each`);
+      if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
+      }
+      console.log(`📦 Split ${content.length} chars into ${chunks.length} sentence-aware chunks of ~${MAX_CHUNK_SIZE} chars each`);
     } else {
       chunks.push(content);
       console.log(`📦 Content small enough to process in single chunk (${content.length} chars)`);
@@ -314,7 +371,9 @@ class DocumentProcessor {
 
     for (let i = 0; i < stories.length; i++) {
       const story = stories[i];
-      const storyContextSnippet = story.content.substring(0, 200);
+      // PHASE 2 FIX: Store full story context (up to 2000 chars) instead of 200
+      // This preserves context for atomic facts and prevents story truncation
+      const storyContextSnippet = story.content.substring(0, 2000);
       const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(story.content, storyContextSnippet, (modelOverride || 'gemini-3-flash-preview') as AIModel);
 
       for (const atomicFact of atomicFacts) {

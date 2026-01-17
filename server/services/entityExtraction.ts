@@ -24,6 +24,8 @@ interface DetectedEntity {
   context: string;
   confidence: number;
   mentions: string[];
+  // PHASE 3 FIX: Relationship field for relational references
+  relationship?: string; // e.g., "father", "cousin", "uncle" for PERSON entities
 }
 
 interface EntityExtractionResult {
@@ -232,10 +234,22 @@ DO extract:
 - Specific game mechanics or lore terms as CONCEPTS (e.g., "The Entity", "Gen Rushing", "Tunneling")
 - Specific items or objects as ITEMS (e.g., "Medkit", "Key", "Grandma's Recipe Book")
 
+PHASE 3 FIX - RELATIONAL REFERENCES (IMPORTANT!):
+Extract relational references like "his father", "my cousin", "Nicky's uncle" as PERSON entities.
+These should be extracted even without a proper name, using the relationship as the identifier.
+Examples:
+- "his father" → name: "Nicky's Father", disambiguation: "Father of Nicky", relationship: "father"
+- "my cousin" → name: "Nicky's Cousin", disambiguation: "Cousin of Nicky", relationship: "cousin"
+- "the old man's brother" → name: "Nicky's Father's Brother", disambiguation: "Uncle of Nicky", relationship: "uncle"
+
+For relational entities, ALWAYS:
+1. Use "Nicky's [Relationship]" as the canonical name if no proper name is given
+2. Include the relationship type in the disambiguation field
+3. Set the relationship field to the relationship type (father, mother, cousin, uncle, etc.)
+
 DO NOT extract:
-- Generic pronouns (he, she, it, they)
+- Generic pronouns without relational context (he, she, it, they)
 - Generic place types without names (a restaurant, the school)
-- Generic role terms (survivor, killer, raider) unless referring to a specific character
 - Generic gameplay terms (match, round, session) without specific context`;
 
     try {
@@ -259,7 +273,9 @@ DO NOT extract:
                       aliases: { type: "array", items: { type: "string" } },
                       context: { type: "string" },
                       confidence: { type: "number" },
-                      mentions: { type: "array", items: { type: "string" } }
+                      mentions: { type: "array", items: { type: "string" } },
+                      // PHASE 3 FIX: Relationship field for relational references
+                      relationship: { type: "string" }
                     },
                     required: ["name", "type", "disambiguation", "aliases", "context", "confidence", "mentions"]
                   }
@@ -589,30 +605,44 @@ Be conservative with matches - only match if confidence > 0.7`;
                 ...(existingEntity.aliases || []),
                 ...newEntity.aliases
               ]));
-              
-              await storage.updatePerson(existingEntity.id, {
+
+              // PHASE 3 FIX: Update relationship field if provided
+              const updateData: any = {
                 description: updatedDescription,
                 aliases: mergedAliases
-              });
-              
+              };
+              if (newEntity.relationship) {
+                updateData.relationship = newEntity.relationship;
+              }
+
+              await storage.updatePerson(existingEntity.id, updateData);
+
               if (!personIds.includes(existingEntity.id)) {
                 personIds.push(existingEntity.id);
               }
               console.log(`📝 Updated existing person: ${newEntity.name} (${existingEntity.id})`);
             } else {
               // ✨ CREATE new entity (doesn't exist yet)
+              // PHASE 3 FIX: Populate relationship field from extracted data
               const createdEntity = await storage.createPerson({
                 profileId: profileId,
                 canonicalName: newEntity.name,
                 disambiguation: newEntity.disambiguation,
                 aliases: newEntity.aliases,
-                relationship: '', // Will be filled by AI context
+                relationship: newEntity.relationship || '', // Populated from AI extraction
                 description: newEntity.context
               });
               if (createdEntity?.id && !personIds.includes(createdEntity.id)) {
                 personIds.push(createdEntity.id);
                 entitiesCreated++;
-                console.log(`✨ Created new person: ${newEntity.name}`);
+                console.log(`✨ Created new person: ${newEntity.name}${newEntity.relationship ? ` (${newEntity.relationship})` : ''}`);
+
+                // PHASE 3 FIX: If this is a relational entity, create a link to Nicky
+                // Note: The relationship is stored in the person's relationship field
+                // Additional lore relationship links can be created via memoryAnalyzer if needed
+                if (newEntity.relationship) {
+                  console.log(`🔗 Created relational entity: ${newEntity.name} (${newEntity.relationship} of Nicky)`);
+                }
               }
             }
           } else if (newEntity.type === 'PLACE') {
