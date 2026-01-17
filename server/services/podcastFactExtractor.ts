@@ -7,16 +7,67 @@ import { executeWithProductionModel } from './modelSelector.js';
 export class PodcastFactExtractor {
   private ai: GoogleGenAI;
 
+  // Chunk size for processing long transcripts (25k chars with 2k overlap)
+  private readonly CHUNK_SIZE = 25000;
+  private readonly CHUNK_OVERLAP = 2000;
+
   constructor() {
-    this.ai = new GoogleGenAI({ 
-      apiKey: process.env.GEMINI_API_KEY || "" 
+    this.ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY || ""
     });
   }
 
-  private async extractFactsWithAI(transcript: string): Promise<Array<{ content: string; type: string; keywords: string[]; importance: number }>> {
-    if (!transcript || transcript.length < 50) return [];
+  /**
+   * Split transcript into overlapping chunks for complete processing
+   */
+  private chunkTranscript(transcript: string): string[] {
+    if (transcript.length <= this.CHUNK_SIZE) {
+      return [transcript];
+    }
+
+    const chunks: string[] = [];
+    let startIndex = 0;
+
+    while (startIndex < transcript.length) {
+      let endIndex = startIndex + this.CHUNK_SIZE;
+
+      // Try to break at a sentence boundary (., !, ?, or newline)
+      if (endIndex < transcript.length) {
+        const searchStart = endIndex - 500; // Look back 500 chars for a good break point
+        const searchRegion = transcript.substring(searchStart, endIndex);
+
+        // Find last sentence boundary in the search region
+        const lastBreak = Math.max(
+          searchRegion.lastIndexOf('. '),
+          searchRegion.lastIndexOf('.\n'),
+          searchRegion.lastIndexOf('! '),
+          searchRegion.lastIndexOf('?\n'),
+          searchRegion.lastIndexOf('\n\n')
+        );
+
+        if (lastBreak > 0) {
+          endIndex = searchStart + lastBreak + 1;
+        }
+      }
+
+      chunks.push(transcript.substring(startIndex, endIndex));
+
+      // Move start index, accounting for overlap
+      startIndex = endIndex - this.CHUNK_OVERLAP;
+
+      // Prevent infinite loop
+      if (startIndex >= transcript.length - 100) break;
+    }
+
+    return chunks;
+  }
+
+  private async extractFactsFromChunk(chunk: string, chunkIndex: number, totalChunks: number): Promise<Array<{ content: string; type: string; keywords: string[]; importance: number }>> {
+    if (!chunk || chunk.length < 50) return [];
 
     const prompt = `You are an expert archivist for the "Noodle Arms" podcast. Your job is to extract PERMANENT FACTS and MEMORIES about NICKY from the following podcast transcript.
+
+${totalChunks > 1 ? `NOTE: This is chunk ${chunkIndex + 1} of ${totalChunks} from a longer transcript.` : ''}
 
 CRITICAL: This podcast has TWO CO-HOSTS:
 1. **Toxic** (or "ToxicTeacher", "Host") - The HUMAN co-host. DO NOT extract his opinions/facts as Nicky's.
@@ -25,19 +76,24 @@ CRITICAL: This podcast has TWO CO-HOSTS:
 The transcript has speaker labels like "Toxic:", "Nicky:", "[Toxic]", "[Nicky]", etc.
 
 TRANSCRIPT:
-"${transcript.substring(0, 30000)}" ${(transcript.length > 30000) ? '...(truncated)' : ''}
+"${chunk}"
 
 INSTRUCTIONS:
-Extract 10-20 distinct, atomic facts from this episode. ONLY extract facts that are:
+Extract 10-20 distinct, atomic facts from this section. ONLY extract facts that are:
 - Said BY Nicky (his opinions, stories, preferences)
 - Said ABOUT Nicky by Toxic or others (e.g., "Toxic mentions that Nicky hates camping killers")
+
+IMPORTANT - FAMILY & PERSONAL LORE:
+Pay special attention to any mentions of Nicky's family members (father, mother, cousins, uncles, aunts, etc.).
+These are HIGH PRIORITY facts that should always be extracted.
 
 Focus on:
 1. Nicky's specific opinions and hot takes
 2. Nicky's stories and lore (his fictional Italian-American backstory, SABAM, etc.)
 3. Nicky's relationships with people (real or fictional)
-4. Nicky's gaming preferences (Dead by Daylight, etc.)
-5. Nicky's personal details and character traits
+4. Nicky's family members and their names/stories
+5. Nicky's gaming preferences (Dead by Daylight, etc.)
+6. Nicky's personal details and character traits
 
 Do NOT extract:
 - Toxic's personal opinions (unless they're ABOUT Nicky)
@@ -49,7 +105,7 @@ Return a JSON object with a "facts" array. Each fact should have:
 - content: The fact statement (e.g., "Nicky thinks The Trapper is the worst killer in DBD")
 - type: One of ['OPINION', 'LORE', 'PREFERENCE', 'RELATIONSHIP', 'STORY']
 - keywords: Array of 3-5 search keywords
-- importance: 1-100 scale (100 = critical lore, 1 = trivial)
+- importance: 1-100 scale (100 = critical lore, 1 = trivial). Family lore should be 80+.
 - lane: One of ['CANON', 'RUMOR']. Use 'RUMOR' if the statement is an obvious exaggeration, a lie, or part of Nicky's performative bullshit.
 - truthDomain: One of ['DOC', 'PODCAST', 'OPS', 'NICKY_LORE', 'SABAM_LORE', 'GENERAL']. For podcast transcripts, use 'PODCAST'.
 
@@ -105,9 +161,46 @@ JSON FORMAT:
         return [];
       }, 'extraction');
     } catch (error) {
-      console.error("❌ AI Fact Extraction failed:", error);
+      console.error(`❌ AI Fact Extraction failed for chunk ${chunkIndex + 1}:`, error);
       return [];
     }
+  }
+
+  /**
+   * Extract facts from full transcript by processing in chunks
+   */
+  private async extractFactsWithAI(transcript: string): Promise<Array<{ content: string; type: string; keywords: string[]; importance: number }>> {
+    if (!transcript || transcript.length < 50) return [];
+
+    const chunks = this.chunkTranscript(transcript);
+    console.log(`📄 Transcript is ${transcript.length} chars, split into ${chunks.length} chunks`);
+
+    const allFacts: Array<{ content: string; type: string; keywords: string[]; importance: number }> = [];
+    const seenContent = new Set<string>();
+
+    for (let i = 0; i < chunks.length; i++) {
+      console.log(`   🔍 Processing chunk ${i + 1}/${chunks.length} (${chunks[i].length} chars)...`);
+
+      const chunkFacts = await this.extractFactsFromChunk(chunks[i], i, chunks.length);
+
+      // Deduplicate facts (in case of overlap between chunks)
+      for (const fact of chunkFacts) {
+        const normalizedContent = fact.content.toLowerCase().trim();
+        if (!seenContent.has(normalizedContent)) {
+          seenContent.add(normalizedContent);
+          allFacts.push(fact);
+        }
+      }
+
+      console.log(`   ✅ Chunk ${i + 1}: extracted ${chunkFacts.length} facts (${allFacts.length} total unique)`);
+
+      // Small delay between chunks to avoid rate limiting
+      if (i < chunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    return allFacts;
   }
 
   private extractNickyDialogue(transcript: string): string {
@@ -290,24 +383,49 @@ JSON FORMAT:
       console.log(`🎉 Successfully stored ${factsCreated} facts from Episode ${episodeNumber} into memory!`);
 
       // 🔍 ENTITY EXTRACTION: Extract people, places, and events from the transcript
+      // Process in chunks to capture entities from the entire transcript
       let entitiesCreated = 0;
       try {
-        console.log(`🔍 Extracting entities from Episode ${episodeNumber} transcript...`);
+        console.log(`🔍 Extracting entities from Episode ${episodeNumber} transcript (chunked)...`);
 
-        // Build context from transcript for better entity extraction
-        const contextualTranscript = `Episode ${episodeNumber}: ${title}\n\n${transcript}`;
+        const chunks = this.chunkTranscript(transcript);
+        const totalPersonIds: string[] = [];
+        const totalPlaceIds: string[] = [];
+        const totalEventIds: string[] = [];
+        const totalConceptIds: string[] = [];
+        const totalItemIds: string[] = [];
+        const totalMiscIds: string[] = [];
 
-        const entityResult = await entityExtraction.processMemoryForEntityLinking(
-          contextualTranscript,
-          profileId,
-          storage
-        );
+        for (let i = 0; i < chunks.length; i++) {
+          console.log(`   🔍 Entity extraction chunk ${i + 1}/${chunks.length}...`);
 
-        entitiesCreated = entityResult.entitiesCreated;
+          const contextualChunk = `Episode ${episodeNumber}: ${title} (Part ${i + 1}/${chunks.length})\n\n${chunks[i]}`;
+
+          const entityResult = await entityExtraction.processMemoryForEntityLinking(
+            contextualChunk,
+            profileId,
+            storage
+          );
+
+          // Collect unique IDs
+          entityResult.personIds.forEach(id => { if (!totalPersonIds.includes(id)) totalPersonIds.push(id); });
+          entityResult.placeIds.forEach(id => { if (!totalPlaceIds.includes(id)) totalPlaceIds.push(id); });
+          entityResult.eventIds.forEach(id => { if (!totalEventIds.includes(id)) totalEventIds.push(id); });
+          entityResult.conceptIds.forEach(id => { if (!totalConceptIds.includes(id)) totalConceptIds.push(id); });
+          entityResult.itemIds.forEach(id => { if (!totalItemIds.includes(id)) totalItemIds.push(id); });
+          entityResult.miscIds.forEach(id => { if (!totalMiscIds.includes(id)) totalMiscIds.push(id); });
+
+          entitiesCreated += entityResult.entitiesCreated;
+
+          // Small delay between chunks
+          if (i < chunks.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
 
         if (entitiesCreated > 0) {
           console.log(`✨ Extracted ${entitiesCreated} new entities from Episode ${episodeNumber}`);
-          console.log(`   📊 Entity breakdown: ${entityResult.personIds.length} people, ${entityResult.placeIds.length} places, ${entityResult.eventIds.length} events, ${entityResult.conceptIds.length} concepts, ${entityResult.itemIds.length} items, ${entityResult.miscIds.length} misc`);
+          console.log(`   📊 Entity breakdown: ${totalPersonIds.length} people, ${totalPlaceIds.length} places, ${totalEventIds.length} events, ${totalConceptIds.length} concepts, ${totalItemIds.length} items, ${totalMiscIds.length} misc`);
         } else {
           console.log(`ℹ️ No new entities found in Episode ${episodeNumber} (may have matched existing entities)`);
         }
