@@ -13,6 +13,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fast emotion tag generation for STREAMING mode (rule-based)
 - Memory analytics dashboard UI
 - "Save as Training" button for conversations
+- Embedding cache for repeated queries (see MEMORY_SIMPLIFICATION_PLAN.md)
+- Smart query routing (keyword-first) for API cost reduction
+
+---
+
+## [1.8.0] - 2026-01-17
+
+### Fixed - Memory Retrieval System (Critical)
+- **Scoring Formula Fix:** Changed importance multiplier from `×0.1` to `×0.005` in `embeddingService.ts`
+  - Old: `score = similarity + (importance × 0.1)` — importance=80 added +8 points, overwhelming similarity
+  - New: `score = similarity + (importance × 0.005)` — importance=80 adds only +0.4 points
+  - Result: Semantic relevance now drives retrieval instead of high-importance memories dominating
+- **Freshness Boost:** Added +20% boost for memories with <5 retrievals in `contextBuilder.ts`
+- **Retrieval Penalty:** Added 3% penalty per retrieval (capped at 30%) to prevent same memories winning repeatedly
+- **Confidence Filtering:** Moved confidence from scoring factor to filter-only (≥60 for CANON lane)
+- **Diversity Enforcement:** Strengthened keyword overlap penalty (60%+ overlap = reduced score), max 2 memories from same source
+
+### Fixed - Document Parsing
+- **Sentence-Boundary Chunking:** Documents now split on sentence boundaries with 500-char overlap in `documentProcessor.ts`
+- **Chunk Size Optimization:** Changed default chunk size from 2000 to 4000 chars for better context
+- **Story Context Expansion:** Increased `storyContextSnippet` from 200 to 2000 chars to preserve narrative context
+- **Large Document Handling:** Changed 50K chunks to 8K with sentence-aware splitting
+
+### Fixed - Entity Extraction
+- **Relational References:** Updated extraction prompt to capture family references like "his father" → "Nicky's Father"
+- **Relationship Field:** Now populates the `relationship` field that was previously empty
+- **JSON Schema Update:** Added relationship field to extraction schema
+
+### Fixed - Podcast Fact Extraction
+- **Speaker Distinction:** Fixed prompt to distinguish between Toxic (human host) and Nicky (AI co-host)
+- **Correct Attribution:** Facts from Toxic's dialogue are now correctly attributed (Nicky should know about his co-host)
+- **Live Test Script:** Added `server/scripts/test-podcast-extraction.ts` for verification
+
+### Added - Testing Infrastructure
+- **Memory Scoring Tests:** Created `server/tests/memory-scoring.test.ts` with 25 unit tests
+  - Scoring formula verification
+  - Freshness boost calculations
+  - Diversity scoring
+  - Confidence filtering
+- **Podcast Extraction Tests:** Created `server/tests/podcast-extraction.test.ts` with 10 tests
+  - Speaker detection (Nicky vs Toxic)
+  - Various speaker label formats
+  - Fact attribution verification
+- **Vitest Configuration:** Added `server/vitest.config.ts` for server-side testing
+- **NPM Scripts:** Added `test`, `test:watch`, and `test:all` commands
+
+### Added - Cleanup Scripts
+- **Podcast Cleanup:** Created `server/scripts/cleanup-podcast-facts.ts` for reviewing/deleting incorrectly extracted facts
+- **Opinion Finder:** Created `server/scripts/find-nicky-opinions.ts` for auditing opinion attribution
+
+### Fixed - Misc
+- **Syntax Error:** Fixed orphan array elements in `trainingDataValidator.ts` (pre-existing bug)
 
 ---
 
@@ -263,6 +315,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Key Features |
 |---------|------|--------------|
+| **1.8.0** | 2026-01-17 | Memory retrieval fix, document parsing improvements, entity extraction, testing infrastructure |
+| **1.7.0** | 2026-01-08 | Rant audio pipeline fix, dashboard consolidation |
+| **1.6.1** | 2026-01-04 | Response truncation fix, model sanitation, lore crashes |
+| **1.6.0** | 2026-01-04 | Privacy controls, memory learning toggle |
+| **1.5.0** | 2026-01-03 | Vibe-based storytelling, personality hardening |
+| **1.4.0** | 2025-12-28 | Personality persistence, variety controller |
+| **1.3.0** | 2025-12-08 | Diagnostic chat mode, Arc Raiders context |
+| **1.2.0** | 2025-12-07 | Vector crash fix, Arc Raiders personality mode |
 | **1.1.0** | 2025-11-10 | Vector embeddings, hybrid search, STREAMING optimizations |
 | **1.0.0** | 2025-10-13 | Gemini migration, memory deduplication fix, cost optimization |
 | **0.9.0** | 2025-10-01 | Initial production release, core features |
