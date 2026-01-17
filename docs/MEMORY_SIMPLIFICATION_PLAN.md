@@ -1,12 +1,75 @@
 # Memory System Simplification Plan
 
-**Status:** Proposal Phase
+**Status:** ✅ PHASE 1-3 IMPLEMENTED (2026-01-17)
 **Author:** Analysis of current system complexity
-**Date:** 2026-01-17
+**Last Updated:** 2026-01-17
 
 ---
 
-## Executive Summary
+## Implementation Summary
+
+### What Was Implemented (v1.8.0)
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| **1. Memory Retrieval Fix** | ✅ DONE | Scoring formula, freshness boost, retrieval penalty, diversity |
+| **2. Document Parsing** | ✅ DONE | Sentence-boundary chunking, overlap, expanded story context |
+| **3. Entity Extraction** | ✅ DONE | Relational references, relationship field population |
+| **4. Complexity Reduction** | ⏸️ DEFERRED | Consolidate Sauce/Chaos, simplify modulators (low priority) |
+
+### Key Changes Made
+
+1. **Scoring Formula** (`embeddingService.ts:476`):
+   ```typescript
+   // OLD: importance dominated (importance=80 added +8 points!)
+   score = similarity + (importance × 0.1)
+
+   // NEW: similarity-driven with gentle tiebreaker
+   score = similarity + (importance × 0.005)  // importance=80 adds only +0.4
+   ```
+
+2. **Freshness & Retrieval Penalty** (`contextBuilder.ts`):
+   ```typescript
+   const freshnessBoost = retrievalCount < 5 ? 1.2 : 1.0;  // +20% for low retrieval
+   const retrievalPenalty = Math.min(retrievalCount * 0.03, 0.30);  // 3% per retrieval, max 30%
+   const baseScore = result.similarity * freshnessBoost * (1 - retrievalPenalty);
+   ```
+
+3. **Diversity Scoring** (`contextBuilder.ts`):
+   - Max 2 memories from same source
+   - 60%+ keyword overlap = reduced score
+   - Topic clustering penalty
+
+4. **Sentence-Boundary Chunking** (`documentProcessor.ts`):
+   - Split on sentence boundaries with 500-char overlap
+   - Chunk size: 4000 chars (was 2000)
+   - Large documents: 8K chunks (was 50K)
+   - Story context: 2000 chars (was 200)
+
+5. **Relational Entity Extraction** (`entityExtraction.ts`):
+   - Captures "his father" → "Nicky's Father"
+   - Populates `relationship` field
+   - Creates entity links
+
+### Tests Added
+
+- `server/tests/memory-scoring.test.ts` (25 tests)
+- `server/tests/podcast-extraction.test.ts` (10 tests)
+- `server/vitest.config.ts`
+
+### Future Work (Phase 4 - Optional)
+
+See "Proposal 3: Cache Embeddings" and "Proposal 4: Smart Query Routing" below for remaining optimizations that can be implemented if needed.
+
+---
+
+## Original Analysis (For Reference)
+
+The sections below contain the original analysis and proposals. Phases 1-3 have been implemented as described above.
+
+---
+
+## Executive Summary (Original)
 
 The current memory retrieval system uses **8 overlapping scoring mechanisms**, performs **7 database queries**, and takes **~710ms** before response generation. This plan proposes targeted simplifications that will:
 
