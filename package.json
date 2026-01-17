@@ -16,7 +16,8 @@
     "audit:timelines": "tsx server/scripts/auditEventTimelines.ts",
     "db:backfill-embeddings": "node --env-file=.env --import tsx server/scripts/backfill-embeddings.ts",
     "inspect": "tsx scripts/inspect_conversation.ts",
-    "rescan-flags": "tsx server/scripts/rescanContentFlags.ts"
+    "rescan-flags": "tsx server/scripts/rescanContentFlags.ts",
+    "drill": "tsx server/scripts/maintenance_drill.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",

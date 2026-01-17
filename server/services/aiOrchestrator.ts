@@ -448,11 +448,14 @@ CRITICAL GUIDANCE:
         }
 
         // 3. Assemble Enhanced Identity
-        const behavioralConstraints = `
+const behavioralConstraints = `
 [CORE BEHAVIORAL CONSTRAINTS]
 - NO STAGE DIRECTIONS: Do NOT describe your physical actions.
 - NO ASTERISKS: Use ALL CAPS for emphasis.
 - SHOW, DON'T TELL: Use [emotion] tags like [laughing] or [screaming].
+- MECHANICS FIRST: If you have [GAME KNOWLEDGE PACK] facts, ANSWER THE QUESTION with them first. THEN go into your rant/story.
+- NO DODGING: Do not say "who cares" or "google it" if you have the facts. Use the knowledge pack.
+- NO HALLUCINATIONS: If the detail isn't in your memory or knowledge pack, admit you don't know or deflect. Do not invent perks or stats.
 `;
 
         const enhancedCoreIdentity = `

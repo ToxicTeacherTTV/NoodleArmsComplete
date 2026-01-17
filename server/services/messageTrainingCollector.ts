@@ -84,6 +84,9 @@ export class MessageTrainingCollector {
   /**
    * Save a high-quality AI message as a training example
    */
+  /**
+   * Save a high-quality AI message as a training example
+   */
   async saveMessageAsTraining(
     storage: IStorage,
     message: Message,
@@ -92,22 +95,58 @@ export class MessageTrainingCollector {
       userMessage?: string;
       conversationId?: string;
       mode?: string;
+      allowWrites?: boolean;
     }
   ): Promise<void> {
+    if (context.allowWrites === false) {
+      console.log('🔒 Private mode: Skipping training example creation (safety catch)');
+      return;
+    }
     
+    // Import hygiene services dynamically or statically
+    const { trainingDataValidator } = await import('./trainingDataValidator.js');
+    const { trainingDataNormalizer } = await import('./trainingDataNormalizer.js');
+
     // Format training example with context
-    let trainingContent = '';
+    let rawContent = '';
     
     // Include user message for context if available
     if (context.userMessage) {
-      trainingContent += `User: ${context.userMessage}\n\n`;
+      rawContent += `User: ${context.userMessage}\n\n`;
     }
     
-    trainingContent += `Nicky: ${message.content}`;
+    rawContent += `Nicky: ${message.content}`;
     
-    // Add metadata comment for reference
-    trainingContent += `\n\n---\n[Mode: ${context.mode || 'CHAT'}, Quality Score: High, Source: Message ID ${message.id}]`;
+    // 🛑 STOP METADATA LEAKAGE: Do not append [Mode: ...] anymore.
     
+    // HYGIENE PIPELINE
+    let normalizedContent = rawContent;
+    let originalContent = rawContent;
+    
+    // 1. Initial Validation
+    let validation = trainingDataValidator.validate(rawContent);
+    let wasNormalized = false;
+    
+    // 2. Normalize if needed (FIXABLE)
+    if (validation.status === 'FIXABLE') {
+      console.log(`🧹 Normalizing training example for message ${message.id}...`);
+      normalizedContent = trainingDataNormalizer.normalize(rawContent);
+      // Re-validate
+      validation = trainingDataValidator.validate(normalizedContent);
+      wasNormalized = true;
+    }
+    
+    // 3. Prepare Metadata
+    const hygieneMetadata = {
+      tagQualityScore: validation.score,
+      validationStatus: wasNormalized ? 'NORMALIZED' : validation.status,
+      quarantineReason: validation.status === 'QUARANTINE' ? validation.issues.details.join('; ') : undefined,
+      originalContent: wasNormalized ? originalContent : undefined, // Only save original if changed
+      normalizedContent: normalizedContent
+    };
+
+    console.log(`📊 Training Data Hygiene Result: ${hygieneMetadata.validationStatus} (Score: ${validation.score})`);
+
     // Create document as training example
     const doc = await storage.createDocument({
       profileId,
@@ -115,17 +154,27 @@ export class MessageTrainingCollector {
       filename: `auto_msg_${message.id.substring(0, 8)}.txt`,
       contentType: 'text/plain',
       documentType: 'TRAINING_EXAMPLE',
-      size: trainingContent.length,
-      extractedContent: trainingContent,
-      processingStatus: 'COMPLETED'
+      size: normalizedContent.length,
+      extractedContent: normalizedContent, // Use clean content for primary storage if valid/normalized
+      processingStatus: validation.status === 'QUARANTINE' ? 'FAILED' : 'COMPLETED', // Use FAILED for Quarantine visibility? Or just COMPLETED but filtered?
+      // Actually, let's keep it COMPLETED but use metadata to filter, as per plan.
+      processingMetadata: {
+        ...hygieneMetadata,
+        source_message_id: message.id,
+        mode: context.mode
+      } as any // Cast to any to bypass strict typing if schema isn't fully updated yet
     });
     
-    // 🔢 Generate embedding for semantic retrieval
-    try {
-      const { embeddingService } = await import('./embeddingService.js');
-      await embeddingService.embedDocument(doc.id, trainingContent);
-    } catch (e) {
-      console.warn(`⚠️ Failed to generate embedding for training example ${doc.id}:`, e);
+    // 🔢 Generate embedding ONLY if not quarantined and high score
+    if (validation.status !== 'QUARANTINE' && validation.score >= 80) {
+        try {
+        const { embeddingService } = await import('./embeddingService.js');
+        await embeddingService.embedDocument(doc.id, normalizedContent);
+        } catch (e) {
+        console.warn(`⚠️ Failed to generate embedding for training example ${doc.id}:`, e);
+        }
+    } else {
+        console.log(`🚫 Skipping embedding for low-quality/quarantined example (Status: ${validation.status})`);
     }
     
     console.log(`📚 Auto-saved message ${message.id.substring(0, 8)} as training example`);

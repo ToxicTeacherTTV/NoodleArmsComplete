@@ -16,17 +16,15 @@ interface AppShellProps {
 }
 
 const tabs = [
-    { id: "chat", label: "Chat", icon: "fa-comments", path: "/" },
-    { id: "brain", label: "Brain", icon: "fa-brain", path: "/brain" },
-    { id: "podcast", label: "Podcast", icon: "fa-podcast", path: "/workspace" },
+    { id: "chat", label: "Dashboard", icon: "fa-home", path: "/" },
+    { id: "memory", label: "Memory", icon: "fa-brain", path: "/memory" },
+    { id: "podcast", label: "Podcast Studio", icon: "fa-podcast", path: "/workspace" },
     { id: "analytics", label: "Analytics", icon: "fa-chart-line", path: "/listener-cities" },
 ];
 
-export default function AppShell({ children, activeProfile }: AppShellProps) {
+export default function AppShell({ children, activeProfile }: Readonly<AppShellProps>) {
     const [location, setLocation] = useLocation();
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const [profileModalOpen, setProfileModalOpen] = useState(false);
-    const [notesModalOpen, setNotesModalOpen] = useState(false);
 
     const activeTab = tabs.find(tab => tab.path === location) || tabs[0];
 
@@ -56,22 +54,18 @@ export default function AppShell({ children, activeProfile }: AppShellProps) {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuItem onClick={() => setProfileModalOpen(true)}>
-                                <i className="fas fa-user-astronaut mr-2" />
-                                Profile Settings
+                            <DropdownMenuItem>
+                                <i className="fas fa-user-astronaut mr-2" /> Profile Settings
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setNotesModalOpen(true)}>
-                                <i className="fas fa-note-sticky mr-2" />
-                                Notes
+                            <DropdownMenuItem>
+                                <i className="fas fa-note-sticky mr-2" /> Notes
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem>
-                                <i className="fas fa-palette mr-2" />
-                                Theme
+                                <i className="fas fa-palette mr-2" /> Theme
                             </DropdownMenuItem>
                             <DropdownMenuItem>
-                                <i className="fas fa-keyboard mr-2" />
-                                Keyboard Shortcuts
+                                <i className="fas fa-keyboard mr-2" /> Keyboard Shortcuts
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>

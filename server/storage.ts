@@ -840,16 +840,35 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(documents.createdAt))
       .limit(candidateLimit);
 
-    if (allExamples.length <= targetLimit) {
-      return allExamples; // If we have targetLimit or fewer, return all
+    // 🔍 HYGIENE FILTER: Remove bad data and swap normalized content
+    const cleanExamples = allExamples
+      .filter((doc: any) => {
+        const meta = doc.processingMetadata as any;
+        // Exclude quarantined
+        if (meta?.validationStatus === 'QUARANTINE') return false;
+        // Exclude low quality (if score exists)
+        if (meta?.tagQualityScore !== undefined && meta.tagQualityScore < 80) return false;
+        return true;
+      })
+      .map((doc: any) => {
+        // Swap content with normalized if available
+        const meta = doc.processingMetadata as any;
+        return {
+          ...doc,
+          extractedContent: meta?.normalizedContent || doc.extractedContent
+        };
+      });
+
+    if (cleanExamples.length <= targetLimit) {
+      return cleanExamples;
     }
 
     // Mix of recent (60%) and sampled older (40%) for variety
     const recentCount = Math.floor(targetLimit * 0.6);
     const olderCount = targetLimit - recentCount;
 
-    const recent = allExamples.slice(0, recentCount);
-    const older = allExamples.slice(recentCount);
+    const recent = cleanExamples.slice(0, recentCount);
+    const older = cleanExamples.slice(recentCount);
 
     // Random sample from older set
     const sampledOlder = older
@@ -861,6 +880,9 @@ export class DatabaseStorage implements IStorage {
 
   async findSimilarTrainingExamples(profileId: string, queryVector: number[], limit = 5, threshold = 0.5): Promise<Array<Document & { similarity: number }>> {
     const vectorLiteral = `[${queryVector.join(",")}]`;
+    // Fetch 2x limit to allow for hygiene filtering
+    const fetchLimit = limit * 2;
+    
     const query = `
       SELECT id, profile_id, name, filename, content_type, document_type, size, chunks, extracted_content, 
              processing_status, processing_progress, processing_metadata, content_hash, embedding, 
@@ -876,30 +898,48 @@ export class DatabaseStorage implements IStorage {
       LIMIT $3
     `;
 
-    const result = await pool.query(query, [profileId, threshold, limit]);
+    const result = await pool.query(query, [profileId, threshold, fetchLimit]);
 
-    return result.rows.map((row: any) => ({
-      id: row.id,
-      profileId: row.profile_id,
-      name: row.name,
-      filename: row.filename,
-      contentType: row.content_type,
-      documentType: row.document_type,
-      size: row.size,
-      chunks: row.chunks,
-      extractedContent: row.extracted_content,
-      processingStatus: row.processing_status,
-      processingProgress: row.processing_progress,
-      processingMetadata: row.processing_metadata,
-      contentHash: row.content_hash,
-      embedding: row.embedding,
-      embeddingModel: row.embedding_model,
-      embeddingUpdatedAt: row.embedding_updated_at,
-      retrievalCount: row.retrieval_count,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      similarity: parseFloat(row.similarity)
-    }));
+    // 🔍 HYGIENE FILTER: Remove bad data and swap normalized content
+    const cleanResults = result.rows
+      .filter((row: any) => {
+        const meta = row.processing_metadata as any;
+        if (meta?.validationStatus === 'QUARANTINE') return false;
+        
+        // Exclude low quality if score exists
+        const score = meta?.tagQualityScore;
+        if (score !== undefined && score < 80) return false;
+        
+        return true;
+      })
+      .slice(0, limit) // Apply original limit after filtering
+      .map((row: any) => {
+         const meta = row.processing_metadata as any;
+         return {
+          id: row.id,
+          profileId: row.profile_id,
+          name: row.name,
+          filename: row.filename,
+          contentType: row.content_type,
+          documentType: row.document_type,
+          size: row.size,
+          chunks: row.chunks,
+          extractedContent: meta?.normalizedContent || row.extracted_content, // SWAP CONTENT
+          processingStatus: row.processing_status,
+          processingProgress: row.processing_progress,
+          processingMetadata: row.processing_metadata,
+          contentHash: row.content_hash,
+          embedding: row.embedding,
+          embeddingModel: row.embedding_model,
+          embeddingUpdatedAt: row.embedding_updated_at,
+          retrievalCount: row.retrieval_count,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          similarity: parseFloat(row.similarity)
+        };
+      });
+
+    return cleanResults;
   }
 
   async createConsolidatedPersonality(consolidation: InsertConsolidatedPersonality): Promise<ConsolidatedPersonality> {

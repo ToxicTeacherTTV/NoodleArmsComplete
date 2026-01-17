@@ -1,8 +1,8 @@
 import type { Express, Request, Response, NextFunction } from "express";
-import { createServer, type Server } from "http";
+import { createServer, type Server } from "node:http";
 import { storage } from "./storage";
 import { memoryCaches } from "./services/memoryCache";
-import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertDocumentSchema, insertMemoryEntrySchema, insertContentFlagSchema, insertDiscordServerSchema, insertDiscordMemberSchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags, duplicateScanResults, profiles, listenerCities } from "@shared/schema";
+import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertMemoryEntrySchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags, duplicateScanResults, profiles, listenerCities, insertAutomatedSourceSchema } from "@shared/schema";
 import { eq, and, sql, or, inArray, desc } from "drizzle-orm";
 import { db } from "./db";
 import { aiOrchestrator } from "./services/aiOrchestrator";
@@ -22,15 +22,23 @@ import { ContentCollectionManager } from './services/ingestion/ContentCollection
 import { adGenerationService } from './services/AdGenerationService';
 import { podcastFactExtractor } from './services/podcastFactExtractor';
 import { entityExtraction } from './services/entityExtraction';
-import { emotionTagGenerator } from './services/emotionTagGenerator';
 import { contextPrewarmer } from './services/contextPrewarmer';
-import { contextPruner } from './services/contextPruner';
-import { insertAutomatedSourceSchema, insertPendingContentSchema, insertAdTemplateSchema, insertPrerollAdSchema } from '@shared/schema';
+import {
+  parseChatRequest,
+  decidePrivacy,
+  buildChaosAdvice,
+  resolvePersonality,
+  normalizeResponseTags,
+  handleBackgroundTasks,
+  type ChatRequest
+} from './services/chatService.js';
+
+
 import multer from "multer";
 import { twitchBotService } from "./services/twitchBot";
 import { z } from "zod";
-import { promises as fs } from "fs";
-import path from "path";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { prometheusMetrics } from "./services/prometheusMetrics.js";
 import { documentStageTracker } from "./services/documentStageTracker";
 import { documentDuplicateDetector } from "./services/documentDuplicateDetector";
@@ -75,12 +83,12 @@ type HydratedDuplicateGroup = {
 };
 
 // CRITICAL SECURITY: Add file size limits and type validation to prevent DoS attacks
-const SUPPORTED_FILE_TYPES = [
+const SUPPORTED_FILE_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'text/plain',
   'text/markdown',
-];
+]);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -90,17 +98,45 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     // Validate MIME type to prevent malicious uploads
-    if (SUPPORTED_FILE_TYPES.includes(file.mimetype)) {
+    if (SUPPORTED_FILE_TYPES.has(file.mimetype)) {
       cb(null, true);
     } else {
-      // Multer expects null as first parameter for rejection, boolean as second
-      cb(null, false);
+      // Return an explicit error for better UX
+      cb(new Error(`Unsupported file type: ${file.mimetype}`));
     }
   }
 });
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  const chaosEngine = ChaosEngine.getInstance();
+
+  // Middleware to handle Multer "Unsupported file type" errors gracefully
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    if (err instanceof Error && /Unsupported file type/.test(err.message)) {
+      return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  });
+
   // Health check endpoint with system status
   app.get('/api/health', async (req, res) => {
     try {
@@ -177,6 +213,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const profiles = await storage.listProfiles();
       res.json(profiles);
     } catch (error) {
+      console.error('Failed to fetch profiles:', error);
       res.status(500).json({ error: 'Failed to fetch profiles' });
     }
   });
@@ -189,6 +226,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(profile);
     } catch (error) {
+      console.error('Failed to fetch active profile:', error);
       res.status(500).json({ error: 'Failed to fetch active profile' });
     }
   });
@@ -199,6 +237,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const profile = await storage.createProfile(profileData);
       res.json(profile);
     } catch (error) {
+      console.error('Invalid profile data:', error);
       res.status(400).json({ error: 'Invalid profile data' });
     }
   });
@@ -210,6 +249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const profile = await storage.updateProfile(id, updates);
       res.json(profile);
     } catch (error) {
+      console.error('Failed to update profile:', error);
       res.status(500).json({ error: 'Failed to update profile' });
     }
   });
@@ -221,13 +261,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get the newly activated profile and set its voice
       const activeProfile = await storage.getProfile(id);
-      if (activeProfile && activeProfile.voiceId) {
+      if (activeProfile?.voiceId) {
         elevenlabsService.setVoiceId(activeProfile.voiceId);
         console.log(`🎵 Voice set to ${activeProfile.voiceId} for activated profile: ${activeProfile.name}`);
       }
 
       res.json({ success: true });
     } catch (error) {
+      console.error('Failed to activate profile:', error);
       res.status(500).json({ error: 'Failed to activate profile' });
     }
   });
@@ -238,6 +279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteProfile(id);
       res.json({ success: true });
     } catch (error) {
+      console.error('Failed to delete profile:', error);
       res.status(500).json({ error: 'Failed to delete profile' });
     }
   });
@@ -255,6 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         voiceSettings: profile.voiceSettings
       });
     } catch (error) {
+      console.error('Failed to get voice settings:', error);
       res.status(500).json({ error: 'Failed to get voice settings' });
     }
   });
@@ -280,6 +323,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         voiceSettings: profile.voiceSettings
       });
     } catch (error) {
+      console.error('Failed to update voice settings:', error);
       res.status(500).json({ error: 'Failed to update voice settings' });
     }
   });
@@ -294,6 +338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       elevenlabsService.setVoiceId(voiceId);
       res.json({ success: true, voiceId });
     } catch (error) {
+      console.error('Failed to set voice:', error);
       res.status(500).json({ error: 'Failed to set voice' });
     }
   });
@@ -329,6 +374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const conversations = await storage.listWebConversations(activeProfile.id, showArchived);
       res.json(conversations);
     } catch (error) {
+      console.error('Failed to fetch conversations:', error);
       res.status(500).json({ error: 'Failed to fetch conversations' });
     }
   });
@@ -342,6 +388,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(conversation);
     } catch (error) {
+      console.error('Failed to fetch conversation:', error);
       res.status(500).json({ error: 'Failed to fetch conversation' });
     }
   });
@@ -352,6 +399,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const messages = await storage.getConversationMessages(id);
       res.json(messages);
     } catch (error) {
+      console.error('Failed to fetch messages:', error);
       res.status(500).json({ error: 'Failed to fetch messages' });
     }
   });
@@ -368,6 +416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const message = await storage.addMessage(messageData);
       res.json(message);
     } catch (error) {
+      console.error('Invalid message data:', error);
       res.status(400).json({ error: 'Invalid message data' });
     }
   });
@@ -446,6 +495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updated = await storage.updateConversationArchiveStatus(id, isArchived);
       res.json(updated);
     } catch (error) {
+      console.error('Failed to update archive status:', error);
       res.status(500).json({ error: 'Failed to update archive status' });
     }
   });
@@ -457,6 +507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateConversationPrivacy(id, isPrivate);
       res.json({ success: true });
     } catch (error) {
+      console.error('Failed to update privacy status:', error);
       res.status(500).json({ error: 'Failed to update privacy status' });
     }
   });
@@ -484,7 +535,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { format = 'txt' } = req.body;
       const messages = await storage.getConversationMessages(id);
-      const conversation = await storage.getConversationById(id);
+      const conversation = await storage.getConversation(id);
 
       if (format === 'json') {
         res.json({ conversation, messages });
@@ -504,6 +555,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.send(textContent);
       }
     } catch (error) {
+      console.error('Failed to export conversation:', error);
       res.status(500).json({ error: 'Failed to export conversation' });
     }
   });
@@ -511,76 +563,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AI Chat routes
   app.post('/api/chat', async (req, res) => {
     try {
-      const { message, conversationId, mode, personalityControl, selectedModel, currentGame, memoryLearning } = req.body;
+      let chatReq: ChatRequest;
+      try {
+        chatReq = parseChatRequest(req.body);
+      } catch (e: any) {
+        return res.status(e.status ?? 400).json({ error: e.message });
+      }
+
+      const { message, conversationId, mode, personalityControl, selectedModel, currentGame, memoryLearning, metadata } = chatReq;
+      const modeSafe = (mode ?? "CHAT");
 
       console.log(`🤖 Selected AI Model: ${selectedModel || 'default (gemini-3-flash-preview)'}`);
 
-      if (!message || !conversationId) {
-        return res.status(400).json({ error: 'Message and conversation ID required' });
-      }
-
       const activeProfile = await storage.getActiveProfile();
-      if (!activeProfile) {
+      if (!activeProfile?.id) {
         return res.status(400).json({ error: 'No active profile found' });
       }
+      const activeProfileId = activeProfile.id;
+
 
       // 🔒 PRIVACY CHECK: Check if this conversation or message is "Off the Record"
-      const conversation = await storage.getConversation(conversationId);
-      const isPrivateTrigger = /\[PRIVATE\]|\[OFF THE RECORD\]/i.test(message);
+      const { isPrivateConversation } = await decidePrivacy(storage, conversationId, message, memoryLearning);
 
-      // Memory learning from request (UI toggle) overrides conversation default if provided
-      const isPrivateConversation = (memoryLearning === false) || conversation?.isPrivate || isPrivateTrigger;
+      // 🔒 SYSTEM GUARANTEE: Explicit flag for all downstream services
+      const allowMemoryWrites = !isPrivateConversation;
 
-      if (isPrivateTrigger) {
-        console.log(`🔒 Private trigger detected in message. This turn will not be stored in lore.`);
-      } else if (memoryLearning === false) {
-        console.log(`🔒 Memory Learning disabled via UI toggle. No lore will be extracted.`);
-      } else if (conversation?.isPrivate) {
-        console.log(`🔒 Conversation is marked as private. No lore will be extracted.`);
-      }
+      console.log(`🔒 Privacy Status: ${isPrivateConversation ? 'PRIVATE (No Learning)' : 'PUBLIC (Learning Enabled)'}`);
 
-      // 🎭 UNIFIED: Get personality with advisory chaos influence (non-mutating)
-      const { personalityController } = await import('./services/personalityController.js');
+      // If new conversation, create it
 
-      // Get base personality from unified controller (and consume any temporary override)
-      let basePersonality = await personalityController.consumeEffectivePersonality();
+      
+      const { controls, chaosState } = await resolvePersonality({
+        message,
+        personalityControl,
+        chaosEngine
+      });
 
-      // Apply manual personality control override if provided (request-scoped)
+      // Log Chaos Advice
+      const chaosAdvice = buildChaosAdvice(chaosState);
+      let direction = 'same';
+      if (chaosAdvice.suggestedIntensityDelta > 0) direction = 'higher';
+      else if (chaosAdvice.suggestedIntensityDelta < 0) direction = 'lower';
+      console.log(`🎲 Chaos advice: ${chaosAdvice.level}% ${chaosAdvice.mode} suggests ${chaosAdvice.suggestedPreset || 'no preset change'} with ${direction} intensity`);
+      console.log(`🎭 Using personality:`, JSON.stringify(controls));
+
       if (personalityControl) {
-        basePersonality = { ...basePersonality, ...personalityControl };
         console.log(`🎭 Manual personality override applied:`, JSON.stringify(personalityControl));
       }
 
-      // Get current chaos state for advisory influence (logged, not applied)
-      const chaosState = await chaosEngine.getCurrentState();
-      const chaosAdvice = {
-        level: chaosState.level,
-        mode: chaosState.mode,
-        suggestedIntensityDelta: chaosState.level >= 80 ? 1 : chaosState.level <= 20 ? -1 : 0,
-        suggestedSpiceCap: chaosState.mode === 'FAKE_PROFESSIONAL' ? 'platform_safe' :
-          chaosState.mode === 'FULL_PSYCHO' ? 'spicy' : undefined,
-        suggestedPreset: chaosState.mode === 'FULL_PSYCHO' ? 'Unhinged' :
-          chaosState.mode === 'FAKE_PROFESSIONAL' ? 'Chill Nicky' :
-            chaosState.mode === 'HYPER_FOCUSED' ? 'Patch Roast' :
-              chaosState.mode === 'CONSPIRACY' ? 'Storytime' : undefined
-      };
-
-      // Log chaos advice for transparency (but use base personality as-is)
-      console.log(`🎲 Chaos advice: ${chaosAdvice.level}% ${chaosAdvice.mode} suggests ${chaosAdvice.suggestedPreset || 'no preset change'} with ${chaosAdvice.suggestedIntensityDelta > 0 ? 'higher' : chaosAdvice.suggestedIntensityDelta < 0 ? 'lower' : 'same'} intensity`);
-
-      const controls = basePersonality;
-      console.log(`🎭 Using personality:`, JSON.stringify(controls));
-
-      // 🎯 CONTEXT-AWARE SWITCHING: Auto-switch preset based on message content
-      const switchOccurred = await personalityController.applyContextualSwitch(message);
-      if (switchOccurred) {
-        const newPersonality = await personalityController.getEffectivePersonality();
-        console.log(`🔄 Context-aware switch: ${controls.preset} → ${newPersonality.preset}`);
-        Object.assign(controls, newPersonality);
-      }
-
       // Generate personality prompt with unified controls
-      const { generatePersonalityPrompt } = await import('./types/personalityControl.js');
+
 
       // 🚀 PERFORMANCE: Track timing for optimization measurement
       const perfTimers = {
@@ -591,22 +623,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         total: Date.now()
       };
 
-      // � CRITICAL: Store the USER message first (was missing, causing history bug)
+      //  CRITICAL: Store the USER message first (was missing, causing history bug)
       // Moved up to ensure it's saved even on cache hits
       await storage.addMessage({
         conversationId,
         type: 'USER' as const,
         content: message,
         isPrivate: isPrivateConversation,
-        metadata: req.body.metadata || null,
+        metadata: metadata || null,
       });
       console.log(`💾 Saved user message to database`);
 
+
       // 🚀 STREAMING OPTIMIZATION: Check response cache first
       const { responseCache } = await import('./services/responseCache.js');
-      const cacheKey = responseCache.getCacheKey(message, mode, activeProfile.id, controls.preset);
+      const cacheKey = responseCache.getCacheKey(message, modeSafe, activeProfileId, controls.preset);
 
-      if (responseCache.shouldCache(message, mode)) {
+      if (responseCache.shouldCache(message, modeSafe)) {
         const cachedResponse = await responseCache.get(cacheKey);
 
         if (cachedResponse) {
@@ -639,10 +672,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const context = await aiOrchestrator.gatherAllContext(
         message,
-        activeProfile.id,
+        activeProfileId,
         conversationId,
         controls,
-        mode,
+        modeSafe,
         currentGame
       );
 
@@ -652,7 +685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(` Context gathering complete in ${contextLoadTime}ms. Tokens saved: ${context.stats.tokensSaved}`);
 
       const webSearchResults = context.webSearchResults || [];
-      const webSearchUsed = webSearchResults.length > 0;
+
       const messageCount = (await storage.getConversationMessages(conversationId)).length;
 
       const aiStart = Date.now();
@@ -662,9 +695,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message,
         activeProfile.coreIdentity,
         context,
-        mode,
+        modeSafe,
         conversationId,
-        activeProfile.id,
+        activeProfileId,
         selectedModel,
         chaosState.sauceMeter || 0,
         currentGame
@@ -672,103 +705,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       perfTimers.aiGeneration = Date.now() - aiStart;
 
-      // 🎭 Process response: strip debug patterns and add emotion tags
-      let processedContent = aiResponse.content;
+      // 🎭 Normalize tags (single pass - replaces old enhanceResponse + applyUniversalCleanup)
+      const normalizationResult = normalizeResponseTags(aiResponse.content, modeSafe);
+      let processedContent = normalizationResult.content;
+      perfTimers.emotionTags = normalizationResult.metrics.processingTime;
 
-      // Remove any debug headers that Claude might generate despite instructions
-      processedContent = processedContent
-        .replace(/\[NICKY STATE\][^\n]*/gi, '') // Remove debug state header
-        .replace(/<!--\s*METRICS[^>]*-->/gi, '') // Remove metrics footer
-        .trim();
-      // 🎭 EMOTION TAGS: Apply only for PODCAST and STREAMING modes, NOT Discord
-      if (mode === 'PODCAST' || mode === 'STREAMING') {
-        const emotionStart = Date.now();
-        try {
-          const { emotionTagGenerator } = await import('./services/emotionTagGenerator.js');
-          const { elevenlabsService } = await import('./services/elevenlabs.js');
-
-          // 🚀 OPTIMIZATION: Use fast pattern-based arc for STREAMING (no AI call)
-          // UPDATE (Dec 2, 2025): User requested full enhancer for streaming too for better quality
-          const useFastMode = false;
-
-          // 🎭 AUTO-ENHANCE: Use the full EmotionTagGenerator for PODCAST and STREAMING mode to get high-quality tags
-          // This replaces the simple "Emotional Arc" with the full "Enhance" logic the user likes
-          if ((mode === 'PODCAST' || mode === 'STREAMING') && !useFastMode) {
-
-            // 🚀 STREAMING & PODCAST LATENCY CHECK: If the AI already included the tags (via system prompt injection), SKIP this step!
-            // We check for the full double-tag pattern [strong bronx wiseguy accent][emotion]
-            const hasFullTags = /^\[strong bronx wiseguy accent\]\[[\w\s]+\]/i.test(processedContent.trim());
-
-            if ((mode === 'STREAMING' || mode === 'PODCAST') && hasFullTags) {
-              console.log(`⚡ ${mode} MODE: Full tags detected in raw output. Skipping separate enhancement step for speed.`);
-            } else {
-              console.log(`🎭 Auto-Enhancing response for ${mode} mode (Full tags missing)...`);
-              const { emotionTagGenerator } = await import('./services/emotionTagGenerator.js');
-
-              // Use the full enhancer which adds [strong bronx wiseguy accent][emotion] and internal tags
-              processedContent = await emotionTagGenerator.enhanceDialogue(processedContent, {
-                content: processedContent,
-                personality: `Current Personality: ${controls.preset} (${controls.intensity} intensity)`,
-                contentType: 'chat'
-              });
-
-              console.log(`🎭 Auto-Enhanced result: ${processedContent.substring(0, 100)}...`);
-            }
-          } else {
-            // Fallback to the lighter "Emotional Arc" if Enhance fails (or if fast mode was enabled)
-            // Generate 5-stage emotional arc for natural progression
-            const emotionalArc = await emotionTagGenerator.generateEmotionalArc({
-              content: processedContent,
-              personality: activeProfile.name,
-              contentType: 'voice_response',
-              mood: controls.preset === 'Chill Nicky' ? 'grumpy' :
-                controls.preset === 'Roast Mode' ? 'aggressive' :
-                  controls.preset === 'Unhinged' ? 'chaotic' : 'balanced',
-              intensity: controls.intensity === 'low' ? 'low' :
-                controls.intensity === 'high' || controls.intensity === 'ultra' ? 'high' : 'medium'
-            }, useFastMode);
-
-            perfTimers.emotionTags = Date.now() - emotionStart;
-
-            console.log(`🎭 Generated emotional arc${useFastMode ? ' (FAST)' : ''}: opening="${emotionalArc.opening}" rising="${emotionalArc.rising}" peak="${emotionalArc.peak}" falling="${emotionalArc.falling}" close="${emotionalArc.close}" [${perfTimers.emotionTags}ms]`);
-
-            // Check if AI already added proper [strong bronx wiseguy accent][emotion] double-tag pattern
-            const hasBronxEmotionPattern = /^\[strong bronx wiseguy accent\]\[[\w\s]+\]/i.test(processedContent.trim());
-
-            // Only apply emotional arc if proper double-tag pattern is missing
-            if (!hasBronxEmotionPattern) {
-              // Strip existing malformed tags (including lone [bronx] without emotion)
-              let cleanedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
-
-              // Apply emotional arc with natural progression
-              const taggedContent = elevenlabsService.applyEmotionalArc(cleanedContent, emotionalArc);
-              processedContent = taggedContent;
-              console.log(`🎭 Applied emotional arc (proper [strong bronx wiseguy accent][emotion] pattern was missing)`);
-            } else {
-              console.log(`🎭 AI already added proper [strong bronx wiseguy accent][emotion] pattern - keeping it as-is`);
-            }
-          }
-
-        } catch (error) {
-          console.warn('⚠️ Failed to generate emotion tags:', error);
-          // Continue with original content if emotion tag generation fails
-
-          // Still add [strong bronx wiseguy accent][grumpy] for podcast/streaming mode if emotion tagging fails
-          if ((mode === 'PODCAST' || mode === 'STREAMING') && !processedContent.includes('[strong bronx wiseguy accent]')) {
-            processedContent = `[strong bronx wiseguy accent][grumpy] ${processedContent}`;
-          }
-        }
-      } else if (mode === 'DISCORD') {
-        // Discord mode: NO emotion tags, just clean text
-        processedContent = processedContent.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
-        console.log(`🎭 Discord mode: No emotion tags applied, clean text only`);
-      } else {
-        // CHAT mode or other modes: ensure [strong bronx wiseguy accent][emotion] double-tag at start for voice consistency
-        if (!processedContent.trim().startsWith('[strong bronx wiseguy accent]')) {
-          processedContent = `[strong bronx wiseguy accent][grumbling] ${processedContent}`;
-        }
-        console.log(`🎭 Chat mode: Ensured [strong bronx wiseguy accent][grumbling] tag at start for voice consistency`);
-      }
 
       const response = {
         ...aiResponse,
@@ -777,7 +718,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 🚀 PERFORMANCE SUMMARY
       perfTimers.total = Date.now() - perfTimers.total;
-      const savings = mode === 'STREAMING'
+      const savings = modeSafe === 'STREAMING'
         ? ` (🚀 OPTIMIZED: -${Math.round((perfTimers.memoryRetrieval + perfTimers.contextLoading + perfTimers.emotionTags) * 0.4)}ms estimated savings)`
         : '';
       console.log(`⚡ Performance: Memory=${perfTimers.memoryRetrieval}ms | Context=${perfTimers.contextLoading}ms | AI=${perfTimers.aiGeneration}ms | Emotions=${perfTimers.emotionTags}ms | TOTAL=${perfTimers.total}ms${savings}`);
@@ -788,8 +729,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
       // 🚀 CACHE: Store cacheable responses for future requests
-      if (responseCache.shouldCache(message, mode)) {
-        responseCache.set(cacheKey, processedContent, mode);
+      if (responseCache.shouldCache(message, modeSafe)) {
+        responseCache.set(cacheKey, processedContent, modeSafe);
       }
 
       // Store the AI response
@@ -806,107 +747,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      // 🏛️ LORE ORCHESTRATION: Process the turn for new lore and hallucinations
-      // ENABLED FOR PRIVATE MODE (Per user request: "Same shit as learning mode")
-      (async () => {
-        try {
-          const { loreOrchestrator } = await import('./services/LoreOrchestrator.js');
-          // Process user message for facts
-          await loreOrchestrator.processNewContent(
-            message,
-            activeProfile.id,
-            `Conversation: ${conversationId}`,
-            'CONVERSATION',
-            conversationId
-          );
-          // Check if Nicky's response contains new lore to promote
-          await loreOrchestrator.checkHallucination(response.content, activeProfile.id);
-        } catch (loreError) {
-          console.error('🏛️ LoreOrchestrator background task failed:', loreError);
-        }
-      })();
+      // 🧹 BACKGROUND TASKS: Lore, Topic Decay, Auto-Training, Web Memory
+      // Offloaded to chatService to reduce route handler complexity
+      await handleBackgroundTasks({
+        message,
+        responseContent: response.content,
+        activeProfileId,
+        conversationId,
+        allowMemoryWrites,
+        modeSafe,
+        messageCount,
+        savedMessage,
+        webSearchResults,
+        storage
+      });
 
-      // � TOPIC DECAY: Naturally cool down topics after each turn to prevent obsession
-      try {
-        await storage.coolDownTopics(activeProfile.id);
-        console.log(`🕒 Topics cooled down for profile ${activeProfile.id}`);
-      } catch (decayError) {
-        console.warn('⚠️ Failed to cool down topics:', decayError);
-      }
-
-      // �📚 NEW: Auto-save high-quality messages as training examples
-      // 📚 AUTO-TRAINING: Save high-quality messages as training examples (Style Guides)
-      // 📚 AUTO-TRAINING: Save high-quality messages as training examples (Style Guides)
-      // ENABLED FOR PRIVATE MODE (Per user request: "Same shit as learning mode")
-      (async () => {
-        try {
-          const { messageTrainingCollector } = await import('./services/messageTrainingCollector.js');
-
-          // Evaluate in background (don't block response)
-          // Small delay to ensure DB consistency
-          setTimeout(async () => {
-            try {
-              const quality = await messageTrainingCollector.evaluateMessageQuality(savedMessage, {
-                userMessage: message,
-                conversationLength: messageCount + 1,
-                hasPositiveRating: false // Will be updated if user rates
-              });
-
-              if (quality.isQuality) {
-                await messageTrainingCollector.saveMessageAsTraining(
-                  storage,
-                  savedMessage,
-                  activeProfile.id,
-                  {
-                    userMessage: message,
-                    conversationId,
-                    mode
-                  }
-                );
-                console.log(`📚 Auto-saved message as training (score: ${quality.score})`);
-              }
-            } catch (error) {
-              console.warn('⚠️ Failed to auto-save message as training:', error);
-            }
-          }, 500);
-        } catch (error) {
-          console.warn('⚠️ Message training collector import failed:', error);
-        }
-      })();
-
-      // 🌐 ENHANCED: Post-response memory consolidation for web search results
-      if (webSearchUsed && webSearchResults.length > 0) {
-        try {
-          const { webMemoryConsolidator } = await import('./services/webMemoryConsolidator');
-
-          // Evaluate and store valuable web search results in background
-          setTimeout(async () => {
-            try {
-              const candidates = await webMemoryConsolidator.evaluateResultsForStorage(
-                webSearchResults,
-                message,
-                activeProfile.id
-              );
-
-              if (candidates.length > 0) {
-                const storedCount = await webMemoryConsolidator.storeWebMemories(
-                  candidates,
-                  activeProfile.id
-                );
-
-                if (storedCount > 0) {
-                  console.log(`💾 Background consolidation: Stored ${storedCount} web search results as memories`);
-                }
-              }
-            } catch (error) {
-              console.warn('⚠️ Background web memory consolidation failed:', error);
-            }
-          }, 100); // Small delay to not block response
-
-        } catch (error) {
-          console.warn('⚠️ Failed to initiate web memory consolidation:', error);
-        }
-      }
 
       // 🎲 ENHANCED: Trigger response-based chaos evolution after successful AI response
       chaosEngine.onResponseGenerated();
@@ -930,30 +785,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Emotion Enhancement endpoints
-  app.post('/api/enhance-text', async (req, res) => {
+  // 🎭 EMOTION CHECK ENDPOINT (Refactored for Local Enhancement)
+  app.post('/api/emotion-check', async (req, res) => {
     try {
-      const { text, mode, characterContext, messageId } = req.body;
+      const { text, characterContext, messageId } = req.body;
 
       if (!text) {
         return res.status(400).json({ error: 'Text is required' });
       }
 
-      let enhancedText: string;
-
-      if (mode === 'quick') {
-        // Fast pattern-based enhancement
-        enhancedText = emotionTagGenerator.quickEnhance(text);
-        console.log('⚡ Quick emotion enhancement applied');
-      } else {
-        // Full AI-powered enhancement - Manual enhancement is always HIGH intensity
-        enhancedText = await emotionTagGenerator.enhanceDialogue(text, {
-          content: text,
-          personality: characterContext,
-          contentType: 'chat',
-          intensity: 'high'
-        });
-        console.log('🎭 AI emotion enhancement applied (HIGH intensity)');
-      }
+      // Use the new tag normalizer
+      const result = normalizeResponseTags(text, 'CHAT');
+      
+      const enhancedText = result.content;
+      console.log('⚡ Local emotion enhancement applied via API');
 
       // If messageId is provided, persist the enhancement to the database
       if (messageId) {
@@ -961,7 +806,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const message = await storage.getMessage(messageId);
           if (message) {
             const updatedMetadata = {
-              ...(message.metadata || {}),
+              ...message.metadata,
               enhanced_content: enhancedText
             };
             await storage.updateMessageMetadata(messageId, updatedMetadata);
@@ -969,14 +814,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } catch (dbError) {
           console.error('Failed to persist enhancement to DB:', dbError);
-          // Continue anyway, we still have the result to return
         }
       }
 
       res.json({
         original: text,
         enhanced: enhancedText,
-        mode: mode || 'ai'
+        mode: 'local_fast'
       });
     } catch (error) {
       console.error('Enhancement error:', error);
@@ -984,9 +828,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 🎭 ENHANCE MESSAGE ENDPOINT (Refactored for Local Enhancement)
   app.post('/api/enhance-message', async (req, res) => {
     try {
-      const { conversationId, messageIndex, mode } = req.body;
+      const { conversationId, messageIndex } = req.body;
 
       if (!conversationId || messageIndex === undefined) {
         return res.status(400).json({ error: 'Conversation ID and message index are required' });
@@ -1005,31 +850,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Can only enhance AI messages' });
       }
 
-      let enhancedContent: string;
+      const activeProfile = await storage.getActiveProfile();
+      const characterContext = activeProfile ? activeProfile.name : 'Nicky';
 
-      if (mode === 'quick') {
-        enhancedContent = emotionTagGenerator.quickEnhance(message.content);
-        console.log(`⚡ Quick enhanced message at index ${messageIndex}`);
-      } else {
-        // Get personality context for better enhancement
-        const activeProfile = await storage.getActiveProfile();
-        const characterContext = activeProfile ?
-          `Nicky "Noodle Arms" A.I. Dente - unhinged Italian-American podcaster from the Bronx` :
-          undefined;
-
-        enhancedContent = await emotionTagGenerator.enhanceDialogue(message.content, {
-          content: message.content,
-          personality: characterContext,
-          contentType: 'chat'
-        });
-        console.log(`🎭 AI enhanced message at index ${messageIndex}`);
-      }
+      // Use tag normalizer
+      const result = normalizeResponseTags(message.content, 'CHAT');
+      
+      const enhancedContent = result.content;
+      console.log(`⚡ Local enhanced message at index ${messageIndex}`);
 
       res.json({
         messageIndex,
         original: message.content,
         enhanced: enhancedContent,
-        mode: mode || 'ai'
+        mode: 'local_fast'
       });
     } catch (error) {
       console.error('Message enhancement error:', error);
@@ -1043,42 +877,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { rating } = req.body; // 1 = thumbs down, 2 = thumbs up
 
-      if (!rating || ![1, 2].includes(rating)) {
+      if (!rating || !new Set([1, 2]).has(rating)) {
         return res.status(400).json({ error: 'Rating must be 1 (thumbs down) or 2 (thumbs up)' });
       }
 
       await storage.updateMessageRating(id, rating);
 
-      // If thumbs up, also flip the conversation to public so it can be remembered
+      // If thumbs up, save as a high-quality training example!
       if (rating === 2) {
         const message = await storage.getMessage(id);
-        if (message?.conversationId) {
-          // Flip both message and conversation to public
-          await storage.updateMessagePrivacy(id, false);
-          await storage.updateConversationPrivacy(message.conversationId, false);
-
-          // 🧠 LORE PROMOTION: Since this was private, lore extraction was skipped.
-          // Now that it's public, we should process it for lore.
-          try {
-            const { loreOrchestrator } = await import('./services/LoreOrchestrator.js');
-            const conversation = await storage.getConversation(message.conversationId);
-            if (conversation) {
-              // Process the specific message that was "saved"
-              await loreOrchestrator.processNewContent(
-                message.content,
-                conversation.profileId,
-                `Saved Message: ${id}`,
-                'CONVERSATION',
-                message.conversationId
-              );
-            }
-          } catch (loreError) {
-            console.warn('Failed to promote lore after saving message:', loreError);
-          }
+        if (message) {
+           const { messageTrainingCollector } = await import('./services/messageTrainingCollector.js');
+           const activeProfile = await storage.getActiveProfile();
+           if (activeProfile) {
+               console.log(`👍 Thumbs Up detected for message ${id} - Saving as training example...`);
+               await messageTrainingCollector.saveMessageAsTraining(
+                  storage, 
+                  message, 
+                  activeProfile.id,
+                  { 
+                      mode: 'MANUAL_THUMBS_UP', 
+                      allowWrites: true, // Explicit override: User manually approved this message
+                      conversationId: message.conversationId
+                  }
+               );
+           }
         }
       }
+      
+      res.json({ success: true, message: 'Rating updated' });
 
-      res.json({ success: true });
+
     } catch (error) {
       console.error('Rating update error:', error);
       res.status(500).json({ error: 'Failed to update rating' });
@@ -1131,7 +960,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const activeProfile = await storage.getActiveProfile();
       let voiceSettings;
 
-      if (activeProfile && activeProfile.voiceSettings) {
+      if (activeProfile?.voiceSettings) {
         voiceSettings = activeProfile.voiceSettings;
         // Also ensure the voice ID is set
         if (activeProfile.voiceId) {
@@ -1141,7 +970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Prepare AI context for emotion tag generation
       const context = contentType ? {
-        contentType: contentType as 'ad' | 'chat' | 'announcement' | 'voice_response',
+        contentType,
         personality: personality || (activeProfile?.name || 'neutral'),
         mood: mood || 'balanced',
         useAI: useAI !== false  // Default to true unless explicitly disabled
@@ -1432,7 +1261,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 🎮 NEW: Process pasted text as patch notes
   app.post('/api/patch-notes/process', async (req, res) => {
     try {
-      const { text, game, version } = req.body;
+      const { text } = req.body;
+      // Removed unused vars: game, version
 
       if (!text || typeof text !== 'string') {
         return res.status(400).json({ error: 'Text content required' });
@@ -1482,6 +1312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const documents = await storage.getProfileDocuments(activeProfile.id);
       res.json(documents);
     } catch (error) {
+      console.error('Failed to get documents:', error);
       res.status(500).json({ error: 'Failed to fetch documents' });
     }
   });
@@ -1496,6 +1327,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const examples = await storage.getTrainingExamples(activeProfile.id);
       res.json(examples);
     } catch (error) {
+      console.error('Failed to get training examples:', error);
       res.status(500).json({ error: 'Failed to fetch training examples' });
     }
   });
@@ -1510,7 +1342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const trainingExample = await storage.getDocument(id);
-      if (!trainingExample || trainingExample.documentType !== 'TRAINING_EXAMPLE') {
+      if (trainingExample?.documentType !== 'TRAINING_EXAMPLE') {
         return res.status(404).json({ error: 'Training example not found' });
       }
 
@@ -1580,6 +1412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pending = await storage.getPendingConsolidations(activeProfile.id);
       res.json(pending);
     } catch (error) {
+      console.error('Failed to fetch pending consolidations:', error);
       res.status(500).json({ error: 'Failed to fetch pending consolidations' });
     }
   });
@@ -1631,6 +1464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateConsolidationStatus(id, 'REJECTED');
       res.json({ success: true, message: 'Consolidation rejected' });
     } catch (error) {
+      console.error('Failed to reject consolidation:', error);
       res.status(500).json({ error: 'Failed to reject consolidation' });
     }
   });
@@ -1647,6 +1481,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content: document.extractedContent || 'No content available'
       });
     } catch (error) {
+      console.error('Failed to fetch document:', error);
       res.status(500).json({ error: 'Failed to fetch document' });
     }
   });
@@ -1657,6 +1492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteDocument(id);
       res.json({ success: true });
     } catch (error) {
+      console.error('Failed to delete document:', error);
       res.status(500).json({ error: 'Failed to delete document' });
     }
   });
@@ -1838,11 +1674,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const content = await fs.readFile(notesPath, 'utf8');
         res.json({ content });
       } catch (readError) {
-        // If file doesn't exist, return empty content
+        // If file doesn't exist or other error, return empty content template
+        console.log('Notes file not found, returning template');
         res.json({ content: '# Development Notes\n\n<!-- Add your notes here -->\n' });
       }
     } catch (error) {
-      console.error('Failed to read notes:', error);
+      // Should not be reached given inner catch, but good for safety
+      console.error('Critical notes error:', error);
       res.status(500).json({ error: 'Failed to read notes' });
     }
   });
@@ -1894,12 +1732,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get all entries for search functionality
-      const limit = parseInt(req.query.limit as string) || 10000; // Large limit for search
+      const limit = Number.parseInt(req.query.limit as string) || 10000; // Large limit for search
 
       // Use getMemoryWithEntityLinks to include linked entities
       const entries = await storage.getMemoryWithEntityLinks(activeProfile.id, limit);
       res.json(entries);
     } catch (error) {
+      console.error('Failed to get memory entries:', error);
       res.status(500).json({ error: 'Failed to fetch memory entries' });
     }
   });
@@ -2054,7 +1893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await db
         .update(memoryEntries)
-        .set({ type: type as any })
+        .set({ type })
         .where(
           and(
             eq(memoryEntries.profileId, activeProfile.id),
@@ -2302,7 +2141,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stats = await storage.getMemoryStats(activeProfile.id);
       res.json(stats);
     } catch (error) {
+      console.error('Failed to fetch memory stats:', error);
       res.status(500).json({ error: 'Failed to fetch memory stats' });
+    }
+  });
+
+  // 📝 UPDATE Document Content
+  app.patch('/api/documents/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { content } = req.body;
+
+      if (!content) {
+        return res.status(400).json({ error: 'Content is required' });
+      }
+
+      // Check if document exists
+      const doc = await storage.getDocument(id);
+      if (!doc) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      // Prepare update payload
+      const updates: any = {
+        extractedContent: content,
+        updatedAt: new Date()
+      };
+
+      // If it has hygiene metadata, update the normalizedContent too to keep it consistent
+      // (Assuming user is editing the "clean" version)
+      if (doc.processingMetadata && (doc.processingMetadata as any).normalizedContent) {
+          const meta = doc.processingMetadata as any;
+          updates.processingMetadata = {
+              ...meta,
+              normalizedContent: content,
+              // If they edited it manually, it's effectively "VALID" or at least "MANUALLY_CORRECTED"
+              validationStatus: 'VALID', 
+              tagQualityScore: 100 // Manual override implies perfect quality
+          };
+      }
+
+      const updatedDoc = await storage.updateDocument(id, updates);
+      
+      // If it's a training example, we should probably re-embed it
+      // But for now, let's just save the text. 
+      // TODO: trigger embedding update?
+      
+      res.json(updatedDoc);
+    } catch (error) {
+      console.error('Document update error:', error);
+      res.status(500).json({ error: 'Failed to update document' });
     }
   });
 
@@ -2313,6 +2201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stats = responseCache.getStats();
       res.json(stats);
     } catch (error) {
+      console.error('Failed to fetch cache stats:', error);
       res.status(500).json({ error: 'Failed to fetch cache stats' });
     }
   });
@@ -2324,6 +2213,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       responseCache.clear();
       res.json({ success: true, message: 'Cache cleared' });
     } catch (error) {
+      console.error('Failed to clear cache:', error);
       res.status(500).json({ error: 'Failed to clear cache' });
     }
   });
@@ -2334,6 +2224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stats = contextPrewarmer.getStats();
       res.json(stats);
     } catch (error) {
+      console.error('Failed to fetch pre-warmer stats:', error);
       res.status(500).json({ error: 'Failed to fetch pre-warmer stats' });
     }
   });
@@ -2350,6 +2241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stats = contextPrewarmer.getStats();
       res.json({ success: true, message: 'Pre-warmed cache refreshed', stats });
     } catch (error) {
+      console.error('Failed to refresh pre-warmed cache:', error);
       res.status(500).json({ error: 'Failed to refresh pre-warmed cache' });
     }
   });
@@ -2375,6 +2267,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!conversationId) {
         return res.status(400).json({ error: 'Conversation ID required' });
+      }
+
+      // 🔒 Deep Privacy Check for Manual Consolidation
+      const conversation = await storage.getConversation(conversationId);
+      if (conversation?.isPrivate) {
+        console.log(`🔒 Privacy Guard: Skipped memory consolidation for private conversation ${conversationId}`);
+        return res.json({ message: 'Consolidation skipped for private conversation' });
       }
 
       const activeProfile = await storage.getActiveProfile();
@@ -2450,7 +2349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      const { scanDepth = 100, similarityThreshold = 0.90 } = req.body;
+      const { scanDepth = 100, similarityThreshold = 0.9 } = req.body;
 
       // Validate scanDepth
       const validDepths = [100, 500, 1000, 'ALL'];
@@ -2879,7 +2778,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Evolutionary AI and Chaos Engine
   const evolutionaryAI = new EvolutionaryAI();
-  const chaosEngine = ChaosEngine.getInstance();
 
   app.get('/api/chaos/state', async (req, res) => {
     try {
@@ -2890,6 +2788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         effectiveLevel
       });
     } catch (error) {
+      console.error('Failed to get chaos state:', error);
       res.status(500).json({ error: 'Failed to get chaos state' });
     }
   });
@@ -2907,6 +2806,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newState = await chaosEngine.getCurrentState();
       res.json(newState);
     } catch (error) {
+      console.error('Failed to trigger chaos event:', error);
       res.status(500).json({ error: 'Failed to trigger chaos event' });
     }
   });
@@ -2928,6 +2828,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: `Manual override set to ${level}% for next response`
       });
     } catch (error) {
+      console.error('Failed to set chaos override:', error);
       res.status(500).json({ error: 'Failed to set chaos override' });
     }
   });
@@ -2949,6 +2850,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: `Base chaos level permanently set to ${level}%`
       });
     } catch (error) {
+      console.error('Failed to set chaos level:', error);
       res.status(500).json({ error: 'Failed to set chaos level' });
     }
   });
@@ -3165,6 +3067,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(metrics);
     } catch (error) {
+      console.error('Error getting evolution metrics:', error);
       res.status(500).json({ error: 'Failed to get evolution metrics' });
     }
   });
@@ -3478,7 +3381,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             successfulAICalls++;
 
             if (result.isContradiction && result.conflictingFacts.length > 0) {
-              const groupId = `contradiction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+              const groupId = `contradiction-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
               // Group all conflicting facts together
               const allFactsInGroup = [currentFact, ...result.conflictingFacts];
@@ -3492,7 +3395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               // Set the highest confidence fact as primary (keep it ACTIVE)
               const primaryFact = allFactsInGroup.reduce((best, current) =>
                 (current.confidence || 0) > (best.confidence || 0) ? current : best
-              );
+              , allFactsInGroup[0]);
               await storage.updateMemoryStatus(primaryFact.id, 'ACTIVE');
 
               contradictionsFound += allFactsInGroup.length;
@@ -3793,14 +3696,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate confidence range (0-100)
       if (updates.confidence !== undefined) {
         const confidence = Number(updates.confidence);
-        if (isNaN(confidence) || confidence < 0 || confidence > 100) {
+        if (Number.isNaN(confidence) || confidence < 0 || confidence > 100) {
           return res.status(400).json({ error: 'Confidence must be between 0 and 100' });
         }
       }
 
       if (updates.importance !== undefined) {
         const importance = Number(updates.importance);
-        if (isNaN(importance) || importance < 0 || importance > 100) {
+        if (Number.isNaN(importance) || importance < 0 || importance > 100) {
           return res.status(400).json({ error: 'Importance must be between 0 and 100' });
         }
       }
@@ -3890,7 +3793,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         newConfidence = 100;
       }
 
-      const updatedEntry = await storage.updateMemoryConfidence(id, newConfidence, undefined);
+      const updatedEntry = await storage.updateMemoryConfidence(id, newConfidence);
       console.log(`🎯 Progressive boost: Fact confidence ${currentConfidence}% → ${newConfidence}% by user`);
       res.json(updatedEntry);
     } catch (error) {
@@ -3995,7 +3898,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { winnerFactId, loserFactId } = req.body;
 
       // Boost winner to 100%, deprecate loser
-      await storage.updateMemoryConfidence(winnerFactId, 100, undefined);
+      await storage.updateMemoryConfidence(winnerFactId, 100);
       await storage.updateMemoryStatus(loserFactId, 'DEPRECATED');
 
       console.log(`⚖️ Contradiction resolved: Winner ${winnerFactId}, Loser ${loserFactId}`);
@@ -4032,7 +3935,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/lore/context/:profileId', async (req, res) => {
     try {
       const { profileId } = req.params;
-      const limit = parseInt(req.query.limit as string) || 3;
+      const limit = Number.parseInt(req.query.limit as string) || 3;
       const loreContext = await LoreEngine.getRelevantLore(profileId, limit);
       res.json({ context: loreContext });
     } catch (error) {
@@ -4342,7 +4245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const importanceGroups = new Map();
 
       for (const flag of enrichedFlags) {
-        const isImportanceFlag = ['high_importance', 'medium_importance', 'low_importance'].includes(flag.flagType);
+        const isImportanceFlag = new Set(['high_importance', 'medium_importance', 'low_importance']).has(flag.flagType);
 
         if (isImportanceFlag) {
           const groupKey = `${flag.targetType}:${flag.targetId}`;
@@ -4706,7 +4609,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const duplicateGroup = {
         masterEntry,
         duplicates: duplicateEntries,
-        similarity: 1.0, // Manual merge, assume high similarity
+        similarity: 1, // Manual merge, assume high similarity
         mergedContent, // AI-powered merge combining all unique facts
         combinedImportance: Math.max(masterEntry.importance || 1, ...duplicateEntries.map(d => d.importance || 1)),
         combinedKeywords: Array.from(new Set([
@@ -4765,7 +4668,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const duplicateGroup = {
         masterEntry,
         duplicates: duplicateEntries,
-        similarity: 1.0, // Manual merge, assume high similarity
+        similarity: 1, // Manual merge, assume high similarity
         mergedContent: mergedContent || masterEntry.content, // Use custom merged content or master content by default
         combinedImportance: Math.max(masterEntry.importance || 1, ...duplicateEntries.map(d => d.importance || 1)),
         combinedKeywords: Array.from(new Set([
@@ -5612,44 +5515,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Helper function for string similarity (Levenshtein distance based)
-  function calculateStringSimilarity(str1: string, str2: string): number {
-    const longer = str1.length > str2.length ? str1 : str2;
-    const shorter = str1.length > str2.length ? str2 : str1;
-
-    if (longer.length === 0) return 1.0;
-
-    const editDistance = levenshteinDistance(longer, shorter);
-    return (longer.length - editDistance) / longer.length;
-  }
-
-  function levenshteinDistance(str1: string, str2: string): number {
-    const matrix: number[][] = [];
-
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
-    }
-
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
-    }
-
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          );
-        }
-      }
-    }
-
-    return matrix[str2.length][str1.length];
-  }
 
   // Batch extract entities from multiple memories
   app.post('/api/entities/batch-extract', async (req, res) => {
@@ -5775,7 +5640,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const limit = req.query.limit ? Number.parseInt(req.query.limit as string) : 50;
       const memories = await storage.getMemoryWithEntityLinks(profile.id, limit);
 
       res.json(memories);
@@ -5939,7 +5804,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { targetType, targetId } = req.params;
 
-      if (!['MEMORY', 'MESSAGE', 'DOCUMENT', 'CONVERSATION'].includes(targetType)) {
+      if (!new Set(['MEMORY', 'MESSAGE', 'DOCUMENT', 'CONVERSATION']).has(targetType)) {
         return res.status(400).json({ error: 'Invalid target type' });
       }
 
@@ -5973,6 +5838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: isConnected ? 'online' : 'offline'
       });
     } catch (error) {
+      console.error('Error checking Discord bot status:', error);
       res.status(500).json({ error: 'Failed to check Discord bot status' });
     }
   });
@@ -5988,6 +5854,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const servers = await storage.getProfileDiscordServers(activeProfile.id);
       res.json(servers);
     } catch (error) {
+      console.error('Error fetching Discord servers:', error);
       res.status(500).json({ error: 'Failed to fetch Discord servers' });
     }
   });
@@ -6011,15 +5878,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const personalityState = await personalityController.getState();
 
       // For backward compatibility, convert unified personality back to legacy format
+      const intensity = personalityState.effectivePersonality.intensity;
+      const spice = personalityState.effectivePersonality.spice;
+      
+      let aggressiveness = 40;
+      if (intensity === 'ultra') aggressiveness = 90;
+      else if (intensity === 'high') aggressiveness = 75;
+      else if (intensity === 'med') aggressiveness = 60;
+      
+      let responsiveness = 35;
+      if (intensity === 'ultra') responsiveness = 85;
+      else if (intensity === 'high') responsiveness = 70;
+      else if (intensity === 'med') responsiveness = 55;
+      
+      let unpredictability = 15;
+      if (spice === 'spicy') unpredictability = 85;
+      else if (spice === 'normal') unpredictability = 50;
+      
       const legacyFormat = {
-        aggressiveness: personalityState.effectivePersonality.intensity === 'ultra' ? 90 :
-          personalityState.effectivePersonality.intensity === 'high' ? 75 :
-            personalityState.effectivePersonality.intensity === 'med' ? 60 : 40,
-        responsiveness: personalityState.effectivePersonality.intensity === 'ultra' ? 85 :
-          personalityState.effectivePersonality.intensity === 'high' ? 70 :
-            personalityState.effectivePersonality.intensity === 'med' ? 55 : 35,
-        unpredictability: personalityState.effectivePersonality.spice === 'spicy' ? 85 :
-          personalityState.effectivePersonality.spice === 'normal' ? 50 : 15,
+        aggressiveness,
+        responsiveness,
+        unpredictability,
         dbdObsession: personalityState.effectivePersonality.dbd_lens ? 80 : 40,
         familyBusinessMode: 35,
       };
@@ -6072,7 +5951,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🔄 Updated Discord behavior via legacy API: ${JSON.stringify(legacyBehavior)} → ${migratedPersonality.preset}`);
 
       // Return the updated personality state in legacy format for compatibility
-      const personalityState = await personalityController.getState();
       const legacyFormat = {
         aggressiveness: migratedPersonality.intensity,
         responsiveness: Math.max(30, migratedPersonality.intensity - 10),
@@ -6228,8 +6106,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (Array.isArray(enabledMessageTypes)) {
         // Validate message types
-        const validTypes = ['dbd', 'italian', 'family_business', 'aggressive', 'random'];
-        const validMessageTypes = enabledMessageTypes.filter(type => validTypes.includes(type));
+        const validTypes = new Set(['dbd', 'italian', 'family_business', 'aggressive', 'random']);
+        const validMessageTypes = enabledMessageTypes.filter(type => validTypes.has(type));
         updates.enabledMessageTypes = validMessageTypes;
       }
 
@@ -6277,6 +6155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const members = await storage.getServerMembers(serverId);
       res.json(members);
     } catch (error) {
+      console.error('Failed to fetch Discord members:', error);
       res.status(500).json({ error: 'Failed to fetch Discord members' });
     }
   });
@@ -6294,6 +6173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.updateDiscordMember(id, updates);
       res.json(member);
     } catch (error) {
+      console.error('Failed to update Discord member:', error);
       res.status(500).json({ error: 'Failed to update Discord member' });
     }
   });
@@ -6305,6 +6185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const triggers = await storage.getDiscordTopicTriggers(serverId);
       res.json(triggers);
     } catch (error) {
+      console.error('Failed to fetch Discord topic triggers:', error);
       res.status(500).json({ error: 'Failed to fetch Discord topic triggers' });
     }
   });
@@ -6327,6 +6208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trigger = await storage.createDiscordTopicTrigger(triggerData);
       res.json(trigger);
     } catch (error) {
+      console.error('Error creating trigger:', error);
       res.status(400).json({ error: 'Invalid trigger data' });
     }
   });
@@ -6340,6 +6222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trigger = await storage.updateDiscordTopicTrigger(id, updates);
       res.json(trigger);
     } catch (error) {
+      console.error('Failed to update Discord trigger:', error);
       res.status(500).json({ error: 'Failed to update Discord trigger' });
     }
   });
@@ -6351,6 +6234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteDiscordTopicTrigger(id);
       res.json({ success: true });
     } catch (error) {
+      console.error('Failed to delete Discord trigger:', error);
       res.status(500).json({ error: 'Failed to delete Discord trigger' });
     }
   });
@@ -6359,7 +6243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/discord/servers/:id/conversations', requireAuth, async (req, res) => {
     try {
       const { id: serverId } = req.params;
-      const limit = parseInt(req.query.limit as string) || 50;
+      const limit = Number.parseInt(req.query.limit as string) || 50;
 
       const conversations = await storage.getDiscordConversations(serverId, limit);
       res.json(conversations);
@@ -6425,6 +6309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sources = await storage.getAutomatedSources(profileId);
       res.json({ data: sources });
     } catch (error) {
+      console.error('Failed to fetch automated sources:', error);
       res.status(500).json({ error: 'Failed to fetch automated sources' });
     }
   });
@@ -6453,6 +6338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.toggleAutomatedSource(id, isActive);
       res.json({ success: true });
     } catch (error) {
+      console.error('Failed to toggle automated source:', error);
       res.status(500).json({ error: 'Failed to toggle automated source' });
     }
   });
@@ -6461,10 +6347,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/ingestion/pending/:profileId', async (req, res) => {
     try {
       const { profileId } = req.params;
-      const processed = req.query.processed === 'true' ? true : req.query.processed === 'false' ? false : undefined;
+      let processed: boolean | undefined;
+      if (req.query.processed === 'true') processed = true;
+      else if (req.query.processed === 'false') processed = false;
       const pending = await storage.getPendingContent(profileId, processed);
       res.json({ data: pending });
     } catch (error) {
+      console.error('Failed to fetch pending content:', error);
       res.status(500).json({ error: 'Failed to fetch pending content' });
     }
   });
@@ -6516,6 +6405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: 'Content rejected'
       });
     } catch (error) {
+      console.error('Failed to reject content:', error);
       res.status(500).json({ error: 'Failed to reject content' });
     }
   });
@@ -6632,7 +6522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const options = {
         category: category as string,
-        limit: limit ? parseInt(limit as string) : undefined,
+        limit: limit ? Number.parseInt(limit as string) : undefined,
         includeUsed: includeUsed === 'true'
       };
 
@@ -6815,7 +6705,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let affectedCount = 0;
 
       switch (action) {
-        case 'hide_irrelevant':
+        case 'hide_irrelevant': {
           // Hide memories with low relevance scores
           const relevanceScores = await intelligenceEngine.analyzeContextRelevance(
             storage.db,
@@ -6831,8 +6721,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             affectedCount++;
           }
           break;
+        }
 
-        case 'delete_selected':
+        case 'delete_selected': {
           // Delete specific memory IDs
           if (memoryIds && Array.isArray(memoryIds)) {
             for (const memoryId of memoryIds) {
@@ -6841,14 +6732,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
           break;
+        }
 
-        case 'merge_cluster':
+        case 'merge_cluster': {
           // Merge a cluster of related facts into one consolidated fact
           if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length < 2) {
             return res.status(400).json({ error: 'merge_cluster requires at least 2 memory IDs' });
           }
 
-          if (!options || !options.mergedContent) {
+          if (options?.mergedContent) {
             return res.status(400).json({ error: 'merge_cluster requires mergedContent in options' });
           }
 
@@ -6860,6 +6752,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               where: (entries, { eq }) => eq(entries.id, id)
             }))
           );
+
 
           const validFacts = factsToMerge.filter(f => f !== undefined);
 
@@ -6921,6 +6814,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           affectedCount++; // Count the updated primary fact
 
           break;
+        }
 
         default:
           return res.status(400).json({ error: 'Invalid bulk action' });
@@ -6958,6 +6852,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(suggestions);
     } catch (error) {
+      console.error('Error fetching suggestions:', error);
       res.status(500).json({ error: 'Failed to fetch suggestions' });
     }
   });
@@ -6969,6 +6864,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await suggestionService.approveSuggestion(req.params.id);
       res.json({ success: true });
     } catch (error) {
+      console.error('Error approving suggestion:', error);
       res.status(500).json({ error: 'Failed to approve suggestion' });
     }
   });
@@ -6980,6 +6876,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await suggestionService.rejectSuggestion(req.params.id);
       res.json({ success: true });
     } catch (error) {
+      console.error('Error rejecting suggestion:', error);
       res.status(500).json({ error: 'Failed to reject suggestion' });
     }
   });
@@ -7048,7 +6945,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const options = {
         summaryType: (req.query.type as string || 'overview') as 'overview' | 'recent' | 'topical' | 'trend_analysis',
         timeframe: (req.query.timeframe as string || 'all') as 'all' | 'day' | 'week' | 'month',
-        maxFacts: parseInt(req.query.limit as string) || 100,
+        maxFacts: Number.parseInt(req.query.limit as string) || 100,
         focusArea: req.query.focus as string
       };
 
@@ -7567,13 +7464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { country, continent, region, covered } = req.query;
 
-      let query = db
-        .select()
-        .from(listenerCities)
-        .where(eq(listenerCities.profileId, activeProfile.id));
-
-      // Apply filters
-      const conditions: any[] = [eq(listenerCities.profileId, activeProfile.id)];
+      const conditions: any[] = [];
 
       if (country && typeof country === 'string') {
         conditions.push(eq(listenerCities.country, country));
@@ -7939,7 +7830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active profile found' });
       }
 
-      const minIntensity = parseInt(req.query.minIntensity as string) || 60;
+      const minIntensity = Number.parseInt(req.query.minIntensity as string) || 60;
       const highIntensityTopics = await storage.getHighIntensityTopics(activeProfile.id, minIntensity);
       res.json(highIntensityTopics);
     } catch (error) {
@@ -8019,4 +7910,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
   return httpServer;
+}
+
+// Helper function for string similarity (Levenshtein distance based)
+function calculateStringSimilarity(str1: string, str2: string): number {
+  const longer = str1.length > str2.length ? str1 : str2;
+  const shorter = str1.length > str2.length ? str2 : str1;
+
+  if (longer.length === 0) return 1;
+
+  const editDistance = levenshteinDistance(longer, shorter);
+  return (longer.length - editDistance) / longer.length;
+}
+
+function levenshteinDistance(str1: string, str2: string): number {
+  const matrix: number[][] = [];
+
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+
+  return matrix[str2.length][str1.length];
 }

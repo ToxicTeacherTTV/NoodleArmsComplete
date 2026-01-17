@@ -36,6 +36,8 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
   const [trainingName, setTrainingName] = useState('');
   const [viewingDocument, setViewingDocument] = useState<Document | null>(null);
   const [documentContent, setDocumentContent] = useState<string>('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
   const [extractionModel, setExtractionModel] = useState<string>('gemini-2.5-flash');
   const [duplicateWarning, setDuplicateWarning] = useState<{
     file: File;
@@ -210,6 +212,28 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
     },
   });
 
+  const updateDocumentMutation = useMutation({
+    mutationFn: async ({ id, content }: { id: string; content: string }) => {
+      return await apiRequest('PATCH', `/api/documents/${id}`, { content });
+    },
+    onSuccess: (updatedDoc: any) => {
+      toast({
+        title: "Document Updated",
+        description: "Content saved successfully",
+      });
+      setDocumentContent(updatedDoc.extractedContent || '');
+      setIsEditing(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Update Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const extractAsFactsMutation = useMutation({
     mutationFn: async ({ documentId, model }: { documentId: string, model: string }) => {
       return await apiRequest('POST', `/api/documents/${documentId}/extract-facts`, { model });
@@ -367,6 +391,8 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
       const content = (document as any).extractedContent || 'No content available';
       setDocumentContent(content);
       setViewingDocument(document);
+      setIsEditing(false); // Reset edit mode
+      setEditContent(content); // Initialize edit content
     } catch (error) {
       console.error('Document view error:', error);
       toast({
@@ -1061,12 +1087,49 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
       <Dialog open={!!viewingDocument} onOpenChange={() => setViewingDocument(null)}>
         <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <i className={viewingDocument ? getFileIcon(viewingDocument.contentType) : 'fas fa-file'}></i>
-              {viewingDocument?.filename}
+            <DialogTitle className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <i className={viewingDocument ? getFileIcon(viewingDocument.contentType) : 'fas fa-file'}></i>
+                {viewingDocument?.filename}
+              </div>
+              <div className="flex gap-2">
+                 {!isEditing ? (
+                   <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => {
+                        setIsEditing(true);
+                        setEditContent(documentContent);
+                      }}
+                   >
+                     <i className="fas fa-edit mr-2"></i> Edit
+                   </Button>
+                 ) : (
+                   <div className="flex gap-2">
+                     <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={() => setIsEditing(false)}
+                     >
+                       Cancel
+                     </Button>
+                     <Button 
+                        size="sm" 
+                        onClick={() => updateDocumentMutation.mutate({ 
+                          id: viewingDocument!.id, 
+                          content: editContent 
+                        })}
+                        disabled={updateDocumentMutation.isPending}
+                     >
+                       {updateDocumentMutation.isPending ? 'Saving...' : 'Save Changes'}
+                     </Button>
+                   </div>
+                 )}
+              </div>
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-auto">
+            {/* Metadata Header */}
             <div className="text-sm text-muted-foreground mb-4">
               {viewingDocument && (
                 <div className="flex items-center gap-4">
@@ -1079,11 +1142,23 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                 </div>
               )}
             </div>
-            <div className="border border-border rounded-lg p-4 bg-muted/20">
-              <pre className="whitespace-pre-wrap text-sm text-foreground font-mono leading-relaxed">
-                {documentContent || 'Loading...'}
-              </pre>
-            </div>
+
+            {/* Content Area */}
+            {isEditing ? (
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                className="w-full h-[60vh] p-4 font-mono text-sm bg-background border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                aria-label="Edit document content"
+                title="Edit document content"
+              />
+            ) : (
+              <div className="border border-border rounded-lg p-4 bg-muted/20">
+                <pre className="whitespace-pre-wrap text-sm text-foreground font-mono leading-relaxed">
+                  {documentContent || 'Loading...'}
+                </pre>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

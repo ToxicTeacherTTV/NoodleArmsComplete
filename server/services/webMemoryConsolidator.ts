@@ -262,8 +262,14 @@ class WebMemoryConsolidator {
    */
   async storeWebMemories(
     candidates: WebMemoryCandidate[],
-    profileId: string
+    profileId: string,
+    options?: { allowWrites?: boolean }
   ): Promise<number> {
+    if (options && options.allowWrites === false) {
+      console.log('🔒 Private mode: Skipping web memory storage (safety catch)');
+      return 0;
+    }
+
     const storableMemories = candidates.filter(c => c.shouldStore);
     
     if (storableMemories.length === 0) {

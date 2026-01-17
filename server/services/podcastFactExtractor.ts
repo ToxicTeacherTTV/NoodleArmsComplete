@@ -1,9 +1,8 @@
-import { InsertMemoryEntry, InsertDocument } from '@shared/schema';
+import { InsertMemoryEntry } from '@shared/schema';
 import { IStorage } from '../storage.js';
 import { entityExtraction } from './entityExtraction.js';
 import { GoogleGenAI } from "@google/genai";
 import { executeWithProductionModel } from './modelSelector.js';
-import { getDefaultModel } from '../config/geminiModels.js';
 
 export class PodcastFactExtractor {
   private ai: GoogleGenAI;
@@ -169,8 +168,13 @@ JSON FORMAT:
     title: string,
     transcript: string,
     profileId: string,
-    storage: IStorage
+    storage: IStorage,
+    options?: { allowWrites?: boolean }
   ): Promise<{ success: boolean; factsCreated: number; entitiesCreated: number; error?: string }> {
+    if (options?.allowWrites === false) {
+      console.log(`🔒 Privacy Guard: Skipping podcast fact extraction for Episode ${episodeNumber}`);
+      return { success: true, factsCreated: 0, entitiesCreated: 0 };
+    }
     try {
       console.log(`🎙️ Extracting facts from Podcast Episode ${episodeNumber}: "${title}"`);
 

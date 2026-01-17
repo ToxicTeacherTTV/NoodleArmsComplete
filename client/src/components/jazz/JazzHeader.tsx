@@ -42,12 +42,10 @@ export const JazzHeader = ({
                     className="hidden sm:flex"
                 >
                     <ToggleGroupItem value="PODCAST" className={cn(appMode === "PODCAST" && "animate-spring")}>
-                        <i className="fas fa-podcast mr-2" />
-                        Podcast
+<i className="fas fa-podcast mr-2" /> Podcast
                     </ToggleGroupItem>
                     <ToggleGroupItem value="STREAMING" className={cn(appMode === "STREAMING" && "animate-spring")}>
-                        <i className="fas fa-broadcast-tower mr-2" />
-                        Streaming
+<i className="fas fa-broadcast-tower mr-2" /> Streaming
                     </ToggleGroupItem>
                 </ToggleGroup>
 

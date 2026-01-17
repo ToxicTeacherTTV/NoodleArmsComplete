@@ -53,7 +53,7 @@ app.use((req, res, next) => {
       durationSeconds: duration / 1000
     });
     
-    if (path.startsWith("/api")) {
+      if (path.startsWith("/api") && !path.includes("/api/twitch/audio-queue")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
