@@ -173,7 +173,9 @@ export class ContextBuilder {
                 }));
             }
 
-            // 4. Contextual Re-ranking
+            // 4. Contextual Re-ranking with Freshness & Diversity
+            // PHASE 1 FIX: Importance/confidence now used for FILTERING only, not scoring
+            // Scoring is: similarity × freshnessBoost × (1 - retrievalPenalty)
             const seenIds = new Set();
             const combinedResults = [];
 
@@ -190,18 +192,30 @@ export class ContextBuilder {
             }));
 
             for (const result of semanticMemories) {
-                // Enforce confidence >= 60 for CANON grounding
+                // Confidence >= 60 is a FILTER (not a scoring factor)
                 if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
                     seenIds.add(result.id);
-                    combinedResults.push({ ...result, baseScore: result.similarity * 1.2 + (result.contextualRelevance || 0) * 0.3 });
+                    // Freshness boost: low retrieval count = boost (memories not seen often get +20%)
+                    const retrievalCount = result.retrievalCount || 0;
+                    const freshnessBoost = retrievalCount < 5 ? 1.2 : 1.0;
+                    // Retrieval penalty: high retrieval count = penalty (max -30% for overused memories)
+                    const retrievalPenalty = Math.min(retrievalCount * 0.03, 0.30);
+                    // Similarity is PRIMARY driver now
+                    const baseScore = result.similarity * freshnessBoost * (1 - retrievalPenalty);
+                    combinedResults.push({ ...result, baseScore });
                 }
             }
 
             for (const result of keywordMemories) {
-                // Enforce confidence >= 60 for CANON grounding
+                // Confidence >= 60 is a FILTER (not a scoring factor)
                 if (!seenIds.has(result.id) && (result.confidence || 50) >= 60) {
                     seenIds.add(result.id);
-                    combinedResults.push({ ...result, baseScore: 0.7 + (result.contextualRelevance || 0) * 0.3 });
+                    const retrievalCount = result.retrievalCount || 0;
+                    const freshnessBoost = retrievalCount < 5 ? 1.2 : 1.0;
+                    const retrievalPenalty = Math.min(retrievalCount * 0.03, 0.30);
+                    // Keyword matches get 0.7 base similarity
+                    const baseScore = 0.7 * freshnessBoost * (1 - retrievalPenalty);
+                    combinedResults.push({ ...result, baseScore });
                 }
             }
 
@@ -293,17 +307,53 @@ export class ContextBuilder {
         return Math.min(relevance, 1.0);
     }
 
+    /**
+     * PHASE 1 FIX: Strengthened diversity scoring
+     * - Skip memories with >60% keyword overlap with already-selected ones
+     * - Hard limit: max 2 memories from same source
+     * - Stronger penalty for type duplication
+     */
     private calculateDiversityScore(memory: any, selectedMemories: any[]): number {
         if (selectedMemories.length === 0) return 1.0;
+
         let penalty = 0;
-        const memoryKeywords = new Set(memory.keywords || []);
+        const memoryKeywords = new Set((memory.keywords || []).map((k: string) => k.toLowerCase()));
+        const memorySource = memory.source || memory.sourceId || '';
+
+        // Count memories from same source
+        let sameSourceCount = 0;
+
         for (const selected of selectedMemories) {
-            if (selected.type === memory.type) penalty += 0.1;
-            const selectedKeywords = new Set(selected.keywords || []);
+            // Hard limit: max 2 from same source
+            const selectedSource = selected.source || selected.sourceId || '';
+            if (selectedSource && memorySource && selectedSource === memorySource) {
+                sameSourceCount++;
+            }
+
+            // Type penalty (stronger than before)
+            if (selected.type === memory.type) penalty += 0.15;
+
+            // Keyword overlap check (SKIP if >60% overlap)
+            const selectedKeywords = new Set((selected.keywords || []).map((k: string) => k.toLowerCase()));
             const overlap = Array.from(memoryKeywords).filter(k => selectedKeywords.has(k)).length;
             const total = Math.max(memoryKeywords.size, selectedKeywords.size);
-            if (total > 0) penalty += (overlap / total) * 0.2;
+
+            if (total > 0) {
+                const overlapRatio = overlap / total;
+                // If >60% overlap with any selected memory, heavily penalize
+                if (overlapRatio > 0.6) {
+                    penalty += 0.5; // Strong penalty for near-duplicates
+                } else {
+                    penalty += overlapRatio * 0.25;
+                }
+            }
         }
+
+        // Hard limit: if already 2 from same source, return 0 (exclude)
+        if (sameSourceCount >= 2) {
+            return 0;
+        }
+
         return Math.max(0, 1.0 - penalty);
     }
 

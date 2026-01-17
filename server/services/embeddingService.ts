@@ -470,11 +470,13 @@ export class EmbeddingService {
         }
       });
 
-      // Sort combined results by similarity + importance + confidence
+      // Sort combined results by similarity with gentle importance tiebreaker
+      // Importance × 0.005 means importance=80 adds only +0.4 (not +8)
+      // This lets semantic relevance (0-1) be the primary driver
       const combined = Array.from(combinedMap.values())
         .sort((a, b) => {
-          const scoreA = a.similarity + (a.importance || 0) * 0.1 + (a.confidence || 0) * 0.001;
-          const scoreB = b.similarity + (b.importance || 0) * 0.1 + (b.confidence || 0) * 0.001;
+          const scoreA = a.similarity + (a.importance || 0) * 0.005;
+          const scoreB = b.similarity + (b.importance || 0) * 0.005;
           return scoreB - scoreA;
         })
         .slice(0, limit);

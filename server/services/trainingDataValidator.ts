@@ -64,6 +64,8 @@ const ALLOWED_ACCENTS = [
   '[strong bronx wiseguy accent]' // Legacy, map to canonical
 ];
 
+// Extended emotion tags for richer expression
+const ALLOWED_EXTENDED_EMOTIONS = [
   'furious', 'annoyed', 'grumpy', 'exasperated', 'unhinged', 'manic',
   'psycho', 'losing it', 'conspiratorial', 'suspicious', 'paranoid',
   'seething', 'disgusted', 'outraged', 'bitter', 'warm', 'genuine',
