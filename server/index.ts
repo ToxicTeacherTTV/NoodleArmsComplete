@@ -53,7 +53,16 @@ app.use((req, res, next) => {
       durationSeconds: duration / 1000
     });
     
-      if (path.startsWith("/api") && !path.includes("/api/twitch/audio-queue")) {
+      // Skip logging for noisy polling endpoints
+      const noisyEndpoints = [
+        "/api/twitch/audio-queue",
+        "/api/personality/state",
+        "/api/chaos/state",
+        "/api/chaos/personality"
+      ];
+      const isNoisy = noisyEndpoints.some(ep => path.includes(ep));
+
+      if (path.startsWith("/api") && !isNoisy) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
