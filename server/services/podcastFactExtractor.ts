@@ -317,17 +317,19 @@ JSON FORMAT:
         // Don't fail the whole operation if entity extraction fails
       }
 
-      // 📚 NEW: Create training example from transcript
-      if (transcript.length > 500) {
-        await this.createTrainingExampleFromTranscript(
-            storage,
-            profileId,
-            episodeId,
-            episodeNumber,
-            title,
-            transcript
-        );
-      }
+      // 📚 DISABLED: Training examples from transcripts aren't ideal
+      // Transcripts are conversational/reactive, not representative of Nicky's style
+      // Keeping this code for potential future use with better filtering
+      // if (transcript.length > 500) {
+      //   await this.createTrainingExampleFromTranscript(
+      //       storage,
+      //       profileId,
+      //       episodeId,
+      //       episodeNumber,
+      //       title,
+      //       transcript
+      //   );
+      // }
 
       return { success: true, factsCreated, entitiesCreated };
 
