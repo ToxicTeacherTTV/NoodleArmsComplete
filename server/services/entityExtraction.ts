@@ -225,26 +225,35 @@ ONLY extract entities that are:
 2. Important to Nicky's stories, relationships, or experiences
 3. Named or uniquely identifiable
 
-DO extract:
+DO extract (IN PRIORITY ORDER - family first!):
+
+**HIGHEST PRIORITY - NICKY'S FAMILY & PERSONAL RELATIONSHIPS:**
+- ANY family member mentioned (father, mother, cousin, uncle, aunt, grandmother, etc.)
+- If a name is given (e.g., "my father Salvatore Dente"), use that name with relationship in disambiguation
+- If no name is given (e.g., "my cousin"), use "Nicky's [Relationship]" as the name
+- Example: "My father... His name was Salvatore Dente" → name: "Salvatore Dente", disambiguation: "Nicky's Father", relationship: "father"
+- Example: "my cousin who lives in Jersey" → name: "Nicky's Cousin", disambiguation: "Cousin who lives in Jersey", relationship: "cousin"
+- ALSO extract "my mother" / "his mother" even if unnamed → name: "Nicky's Mother", relationship: "mother"
+
+**HIGH PRIORITY - NICKY'S PERSONAL CONNECTIONS:**
+- Named people Nicky knows personally or talks about regularly
+- The Host/Toxic (the human co-host)
+- Friends, acquaintances, people from stories
+
+**NORMAL PRIORITY - OTHER ENTITIES:**
 - Named game characters with source context (e.g., "Victor (DBD Character)", "Raider (Arc Raiders Character)")
-- Named people (Nicky, The Host, specific developers, real people)
+- Named celebrities, developers, real people mentioned in passing
 - Named places (Little Italy, specific restaurants, locations, game maps with source context)
 - Named shows/media/games as EVENT entities (e.g., "Arc Raiders", "Dead by Daylight", "Stranger Things")
 - Specific events with dates or context
 - Specific game mechanics or lore terms as CONCEPTS (e.g., "The Entity", "Gen Rushing", "Tunneling")
 - Specific items or objects as ITEMS (e.g., "Medkit", "Key", "Grandma's Recipe Book")
 
-PHASE 3 FIX - RELATIONAL REFERENCES (IMPORTANT!):
-Extract relational references like "his father", "my cousin", "Nicky's uncle" as PERSON entities.
-These should be extracted even without a proper name, using the relationship as the identifier.
-Examples:
-- "his father" → name: "Nicky's Father", disambiguation: "Father of Nicky", relationship: "father"
-- "my cousin" → name: "Nicky's Cousin", disambiguation: "Cousin of Nicky", relationship: "cousin"
-- "the old man's brother" → name: "Nicky's Father's Brother", disambiguation: "Uncle of Nicky", relationship: "uncle"
+CRITICAL: Family members are MORE important than celebrities. If "Salvatore Dente" is mentioned as Nicky's father, extract him BEFORE extracting random celebrities.
 
-For relational entities, ALWAYS:
-1. Use "Nicky's [Relationship]" as the canonical name if no proper name is given
-2. Include the relationship type in the disambiguation field
+For ALL family/relational entities, ALWAYS:
+1. Use the actual name if given, otherwise use "Nicky's [Relationship]"
+2. Include the relationship in the disambiguation field (e.g., "Nicky's Father")
 3. Set the relationship field to the relationship type (father, mother, cousin, uncle, etc.)
 
 DO NOT extract:
