@@ -135,13 +135,25 @@ You currently have **EIGHT** different scoring mechanisms. Here's what each one 
 - **Cost:** 50ms
 - **Used in:** Primary ranking (if not found in semantic)
 
-### 3. **Importance** (0-999)
-- **Source:** Memory field, manually set or auto-calculated
-- **Contribution:** `importance * 0.1` (max +99.9)
+### 3. **Importance** (1-100)
+- **Source:** Memory field, set during extraction based on AI assessment
+- **Scale (as of v1.9.0):**
+  - 1-25: Minor details, trivial info
+  - 26-45: Standard facts, common details
+  - 46-60: Notable facts (MOST facts should be here)
+  - 61-75: Important facts, key traits
+  - 76-100: CRITICAL ONLY - core identity facts (use sparingly!)
+- **Contribution:** `importance * 0.005` (max +0.5) - reduced in v1.8.0
 - **Used in:** Base score, contextual relevance
 
-### 4. **Confidence** (0-100)
-- **Source:** Memory field
+### 4. **Confidence** (1-100)
+- **Source:** Memory field, set during extraction and boosted on duplicates
+- **Tiers (as of v1.9.0):**
+  - 1-59: Low confidence, unverified content
+  - 60-75: Standard auto-extracted content
+  - 76-85: Boosted/frequently confirmed facts (auto-ceiling for non-protected)
+  - 86-99: Human-verified content (manual only)
+  - 100: Protected core identity facts only
 - **Contribution:** `confidence * 0.001` (max +0.1)
 - **Used in:** Base score, contextual relevance, HARD FILTER (must be >= 60 for CANON)
 
@@ -217,20 +229,23 @@ TOTAL:                      ~710ms      1            7 queries
 
 Given this message: **"Hey Nicky, what's your favorite pasta?"**
 
-### Memories in Database (4,136 total):
+### Memories in Database (3,679 total):
 
 ```
 ID   | Content                                    | Lane   | Conf | Importance
 ──────────────────────────────────────────────────────────────────────────────
-M1   | Nicky's favorite pasta is carbonara       | CANON  | 95   | 200
-M2   | Nicky HATES cream in carbonara            | CANON  | 90   | 180
-M3   | Carbonara must have guanciale, not bacon  | CANON  | 85   | 150
-M4   | Nicky once threw a plate at someone       | RUMOR  | 30   | 50
+M1   | Nicky's favorite pasta is carbonara       | CANON  | 82   | 75
+M2   | Nicky HATES cream in carbonara            | CANON  | 78   | 65
+M3   | Carbonara must have guanciale, not bacon  | CANON  | 75   | 55
+M4   | Nicky once threw a plate at someone       | RUMOR  | 30   | 40
      | who used cream
-M5   | Nicky's grandmother taught him to cook    | CANON  | 70   | 120
-M6   | Penne is acceptable but rigatoni is best  | CANON  | 65   | 100
-M7   | Nicky's favorite color is red             | CANON  | 80   | 50
-M8   | Nicky has 200 hours in Dead by Daylight   | CANON  | 95   | 80
+M5   | Nicky's grandmother taught him to cook    | CANON  | 70   | 60
+M6   | Penne is acceptable but rigatoni is best  | CANON  | 65   | 45
+M7   | Nicky's favorite color is red             | CANON  | 72   | 35
+M8   | Nicky has 200 hours in Dead by Daylight   | CANON  | 80   | 50
+
+Note: As of v1.9.0, confidence values cap at 85 for auto-extracted content.
+Values 86+ are reserved for human-verified facts, 100 for protected facts only.
 ```
 
 ### Step 1: Keyword Extraction
@@ -256,68 +271,72 @@ Keywords: ["nicky", "favorite", "pasta"]
 
 **M1: Carbonara is favorite**
 ```
-Base score = 0.92 * 1.2 + 200 * 0.1 + 95 * 0.001
-           = 1.104 + 20.0 + 0.095
-           = 21.199
+Base score = 0.92 * 1.2 + 75 * 0.005 + 82 * 0.001
+           = 1.104 + 0.375 + 0.082
+           = 1.561
 
 Contextual relevance = 0.5 (base)
                      + 0.4 (PREFERENCE matches "favorite" intent)
-                     + 0.5 (importance contribution)
-                     + 0.095 (confidence contribution)
+                     + 0.1875 (importance contribution: 75/100 * 0.25)
+                     + 0.082 (confidence contribution)
                      + 0.3 (3 keyword matches)
                      = 1.0 (capped)
 
 Diversity = 1.0 (first result, no penalty)
 
-Final score = 21.199 * 1.0 + 1.0 * 0.3 = 21.499
+Final score = 1.561 * 1.0 + 1.0 * 0.3 = 1.861
 ```
 
 **M7: Favorite color is red**
 ```
-Base score = 0.55 * 1.2 + 50 * 0.1 + 80 * 0.001
-           = 0.66 + 5.0 + 0.08
-           = 5.74
+Base score = 0.55 * 1.2 + 35 * 0.005 + 72 * 0.001
+           = 0.66 + 0.175 + 0.072
+           = 0.907
 
 Contextual relevance = 0.5 + 0.1 (keyword: "favorite") = 0.6
 
 Diversity = 1.0 - 0.1 (same type: PREFERENCE) = 0.9
 
-Final score = 5.74 * 0.9 + 0.6 * 0.3 = 5.35
+Final score = 0.907 * 0.9 + 0.6 * 0.3 = 0.996
 ```
 
 **M8: Dead by Daylight hours**
 ```
-Base score = 0.45 * 1.2 + 80 * 0.1 + 95 * 0.001
-           = 0.54 + 8.0 + 0.095
-           = 8.635
+Base score = 0.45 * 1.2 + 50 * 0.005 + 80 * 0.001
+           = 0.54 + 0.25 + 0.08
+           = 0.87
 
 Contextual relevance = 0.5 (base only, no matches)
 
 Diversity = 1.0 - 0.2 (no type match but keyword overlap with "Nicky")
 
-Final score = 8.635 * 0.8 + 0.5 * 0.3 = 7.06
+Final score = 0.87 * 0.8 + 0.5 * 0.3 = 0.846
 ```
+
+**Note (v1.9.0):** With the reduced importance multiplier (0.005 vs old 0.1),
+semantic similarity now dominates scoring. High-importance but irrelevant
+memories no longer overwhelm the results.
 
 ### Step 4: Filtering
 
 **CANON Filter** (confidence >= 60):
-- ✅ M1 (95) → KEEP
-- ✅ M2 (90) → KEEP
-- ✅ M3 (85) → KEEP
+- ✅ M1 (82) → KEEP
+- ✅ M2 (78) → KEEP
+- ✅ M3 (75) → KEEP
 - ❌ M4 (30) → RUMOR lane, skip in normal chat
 - ✅ M5 (70) → KEEP
 - ✅ M6 (65) → KEEP
-- ✅ M7 (80) → KEEP (but low relevance score)
-- ✅ M8 (95) → KEEP (but low relevance score)
+- ✅ M7 (72) → KEEP (but low relevance score)
+- ✅ M8 (80) → KEEP (but low relevance score)
 
 **Sort by Final Score:**
-1. M1 (21.499)
-2. M2 (similar high score)
-3. M3 (similar high score)
-4. M8 (7.06) - IRRELEVANT but high base score!
-5. M5 (moderate)
-6. M6 (moderate)
-7. M7 (5.35) - Wrong topic!
+1. M1 (1.861) - Best semantic match + importance
+2. M2 (similar high score) - Related pasta content
+3. M3 (similar high score) - Related pasta content
+4. M5 (moderate) - Cooking context
+5. M6 (moderate) - Pasta types
+6. M7 (0.996) - Wrong topic, but still passed filter
+7. M8 (0.846) - Irrelevant, but now properly ranked LOW due to v1.8.0 fix!
 
 ### Step 5: Returned to Gemini (top 8)
 
@@ -326,14 +345,15 @@ Final score = 8.635 * 0.8 + 0.5 * 0.3 = 7.06
 - Nicky's favorite pasta is carbonara
 - Nicky HATES cream in carbonara
 - Carbonara must have guanciale, not bacon
-- Nicky has 200 hours in Dead by Daylight ← IRRELEVANT!
 - Nicky's grandmother taught him to cook
 - Penne is acceptable but rigatoni is best
-- (M7 might be filtered by limit)
-- (M8 got through due to high importance!)
+- Nicky's favorite color is red (low relevance, may be filtered by limit)
+- Nicky has 200 hours in Dead by Daylight (lowest score, likely filtered)
 ```
 
-**Notice:** M8 (Dead by Daylight) made it through because it has high `importance` (80) and `confidence` (95), even though it's completely irrelevant to pasta!
+**v1.8.0+ Improvement:** M8 (Dead by Daylight) now ranks LAST because semantic
+similarity dominates scoring. The importance multiplier fix (0.1 → 0.005)
+prevents high-importance but irrelevant memories from overwhelming results.
 
 ---
 
@@ -345,13 +365,18 @@ Final score = 8.635 * 0.8 + 0.5 * 0.3 = 7.06
 3. **Lane filtering** (CANON vs RUMOR) is a good concept
 4. **Confidence threshold** prevents low-quality memories
 
-### What's Broken:
-1. **Importance and confidence are too heavily weighted** - Unrelated but "important" memories get through
-2. **Too many scoring layers** - 8 different mechanisms that overlap
-3. **Retrieval count** is barely used (only in vector ranking)
-4. **Success rate** is tracked but never used
-5. **Contextual relevance calculation is expensive** (10ms × 50 memories = 500ms wasted)
-6. **Diversity scoring** is applied AFTER retrieval, should be during
+### What Was Broken (Fixed in v1.8.0 & v1.9.0):
+1. ~~**Importance and confidence too heavily weighted**~~ ✅ FIXED v1.8.0: Importance multiplier reduced from 0.1 to 0.005
+2. ~~**Confidence inflation**~~ ✅ FIXED v1.9.0: Auto-ceiling at 85, slower boost growth (+3 vs +10)
+3. ~~**Importance always increasing**~~ ✅ FIXED v1.9.0: Now uses weighted average instead of MAX
+4. ~~**Patch notes importance: 850**~~ ✅ FIXED v1.9.0: Now correctly 35-65 on 1-100 scale
+
+### Remaining Issues:
+1. **Too many scoring layers** - 8 different mechanisms that overlap
+2. **Retrieval count** is barely used (only in vector ranking)
+3. **Success rate** is tracked but never used
+4. **Contextual relevance calculation is expensive** (10ms × 50 memories = 500ms wasted)
+5. **Diversity scoring** is applied AFTER retrieval, should be during
 
 ### Performance Issues:
 1. **Embedding generation on EVERY message** (200ms + API cost)

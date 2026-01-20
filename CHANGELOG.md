@@ -18,6 +18,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.0] - 2026-01-19
+
+### Fixed - Importance/Confidence Inflation (Critical)
+
+Major overhaul to fix inflated importance and confidence values that were causing retrieval issues.
+
+#### Document Classification (`documentProcessor.ts`)
+- **Profile Detection:** Added filename patterns for `profile`, `character`, `lore`, `bio`, `biography`, `backstory`, `facts`, `data`, `info`, `wiki`, `reference`, `notes`
+- **Content Detection:** New "about Nicky" pattern matching detects third-person descriptions (e.g., "Nicky is...", "Nicky's streaming...")
+- **Default Fix:** Documents with 0 Nicky turns now default to `informational` mode instead of `conversational`
+- **`.docx` Bug:** Fixed false positive where `.docx` extension matched "doc" pattern, giving all Word docs +20 confidence boost
+
+#### AI Extraction Prompts (`gemini.ts`)
+- **Importance Guidance:** Added detailed scale with examples:
+  - 1-25: Minor details, trivial info
+  - 26-45: Standard facts, common details
+  - 46-60: Notable facts (MOST facts should be here)
+  - 61-75: Important facts, key traits
+  - 76-100: CRITICAL ONLY - core identity facts
+- **Example Fix:** Changed example importance from `80` to `45`
+- **Warning:** Added "⚠️ MOST facts should be importance 35-55"
+
+#### Confidence Calculation (`documentProcessor.ts`, `storage.ts`)
+- **Source Boost:** Reduced from +20 to +15 for official docs, +15 to +10 for notes
+- **Importance Boost:** Reduced from `/5` (0-20 range) to `/10` (0-10 range)
+- **Max Cap:** Reduced from 95 to 85 for auto-extracted content
+- **Duplicate Boost:** Reduced from +10 to +3 per duplicate encounter
+- **Auto-Ceiling:** Non-protected facts now cap at 85 confidence (reserves 90+ for manual verification)
+
+#### Importance Merge Logic (`storage.ts`)
+- **Old:** `GREATEST(old, new)` - importance only ever increased
+- **New:** `(old * 0.6 + new * 0.4)` - weighted average favoring stability
+
+#### Patch Notes Processor (`patchNotesProcessor.ts`)
+- **CRITICAL BUG:** Fixed `importance: 850, 900, 700, 500` → now `65, 50, 35` (was completely off 1-100 scale!)
+- **Confidence:** Reduced from 99 to 75
+
+#### Podcast Fact Extractor (`podcastFactExtractor.ts`)
+- **Importance Normalization:** Added detection for 1-10 scale values, auto-converts to 1-100
+- **Confidence:** Reduced from 95 to 75
+
+#### Fact Merge Endpoint (`routes.ts`)
+- **Old:** Hardcoded `confidence: 100` for merged facts
+- **New:** Calculated from source facts average + 5, capped at 85
+
+### Added - Database Migration Script
+- **Script:** `server/scripts/normalize-importance-confidence.ts`
+- **Purpose:** Normalizes existing inflated values in database
+- **Dry Run:** Shows distribution before/after without changes
+- **Apply:** Use `--apply` flag to commit changes
+- **Results:** Normalized 4,008 entries
+  - Confidence 100 (non-protected): 28.1% → 0.2%
+  - Confidence 86-99: 50.9% → 0.1%
+  - Confidence 76-85: 11.9% → 90.4%
+  - Importance 81-100: 34.2% → 3.9%
+  - Importance 61-80: 24.7% → 55.1%
+
+### New Confidence Tiers
+| Tier | Range | Purpose |
+|------|-------|---------|
+| Low | 1-59 | Unverified, rumor-like |
+| Standard | 60-75 | Auto-extracted content |
+| Boosted | 76-85 | Frequently confirmed facts |
+| Manual | 86-99 | Human-verified content |
+| Protected | 100 | Core identity facts only |
+
+---
+
 ## [1.8.0] - 2026-01-17
 
 ### Fixed - Memory Retrieval System (Critical)

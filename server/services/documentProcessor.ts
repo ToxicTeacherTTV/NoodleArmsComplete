@@ -1,5 +1,6 @@
 import { storage } from "../storage";
-import { Document } from "@shared/schema";
+import { Document, loreRelationships, InsertLoreRelationship } from "@shared/schema";
+import { db } from "../db";
 import pdf from 'pdf-parse';
 import mammoth from 'mammoth';
 import { aiOrchestrator } from './aiOrchestrator';
@@ -241,9 +242,19 @@ class DocumentProcessor {
     await storage.updateDocument(documentId, { processingProgress: 5 });
 
     try {
+      // Step 0: Generate document summary for context injection (NEW)
+      console.log(`📋 Generating document summary for context injection...`);
+      let documentSummary: string | undefined;
+      try {
+        documentSummary = await aiOrchestrator.generateDocumentSummary(content, filename, modelOverride);
+        console.log(`✅ Document summary generated (${documentSummary.length} chars)`);
+      } catch (summaryError) {
+        console.warn(`⚠️ Failed to generate document summary, continuing without it:`, summaryError);
+      }
+
       // Just call the full extraction method and update progress along the way
       // This does ALL the entity extraction, story parsing, etc.
-      await this.extractAndStoreHierarchicalKnowledgeWithProgress(profileId, content, filename, documentId, modelOverride);
+      await this.extractAndStoreHierarchicalKnowledgeWithProgress(profileId, content, filename, documentId, modelOverride, documentSummary);
 
       console.log(`✅ Full background extraction completed for ${filename}`);
     } catch (error) {
@@ -258,7 +269,8 @@ class DocumentProcessor {
     content: string,
     filename: string,
     documentId: string,
-    modelOverride?: AIModel
+    modelOverride?: AIModel,
+    documentSummary?: string
   ): Promise<void> {
     // Step 1: Chunk large documents to prevent API overload
     await storage.updateDocument(documentId, { processingProgress: 10 });
@@ -312,9 +324,10 @@ class DocumentProcessor {
         const chunkIndex = i + index;
         try {
           return await aiOrchestrator.extractStoriesFromDocument(
-            chunk, 
-            `${filename} (chunk ${chunkIndex + 1})`, 
-            (modelOverride || 'gemini-3-flash-preview') as AIModel
+            chunk,
+            `${filename} (chunk ${chunkIndex + 1})`,
+            (modelOverride || 'gemini-3-flash-preview') as AIModel,
+            documentSummary // Pass document summary for context injection
           );
         } catch (err) {
           console.error(`❌ Error processing chunk ${chunkIndex + 1}:`, err);
@@ -365,18 +378,20 @@ class DocumentProcessor {
 
     await storage.updateDocument(documentId, { processingProgress: 40 });
 
-    // Step 3: Extract atomic facts from stories (40% -> 95%)
-    console.log(`⚛️ Extracting atomic facts from stories...`);
+    // Step 3: Extract atomic facts AND relationship triples from stories (40% -> 95%)
+    console.log(`⚛️ Extracting atomic facts and relationships from stories...`);
     let totalAtomicFacts = 0;
+    let totalRelationships = 0;
 
     for (let i = 0; i < stories.length; i++) {
       const story = stories[i];
       // PHASE 2 FIX: Store full story context (up to 2000 chars) instead of 200
       // This preserves context for atomic facts and prevents story truncation
       const storyContextSnippet = story.content.substring(0, 2000);
-      const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(story.content, storyContextSnippet, (modelOverride || 'gemini-3-flash-preview') as AIModel);
+      const extractionResult = await aiOrchestrator.extractAtomicFactsFromStory(story.content, storyContextSnippet, (modelOverride || 'gemini-3-flash-preview') as AIModel);
 
-      for (const atomicFact of atomicFacts) {
+      // Store atomic facts
+      for (const atomicFact of extractionResult.facts) {
         const canonicalKey = this.generateCanonicalKey(atomicFact.content);
         await storage.addMemoryEntry({
           profileId,
@@ -395,6 +410,29 @@ class DocumentProcessor {
         totalAtomicFacts++;
       }
 
+      // Store extracted relationship triples in loreRelationships
+      for (const rel of extractionResult.relationships) {
+        try {
+          const relationshipData: InsertLoreRelationship = {
+            profileId,
+            entityType1: rel.subjectType,
+            entityId1: rel.subject.toLowerCase().replace(/\s+/g, '_'),
+            entityName1: rel.subject,
+            entityType2: rel.objectType,
+            entityId2: rel.object.toLowerCase().replace(/\s+/g, '_'),
+            entityName2: rel.object,
+            relationshipType: rel.predicate,
+            strength: rel.strength,
+            description: `${rel.subject} ${rel.predicate.replace(/_/g, ' ')} ${rel.object}`,
+            status: 'active'
+          };
+          await db.insert(loreRelationships).values(relationshipData).onConflictDoNothing();
+          totalRelationships++;
+        } catch (relError) {
+          console.warn(`⚠️ Failed to store relationship ${rel.subject} -> ${rel.object}:`, relError);
+        }
+      }
+
       // Update progress based on stories processed
       const progress = 40 + Math.floor((i + 1) / stories.length * 55);
       await storage.updateDocument(documentId, { processingProgress: Math.min(progress, 95) });
@@ -403,7 +441,7 @@ class DocumentProcessor {
       await new Promise(resolve => setTimeout(resolve, 200));
     }
 
-    console.log(`✅ Extracted ${totalAtomicFacts} atomic facts from ${stories.length} stories`);
+    console.log(`✅ Extracted ${totalAtomicFacts} atomic facts and ${totalRelationships} relationships from ${stories.length} stories`);
   }
 
   // Enhanced chunking with global entity extraction and story arc detection
@@ -497,10 +535,14 @@ class DocumentProcessor {
 
   /**
    * Classify content as conversational vs informational
+   *
+   * IMPROVED: Better detection for profile/lore documents that describe Nicky
+   * rather than conversations WITH Nicky
    */
   private classifyContent(content: string, filename: string): { mode: 'conversational' | 'informational', metrics: any } {
     const lines = content.split('\n');
     const contentLength = content.length;
+    const lowerFilename = filename.toLowerCase();
 
     // Calculate features for classification
     const questionCount = (content.match(/[?]/g) || []).length;
@@ -513,8 +555,32 @@ class DocumentProcessor {
     const parsed = conversationParser.parseConversation(content, filename);
     const nickyTurns = parsed.turns.filter(t => t.speaker === 'nicky').length;
     const userTurns = parsed.turns.filter(t => t.speaker === 'user').length;
+    const unknownTurns = parsed.turns.filter(t => t.speaker === 'unknown').length;
     const totalTurns = parsed.totalTurns;
     const nickyContentRatio = parsed.nickyContent.length / contentLength;
+
+    // NEW: Detect content that is ABOUT Nicky (informational) vs FROM Nicky (conversational)
+    // These patterns indicate third-person descriptions of Nicky, not Nicky speaking
+    const aboutNickyPatterns = [
+      /nicky('s|'s|\s+is|\s+has|\s+was|\s+claims|\s+believes|\s+plays|\s+uses|\s+maintains)/gi,
+      /nicky\s+(noodle\s+)?arms('s|'s|\s+is|\s+has|\s+was)/gi,
+      /nicholas\s+.*\s+dente/gi,
+      /the\s+(vice\s+)?don\s+(is|has|was|claims)/gi,
+      /his\s+(streaming|gaming|podcast|twitch)/gi,
+    ];
+    const aboutNickyCount = aboutNickyPatterns.reduce((count, pattern) => {
+      return count + (content.match(pattern) || []).length;
+    }, 0);
+
+    // NEW: Expanded filename patterns for informational documents
+    const informationalFilenamePatterns = [
+      'profile', 'character', 'lore', 'bio', 'biography', 'backstory',
+      'facts', 'data', 'info', 'wiki', 'reference', 'notes',
+      'guide', 'patch', 'manual', 'doc', 'documentation'
+    ];
+    const hasInformationalFilename = informationalFilenamePatterns.some(pattern =>
+      lowerFilename.includes(pattern)
+    ) || lowerFilename.endsWith('.pdf');
 
     const metrics = {
       contentLength,
@@ -526,31 +592,56 @@ class DocumentProcessor {
       totalTurns,
       nickyTurns,
       userTurns,
-      nickyContentRatio
+      unknownTurns,
+      nickyContentRatio,
+      aboutNickyCount,
+      hasInformationalFilename
     };
 
-    // Classification logic - conservative approach
+    // Classification logic - improved approach
     const isConversational = (
-      (totalTurns >= 6 && (nickyTurns >= 2 || nickyContentRatio >= 0.15)) ||
-      (questionCount >= 3 && dialogueMarkers >= 4) ||
-      (nickyTurns >= 2 && userTurns >= 2)
+      // Must have actual Nicky turns with meaningful content ratio
+      (totalTurns >= 6 && nickyTurns >= 2 && nickyContentRatio >= 0.15) ||
+      // Clear dialogue markers with questions (back-and-forth conversation)
+      (questionCount >= 5 && dialogueMarkers >= 6 && nickyTurns >= 1) ||
+      // Balanced conversation between user and Nicky
+      (nickyTurns >= 3 && userTurns >= 3)
     );
 
     const isInformational = (
-      (totalTurns < 6 && sectionHeaders >= 3) ||
-      (nickyContentRatio < 0.05 && longParagraphs > 5) ||
+      // Filename suggests informational content
+      hasInformationalFilename ||
+      // No Nicky turns but content is ABOUT Nicky (third-person descriptions)
+      (nickyTurns === 0 && aboutNickyCount >= 3) ||
+      // Very low Nicky content ratio with long paragraphs (descriptive content)
+      (nickyContentRatio < 0.05 && longParagraphs >= 3) ||
+      // Document structure with section headers
+      (sectionHeaders >= 3) ||
+      // Long average lines with headers (structured document)
       (avgLineLength > 100 && sectionHeaders >= 2) ||
-      filename.toLowerCase().includes('guide') ||
-      filename.toLowerCase().includes('patch') ||
-      filename.toLowerCase().includes('manual') ||
-      filename.toLowerCase().includes('.pdf')
+      // Most turns are unknown/misclassified (not a real conversation)
+      (unknownTurns > nickyTurns + userTurns && totalTurns >= 3)
     );
 
-    // Default to conversational to preserve existing behavior
-    const mode = isInformational && !isConversational ? 'informational' : 'conversational';
+    // Decision: prefer informational if detected, otherwise check conversational
+    // This fixes the issue where profile docs were being treated as conversations
+    let mode: 'conversational' | 'informational';
+    if (isInformational && !isConversational) {
+      mode = 'informational';
+    } else if (isConversational && !isInformational) {
+      mode = 'conversational';
+    } else if (isInformational && isConversational) {
+      // Both match - use aboutNickyCount to break the tie
+      // If content describes Nicky in third person, it's likely informational
+      mode = aboutNickyCount >= 5 ? 'informational' : 'conversational';
+    } else {
+      // Neither match - use heuristics
+      // If no Nicky turns found, default to informational (avoid conversation parsing issues)
+      mode = nickyTurns === 0 ? 'informational' : 'conversational';
+    }
 
     console.log(`📊 Content classification for ${filename}: ${mode}`);
-    console.log(`📈 Metrics: turns=${totalTurns}, nicky=${nickyTurns}, ratio=${nickyContentRatio.toFixed(3)}, headers=${sectionHeaders}`);
+    console.log(`📈 Metrics: turns=${totalTurns}, nicky=${nickyTurns}, unknown=${unknownTurns}, ratio=${nickyContentRatio.toFixed(3)}, aboutNicky=${aboutNickyCount}, headers=${sectionHeaders}`);
 
     return { mode, metrics };
   }
@@ -629,8 +720,9 @@ class DocumentProcessor {
       }
 
       // PASS 2: Extract atomic facts from each story
-      console.log(`🔬 Pass 2: Extracting atomic facts from stories...`);
+      console.log(`🔬 Pass 2: Extracting atomic facts and relationships from stories...`);
       let totalAtomicFacts = 0;
+      let totalRelationships = 0;
       const atomicFactIds: string[] = []; // Track atomic fact IDs for batched entity extraction
 
       for (let i = 0; i < stories.length; i++) {
@@ -640,16 +732,16 @@ class DocumentProcessor {
         if (!storyId) continue;
 
         try {
-          const atomicFacts = await aiOrchestrator.extractAtomicFactsFromStory(
+          const extractionResult = await aiOrchestrator.extractAtomicFactsFromStory(
             story.content,
             `${story.type}: ${story.keywords.join(', ')}`,
             (modelOverride || 'gemini-3-flash-preview') as AIModel
           );
 
-          console.log(`⚛️ Extracted ${atomicFacts.length} atomic facts from story ${i + 1}`);
+          console.log(`⚛️ Extracted ${extractionResult.facts.length} atomic facts and ${extractionResult.relationships.length} relationships from story ${i + 1}`);
 
           // Store atomic facts linked to parent story
-          for (const atomicFact of atomicFacts) {
+          for (const atomicFact of extractionResult.facts) {
             const atomicCanonicalKey = this.generateCanonicalKey(atomicFact.content);
 
             const atomicMemory = await storage.addMemoryEntry({
@@ -676,13 +768,36 @@ class DocumentProcessor {
             //  OPTIMIZATION: Skip per-memory entity extraction, batch it at the end
             // Entities will be extracted in one batch after all memories are created
           }
+
+          // Store extracted relationship triples in loreRelationships
+          for (const rel of extractionResult.relationships) {
+            try {
+              const relationshipData: InsertLoreRelationship = {
+                profileId,
+                entityType1: rel.subjectType,
+                entityId1: rel.subject.toLowerCase().replace(/\s+/g, '_'),
+                entityName1: rel.subject,
+                entityType2: rel.objectType,
+                entityId2: rel.object.toLowerCase().replace(/\s+/g, '_'),
+                entityName2: rel.object,
+                relationshipType: rel.predicate,
+                strength: rel.strength,
+                description: `${rel.subject} ${rel.predicate.replace(/_/g, ' ')} ${rel.object}`,
+                status: 'active'
+              };
+              await db.insert(loreRelationships).values(relationshipData).onConflictDoNothing();
+              totalRelationships++;
+            } catch (relError) {
+              console.warn(`⚠️ Failed to store relationship ${rel.subject} -> ${rel.object}:`, relError);
+            }
+          }
         } catch (error) {
           console.error(`❌ Failed to extract atomic facts from story ${i + 1}:`, error);
           // Continue with other stories
         }
       }
 
-      console.log(`✅ Extracted ${totalAtomicFacts} atomic facts from ${stories.length} stories`);
+      console.log(`✅ Extracted ${totalAtomicFacts} atomic facts and ${totalRelationships} relationships from ${stories.length} stories`);
     } catch (error) {
       console.error('❌ Hierarchical knowledge extraction failed:', error);
       // Fallback to legacy extraction
@@ -1039,22 +1154,29 @@ class DocumentProcessor {
     let baseConfidence = 50; // Default medium confidence
 
     // Boost confidence based on importance (1-100 scale)
-    // High importance facts from documents are usually more reliable
-    const importanceBoost = Math.floor(importance / 5); // 0-20 point boost
+    // Scale down the boost to prevent inflated confidence
+    const importanceBoost = Math.floor(importance / 10); // 0-10 point boost (was /5 = 0-20)
 
     // Boost confidence based on source type
+    // FIX: Use word boundaries to avoid matching file extensions like .docx
     let sourceBoost = 0;
     const lowerFilename = filename.toLowerCase();
+    // Remove file extension for pattern matching
+    const filenameWithoutExt = lowerFilename.replace(/\.[^.]+$/, '');
 
-    if (lowerFilename.includes('official') || lowerFilename.includes('doc')) {
-      sourceBoost = 20; // Official documentation
-    } else if (lowerFilename.includes('note') || lowerFilename.includes('fact')) {
-      sourceBoost = 15; // Personal notes/facts
-    } else if (lowerFilename.includes('chat') || lowerFilename.includes('log')) {
+    if (lowerFilename.includes('official') || filenameWithoutExt.includes('documentation')) {
+      sourceBoost = 15; // Official documentation (reduced from 20)
+    } else if (filenameWithoutExt.includes('note') || filenameWithoutExt.includes('fact')) {
+      sourceBoost = 10; // Personal notes/facts (reduced from 15)
+    } else if (lowerFilename.includes('chat') || filenameWithoutExt.includes('log') || lowerFilename.includes('transcript')) {
       sourceBoost = 5;  // Chat logs or conversation logs
     }
+    // Profile/lore documents get a small boost for being curated content
+    else if (filenameWithoutExt.includes('profile') || filenameWithoutExt.includes('lore') || filenameWithoutExt.includes('character')) {
+      sourceBoost = 8;
+    }
 
-    const confidence = Math.min(95, baseConfidence + importanceBoost + sourceBoost);
+    const confidence = Math.min(85, baseConfidence + importanceBoost + sourceBoost); // Reduced max from 95 to 85
     return Math.max(30, confidence); // Minimum 30% confidence
   }
 }

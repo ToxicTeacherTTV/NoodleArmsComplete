@@ -10,6 +10,7 @@ import {
   memoryEntries,
   contentLibrary,
   chaosState,
+  heatState,
   personalityState,
   loreEvents,
   loreCharacters,
@@ -66,6 +67,8 @@ import {
   type InsertContentLibraryEntry,
   type ChaosState,
   type InsertChaosState,
+  type HeatState,
+  type InsertHeatState,
   type LoreEvent,
   type InsertLoreEvent,
   type LoreCharacter,
@@ -216,6 +219,10 @@ export interface IStorage {
   // Chaos State management
   getChaosState(): Promise<ChaosState | undefined>;
   createOrUpdateChaosState(state: InsertChaosState): Promise<ChaosState>;
+
+  // Heat State management (simplified personality system)
+  getHeatState(): Promise<HeatState | undefined>;
+  createOrUpdateHeatState(state: InsertHeatState): Promise<HeatState>;
 
   // Personality State management
   getPersonalityState(profileId: string): Promise<any | undefined>;
@@ -1079,10 +1086,12 @@ export class DatabaseStorage implements IStorage {
             .limit(1);
           if (existing.length > 0) {
             // Update confidence and support count on existing memory
+            // FIXED: Slower confidence growth (+3 instead of +10) with ceiling of 85 for auto-boosted
+            const currentConf = existing[0].confidence || 50;
             const [updated] = await db
               .update(memoryEntries)
               .set({
-                confidence: sql`LEAST(100, ${existing[0].confidence || 50} + 10)`,
+                confidence: sql`LEAST(85, ${currentConf} + 3)`, // Slower growth, max 85 for duplicates
                 supportCount: sql`${existing[0].supportCount || 1} + 1`,
                 lastSeenAt: sql`now()`,
                 updatedAt: sql`now()`
@@ -1115,17 +1124,20 @@ export class DatabaseStorage implements IStorage {
         target: [memoryEntries.profileId, memoryEntries.canonicalKey, memoryEntries.lane],
         set: {
           // === Counter updates ===
-          // Increment confidence (max 100 for CANON, max 40 for RUMOR)
+          // FIXED: Slower confidence growth (+3 instead of +10) with lower ceilings
+          // Auto-boosted confidence caps at 85 to reserve 90+ for manually verified facts
           confidence: finalEntry.lane === 'RUMOR'
-            ? sql`LEAST(40, COALESCE(${memoryEntries.confidence}, 25) + 5)`
-            : sql`LEAST(100, COALESCE(${memoryEntries.confidence}, 50) + 10)`,
+            ? sql`LEAST(40, COALESCE(${memoryEntries.confidence}, 25) + 2)` // Slower RUMOR growth
+            : sql`LEAST(85, COALESCE(${memoryEntries.confidence}, 50) + 3)`, // Slower CANON growth, max 85
           // Increment support count
           supportCount: sql`COALESCE(${memoryEntries.supportCount}, 1) + 1`,
 
           // === Metadata updates (preserve existing values if new ones are null) ===
           type: sql`COALESCE(EXCLUDED.type, ${memoryEntries.type})`,
           content: sql`COALESCE(EXCLUDED.content, ${memoryEntries.content})`,
-          importance: sql`GREATEST(COALESCE(${memoryEntries.importance}, 0), COALESCE(EXCLUDED.importance, 0))`,
+          // FIXED: Use weighted average instead of MAX to prevent importance inflation
+          // New formula: (old * 0.6 + new * 0.4) - slightly favors existing value for stability
+          importance: sql`ROUND((COALESCE(${memoryEntries.importance}, 50) * 0.6 + COALESCE(EXCLUDED.importance, 50) * 0.4))`,
           source: sql`COALESCE(EXCLUDED.source, ${memoryEntries.source})`,
           sourceId: sql`COALESCE(EXCLUDED.source_id, ${memoryEntries.sourceId})`,
           origin: sql`COALESCE(EXCLUDED.origin, ${memoryEntries.origin})`,
@@ -2150,6 +2162,48 @@ export class DatabaseStorage implements IStorage {
       const [newState] = await db
         .insert(chaosState)
         .values([insertData as any])
+        .returning();
+      return newState;
+    }
+  }
+
+  // Heat State management implementation (simplified personality system)
+  async getHeatState(): Promise<HeatState | undefined> {
+    const [state] = await db
+      .select()
+      .from(heatState)
+      .where(eq(heatState.isGlobal, true))
+      .limit(1);
+    return state;
+  }
+
+  async createOrUpdateHeatState(state: InsertHeatState): Promise<HeatState> {
+    const existingState = await this.getHeatState();
+
+    if (existingState) {
+      // Update existing state
+      const [updatedState] = await db
+        .update(heatState)
+        .set({
+          heat: state.heat,
+          currentGame: state.currentGame as 'none' | 'dbd' | 'arc_raiders' | 'other',
+          spice: state.spice as 'platform_safe' | 'normal' | 'spicy',
+          lastUpdated: state.lastUpdated || sql`now()`
+        })
+        .where(eq(heatState.id, existingState.id))
+        .returning();
+      return updatedState;
+    } else {
+      // Create new global state
+      const [newState] = await db
+        .insert(heatState)
+        .values([{
+          heat: state.heat || 45,
+          currentGame: (state.currentGame || 'none') as 'none' | 'dbd' | 'arc_raiders' | 'other',
+          spice: (state.spice || 'spicy') as 'platform_safe' | 'normal' | 'spicy',
+          lastUpdated: state.lastUpdated || sql`now()`,
+          isGlobal: true
+        } as any])
         .returning();
       return newState;
     }
