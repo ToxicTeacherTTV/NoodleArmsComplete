@@ -221,15 +221,16 @@ Return ONLY valid JSON.`;
         if (patchInfo.isPTB) keywords.push('ptb', 'test');
         
         // Create memory entry
+        // FIXED: Importance values were 500-900, should be 1-100 scale
         await storage.addMemoryEntry({
           profileId,
           type: 'FACT',
           content,
-          importance: change.impact === 'HIGH' ? 900 : change.impact === 'MEDIUM' ? 700 : 500,
+          importance: change.impact === 'HIGH' ? 65 : change.impact === 'MEDIUM' ? 50 : 35,
           source: 'patch_notes',
           sourceId: sourceDocument,
           keywords,
-          confidence: 99, // Patch notes are facts
+          confidence: 75, // FIXED: Was 99, patch notes are factual but auto-extracted
           temporalContext,
           storyContext: change.details,
           qualityScore: 5,
@@ -256,7 +257,7 @@ Return ONLY valid JSON.`;
         profileId,
         type: 'FACT',
         content: summaryContent,
-        importance: 850,
+        importance: 55, // FIXED: Was 850, should be 1-100 scale. Patch summaries are useful but not core facts.
         source: 'patch_notes',
         sourceId: sourceDocument,
         keywords: [
@@ -265,7 +266,7 @@ Return ONLY valid JSON.`;
           patchInfo.version,
           patchInfo.isPTB ? 'ptb' : 'live'
         ],
-        confidence: 99,
+        confidence: 75, // FIXED: Was 99, reduced to allow room for verified facts
         temporalContext,
         qualityScore: 5,
         retrievalCount: 0,

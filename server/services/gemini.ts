@@ -255,8 +255,51 @@ class GeminiService {
     return "Nicky 'Noodle Arms' A.I. Dente's universe";
   }
 
+  /**
+   * Generate a brief summary of the entire document for context injection.
+   * This summary is passed to chunk extractions so the AI understands the full document context.
+   */
+  async generateDocumentSummary(content: string, filename: string, modelOverride?: string): Promise<string> {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Gemini API key not configured");
+    }
+
+    // Take first 15K chars for summary (enough to understand document scope)
+    const sampleContent = content.length > 15000 ? content.substring(0, 15000) + "\n\n[...document continues...]" : content;
+
+    const prompt = `Analyze this document and provide a 150-200 word summary that captures:
+1. What type of document this is (character sheet, game guide, podcast transcript, lore document, etc.)
+2. The main subjects/characters discussed
+3. Key topics and themes covered
+4. Any important relationships or hierarchies mentioned
+
+Document: "${filename}"
+
+Content:
+${sampleContent}
+
+Provide a concise summary that would help someone understand what this document is about before reading specific sections. Focus on WHO and WHAT, not detailed facts.`;
+
+    try {
+      const result = await executeWithModelFallback(async (model) => {
+        const response = await this.ai.models.generateContent({
+          model,
+          contents: prompt,
+        });
+        return this.safeExtractText(response) || "";
+      }, { purpose: 'extraction', maxRetries: 2 });
+
+      console.log(`📋 Generated document summary (${result.data.length} chars)`);
+      return result.data;
+    } catch (error) {
+      console.error('Failed to generate document summary:', error);
+      // Return a basic fallback summary
+      return `Document "${filename}" containing information relevant to Nicky's knowledge base.`;
+    }
+  }
+
   // Enhanced hierarchical extraction methods - Pure Gemini Implementation
-  async extractStoriesFromDocument(content: string, filename: string, modelOverride?: string): Promise<Array<{
+  async extractStoriesFromDocument(content: string, filename: string, modelOverride?: string, documentSummary?: string): Promise<Array<{
     content: string;
     type: 'STORY' | 'LORE' | 'CONTEXT';
     importance: number;
@@ -325,14 +368,19 @@ EXTRACTION SCOPE - Include ALL relevant facts:
 Extract comprehensively - this is building Nicky's knowledge base. Even if the document is purely technical (like a game guide), extract the facts so Nicky knows how to play/talk about it.`;
     }
 
+    // Inject document summary if provided (for chunk-level extraction with global context)
+    const summarySection = documentSummary
+      ? `\n📄 FULL DOCUMENT SUMMARY (for context - you are extracting from a chunk):\n${documentSummary}\n\n---\n`
+      : '';
+
     const prompt = `You are extracting facts from "${filename}" to build a knowledge base for Nicky "Noodle Arms" A.I. Dente.
 He is a streamer who plays games like Dead by Daylight and Arc Raiders. He needs to know the lore, mechanics, and details of these games to talk about them intelligently.
 
 🎯 DOCUMENT CONTEXT: This document is about ${docContext}
-
+${summarySection}
 ${extractionScope}
 
-Content:
+Content (this may be a chunk of a larger document):
 ${content}
 
 Extract COMPLETE STORIES, ANECDOTES, and RICH CONTEXTS. Focus on:
@@ -351,10 +399,17 @@ CRITICAL: When extracting facts, INCLUDE SOURCE CONTEXT in the content itself.
 For each story/narrative, provide:
 - content: The COMPLETE story/context WITH SOURCE CONTEXT (1-3 sentences max)
 - type: STORY (incidents/events), LORE (backstory/game lore), or CONTEXT (mechanics/background)
-- importance: 1-100 (100 being most important for character understanding)
+- importance: 1-100, BE CONSERVATIVE with this value:
+  * 1-20: Trivial details, minor flavor text, generic info
+  * 21-40: Standard facts, common knowledge, routine details
+  * 41-60: Notable facts, useful context, memorable details (MOST facts should be here)
+  * 61-80: Important facts, key character traits, significant events
+  * 81-100: CRITICAL only - core identity facts, defining moments (use sparingly!)
 - keywords: 3-5 relevant keywords for retrieval (INCLUDE game/topic name if relevant)
 - lane: "CANON" if it's a verifiable fact, "RUMOR" if it's an obvious exaggeration, lie, or performative bullshit.
 - truthDomain: One of ["DOC", "PODCAST", "OPS", "NICKY_LORE", "SABAM_LORE", "GENERAL"]
+
+⚠️ IMPORTANT: Most facts should have importance 30-55. Reserve 70+ for truly critical facts only!
 
 Return as JSON array.
 
@@ -363,7 +418,7 @@ Example format:
   {
     "content": "In Arc Raiders, the Enforcer is a heavily armored playable character specialized in close-quarters combat. The character uses shield abilities to protect teammates during extractions.",
     "type": "LORE",
-    "importance": 80,
+    "importance": 45,
     "keywords": ["arc raiders", "enforcer", "character", "shield", "combat"],
     "lane": "CANON",
     "truthDomain": "DOC"
@@ -413,23 +468,37 @@ Example format:
     return result.data;
   }
 
-  async extractAtomicFactsFromStory(storyContent: string, storyContext: string, modelOverride?: string): Promise<Array<{
-    content: string;
-    type: 'ATOMIC';
-    importance: number;
-    keywords: string[];
-    storyContext: string;
-  }>> {
+  async extractAtomicFactsFromStory(storyContent: string, storyContext: string, modelOverride?: string): Promise<{
+    facts: Array<{
+      content: string;
+      type: 'ATOMIC';
+      importance: number;
+      keywords: string[];
+      storyContext: string;
+      lane?: string;
+      truthDomain?: string;
+    }>;
+    relationships: Array<{
+      subject: string;
+      predicate: string;
+      object: string;
+      subjectType: 'character' | 'location' | 'event' | 'concept';
+      objectType: 'character' | 'location' | 'event' | 'concept';
+      strength: number;
+    }>;
+  }> {
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("Gemini API key not configured");
     }
 
-    const prompt = `You are breaking down a narrative into ATOMIC FACTS about Nicky "Noodle Arms" A.I. Dente and his universe.
+    const prompt = `You are breaking down a narrative into ATOMIC FACTS and RELATIONSHIP TRIPLES about Nicky "Noodle Arms" A.I. Dente and his universe.
 
 Story Context: ${storyContext}
 
 Full Story:
 ${storyContent}
+
+=== TASK 1: EXTRACT ATOMIC FACTS ===
 
 EXTRACTION RULES:
 - Extract ALL discrete, verifiable facts from this story
@@ -439,52 +508,41 @@ EXTRACTION RULES:
 - Clear about WHO did WHAT
 - PRESERVE source context from the story (if it mentions "in Arc Raiders" or "in DBD", keep that context)
 
-Extract individual, verifiable claims from this story. Each atomic fact should be:
-- A single, specific claim
-- Independently verifiable
-- 1-2 sentences maximum (HARD LIMIT)
-- Clear about WHO/WHAT and WHAT happened
-- Include game/source context if present in the original story
-
 For each atomic fact, provide:
 - content: The specific atomic claim WITH source context if relevant (max 2 sentences)
 - type: "ATOMIC" (always)
-- importance: 1-100 based on how critical this detail is (1=Trivial, 50=Standard, 100=Critical)
+- importance: 1-100, BE CONSERVATIVE:
+  * 1-25: Minor details, trivial info (e.g., "Nicky mentioned liking pizza")
+  * 26-45: Standard facts, common details (e.g., "Nicky plays Dead by Daylight")
+  * 46-60: Notable facts, useful info (MOST facts here) (e.g., "Nicky mains Ghostface")
+  * 61-75: Important facts, key traits (e.g., "Nicky has a rivalry with Earl Grey")
+  * 76-100: CRITICAL ONLY - core identity (e.g., "Nicky's full name is Nicholas Alfredo Italiano Dente")
 - keywords: 3-5 keywords for retrieval (include game/source name if relevant)
 - storyContext: Brief note about which part of the story this relates to
 - lane: "CANON" if it's a verifiable fact, "RUMOR" if it's an obvious exaggeration, lie, or performative bullshit.
 - truthDomain: One of ["DOC", "PODCAST", "OPS", "NICKY_LORE", "SABAM_LORE", "GENERAL"]
 
-Examples from various stories:
-[
-  {
-    "content": "In Arc Raiders, the Enforcer character uses shield abilities to protect teammates during extractions",
-    "type": "ATOMIC",
-    "importance": 85,
-    "keywords": ["arc raiders", "enforcer", "shield", "teammates", "extraction"],
-    "storyContext": "Arc Raiders character abilities",
-    "lane": "CANON",
-    "truthDomain": "DOC"
-  },
-  {
-    "content": "Uncle Gnocchi claims to have invented Dead by Daylight",
-    "type": "ATOMIC",
-    "importance": 95,
-    "keywords": ["uncle gnocchi", "dbd", "invented", "claims"],
-    "storyContext": "Uncle Gnocchi's legendary status",
-    "lane": "RUMOR",
-    "truthDomain": "NICKY_LORE"
-  },
-  {
-    "content": "In DBD, Bruno Bolognese is actually one of the best Bubba players",
-    "type": "ATOMIC",
-    "importance": 30,
-    "keywords": ["bruno", "bolognese", "bubba", "skill", "dbd"],
-    "storyContext": "Bruno's gaming ability in Dead by Daylight"
-  }
-]
+⚠️ MOST atomic facts should be importance 35-55. Only use 70+ for truly defining facts!
 
-Return as JSON array.`;
+=== TASK 2: EXTRACT RELATIONSHIP TRIPLES ===
+
+Extract structured relationships between entities. IMPORTANT: Also extract relational references like "his father", "my cousin", "Nicky's brother" - these should create relationships linking Nicky to the referenced person.
+
+For each relationship:
+- subject: The first entity (use their NAME, not pronouns)
+- predicate: The relationship type (use snake_case like: is_father_of, works_with, lives_in, knows, is_rival_of, owns, created, etc.)
+- object: The second entity (use their NAME)
+- subjectType: One of "character", "location", "event", "concept"
+- objectType: One of "character", "location", "event", "concept"
+- strength: 1-5 (how important/strong this relationship is)
+
+RELATIONSHIP EXAMPLES:
+- "Nicky's father" → {subject: "Salvatore", predicate: "is_father_of", object: "Nicky", subjectType: "character", objectType: "character", strength: 5}
+- "his cousin Bruno" → {subject: "Bruno", predicate: "is_cousin_of", object: "Nicky", subjectType: "character", objectType: "character", strength: 4}
+- "Nicky works at the restaurant" → {subject: "Nicky", predicate: "works_at", object: "The Restaurant", subjectType: "character", objectType: "location", strength: 3}
+- "Uncle Gnocchi and Nicky are rivals" → {subject: "Uncle Gnocchi", predicate: "is_rival_of", object: "Nicky", subjectType: "character", objectType: "character", strength: 4}
+
+Return a JSON object with two arrays: "facts" and "relationships".`;
 
     try {
       const result = await executeWithModelFallback(async (model) => {
@@ -495,20 +553,41 @@ Return as JSON array.`;
           config: {
             responseMimeType: "application/json",
             responseSchema: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  content: { type: "string" },
-                  type: { type: "string", enum: ["ATOMIC"] },
-                  importance: { type: "number" },
-                  keywords: { type: "array", items: { type: "string" } },
-                  storyContext: { type: "string" },
-                  lane: { type: "string", enum: ["CANON", "RUMOR"] },
-                  truthDomain: { type: "string", enum: ["DOC", "PODCAST", "OPS", "NICKY_LORE", "SABAM_LORE", "GENERAL"] }
+              type: "object",
+              properties: {
+                facts: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      content: { type: "string" },
+                      type: { type: "string", enum: ["ATOMIC"] },
+                      importance: { type: "number" },
+                      keywords: { type: "array", items: { type: "string" } },
+                      storyContext: { type: "string" },
+                      lane: { type: "string", enum: ["CANON", "RUMOR"] },
+                      truthDomain: { type: "string", enum: ["DOC", "PODCAST", "OPS", "NICKY_LORE", "SABAM_LORE", "GENERAL"] }
+                    },
+                    required: ["content", "type", "importance", "keywords", "storyContext", "lane", "truthDomain"]
+                  }
                 },
-                required: ["content", "type", "importance", "keywords", "storyContext", "lane", "truthDomain"]
-              }
+                relationships: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      subject: { type: "string" },
+                      predicate: { type: "string" },
+                      object: { type: "string" },
+                      subjectType: { type: "string", enum: ["character", "location", "event", "concept"] },
+                      objectType: { type: "string", enum: ["character", "location", "event", "concept"] },
+                      strength: { type: "number" }
+                    },
+                    required: ["subject", "predicate", "object", "subjectType", "objectType", "strength"]
+                  }
+                }
+              },
+              required: ["facts", "relationships"]
             }
           },
           contents: prompt,
@@ -535,14 +614,14 @@ Return as JSON array.`;
       const errorType = this.classifyGeminiError(error);
       console.warn(`⚠️ Fact extraction failed (${errorType}): Returning empty result with error flag`);
 
-      // Return empty array but with error metadata for upstream handling
-      const result: any[] = [];
-      (result as any)._extractionError = {
+      // Return empty result object with error metadata for upstream handling
+      const emptyResult = { facts: [] as any[], relationships: [] as any[] };
+      (emptyResult as any)._extractionError = {
         type: errorType,
         message: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString()
       };
-      return result;
+      return emptyResult;
     }
   }
 

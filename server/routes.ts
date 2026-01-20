@@ -591,8 +591,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🔒 Privacy Status: ${isPrivateConversation ? 'PRIVATE (No Learning)' : 'PUBLIC (Learning Enabled)'}`);
 
       // If new conversation, create it
+      const existingConversation = await storage.getConversation(conversationId);
+      if (!existingConversation) {
+        await storage.createConversation({
+          id: conversationId,
+          profileId: activeProfileId,
+          title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
+          isPrivate: isPrivateConversation,
+        });
+        console.log(`📝 Created new conversation: ${conversationId}`);
+      }
 
-      
       const { controls, chaosState } = await resolvePersonality({
         message,
         personalityControl,
@@ -765,6 +774,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 🎲 ENHANCED: Trigger response-based chaos evolution after successful AI response
       chaosEngine.onResponseGenerated();
+
+      // 🔥 Heat system: Natural cooldown after each response
+      const { heatController } = await import('./services/heatController.js');
+      heatController.onResponseGenerated();
 
       // 📝 Generate conversation title after first exchange
       if (messageCount === 1) { // First exchange complete (1 user msg just added + AI responding now)
@@ -2852,6 +2865,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Failed to set chaos level:', error);
       res.status(500).json({ error: 'Failed to set chaos level' });
+    }
+  });
+
+  // 🔥 HEAT CONTROLLER ROUTES - Simplified personality system (replaces chaos engine)
+  app.get('/api/heat/state', async (req, res) => {
+    try {
+      const { heatController } = await import('./services/heatController.js');
+      const state = await heatController.getState();
+      const heatLevel = heatController.getHeatLevel();
+      res.json({
+        ...state,
+        heatLevel
+      });
+    } catch (error) {
+      console.error('Failed to get heat state:', error);
+      res.status(500).json({ error: 'Failed to get heat state' });
+    }
+  });
+
+  app.post('/api/heat/set', async (req, res) => {
+    try {
+      const { heatController } = await import('./services/heatController.js');
+      const { heat } = req.body;
+
+      if (typeof heat !== 'number' || heat < 10 || heat > 100) {
+        return res.status(400).json({ error: 'Heat must be a number between 10 and 100' });
+      }
+
+      await heatController.setHeat(heat);
+      const state = await heatController.getState();
+      res.json({
+        ...state,
+        heatLevel: heatController.getHeatLevel(),
+        message: `Heat set to ${heat}`
+      });
+    } catch (error) {
+      console.error('Failed to set heat:', error);
+      res.status(500).json({ error: 'Failed to set heat' });
+    }
+  });
+
+  app.post('/api/heat/adjust', async (req, res) => {
+    try {
+      const { heatController } = await import('./services/heatController.js');
+      const { delta } = req.body;
+
+      if (typeof delta !== 'number') {
+        return res.status(400).json({ error: 'Delta must be a number' });
+      }
+
+      await heatController.adjustHeat(delta);
+      const state = await heatController.getState();
+      res.json({
+        ...state,
+        heatLevel: heatController.getHeatLevel(),
+        message: `Heat adjusted by ${delta}`
+      });
+    } catch (error) {
+      console.error('Failed to adjust heat:', error);
+      res.status(500).json({ error: 'Failed to adjust heat' });
+    }
+  });
+
+  app.post('/api/heat/game', async (req, res) => {
+    try {
+      const { heatController } = await import('./services/heatController.js');
+      const { game } = req.body;
+
+      const validGames = ['none', 'dbd', 'arc_raiders', 'other'];
+      if (!validGames.includes(game)) {
+        return res.status(400).json({ error: 'Game must be one of: none, dbd, arc_raiders, other' });
+      }
+
+      await heatController.setCurrentGame(game);
+      const state = await heatController.getState();
+      res.json({
+        ...state,
+        heatLevel: heatController.getHeatLevel(),
+        message: `Current game set to ${game}`
+      });
+    } catch (error) {
+      console.error('Failed to set game:', error);
+      res.status(500).json({ error: 'Failed to set game' });
+    }
+  });
+
+  app.post('/api/heat/spice', async (req, res) => {
+    try {
+      const { heatController } = await import('./services/heatController.js');
+      const { spice } = req.body;
+
+      const validSpices = ['platform_safe', 'normal', 'spicy'];
+      if (!validSpices.includes(spice)) {
+        return res.status(400).json({ error: 'Spice must be one of: platform_safe, normal, spicy' });
+      }
+
+      await heatController.setSpice(spice);
+      const state = await heatController.getState();
+      res.json({
+        ...state,
+        heatLevel: heatController.getHeatLevel(),
+        message: `Spice level set to ${spice}`
+      });
+    } catch (error) {
+      console.error('Failed to set spice:', error);
+      res.status(500).json({ error: 'Failed to set spice' });
+    }
+  });
+
+  app.post('/api/heat/event', async (req, res) => {
+    try {
+      const { heatController } = await import('./services/heatController.js');
+      const { eventType } = req.body;
+
+      const validEvents = ['provocation', 'compliment', 'death', 'win'];
+      if (!validEvents.includes(eventType)) {
+        return res.status(400).json({ error: 'Event must be one of: provocation, compliment, death, win' });
+      }
+
+      await heatController.triggerEvent(eventType);
+      const state = await heatController.getState();
+      res.json({
+        ...state,
+        heatLevel: heatController.getHeatLevel(),
+        message: `Event ${eventType} triggered`
+      });
+    } catch (error) {
+      console.error('Failed to trigger heat event:', error);
+      res.status(500).json({ error: 'Failed to trigger heat event' });
     }
   });
 
@@ -6783,13 +6925,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const avgImportance = validFacts.reduce((sum, f) => sum + (f?.importance || 50), 0) / validFacts.length;
 
           // Update the primary fact with merged content and metadata
+          // FIXED: Calculate merged confidence from source facts instead of hardcoding 100
+          const avgConfidence = validFacts.reduce((sum, f) => sum + (f?.confidence || 50), 0) / validFacts.length;
+          const mergedConfidence = Math.min(85, Math.round(avgConfidence + 5)); // Slight boost for human-verified merge, cap at 85
+
           const updateResult = await storage.db.update(memoryEntries)
             .set({
               content: options.mergedContent,
               keywords: allKeywords,
               relationships: allRelationships,
               importance: Math.round(avgImportance),
-              confidence: 100, // Merged facts have high confidence
+              confidence: mergedConfidence, // FIXED: Was hardcoded 100, now based on source facts
               supportCount: validFacts.length, // Track how many facts were merged
               updatedAt: new Date()
             })

@@ -2,7 +2,7 @@ import { InsertMemoryEntry } from '@shared/schema';
 import { IStorage } from '../storage.js';
 import { entityExtraction } from './entityExtraction.js';
 import { GoogleGenAI } from "@google/genai";
-import { executeWithProductionModel } from './modelSelector.js';
+import { executeWithProductionModel, safeExtractText } from './modelSelector.js';
 
 export class PodcastFactExtractor {
   private ai: GoogleGenAI;
@@ -153,7 +153,7 @@ JSON FORMAT:
           contents: prompt,
         });
 
-        const rawJson = response.text;
+        const rawJson = safeExtractText(response);
         if (rawJson) {
           const result = JSON.parse(rawJson);
           return result.facts || [];
@@ -355,17 +355,22 @@ JSON FORMAT:
             title.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(' ').filter(w => w.length > 2)
           ].flat().filter(Boolean);
 
+          // FIXED: Normalize importance to 1-100 scale and reduce auto-confidence
+          const normalizedImportance = fact.importance
+            ? (fact.importance <= 10 ? fact.importance * 10 : Math.min(fact.importance, 100))
+            : 45; // Default to moderate importance
+
           const memoryEntry: InsertMemoryEntry = {
             profileId,
             type: 'FACT', // All podcast content stored as facts
             content: fact.content,
-            importance: fact.importance || 3,
+            importance: normalizedImportance,
             source: 'podcast_episode',
             sourceId: episodeId,
             keywords: Array.from(new Set(enhancedKeywords)), // Remove duplicates
-            confidence: 95, // High confidence since extracted from actual transcript
+            confidence: 75, // FIXED: Was 95, reduced to allow room for verified facts
             temporalContext: `Episode ${episodeNumber} (${title})`,
-            qualityScore: fact.importance || 3,
+            qualityScore: Math.min(fact.importance || 5, 10),
             retrievalCount: 0,
             successRate: 100,
             supportCount: 1
