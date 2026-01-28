@@ -1,3 +1,6 @@
+// File logger must be imported FIRST to intercept all console output
+import './services/fileLogger.js';
+
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -58,7 +61,8 @@ app.use((req, res, next) => {
         "/api/twitch/audio-queue",
         "/api/personality/state",
         "/api/chaos/state",
-        "/api/chaos/personality"
+        "/api/chaos/personality",
+        "/api/heat/state"
       ];
       const isNoisy = noisyEndpoints.some(ep => path.includes(ep));
 

@@ -37,6 +37,15 @@ export default function ChatPanel({ messages, conversationId, sessionDuration, m
   const queryClient = useQueryClient();
   const [enhancingMessage, setEnhancingMessage] = useState<string | null>(null);
 
+  // Preprocess text for TTS - adds line breaks before emotion tags for better ElevenLabs handling
+  const preprocessForTTS = (text: string): string => {
+    return text
+      // Add line break after sentence-ending punctuation followed by emotion tag
+      .replace(/([.!?])\s+\[/g, '$1\n[')
+      // Also handle cases where there's already a tag and a new one starts (but not accent tags)
+      .replace(/\]\s+\[(?!strong)/g, ']\n[');
+  };
+
   const rateMessageMutation = useMutation({
     mutationFn: async ({ messageId, rating }: { messageId: string; rating: number }) => {
       return await apiRequest('PATCH', `/api/messages/${messageId}/rate`, { rating });
@@ -453,6 +462,20 @@ export default function ChatPanel({ messages, conversationId, sessionDuration, m
                               data-testid={`copy-ai-message-${message.id}`}
                             >
                               <i className="fas fa-copy text-xs"></i>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const ttsText = preprocessForTTS(message.content);
+                                navigator.clipboard.writeText(ttsText);
+                                toast({ title: "Copied for TTS!", description: "Text with line breaks copied", duration: 2000 });
+                              }}
+                              className="h-6 px-2 text-xs text-muted-foreground hover:text-accent transition-colors"
+                              title="Copy with line breaks for ElevenLabs"
+                              data-testid={`copy-tts-${message.id}`}
+                            >
+                              <i className="fas fa-microphone text-xs"></i>
                             </Button>
                           </div>
                         )}

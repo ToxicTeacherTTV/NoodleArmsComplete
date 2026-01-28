@@ -1,12 +1,13 @@
 import { GoogleGenAI } from "@google/genai";
-import type { 
-  KnowledgeRelationship, 
-  KnowledgeCluster, 
-  ConversationFeedback, 
-  KnowledgeGap, 
-  EvolutionMetrics 
+import type {
+  KnowledgeRelationship,
+  KnowledgeCluster,
+  ConversationFeedback,
+  KnowledgeGap,
+  EvolutionMetrics
 } from "../../shared/evolutionaryTypes.js";
 import type { MemoryEntry } from "../../shared/schema.js";
+import { safeExtractText } from './modelSelector.js';
 
 class EvolutionaryAI {
   private ai: GoogleGenAI;
@@ -313,7 +314,7 @@ Return optimized facts in JSON:
         contents: prompt,
       });
 
-      const consolidatedData = JSON.parse(response.text || "[]");
+      const consolidatedData = JSON.parse(safeExtractText(response) || "[]");
       return consolidatedData.map((item: any) => ({
         id: `consolidated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         profileId: facts[0]?.profileId || "",

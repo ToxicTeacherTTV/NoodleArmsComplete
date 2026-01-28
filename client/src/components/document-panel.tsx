@@ -38,7 +38,7 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
   const [documentContent, setDocumentContent] = useState<string>('');
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
-  const [extractionModel, setExtractionModel] = useState<string>('gemini-2.5-flash');
+  const [extractionModel, setExtractionModel] = useState<string>('gemini-3-flash-preview');
   const [duplicateWarning, setDuplicateWarning] = useState<{
     file: File;
     name?: string;
@@ -886,8 +886,10 @@ export default function DocumentPanel({ profileId, documents }: DocumentPanelPro
                 <SelectValue placeholder="Select Extraction Model" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Cheap)</SelectItem>
-                <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro (High Quality)</SelectItem>
+                <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash (Recommended)</SelectItem>
+                <SelectItem value="gemini-3-pro-preview">Gemini 3 Pro (Premium)</SelectItem>
+                <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash (Legacy)</SelectItem>
+                <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro (Legacy)</SelectItem>
                 <SelectItem value="claude-sonnet-4.5">Claude Sonnet 4.5 (Best Reasoning)</SelectItem>
               </SelectContent>
             </Select>

@@ -1,5 +1,5 @@
 import { storage } from '../storage.js';
-import ChaosEngine from './chaosEngine.js';
+import { heatController } from './heatController.js';
 import { Message, MemoryEntry } from '@shared/schema';
 import { contextPrewarmer } from './contextPrewarmer.js';
 import { contextPruner } from './contextPruner.js';
@@ -19,12 +19,6 @@ import { diagnosticService } from './diagnosticService.js';
  * 3. Context assembly and prompt construction
  */
 export class ContextBuilder {
-    private chaosEngine: ChaosEngine;
-
-    constructor() {
-        this.chaosEngine = ChaosEngine.getInstance();
-    }
-
     /**
      * Extract base keywords from a message
      */
@@ -60,7 +54,7 @@ export class ContextBuilder {
 
         try {
             if (conversationId || prefetchedMessages) {
-                const recentMessages = prefetchedMessages || await storage.getRecentMessages(conversationId!, 3);
+                const recentMessages = prefetchedMessages || await storage.getRecentMessages(conversationId!, 5);
                 if (recentMessages.length > 0) {
                     const conversationText = recentMessages.map(m => m.content).join(' ');
                     const conversationKeywords = this.extractKeywords(conversationText);
@@ -140,10 +134,12 @@ export class ContextBuilder {
     }> {
         try {
             const queryIntent = this.detectQueryIntent(userMessage);
-            const chaosState = await this.chaosEngine.getCurrentState();
 
-            // 1. Fetch Lane-aware Memory Packs from DB
-            const packs = await storage.getMemoryPacks(profileId, userMessage, chaosState.level, mode, queryIntent);
+            // Use heat level for personality intensity
+            const heatLevel = heatController.getHeat();
+
+            // 1. Fetch Lane-aware Memory Packs from DB (use heat level)
+            const packs = await storage.getMemoryPacks(profileId, userMessage, heatLevel, mode, queryIntent);
 
             // 2. Enhanced Keyword Extraction
             const { keywords, contextualQuery } = await this.extractContextualKeywords(
@@ -161,7 +157,8 @@ export class ContextBuilder {
             // 🎭 THEATER ZONE: Optional Rumor Hybrid Search
             // This allows Nicky to re-summon his own bullshit variants semantically
             let hybridRumors: any[] = [];
-            const isTheaterZone = mode === 'PODCAST' || mode === 'STREAMING' || chaosState.level > 70 || (queryIntent && /tell_about|remind|opinion/i.test(queryIntent));
+            // Use heat level for theater zone threshold (70+ = allow rumors)
+            const isTheaterZone = mode === 'PODCAST' || mode === 'STREAMING' || heatLevel > 70 || (queryIntent && /tell_about|remind|opinion/i.test(queryIntent));
 
             if (isTheaterZone) {
                 const rumorLimit = Math.floor(candidateLimit / 2);
@@ -453,7 +450,7 @@ export class ContextBuilder {
 
         // 2. Recent Conversation History
         if (conversationId || profileId) {
-            const messageLimit = mode === 'STREAMING' ? 8 : 12; // Reduced from 10/20 for speed
+            const messageLimit = mode === 'STREAMING' ? 20 : 30; // Increased for better conversation continuity
             const recentMessages = conversationId
                 ? await storage.getRecentMessages(conversationId, messageLimit)
                 : await storage.getRecentProfileMessages(profileId!, messageLimit);
@@ -564,17 +561,12 @@ export class ContextBuilder {
             contextPrompt += "If da user asks about dese, tell 'em to stop askin' stupid questions or make up some bullshit excuse why you won't talk about it. NEVER break character to explain dese topics.\n";
         }
 
-        // 9. Sauce Meter
-        let saucePrompt = "";
-        if (sauceMeter > 0) {
-            const intensity = sauceMeter > 80 ? "CRITICAL" : sauceMeter > 50 ? "HIGH" : "MODERATE";
-            saucePrompt = `
-[SAUCE METER: ${sauceMeter}/100 - ${intensity}]
-Nicky is currently ${intensity === 'CRITICAL' ? 'ABSOLUTELY LIVID' : intensity === 'HIGH' ? 'HEATED' : 'ANNOYED'}.
-- Increase aggression and Bronx intensity.
-- If Sauce is > 80, you are prone to making up wild, aggressive lies about the user's past.
-`;
-        }
+        // 9. Heat System (replaces Sauce Meter)
+        // Use the new heatController for state-based personality
+        const heatPrompt = heatController.generateHeatPrompt();
+
+        // Legacy saucePrompt for backward compatibility (will be removed later)
+        let saucePrompt = heatPrompt;
 
         // 10. Game Context
         let identityGameFocus = "Dead by Daylight addicted";
@@ -591,11 +583,23 @@ Nicky is currently ${intensity === 'CRITICAL' ? 'ABSOLUTELY LIVID' : intensity =
             gameContext = `\n\n[CURRENT TOPIC: DEAD BY DAYLIGHT]\nYou are currently playing DEAD BY DAYLIGHT.\nFocus: Tunneling, camping, and the SABAM code of conduct.`;
         }
 
+        // 11. Stream Status (Twitch context)
+        let streamStatusPrompt = "";
+        if (context?.streamStatus) {
+            const { isLive } = context.streamStatus;
+            if (isLive) {
+                streamStatusPrompt = `\n\n[STREAM STATUS]\n🔴 STREAM IS LIVE - You are actively streaming to viewers on Twitch right now.\n`;
+            } else {
+                streamStatusPrompt = `\n\n[STREAM STATUS]\n⚫ STREAM IS OFFLINE - No one is watching right now. The channel is not live.\n`;
+            }
+        }
+
         const gameFocusPrompt = `
 [CURRENT FOCUS]
 Game Focus: ${identityGameFocus}
 Topic Focus: ${identityTopicFocus}
 ${gameContext}
+${streamStatusPrompt}
 `;
 
         return {
@@ -623,7 +627,7 @@ ${gameContext}
         currentGame: string = ""
     ): Promise<any> {
         const isStreaming = mode === 'STREAMING';
-        const limit = 8;
+        const limit = 30; // Increased for better conversation continuity
         // 1. Prefetch history once for everyone
         const recentMessages: Message[] = conversationId ? await contextPruner.getRecentMessages(conversationId, storage, limit) : [];
 

@@ -267,6 +267,57 @@ export async function executeWithProductionModel<T>(
     maxRetries: 5,
     allowExperimental: false // Only production-ready models
   });
-  
+
   return result.data;
+}
+
+/**
+ * 🛡️ SAFE TEXT EXTRACTION FROM GEMINI RESPONSES
+ * Handles responses that may contain "thought" parts from thinking models
+ * without triggering SDK warnings about non-text parts.
+ */
+export function safeExtractText(response: any): string {
+  if (!response) return "";
+
+  try {
+    // 1. Try the .text property (new @google/genai SDK v1)
+    if (typeof response.text === 'string') {
+      return response.text;
+    }
+
+    // 2. Try to get text from parts (standard structure)
+    const parts = response.candidates?.[0]?.content?.parts;
+    if (parts && Array.isArray(parts)) {
+      // Filter out "thought" parts (thinking/reasoning) and join regular text
+      const text = parts
+        .filter((part: any) => part.text && !part.thought && !part.thinkingContent)
+        .map((part: any) => part.text)
+        .join('');
+      if (text) return text;
+    }
+
+    // 3. Try the .text() method (older @google/generative-ai SDK)
+    // Note: This often throws warnings, so we try to avoid it if possible
+    if (typeof response.text === 'function') {
+      try {
+        return response.text();
+      } catch {
+        // Fallback if SDK method fails on non-text parts
+        const candidateParts = response.candidates?.[0]?.content?.parts;
+        if (candidateParts) {
+          return candidateParts.filter((p: any) => p.text).map((p: any) => p.text).join('') || "";
+        }
+      }
+    }
+
+    // 4. Deep dive into candidates
+    const candidateText = response.candidates?.[0]?.text;
+    if (typeof candidateText === 'string') return candidateText;
+
+    return "";
+
+  } catch (e) {
+    console.warn("⚠️ Error extracting text from response:", e);
+    return "";
+  }
 }

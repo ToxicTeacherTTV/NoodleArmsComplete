@@ -5,6 +5,9 @@ server/public
 vite.config.ts.*
 *.tar.gz
 
+# Log files - don't commit
+logs/
+
 # Large binaries - don't commit
 claude.exe
 

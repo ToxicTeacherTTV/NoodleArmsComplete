@@ -1011,6 +1011,75 @@ export class DatabaseStorage implements IStorage {
       .where(eq(documents.id, id));
   }
 
+  /**
+   * 🏷️ AUTO-TAGGING: Apply tags based on content patterns
+   * Tags help with fast filtering and context retrieval
+   */
+  private autoTagContent(entry: InsertMemoryEntry): string[] {
+    const tags: string[] = [];
+    const content = entry.content.toLowerCase();
+
+    // 1. IDENTITY TAGS
+    // Family - Core to Nicky's character
+    if (/\b(uncle|cousin|aunt|mama|papa|nonna|nonno|brother|sister|vinny|family)\b/i.test(content)) {
+      tags.push('family');
+    }
+
+    // Italian - Cultural identity
+    if (/\b(pasta|sauce|marinara|lasagna|italian|bronx|newark|jersey|gnocchi|calzone|dente|ravioli|tortellini)\b/i.test(content)) {
+      tags.push('italian');
+    }
+
+    // Personal - Nicky's own stories (detected via source or narrative markers)
+    if (entry.source === 'nicky_story' || entry.type === 'STORY') {
+      tags.push('personal');
+    }
+
+    // 2. TOPIC TAGS (Fast filtering)
+    // DBD - Dead by Daylight
+    if (/\b(dead by daylight|dbd|killer|survivor|entity|bhvr|hook|pallet|totem|gen|bloodlust|exposed|exhaustion)\b/i.test(content)) {
+      tags.push('dbd');
+    }
+
+    // Arc Raiders - Separate from general gaming
+    if (/\b(arc raiders|headwinds|extract|extraction|raiders|arc|looter shooter)\b/i.test(content)) {
+      tags.push('arc-raiders');
+    }
+
+    // Gaming - Other games (but not DBD/Arc Raiders)
+    if (!tags.includes('dbd') && !tags.includes('arc-raiders')) {
+      if (/\b(game|gaming|stream|twitch|patch|update|fps|rpg|mmo|moba|battle royale|esports)\b/i.test(content)) {
+        tags.push('gaming');
+      }
+    }
+
+    // 3. CHARACTER/RELATIONSHIP TAGS
+    // Enemies - People/entities Nicky has beef with
+    if (/\b(tony|benedetti|trap|ghost pig|rival|enemy|hate|beef|betrayed|wronged|crossed|screwed over|backstabbed|bastard who|son of a bitch)\b/i.test(content)) {
+      tags.push('enemies');
+    }
+
+    // 4. EMOTIONAL/META TAGS
+    // Heated - High emotion moments (sauce meter or caps/profanity density)
+    const capsRatio = (content.match(/[A-Z]/g) || []).length / content.length;
+    const profanityDensity = (content.match(/\b(fuck|shit|damn|hell|bastard|asshole)\b/gi) || []).length;
+    if (capsRatio > 0.3 || profanityDensity > 3) {
+      tags.push('heated');
+    }
+
+    // Meta - Fourth wall breaks, simulation references
+    if (/\b(simulation|matrix|code|developer|ai|fourth wall|meta|lore|admin|glitch|bug|system)\b/i.test(content)) {
+      tags.push('meta');
+    }
+
+    // Auto-boost importance for family mentions
+    if (tags.includes('family')) {
+      entry.importance = Math.max(entry.importance || 0, 75);
+    }
+
+    return tags;
+  }
+
   async addMemoryEntry(entry: InsertMemoryEntry): Promise<MemoryEntry> {
     // CRITICAL FIX: Ensure canonicalKey is always present
     let finalEntry = { ...entry };
@@ -1025,6 +1094,11 @@ export class DatabaseStorage implements IStorage {
     if (!finalEntry.canonicalKey && finalEntry.content) {
       const { generateCanonicalKey } = await import('./utils/canonical.js');
       finalEntry.canonicalKey = generateCanonicalKey(finalEntry.content);
+    }
+
+    // 🏷️ AUTO-TAGGING: Apply tags based on content patterns
+    if (finalEntry.content && !finalEntry.tags) {
+      finalEntry.tags = this.autoTagContent(finalEntry);
     }
 
     // 🌟 NEW: Vector-based duplicate detection (BEFORE insert)

@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "node:http";
 import { storage } from "./storage";
 import { memoryCaches } from "./services/memoryCache";
-import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertMemoryEntrySchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags, duplicateScanResults, profiles, listenerCities, insertAutomatedSourceSchema } from "@shared/schema";
+import { insertProfileSchema, insertConversationSchema, insertMessageSchema, insertMemoryEntrySchema, insertDiscordTopicTriggerSchema, loreCharacters, loreEvents, documents, memoryEntries, contentFlags, duplicateScanResults, profiles, listenerCities, insertAutomatedSourceSchema, podcastEpisodes } from "@shared/schema";
 import { eq, and, sql, or, inArray, desc } from "drizzle-orm";
 import { db } from "./db";
 import { aiOrchestrator } from "./services/aiOrchestrator";
@@ -26,7 +26,7 @@ import { contextPrewarmer } from './services/contextPrewarmer';
 import {
   parseChatRequest,
   decidePrivacy,
-  buildChaosAdvice,
+  buildHeatAdvice,
   resolvePersonality,
   normalizeResponseTags,
   handleBackgroundTasks,
@@ -602,18 +602,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`📝 Created new conversation: ${conversationId}`);
       }
 
-      const { controls, chaosState } = await resolvePersonality({
+      const { controls, heatState } = await resolvePersonality({
         message,
-        personalityControl,
-        chaosEngine
+        personalityControl
       });
 
-      // Log Chaos Advice
-      const chaosAdvice = buildChaosAdvice(chaosState);
-      let direction = 'same';
-      if (chaosAdvice.suggestedIntensityDelta > 0) direction = 'higher';
-      else if (chaosAdvice.suggestedIntensityDelta < 0) direction = 'lower';
-      console.log(`🎲 Chaos advice: ${chaosAdvice.level}% ${chaosAdvice.mode} suggests ${chaosAdvice.suggestedPreset || 'no preset change'} with ${direction} intensity`);
+      // Log Heat State
+      const heatAdvice = buildHeatAdvice(heatState);
+      console.log(`🔥 Heat: ${heatAdvice.heat}/100 (${heatAdvice.heatLevel}) | Game: ${heatAdvice.game} | Spice: ${heatAdvice.spice}`);
       console.log(`🎭 Using personality:`, JSON.stringify(controls));
 
       if (personalityControl) {
@@ -708,7 +704,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         conversationId,
         activeProfileId,
         selectedModel,
-        chaosState.sauceMeter || 0,
+        heatState.heat || 0,
         currentGame
       );
 
@@ -772,12 +768,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
 
-      // 🎲 ENHANCED: Trigger response-based chaos evolution after successful AI response
-      chaosEngine.onResponseGenerated();
-
       // 🔥 Heat system: Natural cooldown after each response
       const { heatController } = await import('./services/heatController.js');
-      heatController.onResponseGenerated();
+      await heatController.onResponseGenerated();
 
       // 📝 Generate conversation title after first exchange
       if (messageCount === 1) { // First exchange complete (1 user msg just added + AI responding now)
@@ -2789,9 +2782,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Evolutionary AI and Chaos Engine
+  // Evolutionary AI
   const evolutionaryAI = new EvolutionaryAI();
 
+  // ⚠️ DEPRECATED: Chaos Engine endpoints - use /api/heat/* instead
+  // These endpoints are kept for backwards compatibility but are no longer used
+  // for AI behavior. The Heat Controller (/api/heat/*) is the active system.
   app.get('/api/chaos/state', async (req, res) => {
     try {
       const chaosState = await chaosEngine.getCurrentState();
@@ -2979,9 +2975,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { heatController } = await import('./services/heatController.js');
       const { eventType } = req.body;
 
-      const validEvents = ['provocation', 'compliment', 'death', 'win'];
+      const validEvents = ['provocation', 'compliment', 'death', 'win', 'calm_down', 'rage'];
       if (!validEvents.includes(eventType)) {
-        return res.status(400).json({ error: 'Event must be one of: provocation, compliment, death, win' });
+        return res.status(400).json({ error: 'Event must be one of: provocation, compliment, death, win, calm_down, rage' });
       }
 
       await heatController.triggerEvent(eventType);
@@ -7425,6 +7421,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`🧠 Extracting facts from Episode ${episode.episodeNumber}: "${episode.title}"`);
 
+      // Set status to PROCESSING
+      await db.update(podcastEpisodes)
+        .set({
+          processingStatus: 'PROCESSING',
+          processingProgress: 10
+        })
+        .where(eq(podcastEpisodes.id, episode.id));
+
       // Extract facts and store them in Nicky's memory
       const result = await podcastFactExtractor.extractFactsFromEpisode(
         episode.id,
@@ -7436,6 +7440,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       if (!result.success) {
+        // Update episode status to FAILED
+        await db.update(podcastEpisodes)
+          .set({
+            processingStatus: 'FAILED',
+            processingProgress: 0
+          })
+          .where(eq(podcastEpisodes.id, episode.id));
+
         return res.status(400).json({
           error: result.error || 'Failed to extract facts',
           factsCreated: 0,
@@ -7443,18 +7455,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      console.log(`✅ Successfully extracted ${result.factsCreated} facts and ${result.entitiesCreated} entities from Episode ${episode.episodeNumber} `);
+      console.log(`✅ Successfully extracted ${result.factsCreated} facts and ${result.entitiesCreated} entities from Episode ${episode.episodeNumber}`);
+
+      // Update episode record with extraction results
+      await db.update(podcastEpisodes)
+        .set({
+          factsExtracted: result.factsCreated,
+          entitiesExtracted: result.entitiesCreated,
+          processingStatus: 'COMPLETED',
+          processingProgress: 100
+        })
+        .where(eq(podcastEpisodes.id, episode.id));
+
+      console.log(`📊 Updated episode ${episode.episodeNumber} status to COMPLETED`);
 
       res.json({
         message: `Successfully extracted ${result.factsCreated} facts and ${result.entitiesCreated} entities and stored them in Nicky's memory`,
         factsCreated: result.factsCreated,
         entitiesCreated: result.entitiesCreated,
+        storiesCreated: result.storiesCreated,
         episodeNumber: episode.episodeNumber,
         episodeTitle: episode.title
       });
 
     } catch (error) {
       console.error('Error extracting podcast facts:', error);
+
+      // Update episode status to FAILED if we have the episode ID
+      const { id } = req.params;
+      if (id) {
+        try {
+          await db.update(podcastEpisodes)
+            .set({
+              processingStatus: 'FAILED',
+              processingProgress: 0
+            })
+            .where(eq(podcastEpisodes.id, id));
+        } catch (updateError) {
+          console.error('Failed to update episode status:', updateError);
+        }
+      }
+
       res.status(500).json({ error: 'Failed to extract podcast facts' });
     }
   });

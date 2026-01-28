@@ -280,112 +280,175 @@ JSON FORMAT:
     profileId: string,
     storage: IStorage,
     options?: { allowWrites?: boolean }
-  ): Promise<{ success: boolean; factsCreated: number; entitiesCreated: number; error?: string }> {
+  ): Promise<{ success: boolean; factsCreated: number; entitiesCreated: number; storiesCreated?: number; error?: string }> {
     if (options?.allowWrites === false) {
       console.log(`🔒 Privacy Guard: Skipping podcast fact extraction for Episode ${episodeNumber}`);
-      return { success: true, factsCreated: 0, entitiesCreated: 0 };
+      return { success: true, factsCreated: 0, entitiesCreated: 0, storiesCreated: 0 };
     }
     try {
-      console.log(`🎙️ Extracting facts from Podcast Episode ${episodeNumber}: "${title}"`);
+      console.log(`🎙️ Extracting stories and facts from Podcast Episode ${episodeNumber}: "${title}"`);
 
-      // Basic facts extraction logic (Metadata)
-      const extractedFacts: Array<{ content: string; type: string; keywords: string[]; importance: number }> = [];
+      let factsCreated = 0;
+      let storiesCreated = 0;
 
-      // Add title fact
-      extractedFacts.push({
-        content: `Episode ${episodeNumber} is titled "${title}"`,
-        type: 'EPISODE_INFO',
-        keywords: ['episode', 'title', episodeNumber.toString()],
-        importance: 5
-      });
+      // PHASE 1: Extract stories (preserves narratives)
+      console.log(`📖 Phase 1: Extracting stories from Episode ${episodeNumber}...`);
+      const chunks = this.chunkTranscript(transcript);
+      const allStories: Array<{ content: string; type: 'STORY' | 'LORE' | 'CONTEXT'; importance: number; keywords: string[] }> = [];
+
+      // Import aiOrchestrator dynamically to avoid circular dependency
+      const { aiOrchestrator } = await import('./aiOrchestrator.js');
+
+      for (let i = 0; i < chunks.length; i++) {
+        console.log(`   📄 Extracting stories from chunk ${i + 1}/${chunks.length}...`);
+
+        try {
+          const stories = await aiOrchestrator.extractStoriesFromDocument(
+            chunks[i],
+            `Podcast Episode ${episodeNumber} - ${title} (Chunk ${i + 1}/${chunks.length})`,
+            'gemini-3-flash-preview'
+          );
+
+          allStories.push(...stories);
+          console.log(`   ✅ Chunk ${i + 1}: Found ${stories.length} stories`);
+        } catch (error) {
+          console.warn(`   ⚠️ Story extraction failed for chunk ${i + 1}:`, error);
+        }
+
+        // Small delay to avoid rate limiting
+        if (i < chunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      console.log(`✨ Total stories extracted: ${allStories.length}`);
+
+      // Store metadata facts
+      const metadataFacts = [
+        {
+          content: `Episode ${episodeNumber} is titled "${title}"`,
+          type: 'EPISODE_INFO' as const,
+          keywords: ['episode', 'title', episodeNumber.toString()],
+          importance: 5
+        }
+      ];
 
       // Extract guests if mentioned in title
       const guestMatch = title.match(/with\s+([^,]+)/i);
       if (guestMatch) {
         const guest = guestMatch[1].trim();
-        extractedFacts.push({
+        metadataFacts.push({
           content: `Episode ${episodeNumber} features guest ${guest}`,
-          type: 'GUEST',
+          type: 'GUEST' as const,
           keywords: [guest.toLowerCase(), 'guest', 'episode', episodeNumber.toString()],
           importance: 4
         });
       }
 
-      // 🧠 AI EXTRACTION: Deep analyze the transcript
-      console.log(`🧠 Analyzing transcript with AI for deep fact extraction...`);
-      const aiFacts = await this.extractFactsWithAI(transcript);
-      
-      if (aiFacts.length > 0) {
-        console.log(`✨ AI found ${aiFacts.length} deep facts/memories from transcript`);
-        extractedFacts.push(...aiFacts);
-      } else {
-        console.warn(`⚠️ AI returned 0 facts. Falling back to basic metadata.`);
-        
-        // Fallback: If we have no topic/guest data, create facts from the episode title
-        if (extractedFacts.length === 1) { 
-          const titleWords = title.toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 3);
-          titleWords.slice(0, 3).forEach(word => {
-            extractedFacts.push({
-              content: `Episode ${episodeNumber} covers content related to ${word}`,
-              type: 'TOPIC',
-              keywords: [word, 'episode', episodeNumber.toString()],
-              importance: 2
-            });
-          });
-        }
-      }
-
-      if (extractedFacts.length === 0) {
-        return { success: false, factsCreated: 0, entitiesCreated: 0, error: 'No facts extracted' };
-      }
-
-      console.log(`✅ Extracted ${extractedFacts.length} facts from Episode ${episodeNumber}`);
-
-      // Store each extracted fact as a memory entry
-      let factsCreated = 0;
-      for (const fact of extractedFacts) {
+      // Store metadata facts
+      for (const fact of metadataFacts) {
         try {
-          // Create enhanced keywords including episode-specific terms
-          const enhancedKeywords = [
-            ...fact.keywords,
-            'podcast',
-            'episode',
-            episodeNumber.toString(),
-            `episode_${episodeNumber}`,
-            title.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(' ').filter(w => w.length > 2)
-          ].flat().filter(Boolean);
-
-          // FIXED: Normalize importance to 1-100 scale and reduce auto-confidence
-          const normalizedImportance = fact.importance
-            ? (fact.importance <= 10 ? fact.importance * 10 : Math.min(fact.importance, 100))
-            : 45; // Default to moderate importance
-
-          const memoryEntry: InsertMemoryEntry = {
+          await storage.addMemoryEntry({
             profileId,
-            type: 'FACT', // All podcast content stored as facts
+            type: 'FACT',
             content: fact.content,
-            importance: normalizedImportance,
+            importance: fact.importance,
             source: 'podcast_episode',
             sourceId: episodeId,
-            keywords: Array.from(new Set(enhancedKeywords)), // Remove duplicates
-            confidence: 75, // FIXED: Was 95, reduced to allow room for verified facts
+            keywords: fact.keywords,
+            confidence: 100, // Metadata is always accurate
             temporalContext: `Episode ${episodeNumber} (${title})`,
-            qualityScore: Math.min(fact.importance || 5, 10),
-            retrievalCount: 0,
-            successRate: 100,
-            supportCount: 1
-            // canonicalKey will be generated by storage.addMemoryEntry based on content
-          };
-
-          await storage.addMemoryEntry(memoryEntry);
+            lane: 'CANON',
+            truthDomain: 'PODCAST'
+          });
           factsCreated++;
-
-        } catch (entryError) {
-          console.warn(`⚠️ Failed to store fact: ${fact.content.slice(0, 100)}...`, entryError);
+        } catch (error) {
+          console.warn(`⚠️ Failed to store metadata fact:`, error);
         }
       }
 
-      console.log(`🎉 Successfully stored ${factsCreated} facts from Episode ${episodeNumber} into memory!`);
+      // PHASE 2: Store stories and extract atomic facts
+      if (allStories.length > 0) {
+        console.log(`📚 Phase 2: Storing ${allStories.length} stories and extracting atomic facts...`);
+
+        for (let i = 0; i < allStories.length; i++) {
+          const story = allStories[i];
+
+          try {
+            // Store the complete story
+            const storyEntry = await storage.addMemoryEntry({
+              profileId,
+              type: story.type, // 'STORY', 'LORE', or 'CONTEXT'
+              content: story.content,
+              importance: Math.min(story.importance, 100),
+              source: 'podcast_episode',
+              sourceId: episodeId,
+              keywords: story.keywords,
+              confidence: 75,
+              temporalContext: `Episode ${episodeNumber} (${title})`,
+              isAtomicFact: false, // This is a parent story
+              lane: 'CANON', // Podcast content is canon
+              truthDomain: 'PODCAST'
+            });
+
+            if (storyEntry?.id) {
+              storiesCreated++;
+              console.log(`   📖 Story ${i + 1}/${allStories.length}: ${story.content.substring(0, 80)}...`);
+
+              // Extract atomic facts from this story
+              try {
+                const { facts } = await aiOrchestrator.extractAtomicFactsFromStory(
+                  story.content,
+                  `Episode ${episodeNumber}: ${story.keywords.join(', ')}`,
+                  'gemini-3-flash-preview'
+                );
+
+                console.log(`   ⚛️ Extracted ${facts.length} atomic facts from story ${i + 1}`);
+
+                // Store atomic facts linked to parent story
+                for (const fact of facts) {
+                  try {
+                    await storage.addMemoryEntry({
+                      profileId,
+                      type: 'ATOMIC',
+                      content: fact.content,
+                      importance: Math.min(fact.importance || 50, 100),
+                      source: 'podcast_episode',
+                      sourceId: episodeId,
+                      keywords: fact.keywords || [],
+                      confidence: 75,
+                      temporalContext: `Episode ${episodeNumber} (${title})`,
+                      isAtomicFact: true,
+                      parentFactId: storyEntry.id, // Link to parent story
+                      lane: 'CANON',
+                      truthDomain: 'PODCAST',
+                      storyContext: fact.storyContext
+                    });
+                    factsCreated++;
+                  } catch (error) {
+                    console.warn(`   ⚠️ Failed to store atomic fact:`, error);
+                  }
+                }
+              } catch (error) {
+                console.warn(`   ⚠️ Failed to extract atomic facts from story ${i + 1}:`, error);
+              }
+            } else {
+              console.warn(`   ⚠️ Failed to store story ${i + 1}, skipping atomic fact extraction`);
+            }
+          } catch (error) {
+            console.warn(`   ⚠️ Failed to process story ${i + 1}:`, error);
+          }
+
+          // Small delay between stories
+          if (i < allStories.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      } else {
+        console.warn(`⚠️ No stories found in transcript. This is unusual for a podcast episode.`);
+      }
+
+      console.log(`🎉 Successfully stored ${storiesCreated} stories and ${factsCreated} facts from Episode ${episodeNumber}!`);
 
       // 🔍 ENTITY EXTRACTION: Extract people, places, and events from the transcript
       // Process in chunks to capture entities from the entire transcript
@@ -454,11 +517,11 @@ JSON FORMAT:
       //   );
       // }
 
-      return { success: true, factsCreated, entitiesCreated };
+      return { success: true, factsCreated, entitiesCreated, storiesCreated };
 
     } catch (error) {
       console.error(`❌ Error extracting facts from Episode ${episodeNumber}:`, error);
-      return { success: false, factsCreated: 0, entitiesCreated: 0, error: error instanceof Error ? error.message : 'Unknown error' };
+      return { success: false, factsCreated: 0, entitiesCreated: 0, storiesCreated: 0, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 }

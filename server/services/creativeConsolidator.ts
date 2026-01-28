@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { IStorage } from '../storage.js';
 import { InsertMemoryEntry } from '@shared/schema';
-import { executeWithDefaultModel } from './modelSelector.js';
+import { executeWithDefaultModel, safeExtractText } from './modelSelector.js';
 
 export class CreativeConsolidator {
   private ai: GoogleGenAI;
@@ -118,7 +118,7 @@ Return a JSON object with a "facts" array.
           contents: prompt,
         });
 
-        const rawJson = response.text;
+        const rawJson = safeExtractText(response);
         if (rawJson) {
           const result = JSON.parse(rawJson);
           return result.facts || [];

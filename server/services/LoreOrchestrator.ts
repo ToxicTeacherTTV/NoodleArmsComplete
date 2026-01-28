@@ -46,6 +46,67 @@ export class LoreOrchestrator {
   }
 
   /**
+   * 📖 DETECT USER STORY
+   * Heuristic detection for user-told stories in messages
+   */
+  private isUserStory(content: string): boolean {
+    // Length check (users typically more concise than Nicky)
+    if (content.length < 150) return false;
+
+    // Narrative indicators (past tense, storytelling phrases)
+    const storyIndicators = [
+      /\b(yesterday|last (week|month|year|night|time))\b/i,
+      /\b(I remember|let me tell you|this one time|back when|so I was)\b/i,
+      /\b(I went|I saw|I did|I played|I met|I found)\b/i,
+    ];
+
+    const hasIndicators = storyIndicators.some(pattern => pattern.test(content));
+
+    // Must have multiple sentences
+    const sentenceCount = (content.match(/[.!?]+/g) || []).length;
+
+    // Check for past tense verb density
+    const pastTenseVerbs = (content.match(/\b(happened|told|asked|said|went|was|were|did|had|got|came|left|found|saw)\b/gi) || []).length;
+    const hasPastTense = pastTenseVerbs >= 2;
+
+    return hasIndicators && sentenceCount >= 2 && hasPastTense;
+  }
+
+  /**
+   * 📖 DETECT NICKY'S STORY
+   * Heuristic detection for stories Nicky tells in his responses
+   */
+  private isNickyStory(content: string): boolean {
+    // Strip emotion tags first to analyze raw narrative
+    const stripped = content.replace(/\[(yelling|screaming|muttering|whispering|shouting|ranting|huffing|panting|slapping|sniffing|dramatic pause|strong bronx wiseguy accent|sound of [^\]]+)\]/gi, '');
+
+    // Nicky is verbose - stories are typically 300+ chars
+    if (stripped.length < 300) return false;
+
+    // Nicky's storytelling indicators
+    const nickyStoryIndicators = [
+      /\b(back in|remember when|one time|there was this|I told you about|let me tell ya|so there I was)\b/i,
+      /\b(Uncle Vinny|my cousin|my mother|the old neighborhood|Newark|Brooklyn|Bronx)\b/i, // Italian-American references
+      /\b(1987|1992|'87|'92|the 80s|the 90s)\b/i, // Specific years/decades common in stories
+    ];
+
+    const hasIndicators = nickyStoryIndicators.some(pattern => pattern.test(content));
+
+    // Check for past tense density (Nicky's stories are narrative heavy)
+    const pastTenseVerbs = (stripped.match(/\b(happened|told|asked|said|went|was|were|did|had|got|came|left|found|saw|ran|caught|tried|looked|walked|grabbed)\b/gi) || []).length;
+    const hasPastTense = pastTenseVerbs >= 4; // Higher threshold for Nicky's verbose style
+
+    // Multiple sentences check
+    const sentenceCount = (stripped.match(/[.!?]+/g) || []).length;
+    const hasMultipleSentences = sentenceCount >= 3;
+
+    // Check for narrative structure markers
+    const hasNarrativeStructure = /\b(so then|and then|but then|after that|next thing|suddenly)\b/i.test(content);
+
+    return hasIndicators && hasPastTense && (hasMultipleSentences || hasNarrativeStructure);
+  }
+
+  /**
    * 📥 PROCESS NEW CONTENT
    * Extracts facts and entities from raw text and integrates them into the lore.
    */
@@ -55,7 +116,12 @@ export class LoreOrchestrator {
     source: string,
     type: 'CONVERSATION' | 'DOCUMENT' | 'WEB' = 'CONVERSATION',
     conversationId?: string,
-    options?: { allowWrites?: boolean }
+    options?: {
+      allowWrites?: boolean;
+      speaker?: 'user' | 'nicky';
+      speakerName?: string;
+      speakerId?: string;
+    }
   ): Promise<LoreProcessingResult> {
     if (options && options.allowWrites === false) {
       console.log('🔒 Private mode: Skipping lore processing (safety catch)');
@@ -75,7 +141,189 @@ export class LoreOrchestrator {
       }
     }
 
-    // 1. Extract Atomic Facts
+    // 0.5. Check if this is a USER STORY (NEW!)
+    if (options?.speaker === 'user' && this.isUserStory(content)) {
+      console.log(`📖 Detected user story from ${options.speakerName || 'User'}`);
+
+      try {
+        // Store complete user story
+        const storyEntry = await storage.addMemoryEntry({
+          profileId,
+          type: 'STORY',
+          content,
+          importance: 60, // User stories are important
+          source: 'user_story',
+          sourceId: conversationId || source,
+          confidence: 100, // User stories are always true
+          lane: 'CANON',
+          truthDomain: 'GENERAL',
+          keywords: content.toLowerCase().split(' ').filter(w => w.length > 3).slice(0, 10),
+          metadata: {
+            toldBy: options.speakerName || 'User',
+            toldByUserId: options.speakerId,
+            context: conversationId
+          }
+        });
+
+        if (storyEntry?.id) {
+          console.log(`✅ Stored user story: ${content.substring(0, 80)}...`);
+
+          // Extract atomic facts FROM the story
+          const { aiOrchestrator } = await import('./aiOrchestrator.js');
+          const { facts } = await aiOrchestrator.extractAtomicFactsFromStory(
+            content,
+            `Story told by ${options.speakerName || 'User'}`,
+            'gemini-3-flash-preview'
+          );
+
+          console.log(`⚛️ Extracted ${facts.length} atomic facts from user story`);
+
+          // Store atomic facts linked to parent story
+          let factsStored = 0;
+          for (const fact of facts) {
+            try {
+              await storage.addMemoryEntry({
+                profileId,
+                type: 'ATOMIC',
+                content: fact.content,
+                importance: Math.min(fact.importance || 50, 100),
+                source: 'user_story',
+                sourceId: conversationId || source,
+                confidence: 100,
+                isAtomicFact: true,
+                parentFactId: storyEntry.id, // Link to parent
+                lane: 'CANON',
+                truthDomain: 'GENERAL',
+                keywords: fact.keywords || [],
+                storyContext: fact.storyContext
+              });
+              factsStored++;
+            } catch (error) {
+              console.warn(`⚠️ Failed to store atomic fact from user story:`, error);
+            }
+          }
+
+          // Still do entity extraction from user story
+          const analysis = await MemoryAnalyzer.analyzeMemoryBatch([{ content, type }], profileId);
+          let updatedEntities = 0;
+          for (const char of (analysis.characters || [])) {
+            await this.integrateCharacter(char, profileId);
+            updatedEntities++;
+          }
+          for (const loc of (analysis.locations || [])) {
+            await this.integrateLocation(loc, profileId);
+            updatedEntities++;
+          }
+
+          return {
+            newFacts: factsStored,
+            updatedEntities,
+            conflictsDetected: 0,
+            summary: `Stored user story from ${options.speakerName || 'User'} with ${factsStored} facts`
+          };
+        }
+      } catch (error) {
+        console.error(`❌ Failed to process user story:`, error);
+        // Fall through to normal fact extraction if story processing fails
+      }
+    }
+
+    // 0.6. Check if this is a NICKY STORY (Phase 2!)
+    if (options?.speaker === 'nicky' && this.isNickyStory(content)) {
+      console.log(`📖 Detected Nicky story (${content.length} chars)`);
+
+      try {
+        // Determine lane based on sauce meter
+        const chaos = ChaosEngine.getInstance();
+        const state = await chaos.getCurrentState();
+        const sauceLevel = state.sauceMeter;
+        const lane = sauceLevel > 70 ? 'RUMOR' : 'CANON'; // High heat = performative bullshit
+
+        console.log(`🌶️ Sauce meter: ${sauceLevel}/100 → Lane: ${lane}`);
+
+        // Store complete Nicky story
+        const storyEntry = await storage.addMemoryEntry({
+          profileId,
+          type: 'STORY',
+          content,
+          importance: 50, // Nicky's stories are moderately important
+          source: 'nicky_story',
+          sourceId: conversationId || source,
+          confidence: lane === 'CANON' ? 85 : 60, // Lower confidence for rumors
+          lane,
+          truthDomain: 'GENERAL',
+          keywords: content.toLowerCase().split(' ').filter(w => w.length > 3).slice(0, 10),
+          metadata: {
+            toldBy: 'Nicky',
+            sauceMeter: sauceLevel,
+            context: conversationId
+          }
+        });
+
+        if (storyEntry?.id) {
+          console.log(`✅ Stored Nicky story in ${lane} lane: ${content.substring(0, 80)}...`);
+
+          // Extract atomic facts FROM the story
+          const { aiOrchestrator } = await import('./aiOrchestrator.js');
+          const { facts } = await aiOrchestrator.extractAtomicFactsFromStory(
+            content,
+            'Story told by Nicky',
+            'gemini-3-flash-preview'
+          );
+
+          console.log(`⚛️ Extracted ${facts.length} atomic facts from Nicky's story`);
+
+          // Store atomic facts linked to parent story
+          let factsStored = 0;
+          for (const fact of facts) {
+            try {
+              await storage.addMemoryEntry({
+                profileId,
+                type: 'ATOMIC',
+                content: fact.content,
+                importance: Math.min(fact.importance || 50, 100),
+                source: 'nicky_story',
+                sourceId: conversationId || source,
+                confidence: lane === 'CANON' ? 85 : 60, // Match parent confidence
+                isAtomicFact: true,
+                parentFactId: storyEntry.id, // Link to parent
+                lane,
+                truthDomain: 'GENERAL',
+                keywords: fact.keywords || [],
+                storyContext: fact.storyContext
+              });
+              factsStored++;
+            } catch (error) {
+              console.warn(`⚠️ Failed to store atomic fact from Nicky's story:`, error);
+            }
+          }
+
+          // Still do entity extraction from Nicky's story
+          const analysis = await MemoryAnalyzer.analyzeMemoryBatch([{ content, type }], profileId);
+          let updatedEntities = 0;
+          for (const char of (analysis.characters || [])) {
+            await this.integrateCharacter(char, profileId);
+            updatedEntities++;
+          }
+          for (const loc of (analysis.locations || [])) {
+            await this.integrateLocation(loc, profileId);
+            updatedEntities++;
+          }
+
+          return {
+            newFacts: factsStored,
+            updatedEntities,
+            conflictsDetected: 0,
+            summary: `Stored Nicky story (${lane}) with ${factsStored} facts`
+          };
+        }
+      } catch (error) {
+        console.error(`❌ Failed to process Nicky story:`, error);
+        // Fall through to normal fact extraction if story processing fails
+      }
+    }
+
+    // 1. Extract Atomic Facts (existing flow - only reached if not a story)
     const { fact, importance } = await geminiService.distillTextToFact(content);
 
     // 1b. Save Fact to Memory
@@ -103,14 +351,14 @@ export class LoreOrchestrator {
     // 2. Analyze for Entities & Relationships
     const analysis = await MemoryAnalyzer.analyzeMemoryBatch([{ content, type }], profileId);
 
-    // 3. Integrate Entities
+    // 3. Integrate Entities (with safe array access in case AI returns malformed response)
     let updatedEntities = 0;
-    for (const char of analysis.characters) {
+    for (const char of (analysis.characters || [])) {
       await this.integrateCharacter(char, profileId);
       updatedEntities++;
     }
 
-    for (const loc of analysis.locations) {
+    for (const loc of (analysis.locations || [])) {
       await this.integrateLocation(loc, profileId);
       updatedEntities++;
     }

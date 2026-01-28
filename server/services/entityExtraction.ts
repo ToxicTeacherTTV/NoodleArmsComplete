@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { executeWithProductionModel } from './modelSelector.js';
+import { executeWithProductionModel, safeExtractText } from './modelSelector.js';
 import { getDefaultModel, isValidModel } from '../config/geminiModels.js';
 
 /**
@@ -296,7 +296,7 @@ DO NOT extract:
           contents: prompt,
         });
 
-        const rawJson = response.text;
+        const rawJson = safeExtractText(response);
         if (rawJson) {
           const result = JSON.parse(rawJson);
           return {
@@ -431,10 +431,10 @@ Be conservative with matches - only match if confidence > 0.7`;
           contents: prompt,
         });
 
-        const rawJson = response.text;
+        const rawJson = safeExtractText(response);
         if (rawJson) {
           const result = JSON.parse(rawJson);
-          
+
           // Convert to our expected format
           const matches = result.matches.map((match: any) => ({
             detectedEntity: detectedEntities.find(e => e.name === match.detectedEntityName) || detectedEntities[0],
@@ -443,7 +443,7 @@ Be conservative with matches - only match if confidence > 0.7`;
             confidence: match.confidence
           }));
 
-          const newEntities = detectedEntities.filter(entity => 
+          const newEntities = detectedEntities.filter(entity =>
             !result.matches.some((match: any) => match.detectedEntityName === entity.name)
           );
 

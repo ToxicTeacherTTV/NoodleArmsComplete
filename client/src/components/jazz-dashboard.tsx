@@ -1,16 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 
 // Components
 import ChatPanel from "@/components/chat-panel";
 import ChatHistorySidebar from "@/components/chat-history-sidebar";
-import PersonalitySurgePanel from "@/components/personality-surge-panel";
+import HeatControlPanel from "@/components/heat-control-panel";
 import MessageComposer from "@/components/MessageComposer";
 import ProfileModal from "@/components/profile-modal";
 import NotesModal from "@/components/notes-modal";
-import { MemoryChecker } from "@/components/memory-checker";
 import { JazzHeader } from "@/components/jazz/JazzHeader";
 import { JazzChatLayout } from "@/components/jazz/JazzChatLayout";
 
@@ -27,7 +25,6 @@ export default function JazzDashboard() {
     const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
-    const [memoryCheckerOpen, setMemoryCheckerOpen] = useState(false);
     const [audioEnabled, setAudioEnabled] = useState(false);
     const processedIds = useRef(new Set<string>());
 
@@ -66,7 +63,7 @@ export default function JazzDashboard() {
     useEffect(() => {
         if (chat.appMode === 'STREAMING' && chat.messages.length > 0) {
             const lastMsg = chat.messages.at(-1);
-            if (lastMsg.type === 'AI' && !voice.isSpeaking) {
+            if (lastMsg?.type === 'AI' && !voice.isSpeaking) {
                 voice.speak(lastMsg.content);
                 chat.setAiStatus('SPEAKING');
             }
@@ -239,18 +236,9 @@ export default function JazzDashboard() {
                             disabled={chat.aiStatus === 'PROCESSING'}
                         />
                     }
-                    rightPanelContent={<PersonalitySurgePanel />}
+                    rightPanelContent={<HeatControlPanel />}
                 />
             </div>
-
-            {/* Memory Checker */}
-            <MemoryChecker
-                selectedText={selectedText}
-                profileId={chat.activeProfile?.id}
-                isOpen={memoryCheckerOpen}
-                onClose={() => setMemoryCheckerOpen(false)}
-                position={checkerPosition}
-            />
         </>
     );
 }
