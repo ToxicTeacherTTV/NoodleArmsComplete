@@ -110,7 +110,6 @@ export default function SystemOperationsSummary({
 
   if (timelineIssues > 0) {
     actionItems.push(`Timeline audit flagged ${timelineIssues} event fact${timelineIssues === 1 ? '' : 's'} for review.`);
-    actionItems.push(`Chaos influence active: ${personalityState.chaosInfluence.reason}.`);
   }
 
   if (actionItems.length === 0) {
