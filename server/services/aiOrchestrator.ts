@@ -10,7 +10,9 @@ import {
     DiscordMemberFactResult,
     OptimizedMemory,
     ConsolidatedMemory,
-    PsycheProfile
+    PsycheProfile,
+    FactsAndRelationshipsResult,
+    RelationshipTriple
 } from './ai-types.js';
 import { AIModel } from '@shared/modelSelection.js';
 import { varietyController } from './VarietyController.js';
@@ -67,33 +69,52 @@ export class AIOrchestrator {
     }
 
     /**
+     * Generate a summary of the entire document for context injection
+     */
+    async generateDocumentSummary(
+        content: string,
+        filename: string,
+        selectedModel: AIModel = 'gemini-3-flash-preview'
+    ): Promise<string> {
+        // Only Gemini supports this for now
+        return geminiService.generateDocumentSummary(content, filename, selectedModel);
+    }
+
+    /**
      * Extract stories from a document with user-selectable model
      */
     async extractStoriesFromDocument(
         content: string,
         filename: string,
-        selectedModel: AIModel = 'gemini-3-flash-preview'
+        selectedModel: AIModel = 'gemini-3-flash-preview',
+        documentSummary?: string
     ): Promise<StoryExtractionResult[]> {
         return this.routeToModel(
             'story extraction',
             selectedModel,
             () => anthropicService.extractStoriesFromDocument(content, filename),
-            () => geminiService.extractStoriesFromDocument(content, filename, selectedModel)
+            () => geminiService.extractStoriesFromDocument(content, filename, selectedModel, documentSummary)
         );
     }
 
     /**
-     * Extract atomic facts from a story with user-selectable model
+     * Extract atomic facts AND relationship triples from a story with user-selectable model
+     * Returns both facts and structured relationships for the knowledge graph
      */
     async extractAtomicFactsFromStory(
         storyContent: string,
         storyContext: string,
         selectedModel: AIModel = 'gemini-3-flash-preview'
-    ): Promise<AtomicFactResult[]> {
+    ): Promise<FactsAndRelationshipsResult> {
         return this.routeToModel(
             'atomic fact extraction',
             selectedModel,
-            () => anthropicService.extractAtomicFactsFromStory(storyContent, storyContext),
+            // Anthropic returns just facts - wrap it in the new structure
+            async () => {
+                const facts = await anthropicService.extractAtomicFactsFromStory(storyContent, storyContext);
+                return { facts, relationships: [] as RelationshipTriple[] };
+            },
+            // Gemini returns the full structure with facts + relationships
             () => geminiService.extractAtomicFactsFromStory(storyContent, storyContext, selectedModel)
         );
     }
@@ -386,7 +407,37 @@ export class AIOrchestrator {
                 storyState: state
             });
 
-            return `
+            // Different guidance based on story progress
+            if (state.turnCount >= 5 || state.isCompleted) {
+                // FINAL TURN - wrap it up
+                return `
+\n[NICKY VIBE CHECK: "WHERE THE FUCK ARE THE VIEWERS FROM"]
+Current City: ${state.currentCity}
+Story Turn: ${state.turnCount} (FINAL TURN)
+
+🎬 FINISH THE STORY NOW:
+- This is the END of this city story. You MUST finish it in this message.
+- Deliver the punchline, reveal, or conclusion.
+- End with something memorable - a twist, a callback, or a signature Nicky closer.
+- Make it land. This is your moment.
+- After this message, you're done with ${state.currentCity}.
+`;
+            } else if (state.turnCount >= 3) {
+                // BUILDING TO CLIMAX
+                return `
+\n[NICKY VIBE CHECK: "WHERE THE FUCK ARE THE VIEWERS FROM"]
+Current City: ${state.currentCity}
+Story Turn: ${state.turnCount} (Building to climax)
+
+CRITICAL GUIDANCE:
+- You're approaching the end of this story. Build to the climax.
+- Start revealing the main conflict or the "meat" of what happened.
+- Keep building tension - the punchline/reveal is coming in 1-2 more messages.
+- End with heightened stakes or a "here's where shit gets real" moment.
+`;
+            } else {
+                // EARLY TURNS - setup
+                return `
 \n[NICKY VIBE CHECK: "WHERE THE FUCK ARE THE VIEWERS FROM"]
 Current City: ${state.currentCity}
 Story Turn: ${state.turnCount}
@@ -400,6 +451,7 @@ CRITICAL GUIDANCE:
 - End this message with a cliffhanger or a question for Toxic.
 - If you just started (Turn 1), you should barely be getting into the setup.
 `;
+            }
         } catch (e) {
             console.warn("Failed to handle city story state:", e);
             return "";
@@ -456,6 +508,13 @@ const behavioralConstraints = `
 - MECHANICS FIRST: If you have [GAME KNOWLEDGE PACK] facts, ANSWER THE QUESTION with them first. THEN go into your rant/story.
 - NO DODGING: Do not say "who cares" or "google it" if you have the facts. Use the knowledge pack.
 - NO HALLUCINATIONS: If the detail isn't in your memory or knowledge pack, admit you don't know or deflect. Do not invent perks or stats.
+
+[CORE IDENTITY GUARDRAILS - NEVER VIOLATE]
+- YOU ARE A GAMER. NEVER say "I don't play games" or deny playing video games. Gaming is CORE to your identity.
+- You play Dead by Daylight, Arc Raiders, and other games. You're obsessed with them. This is non-negotiable.
+- You can be paranoid about WHO is asking or WHY, but NEVER deny your gaming identity.
+- If asked about games casually, ENGAGE with the topic. Don't treat it as an interrogation.
+- For casual questions like "how you been" or "playing any games" - respond conversationally, not defensively.
 `;
 
         const enhancedCoreIdentity = `

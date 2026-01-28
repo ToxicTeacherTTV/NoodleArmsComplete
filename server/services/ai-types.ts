@@ -33,6 +33,22 @@ export interface AtomicFactResult {
     importance: number;
     keywords: string[];
     storyContext: string;
+    lane?: string;
+    truthDomain?: string;
+}
+
+export interface RelationshipTriple {
+    subject: string;
+    predicate: string;
+    object: string;
+    subjectType: 'character' | 'location' | 'event' | 'concept';
+    objectType: 'character' | 'location' | 'event' | 'concept';
+    strength: number;
+}
+
+export interface FactsAndRelationshipsResult {
+    facts: AtomicFactResult[];
+    relationships: RelationshipTriple[];
 }
 
 export interface PodcastFactResult {

@@ -21,6 +21,8 @@ export class TwitchBotService {
   private lastProactiveMessage: number = Date.now();
   private proactiveInterval: any = null;
   private audioQueue: { id: string; text: string; type: string; timestamp: number }[] = [];
+  private isStreamLive: boolean = false;
+  private lastStreamCheck: number = 0;
 
   public getPendingAudio() {
     return this.audioQueue;
@@ -210,7 +212,11 @@ export class TwitchBotService {
         this.currentGame
       );
 
-
+      // Add stream status to context
+      context.streamStatus = {
+        isLive: this.isStreamLive,
+        lastChecked: this.lastStreamCheck
+      };
 
       // 2. Generate response
       const aiResponse = await aiOrchestrator.generateResponse(
@@ -303,6 +309,13 @@ export class TwitchBotService {
     this.proactiveInterval = setInterval(async () => {
       if (!this.isConnected || !this.client) return;
 
+      // Check if stream is live before sending proactive messages
+      await this.checkStreamStatus();
+      if (!this.isStreamLive) {
+        console.log('🔇 [Twitch] Stream is offline, skipping proactive message');
+        return;
+      }
+
       const now = Date.now();
       const chaos = ChaosEngine.getInstance();
       const chaosState = await chaos.getCurrentState();
@@ -342,6 +355,12 @@ export class TwitchBotService {
         this.currentGame
       );
 
+      // Add stream status to context
+      contextObj.streamStatus = {
+        isLive: this.isStreamLive,
+        lastChecked: this.lastStreamCheck
+      };
+
       // 2. Generate a natural Nicky response based on the context
       const aiResponse = await aiOrchestrator.generateResponse(
         context,
@@ -362,6 +381,54 @@ export class TwitchBotService {
       }
     } catch (error) {
       console.error('❌ Failed to send proactive Twitch message:', error);
+    }
+  }
+
+  private async checkStreamStatus() {
+    const now = Date.now();
+    // Check every 5 minutes
+    if (now - this.lastStreamCheck < 5 * 60 * 1000) return;
+
+    const clientId = process.env.TWITCH_CLIENT_ID;
+    const token = process.env.TWITCH_OAUTH_TOKEN?.replace('oauth:', '');
+    const channelName = this.channel.replace('#', '');
+
+    if (!clientId || !token) {
+      console.warn('⚠️ Missing Twitch Client ID or Token for stream status check');
+      return;
+    }
+
+    try {
+      // Get broadcaster ID
+      const userResponse = await fetch(`https://api.twitch.tv/helix/users?login=${channelName}`, {
+        headers: {
+          'Client-ID': clientId,
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const userData = await userResponse.json();
+      const broadcasterId = userData.data?.[0]?.id;
+
+      if (broadcasterId) {
+        // Check if stream is live
+        const streamResponse = await fetch(`https://api.twitch.tv/helix/streams?user_id=${broadcasterId}`, {
+          headers: {
+            'Client-ID': clientId,
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const streamData = await streamResponse.json();
+
+        const wasLive = this.isStreamLive;
+        this.isStreamLive = streamData.data && streamData.data.length > 0;
+        this.lastStreamCheck = now;
+
+        if (wasLive !== this.isStreamLive) {
+          console.log(`📡 [Twitch] Stream status changed: ${this.isStreamLive ? 'LIVE' : 'OFFLINE'}`);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to check Twitch stream status:', error);
     }
   }
 
@@ -409,7 +476,11 @@ export class TwitchBotService {
           // Detect game change
           if (this.previousGame !== this.currentGame) {
             console.log(`🎮 [Twitch] Game changed from ${this.previousGame} to ${this.currentGame}`);
-            await this.sendProactiveMessage(`I see we're playing ${this.currentGame} now. Great. Another game for me to suffer through.`);
+
+            // Only send proactive message if stream is live
+            if (this.isStreamLive) {
+              await this.sendProactiveMessage(`I see we're playing ${this.currentGame} now. Great. Another game for me to suffer through.`);
+            }
           } else {
             console.log(`🎮 [Twitch] Current game confirmed: ${gameName}`);
           }

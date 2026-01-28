@@ -196,8 +196,14 @@ export class QuerySignalExtractor {
    * Classify the type of question being asked
    */
   private classifyQuestionType(queryLower: string): QuerySignals['questionType'] | 'conversational' {
-    // Conversational / Greeting patterns
-    if (/^(hi|hello|hey|yo|howdy|sup|greetings|how's it going|how are you|what's up|whats up|how ya doin|how you doin)/.test(queryLower)) {
+    // Conversational / Greeting patterns - check at start OR anywhere in query
+    // Start-anchored greetings
+    if (/^(hi|hello|hey|yo|howdy|sup|greetings|what's up|whats up)\b/.test(queryLower)) {
+      return 'conversational';
+    }
+
+    // "How are you doing" style greetings (can appear anywhere, often followed by other questions)
+    if (/\b(how's it going|how are you|how ya doin|how you doin|how you been|how have you been|how've you been|how ya been)\b/.test(queryLower)) {
       return 'conversational';
     }
 
@@ -225,7 +231,7 @@ export class QuerySignalExtractor {
    */
   private isInformationSeekingQuery(queryLower: string): boolean {
     // Skip common greetings and conversational filler
-    const greetings = ['how\'s it going', 'how are you', 'what\'s up', 'whats up', 'how ya doin', 'how you doin'];
+    const greetings = ['how\'s it going', 'how are you', 'what\'s up', 'whats up', 'how ya doin', 'how you doin', 'how you been', 'how have you been', 'how ya been', 'how\'ve you been'];
     if (greetings.some(g => queryLower.includes(g))) {
       return false;
     }

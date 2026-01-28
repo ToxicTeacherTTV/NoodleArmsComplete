@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vitest run server/tests/memory-scoring.test.ts)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(node --env-file=.env --import tsx:*)",
+      "Bash(npm run check:*)",
+      "Bash(curl:*)",
+      "Bash(npx tsc:*)",
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_g8qWAERIsTL3@ep-jolly-surf-ag8tj5ky.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require\" GEMINI_API_KEY=\"AIzaSyBCY3MPp9mvI_x8gFD4PHD2OK8T-49K-7g\" npx tsx scripts/test-user-story-detection.ts)",
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_g8qWAERIsTL3@ep-jolly-surf-ag8tj5ky.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require\" npx tsx:*)",
+      "Bash(npm run test:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npm run db:check-latest-convo:*)"
+    ]
+  }
+}

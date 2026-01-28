@@ -163,29 +163,29 @@ Focus on authentic Italian-American culture and Dead by Daylight streaming conte
       
       const analysis = await this.analyzeMemoryBatch(batch, profileId);
       
-      // Merge results (deduplicate by name)
-      analysis.characters.forEach(char => {
+      // Merge results (deduplicate by name) - with safe array access
+      (analysis.characters || []).forEach(char => {
         const existing = allCharacters.get(char.name);
         if (!existing || char.significance > existing.significance) {
           allCharacters.set(char.name, char);
         }
       });
-      
-      analysis.locations.forEach(loc => {
+
+      (analysis.locations || []).forEach(loc => {
         const existing = allLocations.get(loc.name);
         if (!existing || loc.significance > existing.significance) {
           allLocations.set(loc.name, loc);
         }
       });
-      
-      analysis.events.forEach(event => {
+
+      (analysis.events || []).forEach(event => {
         const existing = allEvents.get(event.name);
         if (!existing || event.significance > existing.significance) {
           allEvents.set(event.name, event);
         }
       });
-      
-      allRelationships.push(...analysis.relationships);
+
+      allRelationships.push(...(analysis.relationships || []));
       
       // Small delay to avoid rate limits
       await new Promise(resolve => setTimeout(resolve, 2000));

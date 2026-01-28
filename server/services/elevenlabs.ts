@@ -183,12 +183,32 @@ class ElevenLabsService {
   }
 
   /**
+   * Preprocess text for better ElevenLabs emotion handling.
+   * Adds line breaks before emotion tags to give the TTS engine natural pause points.
+   */
+  private preprocessForTTS(text: string): string {
+    // Add line break before emotion tags (but not the very first one)
+    // Pattern: punctuation followed by space and bracket = new emotion section
+    let processed = text
+      // Add line break after sentence-ending punctuation followed by emotion tag
+      .replace(/([.!?])\s+\[/g, '$1\n[')
+      // Also handle cases where there's already a tag and a new one starts
+      .replace(/\]\s+\[(?!strong)/g, ']\n[');
+
+    console.log(`🎙️ TTS preprocessing: Added line breaks for emotion transitions`);
+    return processed;
+  }
+
+  /**
    * Synthesize with model fallback (v3 -> v2)
    */
   private async synthesizeWithModelFallback(text: string, settings: any): Promise<Buffer> {
     const models = ["eleven_v3", "eleven_v2"]; // Try v3 first, fallback to v2
     let lastError: any;
-    
+
+    // Preprocess text for better emotion handling
+    const processedText = this.preprocessForTTS(text);
+
     // 🧹 CLEANUP: Strip deprecated v2 parameters for v3 compatibility
     const cleanSettings = {
       stability: settings?.stability ?? 0.0,
@@ -198,7 +218,7 @@ class ElevenLabsService {
     for (const model of models) {
       try {
         console.log(`🎵 ElevenLabs request: voice_id=${this.config.voiceId}, model=${model}, settings=${JSON.stringify(cleanSettings)}`);
-        
+
         const response = await fetch(
           `https://api.elevenlabs.io/v1/text-to-speech/${this.config.voiceId}`,
           {
@@ -209,7 +229,7 @@ class ElevenLabsService {
               "xi-api-key": this.config.apiKey,
             },
             body: JSON.stringify({
-              text: text,
+              text: processedText,
               model_id: model,
               voice_settings: cleanSettings,
             }),

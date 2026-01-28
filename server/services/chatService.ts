@@ -53,27 +53,12 @@ export async function decidePrivacy(storage: any, conversationId: string, messag
   return { isPrivateConversation, isPrivateTrigger };
 }
 
-export function buildChaosAdvice(chaosState: any) {
-  let suggestedSpiceCap: string | undefined;
-  if (chaosState.mode === 'FAKE_PROFESSIONAL') suggestedSpiceCap = 'platform_safe';
-  else if (chaosState.mode === 'FULL_PSYCHO') suggestedSpiceCap = 'spicy';
-
-  let suggestedPreset: string | undefined;
-  if (chaosState.mode === 'FULL_PSYCHO') suggestedPreset = 'Unhinged';
-  else if (chaosState.mode === 'FAKE_PROFESSIONAL') suggestedPreset = 'Chill Nicky';
-  else if (chaosState.mode === 'HYPER_FOCUSED') suggestedPreset = 'Patch Roast';
-  else if (chaosState.mode === 'CONSPIRACY') suggestedPreset = 'Storytime';
-
+export function buildHeatAdvice(heatState: any) {
   return {
-    level: chaosState.level,
-    mode: chaosState.mode,
-    suggestedIntensityDelta: (() => {
-      if (chaosState.level >= 80) return 1;
-      if (chaosState.level <= 20) return -1;
-      return 0;
-    })(),
-    suggestedSpiceCap,
-    suggestedPreset
+    heat: heatState.heat,
+    heatLevel: heatState.heatLevel,
+    game: heatState.currentGame,
+    spice: heatState.spice
   };
 }
 
@@ -82,20 +67,20 @@ export function buildChaosAdvice(chaosState: any) {
 export async function resolvePersonality({
   message,
   personalityControl,
-  chaosEngine,
 }: {
   message: string;
   personalityControl?: any;
-  chaosEngine: any;
-}): Promise<{ controls: any; chaosState: any }> {
-  
+}): Promise<{ controls: any; heatState: any }> {
+  // Dynamic import to avoid circular dependency
+  const { heatController } = await import('./heatController.js');
+
   let basePersonality = await personalityController.consumeEffectivePersonality();
 
   if (personalityControl) {
     basePersonality = { ...basePersonality, ...personalityControl };
   }
 
-  const chaosState = await chaosEngine.getCurrentState();
+  const heatState = await heatController.getState();
 
   const controls = { ...basePersonality };
 
@@ -105,7 +90,7 @@ export async function resolvePersonality({
     Object.assign(controls, newPersonality);
   }
 
-  return { controls, chaosState };
+  return { controls, heatState };
 }
 
 /**
@@ -124,37 +109,38 @@ export function normalizeResponseTags(content: string, mode: string): {
   metrics: { processingTime: number };
 } {
   const start = Date.now();
-  
+
+  // 0. Strip ALL asterisks (they break TTS and cause formatting issues)
+  let processed = content.replaceAll('*', '');
+
   // 1. DISCORD mode: strip all tags
   if (mode === 'DISCORD') {
-    const stripped = content.replaceAll(/\s*\[[^\]]*\]\s*/g, ' ').replaceAll(/\s+/g, ' ').trim();
+    const stripped = processed.replaceAll(/\s*\[[^\]]*\]\s*/g, ' ').replaceAll(/\s+/g, ' ').trim();
     return {
       content: stripped,
       metrics: { processingTime: Date.now() - start }
     };
   }
 
-  let processed = content;
-
   // 2. Check if AI generated ANY tags
   const hasAnyTags = /\[[^\]]+\]/.test(processed);
-  if (hasAnyTags) {
-    console.log(`🎭 Tags detected. Trusting AI output (normalizing spacing only).`);
-  } else {
+  if (!hasAnyTags) {
     // AI generated ZERO tags → apply safe defaults
     console.log(`🎭 No tags detected. Applying defaults: [talking] [neutral]`);
     const defaultTags = '[thick italian-italian american nyc accent] [talking] [neutral] ';
     processed = defaultTags + processed;
+  } else {
+    console.log(`🎭 Tags detected. Trusting AI output (will normalize spacing and ensure accent tag).`);
   }
 
   // 3. Normalize tag spacing (ALWAYS, whether AI-generated or default)
   // Ensure space between tags: ][ → ] [
   processed = processed.replaceAll('][', '] [');
-  
-  // Remove line breaks after tags: ] \n → ] 
+
+  // Remove line breaks after tags: ] \n → ]
   processed = processed.replaceAll(/(\[[^\]]+\])\s*[\r\n]+\s*/g, '$1 ');
 
-  // 4. Ensure accent tag is FIRST (move if present but not first)
+  // 4. ALWAYS ensure accent tag is present and FIRST
   const ACCENT_TAG = '[thick italian-italian american nyc accent]';
   if (processed.includes(ACCENT_TAG)) {
     if (!processed.startsWith(ACCENT_TAG)) {
@@ -163,6 +149,20 @@ export function normalizeResponseTags(content: string, mode: string): {
       processed = `${ACCENT_TAG} ${processed}`;
       console.log(`🎭 Moved accent tag to front`);
     }
+  } else {
+    // Accent tag missing - add it at the beginning
+    processed = `${ACCENT_TAG} ${processed}`;
+    console.log(`🎭 Added missing accent tag`);
+  }
+
+  // 5. Fix incomplete sentences (multiple spaces before punctuation)
+  // Pattern: "text   !" or "text   ?" indicates truncated/missing content
+  processed = processed.replace(/\s{2,}([!?.])/g, '$1');
+
+  // 6. Detect and warn about potential truncation
+  const hasTruncationPattern = /\s{3,}[!?.]|\.\.\.\s*$/i.test(content);
+  if (hasTruncationPattern) {
+    console.warn('⚠️ Potential truncation detected in response (trailing spaces before punctuation)');
   }
 
   return {
@@ -202,15 +202,42 @@ export async function handleBackgroundTasks({
     (async () => {
       try {
         const { loreOrchestrator } = await import('./LoreOrchestrator.js');
-        // Process user message for facts
+
+        // Get user info from conversation context (if available)
+        const conversation = await storage.getConversation(conversationId);
+        const speakerName = conversation?.metadata?.userName || 'User';
+        const speakerId = conversation?.metadata?.userId || undefined;
+
+        // Process user message for facts (with speaker metadata for story detection)
         await loreOrchestrator.processNewContent(
           message,
           activeProfileId,
           `Conversation: ${conversationId}`,
           'CONVERSATION',
           conversationId,
-          { allowWrites: allowMemoryWrites }
+          {
+            allowWrites: allowMemoryWrites,
+            speaker: 'user',
+            speakerName,
+            speakerId
+          }
         );
+
+        // Process Nicky's response for story detection (Phase 2!)
+        await loreOrchestrator.processNewContent(
+          responseContent,
+          activeProfileId,
+          `Conversation: ${conversationId}`,
+          'CONVERSATION',
+          conversationId,
+          {
+            allowWrites: allowMemoryWrites,
+            speaker: 'nicky',
+            speakerName: 'Nicky',
+            speakerId: activeProfileId
+          }
+        );
+
         // Check if Nicky's response contains new lore to promote
         await loreOrchestrator.checkHallucination(
           responseContent,

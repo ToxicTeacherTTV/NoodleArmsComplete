@@ -388,6 +388,16 @@ export const varietyState = pgTable("variety_state", {
   lastUpdated: timestamp("last_updated").default(sql`now()`),
 });
 
+// Heat State - Simplified personality system (replaces chaos engine)
+export const heatState = pgTable("heat_state", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  heat: integer("heat").notNull().default(45), // 10-100, floor of 10 (never calm)
+  currentGame: text("current_game").$type<'none' | 'dbd' | 'arc_raiders' | 'other'>().notNull().default('none'),
+  spice: text("spice").$type<'platform_safe' | 'normal' | 'spicy'>().notNull().default('spicy'),
+  lastUpdated: timestamp("last_updated").default(sql`now()`),
+  isGlobal: boolean("is_global").default(true), // Singleton pattern flag
+});
+
 // Relations
 export const profilesRelations = relations(profiles, ({ many }) => ({
   conversations: many(conversations),
@@ -523,6 +533,10 @@ export const insertChaosStateSchema = createInsertSchema(chaosState).omit({
   updatedAt: true,
 });
 
+export const insertHeatStateSchema = createInsertSchema(heatState).omit({
+  id: true,
+});
+
 // NEW: Entity system insert schemas
 export const insertEntitySystemConfigSchema = createInsertSchema(entitySystemConfig).omit({
   id: true,
@@ -610,6 +624,8 @@ export type MemoryEntry = typeof memoryEntries.$inferSelect;
 export type InsertMemoryEntry = z.infer<typeof insertMemoryEntrySchema>;
 export type ChaosState = typeof chaosState.$inferSelect;
 export type InsertChaosState = z.infer<typeof insertChaosStateSchema>;
+export type HeatState = typeof heatState.$inferSelect;
+export type InsertHeatState = z.infer<typeof insertHeatStateSchema>;
 
 // NEW: Entity system types
 export type EntitySystemConfig = typeof entitySystemConfig.$inferSelect;

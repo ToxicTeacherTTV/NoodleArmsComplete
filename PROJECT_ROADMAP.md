@@ -1,8 +1,63 @@
 # Nicky AI - Project Roadmap & Improvements
 
-**Last Updated:** January 3, 2026
+**Last Updated:** January 24, 2026
 
 This document tracks suggested improvements and their implementation status.
+
+---
+
+## 🎉 RECENT COMPLETIONS (January 25, 2026)
+
+### User Story Detection (Phase 3: Complete) ✅ COMPLETED
+**Status:** DEPLOYED - Nicky now remembers stories YOU tell him
+
+**What was built:**
+- ✅ **Automatic Detection**: Detects narrative structure in user messages (≥150 chars, past tense, story indicators)
+- ✅ **Full Preservation**: User stories stored as `type: 'STORY'` with `toldBy: username` metadata
+- ✅ **Atomic Fact Extraction**: Facts extracted from user stories and linked via `parentFactId`
+- ✅ **Two-Way Memory**: Nicky can reference: "Yeah, you told me about that camping trip with the raccoon"
+- ✅ **Tested**: 4/5 test cases passed, 2 stories preserved with 8 linked facts
+
+**Files:** `server/services/LoreOrchestrator.ts`, `server/services/chatService.ts`, `server/scripts/test-user-story-detection.ts`
+
+### Response Quality Fixes ✅ COMPLETED
+**Status:** DEPLOYED - Fixed asterisk TTS breakage and incomplete sentences
+
+**What was fixed:**
+- ✅ **Asterisk Stripping**: All `*` characters removed (were breaking TTS)
+- ✅ **Incomplete Sentence Cleanup**: Removes trailing spaces before punctuation
+- ✅ **System Prompt Rules**: AI instructed to never use asterisks and always complete sentences
+- ✅ **Truncation Detection**: Logs warnings for suspicious patterns
+
+**Root Cause:** AI generation truncation caused `**TEXT**` to become just `**` with missing content
+
+**Files:** `server/services/chatService.ts`, `server/services/gemini.ts`
+
+### Conversation History Window Increased ✅ COMPLETED
+**Status:** DEPLOYED - Better long-conversation continuity
+
+**What changed:**
+- ✅ **Regular Chat**: 12 → 30 messages (15+ turns remembered)
+- ✅ **Streaming**: 8 → 20 messages
+- ✅ **Keyword Context**: 3 → 5 messages
+
+**Files:** `server/services/contextBuilder.ts`
+
+---
+
+## 🎉 RECENT COMPLETIONS (January 24, 2026)
+
+### Story Preservation System (Phase 1: Podcasts) ✅ COMPLETED
+**Status:** DEPLOYED - Hierarchical memory preserves complete narratives
+
+**What was built:**
+- ✅ **Story-First Extraction**: Podcast transcripts now extract complete stories before atomizing
+- ✅ **Hierarchical Storage**: Stories stored as `type: 'STORY'` with atomic facts linked via `parentFactId`
+- ✅ **Narrative Preservation**: Full story content preserved (e.g., "Uncle Vinny ran a poker game at Sal's Pizzeria in 1987...")
+- ✅ **Searchable Facts**: Atomic facts enable semantic search while maintaining story context
+- ✅ **Tested**: Verified with sample transcript - 5 stories, 13 facts, 8 entities extracted correctly
+
+**Files:** `server/services/podcastFactExtractor.ts`, `server/scripts/test-podcast-story-extraction.ts`, `docs/STORY_PRESERVATION_SESSION.md`
 
 ---
 
@@ -49,6 +104,39 @@ This document tracks suggested improvements and their implementation status.
 - ✅ **Show Context Detection**: Automatic detection of "Camping Them Softly" vs "Camping the Extract" to adjust personality facets.
 
 **Files:** `server/services/aiOrchestrator.ts`, `server/services/gemini.ts`
+
+---
+
+## 🚀 CURRENT PRIORITIES
+
+### Testing - Recent Changes 🎯 HIGH PRIORITY
+**Status:** NEXT UP - Validate all January 25 changes
+
+**What needs testing:**
+- [ ] Conversation history window (30 messages in chat, 20 in streaming)
+- [ ] User story detection with real chat interactions
+- [ ] Asterisk stripping and incomplete sentence cleanup
+- [ ] Verify TTS doesn't break with cleaned responses
+- [ ] Confirm Nicky can reference user stories: "You told me about..."
+
+---
+
+### Story Preservation - Phase 2: Live Conversations 🎯 HIGH PRIORITY
+**Status:** PLANNED - Apply story preservation to Nicky's chat/Discord/stream responses
+
+**What needs to be built:**
+- [ ] Detect when Nicky's responses contain stories (length > 200 chars + narrative indicators)
+- [ ] Store complete stories as `type: 'STORY'` instead of immediately atomizing
+- [ ] Extract atomic facts FROM stories and link via `parentFactId`
+- [ ] Mark high-heat stories as `lane: 'RUMOR'` (performative bullshit)
+- [ ] Test with live stream transcripts
+
+**Target File:** `server/services/LoreOrchestrator.ts` (lines 78-100)
+
+**Benefits:**
+- Nicky can reference his own past stream stories: "Like I told you last week..."
+- Discord conversations preserved as narratives
+- Chat stories searchable but contextually intact
 
 ---
 

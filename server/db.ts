@@ -16,8 +16,6 @@ if (!process.env.DATABASE_URL) {
 
 console.log('🔌 Connecting to Neon database...');
 
-console.log('🔌 Connecting to Neon database...');
-
 export const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL,
   max: 15, // Increased from 10
@@ -46,12 +44,22 @@ process.on('unhandledRejection', (reason: any, promise) => {
 // 🚨 CRITICAL: Catch synchronous errors that might be thrown in callbacks
 process.on('uncaughtException', (error: any) => {
   if (error?.message?.includes('Cannot set property message') && error?.message?.includes('ErrorEvent')) {
-    console.error('⚠️ Caught Neon driver bug (ErrorEvent message setter):', error.message);
+    // Known Neon driver bug - silently ignore (only log once per minute max)
+    const now = Date.now();
+    if (!globalThis._lastNeonBugLog || now - globalThis._lastNeonBugLog > 60000) {
+      console.warn('⚠️ Neon driver bug (ErrorEvent) - suppressing repeated warnings');
+      globalThis._lastNeonBugLog = now;
+    }
     return; // Prevent crash
   }
   console.error('❌ Uncaught Exception:', error);
   // For other errors, we might want to exit, but for now let's just log
 });
+
+// Type declaration for the global throttle variable
+declare global {
+  var _lastNeonBugLog: number | undefined;
+}
 
 // Add proper error handling to prevent unhandled error dumps and crashes
 pool.on('error', (err: any) => {

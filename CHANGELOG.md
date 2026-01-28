@@ -10,11 +10,161 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### To Do
+- Test all recent changes (conversation history, user stories, asterisk fixes)
+- Fix conversation/stream handler to preserve Nicky's stories (Phase 2 of Story Preservation)
 - Fast emotion tag generation for STREAMING mode (rule-based)
 - Memory analytics dashboard UI
 - "Save as Training" button for conversations
 - Embedding cache for repeated queries (see MEMORY_SIMPLIFICATION_PLAN.md)
 - Smart query routing (keyword-first) for API cost reduction
+
+---
+
+## [1.11.0] - 2026-01-25
+
+### Added - User Story Detection (Phase 3 of Story Preservation)
+
+**Problem:** Nicky couldn't remember stories that users told him - only his own stories.
+
+**Solution:** Automatic detection and preservation of user-told stories in conversations.
+
+#### Changes to Lore Orchestrator (`LoreOrchestrator.ts`)
+- **Story Detection Heuristics:** Added `isUserStory()` method with detection criteria:
+  - Length ≥ 150 characters
+  - Narrative indicators: "yesterday", "last week", "I remember", "this one time", etc.
+  - Past tense verb density (≥2 past tense verbs)
+  - Multiple sentences (≥2)
+- **Hierarchical Storage:** User stories stored as `type: 'STORY'` with metadata `toldBy: username`
+- **Atomic Fact Extraction:** Facts extracted FROM user stories and linked via `parentFactId`
+- **Confidence:** User stories marked with `confidence: 100` (always canon)
+
+#### Changes to Chat Service (`chatService.ts`)
+- **Speaker Metadata:** Added speaker info to `processNewContent()` calls:
+  - `speaker: 'user'`
+  - `speakerName: username`
+  - `speakerId: user ID`
+
+#### Test Results
+- ✅ 4/5 test cases passed
+- ✅ 2 user stories detected and stored with full narrative content
+- ✅ 8 atomic facts extracted and linked to parent stories
+- ✅ Non-stories correctly filtered (questions, opinions)
+- ❌ 1 borderline case (too short at 107 chars, needs 150+)
+
+#### Benefits
+- **Two-Way Memory:** Nicky remembers stories YOU tell him, not just his own
+- **Story Reference:** Can say "Yeah, you told me about that Claudette who DC'd"
+- **Relationship Building:** Builds conversational continuity and depth
+
+**Files:** `server/services/LoreOrchestrator.ts`, `server/services/chatService.ts`, `server/scripts/test-user-story-detection.ts`
+
+---
+
+### Fixed - Asterisk Stripping and Incomplete Sentences
+
+**Problem:** Nicky was generating asterisks (breaking TTS) and incomplete sentences with trailing spaces.
+
+#### Root Cause Analysis
+- **AI generation truncation** caused incomplete responses
+- **Asterisk stripping code** was previously removed from codebase
+- **Generation cutoffs** resulted in `**` with no content between asterisks
+- **Trailing spaces** before punctuation indicated truncated content
+
+#### Fixes Implemented
+
+**1. Asterisk Stripping (`chatService.ts` - `normalizeResponseTags()`)**
+```typescript
+// Strip ALL asterisks at start of processing
+let processed = content.replaceAll('*', '');
+```
+
+**2. Incomplete Sentence Cleanup (`chatService.ts`)**
+```typescript
+// Fix multiple spaces before punctuation: "text   !" → "text!"
+processed = processed.replace(/\s{2,}([!?.])/g, '$1');
+```
+
+**3. Truncation Detection (`chatService.ts`)**
+- Logs warnings when suspicious patterns detected
+- Helps identify AI generation issues
+
+**4. System Prompt Rules (`gemini.ts`)**
+- Added: "NO ASTERISKS (*) FOR ANY REASON - they break text-to-speech"
+- Added: "COMPLETE ALL SENTENCES. Never trail off with spaces or ellipses mid-thought"
+
+#### What This Fixes
+**Before:**
+```
+[shouting] **INDUSTRIAL DOOM POLKA**  !
+```
+
+**After:**
+```
+[shouting] INDUSTRIAL DOOM POLKA!
+```
+
+**Files:** `server/services/chatService.ts`, `server/services/gemini.ts`
+
+---
+
+### Improved - Conversation History Window
+
+**Problem:** Limited context window (8-12 messages) meant Nicky forgot older conversation flow.
+
+#### Changes
+- **Regular Chat:** 12 → **30 messages** (15+ turns of back-and-forth)
+- **Streaming Mode:** 8 → **20 messages**
+- **Keyword Extraction:** 3 → **5 messages** for contextual keywords
+
+#### Benefits
+- **Better Continuity:** Nicky remembers more of what you talked about
+- **Longer Conversations:** Can reference things said 15-20 exchanges ago
+- **Combined with User Stories:** Both recent flow + complete story preservation
+
+**Files:** `server/services/contextBuilder.ts`
+
+---
+
+## [1.10.0] - 2026-01-24
+
+### Added - Story Preservation System (Phase 1: Podcasts)
+
+**Problem:** Nicky's stories were being atomized immediately, losing narrative structure and preventing him from referencing past stories.
+
+**Solution:** Hierarchical memory system that preserves complete narratives while extracting searchable facts.
+
+#### Changes to Podcast Processing (`podcastFactExtractor.ts`)
+- **Story-First Extraction:** Now extracts complete stories using `extractStoriesFromDocument()` before atomizing
+- **Hierarchical Storage:** Stories stored as `type: 'STORY'` with full narrative content
+- **Atomic Fact Linking:** Facts extracted FROM stories are linked via `parentFactId` field
+- **Result Return:** Added `storiesCreated` to return type alongside `factsCreated` and `entitiesCreated`
+
+#### Memory Structure
+```
+type: 'STORY'          ← Complete narratives (preserved)
+  ├─ type: 'ATOMIC'    ← Searchable facts (linked via parentFactId)
+  └─ type: 'ATOMIC'
+
+type: 'FACT'           ← Standalone facts (metadata)
+```
+
+#### Test Results
+- ✅ 5 stories preserved with full narrative content from test transcript
+- ✅ 13 atomic facts extracted and linked to parent stories
+- ✅ 8 entities extracted (Uncle Vinny, Tony Benedetti, Sal's Pizzeria, etc.)
+- ✅ Deduplication working (90% similarity threshold)
+
+#### Benefits
+- **Story Reference:** Nicky can now say "Remember when I told you about Uncle Vinny's poker game?"
+- **Search Enabled:** Atomic facts enable semantic search while preserving full context
+- **Backward Compatible:** Old atomized facts remain; new extraction adds stories
+- **Reprocessable:** Existing podcast episodes can be reprocessed to extract stories
+
+#### Future Work
+- **Phase 2:** Apply same pattern to live conversations (chat/Discord/streams)
+- **Phase 3:** Detect and preserve stories that USERS tell Nicky
+
+**Files:** `server/services/podcastFactExtractor.ts`, `server/scripts/test-podcast-story-extraction.ts`, `docs/STORY_PRESERVATION_SESSION.md`
 
 ---
 

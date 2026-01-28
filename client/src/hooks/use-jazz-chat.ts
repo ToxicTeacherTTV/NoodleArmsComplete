@@ -16,7 +16,7 @@ export const useJazzChat = () => {
     const [aiStatus, setAiStatus] = useState<AIStatus>('IDLE');
     const [appMode, setAppMode] = useState<AppMode>('PODCAST');
     const [sessionStartTime] = useState<Date>(new Date());
-    const [memoryLearning, setMemoryLearning] = useState<boolean>(true);
+    const [memoryLearning, setMemoryLearning] = useState<boolean>(false); // Default to OFF (private)
     const [isDebugMode, setIsDebugMode] = useState(false);
 
     // Initial Data Queries
@@ -102,6 +102,9 @@ export const useJazzChat = () => {
                     } else {
                         setAiStatus('IDLE');
                     }
+
+                    // Dispatch event to notify heat panel to refresh
+                    window.dispatchEvent(new CustomEvent('nicky-response'));
                 } else {
                     setAiStatus('IDLE');
                 }
@@ -223,7 +226,7 @@ export const useJazzChat = () => {
         setCurrentConversationId("");
         setMessages([]);
         setAiStatus('IDLE');
-        setMemoryLearning(true);
+        setMemoryLearning(false); // Default to OFF (private) for new chats
     };
 
     const handleToggleLearning = () => {
