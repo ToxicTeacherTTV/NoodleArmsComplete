@@ -16,10 +16,9 @@ interface AppShellProps {
 }
 
 const tabs = [
-    { id: "chat", label: "Dashboard", icon: "fa-home", path: "/" },
-    { id: "memory", label: "Memory", icon: "fa-brain", path: "/memory" },
-    { id: "podcast", label: "Podcast Studio", icon: "fa-podcast", path: "/workspace" },
-    { id: "analytics", label: "Analytics", icon: "fa-chart-line", path: "/listener-cities" },
+    { id: "chat", label: "Chat", icon: "fa-home", path: "/" },
+    { id: "memory", label: "Memory", icon: "fa-brain", path: "/memory-v2" },
+    { id: "settings", label: "Settings", icon: "fa-gear", path: "/settings" },
 ];
 
 export default function AppShell({ children, activeProfile }: Readonly<AppShellProps>) {

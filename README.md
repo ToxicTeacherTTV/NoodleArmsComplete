@@ -1,6 +1,6 @@
 # Nicky AI — AI-Powered Co-Host Application
 
-**Last updated:** January 3, 2026
+**Last updated:** January 28, 2026
 
 This repository contains **Nicky "Noodle Arms" A.I. Dente** — an AI-powered co-host application built for live streaming, podcasting, and Discord integration. The application features real-time voice interaction, advanced memory systems, and dynamic personality control.
 
@@ -23,6 +23,19 @@ This repository contains **Nicky "Noodle Arms" A.I. Dente** — an AI-powered co
 **Privacy:** Global "Memory Learning" toggle and per-message `[PRIVATE]` triggers for user control.
 
 ### **Recent Major Updates (Jan 2026)**
+
+✅ **Complete UI Reorganization (Jan 28, 2026)**
+- **3-Page Navigation**: Chat | Memory | Settings (down from 4 pages with 21 tabs)
+- **New Memory Page**: Task-based sidebar (What Nicky Knows | Review & Fix | Insights)
+- **New Settings Page**: Consolidated configuration (Personality | Integrations | Content Pipeline | System)
+- **Contextual Help**: 50+ tooltips, empty states, and inline descriptions
+- **See**: `docs/UI_REORGANIZATION_COMPLETE.md` and `docs/UI_QUICK_REFERENCE.md`
+
+✅ **User Story Detection (Jan 25, 2026)**
+- Nicky now remembers stories YOU tell him, not just his own
+- Automatic narrative detection (≥150 chars, past tense, story indicators)
+- Hierarchical storage with atomic fact extraction
+- Two-way conversational memory
 
 ✅ **Model Flow Audit & .env Restoration**
 - Verified Gemini 3 Flash as the primary engine for all system operations.

@@ -6,6 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import AppShell from "@/layouts/AppShell";
 import JazzDashboard from "@/components/jazz-dashboard";
 import BrainManagement from "@/pages/brain-management";
+import BrainManagementV2 from "@/pages/brain-management-v2";
+import Settings from "@/pages/settings";
 import ProjectWorkspace from "@/pages/project-workspace";
 import ListenerCities from "@/pages/listener-cities";
 import NotFound from "@/pages/not-found";
@@ -22,6 +24,8 @@ function Router() {
       <Switch>
         <Route path="/" component={JazzDashboard} />
         <Route path="/memory" component={BrainManagement} />
+        <Route path="/memory-v2" component={BrainManagementV2} />
+        <Route path="/settings" component={Settings} />
         <Route path="/workspace" component={ProjectWorkspace} />
         <Route path="/listener-cities" component={ListenerCities} />
         <Route component={NotFound} />

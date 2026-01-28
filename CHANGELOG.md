@@ -9,11 +9,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Complete UI Reorganization (Phases 1-3)
+
+**Problem:** Navigation was chaotic with 21 horizontal tabs, no clear hierarchy, and no contextual help. Features were scattered across confusing locations.
+
+**Solution:** Complete redesign into 3-page task-based hierarchy with contextual help throughout.
+
+#### Phase 1: New Memory Page (`/memory-v2`)
+**Components Created:**
+- `MemorySidebar.tsx` - 3-section vertical navigation with tooltips
+- `WhatNickyKnows.tsx` - Browse/search with 5 tabs (Recent/All/Entities/Documents/Podcasts)
+- `ReviewAndFix.tsx` - Quality review with 5 tabs (By Trust/Contradictions/Duplicates/Flags/Protected)
+- `Insights.tsx` - Analytics with 5 tabs (Overview/Analytics/Intelligence/Timeline/System)
+- `QuickActionsMenu.tsx` - Always-accessible dropdown with 6 maintenance tools
+- `EmptyState.tsx` - Reusable empty state component
+
+**Features:**
+- Task-based sidebar navigation (What/Review/Insights)
+- Comprehensive tooltips on every button and section
+- Empty states with helpful guidance
+- Inline descriptions throughout
+- Quick Actions dropdown always accessible
+
+#### Phase 2: New Settings Page (`/settings`)
+**Components Created:**
+- `SettingsSidebar.tsx` - 4-section vertical navigation with tooltips
+- `PersonalitySettings.tsx` - Core identity, presets, heat/chaos controls
+- `IntegrationsSettings.tsx` - Discord, Twitch, API key management
+- `ContentPipelineSettings.tsx` - Podcast RSS, content ingestion, auto-processing
+- `SystemSettings.tsx` - Profiles, debug/logging, operations status
+
+**Features:**
+- Consolidated all scattered configuration
+- Moved Personality from Memory page
+- Moved Discord management from Memory page
+- Moved Podcast RSS from old "Podcast Studio"
+- Clear 4-section organization
+
+#### Phase 3: Navigation Cleanup
+**Changes to `AppShell.tsx`:**
+- Reduced top navigation from 4 tabs to 3
+- **Before:** Dashboard | Memory | Podcast Studio | Analytics
+- **After:** Chat | Memory | Settings
+- Memory tab now points to `/memory-v2` (new interface)
+- Removed misleading "Podcast Studio" (was actually dev workspace)
+- Removed redundant "Analytics" (merged into Memory → Insights)
+
+**Routing Updates (`App.tsx`):**
+- Added `/memory-v2` route (new memory interface)
+- Added `/settings` route (new settings interface)
+- Kept `/memory` for backward compatibility
+- Old `/workspace` and `/listener-cities` still accessible directly
+
+#### Benefits
+- **Reduced complexity**: 3 pages instead of 4, 2-level nav instead of 21 flat tabs
+- **Improved discoverability**: Task-based organization, clear labels
+- **Better guidance**: 50+ contextual help elements (tooltips, empty states, descriptions)
+- **Easier maintenance**: Modular component structure, reusable patterns
+
+#### Documentation
+- Created `docs/UI_REORGANIZATION_COMPLETE.md` - Complete implementation guide
+- See file for full visual hierarchy, migration guide, and testing checklist
+
 ### To Do
+- Phase 4: Analytics Page Decision (keep/merge/remove)
+- Phase 5: Polish (keyboard shortcuts, loading states, mobile responsive)
 - Test all recent changes (conversation history, user stories, asterisk fixes)
 - Fix conversation/stream handler to preserve Nicky's stories (Phase 2 of Story Preservation)
 - Fast emotion tag generation for STREAMING mode (rule-based)
-- Memory analytics dashboard UI
 - "Save as Training" button for conversations
 - Embedding cache for repeated queries (see MEMORY_SIMPLIFICATION_PLAN.md)
 - Smart query routing (keyword-first) for API cost reduction
