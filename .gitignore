@@ -15,3 +15,6 @@ claude.exe
 .env
 .env.local
 .env.*.local
+
+# Claude settings with API keys - NEVER COMMIT
+.claude/settings.local.json
